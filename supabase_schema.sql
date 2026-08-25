@@ -833,6 +833,67 @@ BEGIN
 END;
 $$;
 
+-- 7. Complete Reconciliation RPC
+CREATE OR REPLACE FUNCTION public.complete_reconciliation(
+    p_rec_id TEXT,
+    p_actual_balance NUMERIC,
+    p_notes TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_tenant_id UUID;
+    v_user_id UUID;
+    v_role TEXT;
+    v_rec RECORD;
+    v_variance NUMERIC;
+    v_status TEXT;
+BEGIN
+    v_tenant_id := public.get_auth_tenant_id();
+    v_user_id := auth.uid();
+    v_role := public.get_auth_user_role();
+
+    IF v_role NOT IN ('SUPER_ADMIN', 'FINANCE_MANAGER') THEN
+        RAISE EXCEPTION 'AUTHORIZATION VIOLATION: Role % is not authorized to complete reconciliations.', v_role;
+    END IF;
+
+    SELECT * INTO v_rec FROM public.reconciliations WHERE id = p_rec_id AND tenant_id = v_tenant_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'RECONCILIATION NOT FOUND: ID % does not exist.', p_rec_id;
+    END IF;
+
+    v_variance := p_actual_balance - v_rec.expected_balance;
+    IF v_variance = 0 THEN
+        v_status := 'reconciled';
+    ELSE
+        v_status := 'discrepancy';
+    END IF;
+
+    UPDATE public.reconciliations
+    SET actual_balance = p_actual_balance,
+        variance = v_variance,
+        status = v_status,
+        notes = p_notes,
+        reconciled_at = NOW(),
+        reconciled_by = v_user_id
+    WHERE id = p_rec_id AND tenant_id = v_tenant_id;
+
+    -- Audit
+    INSERT INTO public.finance_audit_log (
+        id, tenant_id, action, entity_type, entity_id, entity_name, reason, actor_id, actor_role
+    ) VALUES (
+        'aud_' || gen_random_uuid(), v_tenant_id, 'COMPLETE_RECONCILIATION',
+        'reconciliation', p_rec_id, 'Reconciliation: ' || v_rec.account_name || ' (' || v_rec.period || ')',
+        p_notes, v_user_id, v_role
+    );
+
+    RETURN jsonb_build_object('success', true, 'reconciliation_id', p_rec_id, 'variance', v_variance, 'status', v_status);
+END;
+$$;
+
 -- =============================================================================
 -- 7. ROW LEVEL SECURITY (RLS) POLICIES — ZERO ANONYMOUS ACCESS
 -- =============================================================================
