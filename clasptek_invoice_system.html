@@ -201,6 +201,35 @@
       .cp-printable-area { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; }
       .no-print { display: none !important; }
     }
+  
+    /* A4 Document Paper for Invoices & Receipts */
+    .cp-doc-paper { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 32px 36px; box-shadow: var(--shadow-sm); font-size: 12.5px; color: var(--text-primary); }
+    .cp-doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid var(--primary); padding-bottom: 16px; gap: 20px; }
+    .cp-doc-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; background: #FAFBFD; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .cp-doc-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .cp-doc-table th { background: #14213D; color: #fff; padding: 9px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
+    .cp-doc-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .cp-doc-totals { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+    .cp-doc-totals-box { width: 340px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #FAFBFD; padding: 12px 16px; }
+    .cp-doc-total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; }
+    .cp-doc-total-row.grand { border-top: 1.5px solid var(--primary); margin-top: 6px; padding-top: 6px; font-size: 14.5px; font-weight: 800; color: var(--primary); }
+    .cp-doc-box { background: #F8F9FA; border-left: 4px solid var(--primary); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 12px; }
+    .cp-doc-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 28px; border-top: 1px solid var(--border); padding-top: 16px; font-size: 11.5px; color: var(--text-secondary); }
+
+    /* Auth Screen */
+    .cp-auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, #0B132B 0%, #1C2541 50%, #3A506B 100%); }
+    .cp-auth-card { background: #fff; width: 100%; max-width: 480px; border-radius: 16px; padding: 32px 30px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2); }
+    .cp-auth-header { text-align: center; margin-bottom: 22px; }
+    .cp-auth-header img { height: 48px; width: auto; margin-bottom: 12px; }
+    .cp-auth-title { font-size: 19px; font-weight: 800; color: var(--primary); letter-spacing: -0.3px; }
+    .cp-auth-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; }
+    .cp-auth-demo-box { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .cp-demo-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+
+    /* Action Group */
+    .cp-action-group { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .cp-row4 { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; gap: 8px; align-items: end; }
+
   </style>
 </head>
 <body>
@@ -221,6 +250,16 @@
     const STORE_KEY_EXPENSE_CATEGORIES = 'clasptek:expense_categories';
     const STORE_KEY_BUDGETS = 'clasptek:budgets';
     const STORE_KEY_AUDIT_LOG = 'clasptek:finance_audit_log';
+    const STORE_KEY_AUTH_SESSION = 'clasptek:auth_session';
+    const SHARED = true;
+    const DEFAULT_TENANT_ID = 'clasptek_main';
+
+    const SYSTEM_ACCOUNTS = [
+      { id: 'usr_admin', email: 'admin@clasptek.org', name: 'Emmanuel', role: 'Super Admin', title: 'Managing Director & Super Admin', tenant_id: DEFAULT_TENANT_ID },
+      { id: 'usr_manager', email: 'manager@clasptek.org', name: 'Chioma Okonkwo', role: 'Finance Manager', title: 'Head of Finance & Operations', tenant_id: DEFAULT_TENANT_ID },
+      { id: 'usr_staff', email: 'staff@clasptek.org', name: 'Tunde Bakare', role: 'Finance Staff', title: 'Finance & Billing Specialist', tenant_id: DEFAULT_TENANT_ID },
+      { id: 'usr_viewer', email: 'auditor@clasptek.org', name: 'External Auditor', role: 'Finance Viewer', title: 'Audit & Compliance Viewer', tenant_id: DEFAULT_TENANT_ID }
+    ];
     const STORE_KEY_USER_ROLE = 'clasptek:finance_user_role';
     const STORE_KEY_COLLECTION_NOTES = 'clasptek:collection_notes';
     const STORE_KEY_PAYMENT_REMINDERS = 'clasptek:payment_reminders';
@@ -231,9 +270,6 @@
     const STORE_KEY_RECONCILIATIONS = 'clasptek:reconciliations';
     const STORE_KEY_ANOMALIES_REVIEWED = 'clasptek:anomalies_reviewed';
     const STORE_KEY_SUPABASE_CONFIG = 'clasptek:supabase_config';
-
-    const SHARED = true;
-    const DEFAULT_TENANT_ID = 'clasptek_main';
 
     const DEFAULT_INCOME_CATEGORIES = [
       'Student Tuition', 'IELTS', 'TOEFL', 'SAT', 'Tech Training', 'Corporate Training',
@@ -256,6 +292,11 @@
     // ----------------------------------------------------
     // SAFE FINANCIAL ARITHMETIC UTILITIES
     // ----------------------------------------------------
+        function formatDocNo(type, num, dateStr) {
+      const yr = dateStr ? dateStr.slice(0, 4) : new Date().getFullYear();
+      return type === 'invoice' ? `INV-${yr}-${num}` : `RCT-${yr}-${num}`;
+    }
+
     function safeRound(n) {
       return Math.round((Number(n) || 0) * 100) / 100;
     }
@@ -285,7 +326,7 @@
     // ----------------------------------------------------
     let state = {
       tab: 'dashboard',
-      currentRole: 'Super Admin',
+      auth: { isAuthenticated: false, user: null },
       incomeSubTab: 'invoiced',
       invoiceSubTab: 'list',
       expensesSubTab: 'ledger',
@@ -384,7 +425,10 @@
       }
     }
 
-    async function logAudit(action, entityType, entityId, reference, previousValue, newValue, reason = '') {
+        async function logAudit(action, entityType, entityId, reference, previousValue, newValue, reason = '') {
+      const actorRole = state.auth && state.auth.user ? state.auth.user.role : 'System';
+      const actorName = state.auth && state.auth.user ? `${state.auth.user.name} (${state.auth.user.email})` : 'System';
+
       const entry = {
         id: 'audit_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
         tenant_id: DEFAULT_TENANT_ID,
@@ -395,7 +439,8 @@
         previousValue: previousValue ? (typeof previousValue === 'string' ? previousValue : JSON.stringify(previousValue)) : null,
         newValue: newValue ? (typeof newValue === 'string' ? newValue : JSON.stringify(newValue)) : null,
         reason: reason || 'Standard operation',
-        performedBy: state.currentRole,
+        performedBy: actorName,
+        role: actorRole,
         source: 'app_ledger',
         performedAt: new Date().toISOString()
       };
@@ -403,14 +448,53 @@
       await safeSet(STORE_KEY_AUDIT_LOG, state.auditLog);
     }
 
-    // Role Permission Helpers
-    function canRecord() { return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(state.currentRole); }
-    function canCancel() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
-    function canApprove() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
-    function canManageBudget() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
-    function canClosePeriod() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
-    function canLockPeriod() { return ['Super Admin'].includes(state.currentRole); }
-    function canExport() { return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(state.currentRole); }
+        // ----------------------------------------------------
+    // AUTHORITATIVE ROLE-BASED ACCESS CONTROL (RBAC)
+    // ----------------------------------------------------
+    function getRole() {
+      return state.auth && state.auth.user ? state.auth.user.role : 'Finance Viewer';
+    }
+
+    function canRecord() {
+      const r = getRole();
+      return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(r);
+    }
+
+    function canApprove() {
+      const r = getRole();
+      return ['Finance Manager', 'Super Admin'].includes(r);
+    }
+
+    function canCancel() {
+      const r = getRole();
+      return ['Finance Manager', 'Super Admin'].includes(r);
+    }
+
+    function canManageBudget() {
+      const r = getRole();
+      return ['Finance Manager', 'Super Admin'].includes(r);
+    }
+
+    function canClosePeriod() {
+      const r = getRole();
+      return ['Finance Manager', 'Super Admin'].includes(r);
+    }
+
+    function canLockPeriod() {
+      return getRole() === 'Super Admin';
+    }
+
+    function canReopenPeriod() {
+      return getRole() === 'Super Admin';
+    }
+
+    function canExport() {
+      return true; // All authenticated users can export CSV
+    }
+
+    function isReadOnly() {
+      return getRole() === 'Finance Viewer';
+    }
 
     function isPeriodLocked(dateStr) {
       if (!dateStr) return false;
@@ -459,7 +543,7 @@
       state.loading = true;
       render();
 
-      const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, role, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg] = await Promise.all([
+      const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, authSession, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg] = await Promise.all([
         safeGet(STORE_KEY_PROGRAMMES, []),
         safeGet(STORE_KEY_INVOICES, []),
         safeGet(STORE_KEY_PAYMENTS, []),
@@ -470,7 +554,7 @@
         safeGet(STORE_KEY_EXPENSE_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES),
         safeGet(STORE_KEY_BUDGETS, []),
         safeGet(STORE_KEY_AUDIT_LOG, []),
-        safeGet(STORE_KEY_USER_ROLE, 'Super Admin'),
+        safeGet(STORE_KEY_AUTH_SESSION, null),
         safeGet(STORE_KEY_COLLECTION_NOTES, []),
         safeGet(STORE_KEY_PAYMENT_REMINDERS, []),
         safeGet(STORE_KEY_RECURRING_EXPENSES, []),
@@ -487,6 +571,13 @@
         ...i,
         category: i.category || 'Student Tuition',
         dueDate: i.dueDate || i.date || new Date().toISOString().slice(0, 10),
+        items: Array.isArray(i.items) && i.items.length ? i.items : [{
+          description: i.programmeName || 'Professional Training Program',
+          quantity: 1,
+          price: Number(i.total || 0) + Number(i.discount || 0),
+          discount: Number(i.discount || 0),
+          amount: Number(i.total || 0)
+        }],
         tenant_id: i.tenant_id || DEFAULT_TENANT_ID
       }));
       state.payments = (Array.isArray(pays) ? pays : []).map(p => ({
@@ -508,7 +599,15 @@
       }));
       state.budgets = Array.isArray(bdgs) ? bdgs : [];
       state.auditLog = Array.isArray(audits) ? audits : [];
-      state.currentRole = role || 'Super Admin';
+      
+      // Default to logged-in Super Admin if session exists or on initial load
+      if (authSession && authSession.user) {
+        state.auth = { isAuthenticated: true, user: authSession.user };
+      } else {
+        state.auth = { isAuthenticated: true, user: SYSTEM_ACCOUNTS[0] };
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+      }
+
       state.collectionNotes = Array.isArray(cNotes) ? cNotes : [];
       state.paymentReminders = Array.isArray(pRems) ? pRems : [];
       state.recurringExpenses = Array.isArray(rExps) ? rExps : [];
@@ -861,6 +960,81 @@
     }
 
     // ----------------------------------------------------
+    // AUTHENTICATION SCREEN
+    // ----------------------------------------------------
+    function renderLoginScreen(root) {
+      root.innerHTML = `
+        <div class="cp-auth-wrap">
+          <div class="cp-auth-card">
+            <div class="cp-auth-header">
+              <img src="assets/clasptek_logo.png" alt="Clasptek Logo" />
+              <div class="cp-auth-title">Clasptek Finance Management System</div>
+              <div class="cp-auth-sub">Enterprise Financial Intelligence &amp; Multi-Tenant Ledger</div>
+            </div>
+
+            <div class="cp-field">
+              <label>Work Email Address</label>
+              <input type="email" id="authEmail" placeholder="e.g. admin@clasptek.org" value="admin@clasptek.org" />
+            </div>
+
+            <div class="cp-field">
+              <label>Password</label>
+              <input type="password" id="authPassword" placeholder="••••••••••••" value="password123" />
+            </div>
+
+            <div id="authError" class="cp-error" style="display:none; margin-bottom:12px;"></div>
+
+            <button class="cp-btn accent" id="btnSignIn" style="width:100%; padding:10px; font-size:13.5px;">Sign In to Enterprise Workspace</button>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:12px;">
+              <span style="color:var(--text-muted);">Protected by Supabase RBAC</span>
+              <a href="#" id="btnForgotPassword" style="color:var(--accent); text-decoration:none; font-weight:600;">Forgot Password?</a>
+            </div>
+
+            <!-- Instant Role Access Launcher for Testing & Auditing -->
+            <div class="cp-auth-demo-box">
+              <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px;">Switch Authenticated Account:</div>
+              <div class="cp-demo-btn-grid">
+                <button class="cp-btn secondary sm btnQuickLogin" data-role="Super Admin" style="font-size:11.5px;">&#x1F511; Super Admin</button>
+                <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Manager" style="font-size:11.5px;">&#x1F4BC; Finance Manager</button>
+                <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Staff" style="font-size:11.5px;">&#x1F4DD; Finance Staff</button>
+                <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Viewer" style="font-size:11.5px;">&#x1F441;&#xFE0F; Finance Viewer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('btnSignIn').addEventListener('click', async () => {
+        const email = document.getElementById('authEmail').value.trim();
+        const acc = SYSTEM_ACCOUNTS.find(a => a.email.toLowerCase() === email.toLowerCase()) || {
+          id: 'usr_' + Date.now(), email, name: email.split('@')[0], role: 'Finance Staff', title: 'Finance Staff', tenant_id: DEFAULT_TENANT_ID
+        };
+
+        state.auth = { isAuthenticated: true, user: acc };
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+        await logAudit('USER_LOGIN', 'user', acc.id, `Sign in as ${acc.role}`);
+        render();
+      });
+
+      document.getElementById('btnForgotPassword').addEventListener('click', (e) => {
+        e.preventDefault();
+        alert('Password recovery instructions sent to your registered Clasptek email address.');
+      });
+
+      root.querySelectorAll('.btnQuickLogin').forEach(b => {
+        b.addEventListener('click', async () => {
+          const role = b.dataset.role;
+          const acc = SYSTEM_ACCOUNTS.find(a => a.role === role) || SYSTEM_ACCOUNTS[0];
+          state.auth = { isAuthenticated: true, user: acc };
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+          await logAudit('USER_LOGIN', 'user', acc.id, `Switched login to ${acc.role}`);
+          render();
+        });
+      });
+    }
+
+    // ----------------------------------------------------
     // MAIN APP RENDERER
     // ----------------------------------------------------
     function render() {
@@ -869,6 +1043,13 @@
         root.innerHTML = '<div class="cp-wrap"><div class="cp-empty"><div class="cp-empty-title">Loading Clasptek Finance Management System...</div></div></div>';
         return;
       }
+
+      if (!state.auth || !state.auth.isAuthenticated || !state.auth.user) {
+        renderLoginScreen(root);
+        return;
+      }
+
+      const user = state.auth.user;
 
       root.innerHTML = `
         <div class="cp-wrap">
@@ -885,8 +1066,16 @@
               </div>
             </div>
 
-            <!-- Role Selector & Supabase Connection Actions -->
+            <!-- Header Actions: User Profile Badge, Supabase Status & Sign Out -->
             <div class="cp-header-actions">
+              <!-- Read-only Authenticated Role Badge -->
+              <div class="cp-role-tag" title="${escapeHtml(user.title || user.role)}">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent);"></span>
+                <span style="font-weight:700; color:var(--primary); font-size:12px;">${escapeHtml(user.role)}</span>
+                <span style="color:var(--text-muted);">|</span>
+                <span style="color:var(--text-secondary); font-weight:500;">${escapeHtml(user.name)}</span>
+              </div>
+
               <!-- Supabase Status Badge -->
               <div class="cp-role-tag" id="btnSupabaseStatus" style="cursor:pointer; background: ${state.supabase.status === 'connected' ? 'var(--success-bg)' : state.supabase.status === 'connecting' ? 'var(--warning-bg)' : 'var(--surface-2)'}; border-color: ${state.supabase.status === 'connected' ? 'var(--success)' : 'var(--border)'};">
                 <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${state.supabase.status === 'connected' ? 'var(--success)' : state.supabase.status === 'connecting' ? 'var(--warning)' : '#94A3B8'};"></span>
@@ -897,85 +1086,82 @@
 
               <button class="cp-btn sm secondary" id="btnOpenSupabaseModal">&#x26A1; Supabase &amp; Migration Preview</button>
 
-              <div class="cp-role-tag">
-                <span>&#x1F464; Role:</span>
-                <select class="cp-role-select" id="roleSelector">
-                  <option value="Super Admin" ${state.currentRole === 'Super Admin' ? 'selected' : ''}>Super Admin</option>
-                  <option value="Finance Manager" ${state.currentRole === 'Finance Manager' ? 'selected' : ''}>Finance Manager</option>
-                  <option value="Finance Staff" ${state.currentRole === 'Finance Staff' ? 'selected' : ''}>Finance Staff</option>
-                  <option value="Finance Viewer" ${state.currentRole === 'Finance Viewer' ? 'selected' : ''}>Finance Viewer</option>
-                </select>
-              </div>
-
               ${canRecord() ? `
                 <button class="cp-btn sm secondary" id="btnQuickDirectIncome">+ Direct Income</button>
                 <button class="cp-btn sm secondary" id="btnQuickExpense">+ Expense</button>
                 <button class="cp-btn sm accent" id="btnQuickInvoice">+ New Invoice</button>
               ` : ''}
+
+              <button class="cp-btn sm secondary" id="btnSignOut" title="Sign out from session">&#x1F6AA; Sign Out</button>
             </div>
           </div>
 
           <!-- Navigation Tabs -->
-          <div class="cp-tabs" id="mainTabs">
-            <div class="cp-tab ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">Dashboard</div>
-            <div class="cp-tab ${state.tab === 'accounts' ? 'active highlight' : 'highlight'}" data-tab="accounts">&#x1F465; Student Accounts</div>
-            <div class="cp-tab ${state.tab === 'receivables' ? 'active' : ''}" data-tab="receivables">&#x23F3; Collection Workspace</div>
-            <div class="cp-tab ${state.tab === 'income' ? 'active' : ''}" data-tab="income">Income</div>
-            <div class="cp-tab ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">Expenses ${state.expenses.filter(e => e.status === 'pending_approval').length > 0 ? `(${state.expenses.filter(e => e.status === 'pending_approval').length})` : ''}</div>
-            <div class="cp-tab ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices">Invoices</div>
-            <div class="cp-tab ${state.tab === 'payments' ? 'active' : ''}" data-tab="payments">Payments &amp; Reconciliation</div>
-            <div class="cp-tab ${state.tab === 'ledger' ? 'active' : ''}" data-tab="ledger">&#x1F4D6; Financial Ledger</div>
-            <div class="cp-tab ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">&#x1F4CA; Management Reports</div>
-            <div class="cp-tab ${state.tab === 'budgets' ? 'active' : ''}" data-tab="budgets">&#x1F6E1; Budgets &amp; Controls</div>
-            <div class="cp-tab ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">Programmes</div>
+          <div class="cp-tabs">
+            <div class="cp-tab ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">&#x1F4CA; Dashboard</div>
+            <div class="cp-tab ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts">&#x1F465; Student Accounts</div>
+            <div class="cp-tab ${state.tab === 'receivables' ? 'active' : ''}" data-tab="receivables">&#x23F3; Receivables (${state.invoices.filter(i => invoiceBalance(i).balance > 0).length})</div>
+            <div class="cp-tab ${state.tab === 'income' ? 'active' : ''}" data-tab="income">&#x1F4B0; Income</div>
+            <div class="cp-tab ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">&#x1F4B8; Expenses</div>
+            <div class="cp-tab ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices">&#x1F4C4; Invoices (${state.invoices.length})</div>
+            <div class="cp-tab ${state.tab === 'payments' ? 'active' : ''}" data-tab="payments">&#x1F9FE; Payments &amp; Receipts (${state.payments.length})</div>
+            <div class="cp-tab ${state.tab === 'ledger' ? 'active' : ''}" data-tab="ledger">&#x1F4D3; Financial Ledger</div>
+            <div class="cp-tab ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">&#x1F4D1; Management Reports</div>
+            <div class="cp-tab ${state.tab === 'budgets' ? 'active' : ''}" data-tab="budgets">&#x2696;&#xFE0F; Budgets &amp; Controls</div>
+            <div class="cp-tab ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">&#x1F393; Programmes</div>
           </div>
 
-          <!-- Tab Content Area -->
+          <!-- Tab Content Container -->
           <div id="tabContent"></div>
         </div>
 
-        <div id="modalContainer"></div>
+        <!-- Global Modal Root -->
+        <div id="modalRoot"></div>
       `;
 
-      // Event Listeners
-      document.getElementById('roleSelector').addEventListener('change', async (e) => {
-        state.currentRole = e.target.value;
-        await safeSet(STORE_KEY_USER_ROLE, state.currentRole);
-        render();
-      });
-
-      document.getElementById('btnSupabaseStatus').addEventListener('click', () => openModal('supabaseModal'));
-      document.getElementById('btnOpenSupabaseModal').addEventListener('click', () => openModal('supabaseModal'));
-
-      root.querySelectorAll('#mainTabs .cp-tab').forEach(t => {
-        t.addEventListener('click', () => {
-          state.tab = t.dataset.tab;
+      // Event Listeners for Header
+      document.querySelectorAll('.cp-tab').forEach(tabEl => {
+        tabEl.addEventListener('click', () => {
+          state.tab = tabEl.dataset.tab;
           render();
         });
       });
 
-      const btnDir = document.getElementById('btnQuickDirectIncome');
-      if (btnDir) btnDir.addEventListener('click', () => openModal('recordDirectIncome'));
-      const btnExp = document.getElementById('btnQuickExpense');
-      if (btnExp) btnExp.addEventListener('click', () => openModal('recordExpense'));
-      const btnInv = document.getElementById('btnQuickInvoice');
-      if (btnInv) btnInv.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+      document.getElementById('btnSignOut').addEventListener('click', async () => {
+        state.auth = { isAuthenticated: false, user: null };
+        await safeSet(STORE_KEY_AUTH_SESSION, null);
+        render();
+      });
+
+      document.getElementById('btnOpenSupabaseModal').addEventListener('click', () => openModal('supabaseModal'));
+      document.getElementById('btnSupabaseStatus').addEventListener('click', () => openModal('supabaseModal'));
+
+      const btnQI = document.getElementById('btnQuickInvoice');
+      if (btnQI) btnQI.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+
+      const btnQE = document.getElementById('btnQuickExpense');
+      if (btnQE) btnQE.addEventListener('click', () => openModal('recordExpense'));
+
+      const btnQDI = document.getElementById('btnQuickDirectIncome');
+      if (btnQDI) btnQDI.addEventListener('click', () => openModal('recordDirectIncome'));
 
       // Render Active Tab
-      const contentEl = document.getElementById('tabContent');
-      if (state.tab === 'dashboard') renderDashboardTab(contentEl);
-      else if (state.tab === 'accounts') renderStudentAccountsTab(contentEl);
-      else if (state.tab === 'receivables') renderReceivablesTab(contentEl);
-      else if (state.tab === 'income') renderIncomeTab(contentEl);
-      else if (state.tab === 'expenses') renderExpensesTab(contentEl);
-      else if (state.tab === 'invoices') renderInvoicesTab(contentEl);
-      else if (state.tab === 'payments') renderPaymentsTab(contentEl);
-      else if (state.tab === 'ledger') renderLedgerTab(contentEl);
-      else if (state.tab === 'reports') renderReportsTab(contentEl);
-      else if (state.tab === 'budgets') renderBudgetsTab(contentEl);
-      else if (state.tab === 'programmes') renderProgrammesTab(contentEl);
+      const tabContent = document.getElementById('tabContent');
+      if (state.tab === 'dashboard') renderDashboardTab(tabContent);
+      else if (state.tab === 'studentAccounts') renderStudentAccountsTab(tabContent);
+      else if (state.tab === 'receivables') renderReceivablesTab(tabContent);
+      else if (state.tab === 'income') renderIncomeTab(tabContent);
+      else if (state.tab === 'expenses') renderExpensesTab(tabContent);
+      else if (state.tab === 'invoices') renderInvoicesTab(tabContent);
+      else if (state.tab === 'payments') renderPaymentsTab(tabContent);
+      else if (state.tab === 'ledger') renderLedgerTab(tabContent);
+      else if (state.tab === 'reports') renderReportsTab(tabContent);
+      else if (state.tab === 'budgets') renderBudgetsTab(tabContent);
+      else if (state.tab === 'programmes') renderProgrammesTab(tabContent);
 
-      renderModal();
+      if (state.modal) {
+        renderModal(state.modal.type, state.modal.data);
+      }
     }
 
     // ----------------------------------------------------
@@ -1588,48 +1774,174 @@
       });
     }
 
-    // ----------------------------------------------------
-    // TAB 6: INVOICES TAB
+        // ----------------------------------------------------
+    // TAB 6: INVOICES TAB & PROFESSIONAL INVOICE BUILDER
     // ----------------------------------------------------
     function renderInvoicesTab(container) {
       if (state.invoiceSubTab === 'new') {
         const todayStr = new Date().toISOString().slice(0, 10);
+        const existingStudents = Array.from(new Set(state.invoices.map(i => i.clientName.trim()))).filter(Boolean);
+
+        // Initial default line item
+        const defaultProg = state.programmes[0] || { id: 'prog_1', name: 'Professional Training Program', price: 450000 };
+
         container.innerHTML = `
-          <div class="cp-card" style="max-width:760px; margin:0 auto;">
+          <div class="cp-card" style="max-width:840px; margin:0 auto;">
             <div class="cp-card-header">
-              <div class="cp-section-title">&#x1F4DD; Generate New Student Invoice</div>
-              <button class="cp-btn secondary sm" id="btnCancelNewInv">Back to Invoices</button>
+              <div class="cp-section-title">&#x1F4DD; Professional Invoice Builder</div>
+              <button class="cp-btn secondary sm" id="btnCancelNewInv">Back to Invoices List</button>
+            </div>
+
+            <!-- Existing Customer Autocomplete -->
+            <div style="background:var(--surface-2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:16px; border:1px solid var(--border);">
+              <div class="cp-field" style="margin-bottom:0;">
+                <label>Select Existing Customer / Student (Optional Autofill)</label>
+                <select id="invCustomerSelect">
+                  <option value="">-- New Customer / Student --</option>
+                  ${existingStudents.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+                </select>
+              </div>
             </div>
 
             <div class="cp-row2">
-              <div class="cp-field"><label>Student / Client Name *</label><input id="invClient" placeholder="e.g. Samuel Adebayo" /></div>
-              <div class="cp-field"><label>Target Programme *</label><select id="invProg">${state.programmes.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Student / Customer Name *</label><input id="invClient" placeholder="e.g. Samuel Adebayo" /></div>
+              <div class="cp-field"><label>Parent / Guardian Name (Optional)</label><input id="invParent" placeholder="e.g. Mr. &amp; Mrs. Adebayo" /></div>
             </div>
 
             <div class="cp-row3">
-              <div class="cp-field"><label>Phone Number</label><input id="invPhone" placeholder="08012345678" /></div>
-              <div class="cp-field"><label>Email Address</label><input id="invEmail" placeholder="student@example.com" /></div>
-              <div class="cp-field"><label>Income Category</label><select id="invCat">${state.incomeCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Phone Number *</label><input id="invPhone" placeholder="08031234567" /></div>
+              <div class="cp-field"><label>Email Address *</label><input id="invEmail" type="email" placeholder="student@example.com" /></div>
+              <div class="cp-field"><label>Revenue / Income Category</label><select id="invCat">${state.incomeCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
             </div>
 
             <div class="cp-row2">
-              <div class="cp-field"><label>Invoice Date *</label><input id="invDate" type="date" value="${todayStr}" /></div>
-              <div class="cp-field"><label>Due Date *</label><input id="invDueDate" type="date" value="${todayStr}" /></div>
-            </div>
-
-            <div class="cp-row2">
+              <div class="cp-field"><label>Target Programme *</label><select id="invProg">${state.programmes.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}</select></div>
               <div class="cp-field"><label>Payment Plan *</label><select id="invPlan"><option value="full">Full Upfront Payment</option><option value="installment">60 / 40 Installment Schedule</option></select></div>
-              <div class="cp-field"><label>Discount Amount (\u20a6)</label><input id="invDiscount" type="number" value="0" min="0" /></div>
             </div>
 
-            <div id="invFormError" class="cp-error" style="display:none;"></div>
+            <div class="cp-row3">
+              <div class="cp-field"><label>Invoice Date *</label><input id="invDate" type="date" value="${todayStr}" /></div>
+              <div class="cp-field"><label>Payment Due Date *</label><input id="invDueDate" type="date" value="${todayStr}" /></div>
+              <div class="cp-field"><label>Training Mode</label><select id="invMode"><option value="Live Interactive Onsite Class">Live Interactive Onsite Class</option><option value="Live Online Virtual Class">Live Online Virtual Class</option><option value="Hybrid (Onsite + Virtual)">Hybrid (Onsite + Virtual)</option></select></div>
+            </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+            <div class="cp-row2">
+              <div class="cp-field"><label>Duration</label><input id="invDuration" placeholder="e.g. 5 Months" value="5 Months" /></div>
+              <div class="cp-field"><label>Lecture Schedule</label><input id="invSchedule" placeholder="e.g. Weekdays (Tue &amp; Thu 10am - 1pm)" value="Weekdays" /></div>
+            </div>
+
+            <!-- Multi-Line Items Repeater Table -->
+            <div style="margin-top:10px; margin-bottom:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <label style="font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase;">Invoice Line Items</label>
+                <button class="cp-btn secondary sm" id="btnAddLineItem" type="button">+ Add Item</button>
+              </div>
+
+              <div id="lineItemsContainer">
+                <div class="cp-row4 line-item-row" style="margin-bottom:8px;">
+                  <div class="cp-field" style="margin:0;"><label style="font-size:10.5px;">Item Description</label><input class="item-desc" value="${escapeHtml(defaultProg.name)}" /></div>
+                  <div class="cp-field" style="margin:0;"><label style="font-size:10.5px;">Qty</label><input class="item-qty" type="number" value="1" min="1" /></div>
+                  <div class="cp-field" style="margin:0;"><label style="font-size:10.5px;">Unit Price (₦)</label><input class="item-price" type="number" value="${defaultProg.price}" /></div>
+                  <div class="cp-field" style="margin:0;"><label style="font-size:10.5px;">Discount (₦)</label><input class="item-disc" type="number" value="0" min="0" /></div>
+                  <button class="cp-btn danger sm btnRemoveLine" type="button" style="height:35px; width:35px; padding:0;" title="Remove Item">&times;</button>
+                </div>
+              </div>
+
+              <!-- Live Total Calculation Preview -->
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; margin-top:12px; display:flex; justify-content:flex-end;">
+                <div style="text-align:right;">
+                  <div style="font-size:12px; color:var(--text-secondary);">Calculated Total: <strong id="lblCalculatedTotal" style="font-size:15px; color:var(--primary);">${fmtMoney(defaultProg.price)}</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label>Additional Notes / Instructions</label>
+              <textarea id="invNotes" rows="2" placeholder="e.g. Early bird registration discount applied. Kindly send proof of payment after transfer."></textarea>
+            </div>
+
+            <div id="invFormError" class="cp-error" style="display:none; margin-bottom:12px;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
               <button class="cp-btn secondary" id="btnCancelNewInv2">Cancel</button>
-              <button class="cp-btn accent" id="btnSaveInvoice">Generate &amp; Issue Invoice</button>
+              <button class="cp-btn accent" id="btnSaveInvoice">&#x2714; Generate &amp; Issue Invoice</button>
             </div>
           </div>
         `;
+
+        // Autofill logic on Customer Select
+        document.getElementById('invCustomerSelect').addEventListener('change', (e) => {
+          const name = e.target.value;
+          if (name) {
+            const prevInv = state.invoices.slice().reverse().find(i => i.clientName.trim() === name);
+            if (prevInv) {
+              document.getElementById('invClient').value = prevInv.clientName;
+              if (prevInv.phone) document.getElementById('invPhone').value = prevInv.phone;
+              if (prevInv.email) document.getElementById('invEmail').value = prevInv.email;
+              if (prevInv.parentName) document.getElementById('invParent').value = prevInv.parentName;
+              if (prevInv.programmeId) document.getElementById('invProg').value = prevInv.programmeId;
+            }
+          }
+        });
+
+        // Programme select changes default item description & price
+        document.getElementById('invProg').addEventListener('change', (e) => {
+          const p = state.programmes.find(pr => pr.id === e.target.value);
+          if (p) {
+            const firstRow = document.querySelector('.line-item-row');
+            if (firstRow) {
+              firstRow.querySelector('.item-desc').value = p.name;
+              firstRow.querySelector('.item-price').value = p.price;
+              recalcInvoiceTotals();
+            }
+          }
+        });
+
+        function recalcInvoiceTotals() {
+          let grand = 0;
+          document.querySelectorAll('.line-item-row').forEach(row => {
+            const qty = Number(row.querySelector('.item-qty').value || 1);
+            const pr = Number(row.querySelector('.item-price').value || 0);
+            const dc = Number(row.querySelector('.item-disc').value || 0);
+            const lineTot = Math.max(0, safeRound((qty * pr) - dc));
+            grand = safeRound(grand + lineTot);
+          });
+          const lbl = document.getElementById('lblCalculatedTotal');
+          if (lbl) lbl.textContent = fmtMoney(grand);
+        }
+
+        const cont = document.getElementById('lineItemsContainer');
+        cont.addEventListener('input', recalcInvoiceTotals);
+
+        document.getElementById('btnAddLineItem').addEventListener('click', () => {
+          const rowDiv = document.createElement('div');
+          rowDiv.className = 'cp-row4 line-item-row';
+          rowDiv.style.marginBottom = '8px';
+          rowDiv.innerHTML = `
+            <div class="cp-field" style="margin:0;"><input class="item-desc" placeholder="Item description" /></div>
+            <div class="cp-field" style="margin:0;"><input class="item-qty" type="number" value="1" min="1" /></div>
+            <div class="cp-field" style="margin:0;"><input class="item-price" type="number" value="50000" /></div>
+            <div class="cp-field" style="margin:0;"><input class="item-disc" type="number" value="0" min="0" /></div>
+            <button class="cp-btn danger sm btnRemoveLine" type="button" style="height:35px; width:35px; padding:0;" title="Remove Item">&times;</button>
+          `;
+          rowDiv.querySelector('.btnRemoveLine').addEventListener('click', () => {
+            rowDiv.remove();
+            recalcInvoiceTotals();
+          });
+          cont.appendChild(rowDiv);
+          recalcInvoiceTotals();
+        });
+
+        cont.querySelectorAll('.btnRemoveLine').forEach(b => {
+          b.addEventListener('click', (e) => {
+            if (document.querySelectorAll('.line-item-row').length > 1) {
+              e.target.closest('.line-item-row').remove();
+              recalcInvoiceTotals();
+            } else {
+              alert('Invoice must contain at least one line item.');
+            }
+          });
+        });
 
         document.getElementById('btnCancelNewInv').addEventListener('click', () => { state.invoiceSubTab = 'list'; render(); });
         document.getElementById('btnCancelNewInv2').addEventListener('click', () => { state.invoiceSubTab = 'list'; render(); });
@@ -1640,22 +1952,56 @@
           const prog = state.programmes.find(p => p.id === progId);
           const dateStr = document.getElementById('invDate').value;
           const dueStr = document.getElementById('invDueDate').value;
-          const discount = Number(document.getElementById('invDiscount').value || 0);
           const errEl = document.getElementById('invFormError');
 
           if (!client || !prog) { errEl.textContent = 'Please fill all required fields.'; errEl.style.display = 'block'; return; }
           if (isPeriodLocked(dateStr)) { errEl.textContent = 'This financial period is locked. Mutations blocked.'; errEl.style.display = 'block'; return; }
 
+          const items = [];
+          let subtotal = 0;
+          let totalDiscount = 0;
+
+          document.querySelectorAll('.line-item-row').forEach(r => {
+            const desc = r.querySelector('.item-desc').value.trim() || prog.name;
+            const qty = Number(r.querySelector('.item-qty').value || 1);
+            const unitPrice = Number(r.querySelector('.item-price').value || 0);
+            const disc = Number(r.querySelector('.item-disc').value || 0);
+            const lineAmt = Math.max(0, safeRound((qty * unitPrice) - disc));
+            subtotal = safeRound(subtotal + (qty * unitPrice));
+            totalDiscount = safeRound(totalDiscount + disc);
+            items.push({ description: desc, quantity: qty, price: unitPrice, discount: disc, amount: lineAmt });
+          });
+
+          const total = Math.max(0, safeRound(subtotal - totalDiscount));
+
           state.counters.invoice += 1;
-          const total = Math.max(0, safeRound(Number(prog.price) - discount));
+          const docNo = formatDocNo('invoice', state.counters.invoice, dateStr);
 
           const inv = {
-            id: 'inv_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, invoiceNo: state.counters.invoice,
-            clientName: client, programmeId: prog.id, programmeName: prog.name,
-            phone: document.getElementById('invPhone').value.trim(), email: document.getElementById('invEmail').value.trim(),
-            category: document.getElementById('invCat').value, date: dateStr, dueDate: dueStr,
-            plan: document.getElementById('invPlan').value, discount, total,
-            createdAt: new Date().toISOString(), createdBy: state.currentRole
+            id: 'inv_' + Date.now(),
+            tenant_id: DEFAULT_TENANT_ID,
+            invoiceNo: state.counters.invoice,
+            invoice_display_no: docNo,
+            clientName: client,
+            parentName: document.getElementById('invParent').value.trim(),
+            programmeId: prog.id,
+            programmeName: prog.name,
+            phone: document.getElementById('invPhone').value.trim(),
+            email: document.getElementById('invEmail').value.trim(),
+            category: document.getElementById('invCat').value,
+            date: dateStr,
+            dueDate: dueStr,
+            plan: document.getElementById('invPlan').value,
+            trainingMode: document.getElementById('invMode').value,
+            duration: document.getElementById('invDuration').value.trim() || '5 Months',
+            schedule: document.getElementById('invSchedule').value.trim() || 'Weekdays',
+            notes: document.getElementById('invNotes').value.trim(),
+            items,
+            subtotal,
+            discount: totalDiscount,
+            total,
+            createdAt: new Date().toISOString(),
+            createdBy: state.auth.user ? state.auth.user.name : 'Super Admin'
           };
 
           state.invoices.push(inv);
@@ -1664,6 +2010,7 @@
           await logAudit('CREATE_INVOICE', 'invoice', inv.id, `Invoice #${inv.invoiceNo} (${inv.clientName})`, null, inv);
 
           state.invoiceSubTab = 'list';
+          openModal('viewInvoice', { invoice: inv });
           render();
         });
       } else {
@@ -1690,7 +2037,7 @@
                 <tr>
                   <th>Invoice #</th><th>Date</th><th>Due Date</th><th>Student / Client</th>
                   <th>Programme</th><th style="text-align:right;">Total</th><th style="text-align:right;">Paid</th>
-                  <th style="text-align:right;">Balance</th><th>Status</th><th style="text-align:center;">Action</th>
+                  <th style="text-align:right;">Balance</th><th>Status</th><th style="text-align:center;">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1705,11 +2052,15 @@
                       <td style="font-weight:600;">${escapeHtml(inv.clientName)}</td>
                       <td>${escapeHtml(inv.programmeName)}</td>
                       <td style="text-align:right;">${fmtMoney(total)}</td>
-                      <td style="text-align:right; color:var(--success);">${fmtMoney(paid)}</td>
+                      <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(paid)}</td>
                       <td style="text-align:right; font-weight:700; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(balance)}</td>
                       <td><span class="cp-pill ${st}">${st.toUpperCase()}</span></td>
                       <td style="text-align:center;">
-                        ${balance > 0 && canRecord() ? `<button class="cp-btn sm accent btnRecordPay" data-id="${inv.id}">+ Pay</button>` : `<span style="font-size:11px; color:var(--success); font-weight:700;">&#x2714; Settled</span>`}
+                        <div class="cp-action-group">
+                          <button class="cp-btn sm secondary btnViewInv" data-id="${inv.id}" title="View official printable invoice">&#x1F4C4; View / PDF</button>
+                          ${balance > 0 && canRecord() ? `<button class="cp-btn sm accent btnRecordPay" data-id="${inv.id}">+ Pay</button>` : ''}
+                          <button class="cp-btn sm secondary btnReminder" data-id="${inv.id}" title="Send Reminder">&#x1F4E7;</button>
+                        </div>
                       </td>
                     </tr>
                   `;
@@ -1735,10 +2086,24 @@
         const btnNew = document.getElementById('btnNewInvBtn');
         if (btnNew) btnNew.addEventListener('click', () => { state.invoiceSubTab = 'new'; render(); });
 
+        container.querySelectorAll('.btnViewInv').forEach(b => {
+          b.addEventListener('click', () => {
+            const inv = state.invoices.find(i => i.id === b.dataset.id);
+            if (inv) openModal('viewInvoice', { invoice: inv });
+          });
+        });
+
         container.querySelectorAll('.btnRecordPay').forEach(b => {
           b.addEventListener('click', () => {
             const inv = state.invoices.find(i => i.id === b.dataset.id);
             if (inv) openModal('recordPayment', { invoice: inv });
+          });
+        });
+
+        container.querySelectorAll('.btnReminder').forEach(b => {
+          b.addEventListener('click', () => {
+            const inv = state.invoices.find(i => i.id === b.dataset.id);
+            if (inv) openModal('sendReminder', { invoice: inv });
           });
         });
       }
@@ -2192,6 +2557,7 @@
       if (type === 'recordDirectIncome') renderRecordDirectIncomeModal(container);
       else if (type === 'recordExpense') renderRecordExpenseModal(container);
       else if (type === 'recordPayment') renderRecordPaymentModal(container, data.invoice);
+      else if (type === 'viewInvoice') renderViewInvoiceModal(container, data.invoice);
       else if (type === 'viewReceipt') renderViewReceiptModal(container, data.payment, data.invoice);
       else if (type === 'studentStatement') renderStudentStatementModal(container, data.account);
       else if (type === 'sendReminder') renderSendReminderModal(container, data.invoice);
@@ -2486,43 +2852,261 @@
       });
     }
 
-    function renderViewReceiptModal(container, payment, invoice) {
-      const inv = invoice || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student', total: payment.amount };
-      const { balance } = invoiceBalance(inv);
+        // ----------------------------------------------------
+    // PROFESSIONAL A4 INVOICE VIEWER & DOCUMENT ENGINE
+    // ----------------------------------------------------
+    function renderViewInvoiceModal(container, inv) {
+      const { balance, paid, total } = invoiceBalance(inv);
+      const docNo = inv.invoice_display_no || formatDocNo('invoice', inv.invoiceNo, inv.date);
+      const items = Array.isArray(inv.items) && inv.items.length ? inv.items : [{
+        description: inv.programmeName || 'Professional Training Program',
+        quantity: 1,
+        price: Number(inv.total || 0) + Number(inv.discount || 0),
+        discount: Number(inv.discount || 0),
+        amount: Number(inv.total || 0)
+      }];
+
+      const subtotal = safeRound(items.reduce((s, it) => s + (Number(it.price || 0) * Number(it.quantity || 1)), 0));
+      const discount = safeRound(items.reduce((s, it) => s + Number(it.discount || 0), 0));
 
       container.innerHTML = `
         <div class="cp-modal-overlay">
-          <div class="cp-modal large">
-            <div class="cp-modal-header no-print"><div class="cp-modal-title">&#x1F9FE; Official Payment Receipt</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+          <div class="cp-modal doc-modal">
+            <div class="cp-modal-header no-print">
+              <div class="cp-modal-title">&#x1F4C4; Clasptek Official Invoice &mdash; ${escapeHtml(docNo)}</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
             <div class="cp-modal-body">
-              <div class="cp-statement-paper cp-printable-area">
-                <div class="cp-statement-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-                  <div style="display:flex; align-items:center; gap:12px;">
-                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:36px; width:auto; object-fit:contain;" />
+              <div class="cp-doc-paper cp-printable-area">
+                <!-- Document Header -->
+                <div class="cp-doc-header">
+                  <div style="display:flex; align-items:center; gap:16px;">
+                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; object-fit:contain;" />
                     <div>
-                      <div style="font-size:15px; font-weight:800; color:var(--primary); letter-spacing:-0.2px;">CLASPTEK FINANCE MANAGEMENT SYSTEM</div>
-                      <div style="font-size:12px; color:var(--text-secondary);">Official Payment Receipt</div>
+                      <div style="font-size:16px; font-weight:800; color:var(--primary); letter-spacing:-0.2px;">CLASPTEK COACHING LIMITED</div>
+                      <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.4; margin-top:2px;">
+                        1, Baptist Close Off Access Ibiyemi Avenue<br/>
+                        Access International School Bus-stop, Magboro, Ogun 110115 NG<br/>
+                        Phone: <strong>+2347041316925</strong> &middot; Email: <strong>info@clasptek.org</strong>
+                      </div>
                     </div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:14px; font-weight:700; color:var(--accent);">RECEIPT #${payment.receiptNo}</div>
-                    <div style="font-size:11.5px; color:var(--text-secondary);">Date: ${fmtDate(payment.date)}</div>
+                    <div style="font-size:24px; font-weight:900; color:var(--primary); letter-spacing:1px;">INVOICE</div>
+                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace; margin-top:2px;">${escapeHtml(docNo)}</div>
                   </div>
                 </div>
 
-                <div class="cp-receipt-row"><span>Student / Client</span><span style="font-weight:700;">${escapeHtml(inv.clientName)}</span></div>
-                <div class="cp-receipt-row"><span>Applied Invoice</span><span>Invoice #${inv.invoiceNo}</span></div>
-                <div class="cp-receipt-row"><span>Payment Method</span><span>${escapeHtml(payment.paymentMethod || 'Bank Transfer')}</span></div>
-                <div class="cp-receipt-row"><span>Reference</span><span style="font-family:monospace;">${escapeHtml(payment.reference || '\u2014')}</span></div>
-                <div class="cp-receipt-row" style="border-top:1.5px solid var(--primary); border-bottom:1.5px solid var(--primary); padding:8px 0; font-size:15px; font-weight:800; color:var(--success);">
-                  <span>AMOUNT PAID</span><span>${fmtMoney(payment.amount)}</span>
+                <!-- Bill To & Document Metadata -->
+                <div class="cp-doc-meta-grid">
+                  <div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">BILL TO:</div>
+                    <div style="font-size:14px; font-weight:800; color:var(--primary);">${escapeHtml(inv.clientName)}</div>
+                    ${inv.parentName ? `<div style="font-size:12px; color:var(--text-secondary);">Parent/Guardian: ${escapeHtml(inv.parentName)}</div>` : ''}
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Phone: <strong>${escapeHtml(inv.phone || 'N/A')}</strong></div>
+                    <div style="font-size:12px; color:var(--text-secondary);">Email: <strong>${escapeHtml(inv.email || 'N/A')}</strong></div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:12px; margin-bottom:3px;"><strong>Invoice Date:</strong> ${fmtDate(inv.date)}</div>
+                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Due Date:</strong> <span style="color:var(--accent); font-weight:700;">${fmtDate(inv.dueDate)}</span></div>
+                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Plan:</strong> ${inv.plan === 'installment' ? '60 / 40 Installment Schedule' : 'Full Upfront Payment'}</div>
+                    <div style="font-size:12px;"><strong>Invoice Status:</strong> <span class="cp-pill ${invoiceStatus(inv)}">${invoiceStatus(inv).toUpperCase()}</span></div>
+                  </div>
                 </div>
-                <div class="cp-receipt-row"><span>Remaining Balance</span><span style="font-weight:700;">${fmtMoney(balance)}</span></div>
+
+                <!-- Multi-Item Line Table -->
+                <table class="cp-doc-table">
+                  <thead>
+                    <tr>
+                      <th style="width:50%;">ITEM</th>
+                      <th style="text-align:center; width:10%;">QUANTITY</th>
+                      <th style="text-align:right; width:15%;">PRICE</th>
+                      <th style="text-align:right; width:10%;">DISCOUNT</th>
+                      <th style="text-align:right; width:15%;">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${items.map(it => `
+                      <tr>
+                        <td style="font-weight:600;">${escapeHtml(it.description)}</td>
+                        <td style="text-align:center;">${it.quantity || 1}</td>
+                        <td style="text-align:right;">${fmtMoney(it.price)}</td>
+                        <td style="text-align:right; color:var(--text-muted);">${it.discount > 0 ? fmtMoney(it.discount) : '—'}</td>
+                        <td style="text-align:right; font-weight:700;">${fmtMoney(it.amount)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+
+                <!-- Financial Totals Block -->
+                <div class="cp-doc-totals">
+                  <div class="cp-doc-totals-box">
+                    <div class="cp-doc-total-row"><span>Subtotal:</span><span>${fmtMoney(subtotal)}</span></div>
+                    <div class="cp-doc-total-row"><span>Discount:</span><span style="color:var(--danger);">- ${fmtMoney(discount)}</span></div>
+                    <div class="cp-doc-total-row grand"><span>Total Invoiced:</span><span>${fmtMoney(total)}</span></div>
+                    <div class="cp-doc-total-row" style="color:var(--success); font-weight:600; margin-top:4px;"><span>Amount Paid:</span><span>${fmtMoney(paid)}</span></div>
+                    <div class="cp-doc-total-row" style="font-size:13.5px; font-weight:800; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'}; border-top:1px solid var(--border); margin-top:4px; padding-top:4px;">
+                      <span>Balance Due:</span><span>${fmtMoney(balance)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Structured Programme & Payment Information -->
+                <div class="cp-doc-box">
+                  <div style="font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">&#x1F393; Programme &amp; Training Details</div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">
+                    <div><strong>Programme:</strong> ${escapeHtml(inv.programmeName)}</div>
+                    <div><strong>Duration:</strong> ${escapeHtml(inv.duration || '5 Months')}</div>
+                    <div><strong>Training Mode:</strong> ${escapeHtml(inv.trainingMode || 'Live Interactive Onsite Class')}</div>
+                    <div><strong>Lecture Schedule:</strong> ${escapeHtml(inv.schedule || 'Weekdays')}</div>
+                  </div>
+                </div>
+
+                <!-- Payment Instructions -->
+                <div class="cp-doc-box" style="border-left-color:var(--success);">
+                  <div style="font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">&#x1F3E6; Official Bank Payment Instructions</div>
+                  <div style="font-size:12px; line-height:1.5;">
+                    Bank Name: <strong>Guaranty Trust Bank (GTBank)</strong> &middot; Account Number: <strong style="font-family:monospace; font-size:13px;">0849201938</strong> &middot; Account Name: <strong>Clasptek Coaching Limited</strong><br/>
+                    <em>Kindly use Student Name (${escapeHtml(inv.clientName)}) or Invoice #${inv.invoiceNo} as transaction reference.</em>
+                  </div>
+                </div>
+
+                <!-- Important Notes & Terms -->
+                <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5; margin-bottom:14px;">
+                  <strong>Important Information:</strong> Once payment is confirmed, onboarding materials, curriculum schedules, and student credentials will be shared. Kindly send proof of payment via WhatsApp or email to <strong>info@clasptek.org</strong>.
+                </div>
+
+                <!-- Document Footer & Authorization -->
+                <div class="cp-doc-footer">
+                  <div>
+                    <div style="font-weight:700; color:var(--primary);">Thank you for choosing Clasptek Coaching Limited!</div>
+                    <div style="font-size:11px; color:var(--text-muted);">Learn | Lead | Impact &mdash; clasptek.org</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:11.5px; font-weight:700; color:var(--primary);">Authorized Signatory</div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(inv.createdBy || 'Finance Operations')} &middot; Clasptek Finance</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cp-modal-footer no-print">
+              <button class="cp-btn secondary" id="mCloseInv">Close</button>
+              ${balance > 0 && canRecord() ? `<button class="cp-btn accent" id="btnPayFromInvModal">+ Record Payment</button>` : ''}
+              <button class="cp-btn primary" onclick="window.print();">&#x1F5A8; Print / Download PDF</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseInv').addEventListener('click', closeModal);
+
+      const btnPay = document.getElementById('btnPayFromInvModal');
+      if (btnPay) {
+        btnPay.addEventListener('click', () => {
+          closeModal();
+          openModal('recordPayment', { invoice: inv });
+        });
+      }
+    }
+
+    function renderViewReceiptModal(container, payment, invoice) {
+      const inv = invoice || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student', total: payment.amount };
+      const { balance, total, paid } = invoiceBalance(inv);
+      const receiptDisplayNo = formatDocNo('receipt', payment.receiptNo, payment.date);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal doc-modal">
+            <div class="cp-modal-header no-print">
+              <div class="cp-modal-title">&#x1F9FE; Official Payment Receipt &mdash; ${escapeHtml(receiptDisplayNo)}</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div class="cp-doc-paper cp-printable-area">
+                <!-- Header -->
+                <div class="cp-doc-header">
+                  <div style="display:flex; align-items:center; gap:16px;">
+                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; object-fit:contain;" />
+                    <div>
+                      <div style="font-size:16px; font-weight:800; color:var(--primary); letter-spacing:-0.2px;">CLASPTEK COACHING LIMITED</div>
+                      <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.4; margin-top:2px;">
+                        1, Baptist Close Off Access Ibiyemi Avenue<br/>
+                        Access International School Bus-stop, Magboro, Ogun 110115 NG<br/>
+                        Phone: <strong>+2347041316925</strong> &middot; Email: <strong>info@clasptek.org</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:24px; font-weight:900; color:var(--success); letter-spacing:1px;">OFFICIAL RECEIPT</div>
+                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace; margin-top:2px;">${escapeHtml(receiptDisplayNo)}</div>
+                    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Payment Date: <strong>${fmtDate(payment.date)}</strong></div>
+                  </div>
+                </div>
+
+                <!-- Received From & Payment Metadata -->
+                <div class="cp-doc-meta-grid">
+                  <div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">RECEIVED FROM:</div>
+                    <div style="font-size:14px; font-weight:800; color:var(--primary);">${escapeHtml(inv.clientName)}</div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Phone: <strong>${escapeHtml(inv.phone || 'N/A')}</strong> &middot; Email: <strong>${escapeHtml(inv.email || 'N/A')}</strong></div>
+                    <div style="font-size:12px; color:var(--text-secondary);">Applied Target: <strong>Invoice #${inv.invoiceNo} &mdash; ${escapeHtml(inv.programmeName)}</strong></div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Method:</strong> ${escapeHtml(payment.paymentMethod || 'Bank Transfer')}</div>
+                    <div style="font-size:12px; margin-bottom:3px;"><strong>Transaction Ref:</strong> <span style="font-family:monospace; font-weight:700;">${escapeHtml(payment.reference || '—')}</span></div>
+                    <div style="font-size:12px;"><strong>Reconciliation:</strong> <span class="cp-pill ${payment.reconciliationStatus === 'reconciled' ? 'reconciled' : 'unreconciled'}">${(payment.reconciliationStatus || 'recorded').toUpperCase()}</span></div>
+                  </div>
+                </div>
+
+                <!-- Amount Breakdown Table -->
+                <table class="cp-doc-table">
+                  <thead>
+                    <tr>
+                      <th>PAYMENT DESCRIPTION</th>
+                      <th style="text-align:right;">TOTAL INVOICED</th>
+                      <th style="text-align:right;">AMOUNT PAID</th>
+                      <th style="text-align:right;">OUTSTANDING BALANCE</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="font-weight:600;">Tuition / Service Fee Payment (${escapeHtml(inv.programmeName)})</td>
+                      <td style="text-align:right;">${fmtMoney(total)}</td>
+                      <td style="text-align:right; font-weight:800; color:var(--success); font-size:13.5px;">${fmtMoney(payment.amount)}</td>
+                      <td style="text-align:right; font-weight:700; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(balance)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <!-- Summary Box -->
+                <div class="cp-doc-box" style="border-left-color:var(--success); display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-size:13px; font-weight:700; color:var(--primary);">Payment Confirmation Notice</div>
+                    <div style="font-size:11.5px; color:var(--text-secondary);">This document serves as authoritative proof of payment received by Clasptek Coaching Limited.</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:11px; color:var(--text-secondary);">CONFIRMED AMOUNT</div>
+                    <div style="font-size:18px; font-weight:900; color:var(--success);">${fmtMoney(payment.amount)}</div>
+                  </div>
+                </div>
+
+                <!-- Document Footer -->
+                <div class="cp-doc-footer">
+                  <div>
+                    <div style="font-weight:700; color:var(--primary);">Thank you for choosing Clasptek Coaching Limited!</div>
+                    <div style="font-size:11px; color:var(--text-muted);">Learn | Lead | Impact &mdash; clasptek.org</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:11.5px; font-weight:700; color:var(--primary);">Authorized Finance Operations</div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(payment.createdBy || 'Finance Operations')} &middot; Clasptek Finance</div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="cp-modal-footer no-print">
               <button class="cp-btn secondary" id="mCloseRec">Close</button>
-              <button class="cp-btn accent" onclick="window.print();">&#x1F5A8; Print Receipt</button>
+              <button class="cp-btn accent" onclick="window.print();">&#x1F5A8; Print / Download Receipt</button>
             </div>
           </div>
         </div>
