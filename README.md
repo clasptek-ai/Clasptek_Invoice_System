@@ -1,12 +1,12 @@
 # Clasptek Finance Management System
 
-An enterprise-grade, client-side finance, billing, and accounting management platform designed for training institutes, academies, and service organizations.
+An enterprise-grade, financial intelligence, billing, and accounting management platform designed for training institutes, academies, and service organizations.
 
 ---
 
 ## 🌟 Overview
 
-**Clasptek Finance** is an all-in-one financial intelligence and management solution covering the complete lifecycle of financial operations:
+**Clasptek Finance** is an all-in-one financial management solution covering the complete lifecycle of financial operations:
 - **Income & Billing Management**: Multi-item invoicing, one-off and installment payment plans, direct income logging, and dynamic status tracking.
 - **Expense Tracking & Controls**: Hierarchical expense categories, threshold-based multi-tier approval workflows, and audit-safe non-destructive cancellations.
 - **Receipts & Payment Ledger**: Detailed payment recording across modern non-cash channels (Bank Transfer, POS, Card, Online Gateway), unique receipt numbering, and printable receipts.
@@ -14,6 +14,7 @@ An enterprise-grade, client-side finance, billing, and accounting management pla
 - **Student / Customer Account Statements**: Itemized debit/credit running ledger and printable statements.
 - **Financial Intelligence & Management Reports**: Real-time Executive KPIs, Profit & Loss (P&L), Cash Flow statements, 30/60/90-day cash flow projections, and Budget Intelligence with utilization alerts.
 - **Audit Assurance & Period Controls**: Immutable audit logging, 12-step month-end closing checklist, and bank account reconciliation engine.
+- **Supabase Backend Architecture (Phase 5)**: Enterprise PostgreSQL schema (`supabase_schema.sql`), Row Level Security (RLS) with zero anonymous access, database-level period locking triggers, immutable audit triggers, secure RPC functions, and non-destructive Migration Preview Mode.
 
 ---
 
@@ -30,7 +31,7 @@ An enterprise-grade, client-side finance, billing, and accounting management pla
 - **Categorization**: Configurable revenue categories.
 
 ### 3. Expense Management & Approval Matrix
-- **Category Hierarchy**: Staff & Payroll, Marketing & Growth, Technology & Software, Operations & Utilities, Academic & Training, Administration.
+- **Category Hierarchy**: Staff & People, Marketing & Growth, Technology & Software, Operations & Utilities, Academic & Training, Administration.
 - **Multi-Tier Approvals**: Configurable threshold (e.g. ₦500,000) routing high-value expenses to Finance Managers or Super Admins before affecting P&L.
 - **Void / Reversal Audit Safety**: Historical transactions are never silently deleted.
 
@@ -47,13 +48,19 @@ An enterprise-grade, client-side finance, billing, and accounting management pla
 - **Bank Account Reconciliation**: Opening balance, expected transactions, bank balance verification, and variance matching.
 - **Strict Financial Periods**: Lock past accounting periods to prevent retroactive mutations.
 
+### 7. Supabase PostgreSQL Backend & Migration Preview
+- **PostgreSQL DDL**: Fully normalized tables in `supabase_schema.sql` (`tenants`, `profiles`, `tenant_memberships`, `invoices`, `invoice_items`, `payments`, `expenses`, `direct_income`, `budgets`, `finance_audit_log`, `finance_periods`, `reconciliations`, etc.).
+- **Row Level Security (RLS)**: Authenticated-only access deriving tenant isolation from `auth.uid()`. Zero anonymous access to financial records.
+- **Secure RPC Functions**: `create_invoice_with_items`, `record_payment`, `record_expense`, `approve_expense`, `void_financial_record`, `reopen_financial_period`.
+- **Migration Safety Lock**: Pre-flight forensic scan comparing LocalStorage vs Supabase counts and calculating financial balances with zero variance before any live data transfer.
+
 ---
 
 ## 🛠️ Tech Stack & Architecture
 
 - **Frontend**: Pure HTML5, Modern CSS3 with Design Tokens, Vanilla JavaScript (ES6+).
-- **Storage**: Multi-tier storage engine (supports LocalStorage, `window.storage`, and Supabase/PostgreSQL backend readiness).
-- **Precision**: Integer-cent rounding (`Math.round(n * 100) / 100`) to eliminate floating-point drift.
+- **Database**: PostgreSQL on Supabase (`https://logaawoigfxnisimfatf.supabase.co/rest/v1/`).
+- **Precision**: Integer-cent rounding (`Math.round(n * 100) / 100`) eliminating floating-point drift.
 - **Compatibility**: 100% backward compatible with legacy billing data schemas.
 
 ---
@@ -62,7 +69,8 @@ An enterprise-grade, client-side finance, billing, and accounting management pla
 
 ```
 Clasptek_Invoice/
-├── clasptek_invoice_system.html   # Main self-contained application
+├── clasptek_invoice_system.html   # Main self-contained application with Migration Preview
+├── supabase_schema.sql            # Production PostgreSQL schema, RLS, triggers & RPCs
 ├── README.md                      # Documentation
 └── .gitignore                     # Git ignore rules
 ```
@@ -71,19 +79,22 @@ Clasptek_Invoice/
 
 ## 💻 Getting Started
 
-Simply open `clasptek_invoice_system.html` in any modern web browser:
-```bash
-# Windows PowerShell
-Start-Process "clasptek_invoice_system.html"
-```
+1. **Open the application locally**:
+   ```bash
+   Start-Process "clasptek_invoice_system.html"
+   ```
+2. **Execute the PostgreSQL Schema**:
+   Copy the contents of `supabase_schema.sql` and run it in the Supabase SQL Editor (`https://supabase.com/dashboard/project/logaawoigfxnisimfatf/sql`).
+3. **Inspect Migration Diagnostic**:
+   Click **⚡ Supabase & Migration Preview** in the top navigation bar to test the connection and review the pre-flight financial diagnostic.
 
 ---
 
 ## 🔒 Security & Data Integrity
 
-- **Role-Based Access Control (RBAC)**: Super Admin, Finance Manager, and Staff roles.
-- **Multi-Tenant Ready**: All models include `tenant_id` and audit metadata timestamps.
-- **Safe Auditing**: Every status change, reversal, or threshold override creates an immutable entry in `clasptek:finance_audit_log`.
+- **Role-Based Access Control (RBAC)**: Super Admin, Finance Manager, and Staff roles enforced in PostgreSQL.
+- **Multi-Tenant Derivation**: Tenant access resolved strictly via `get_auth_tenant_id()` from `auth.uid()`.
+- **Immutable Audit Trail**: Append-only trigger prohibits any `UPDATE` or `DELETE` operations on `finance_audit_log`.
 
 ---
 
