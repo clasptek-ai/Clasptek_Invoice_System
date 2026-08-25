@@ -1,0 +1,3129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clasptek Finance — Financial Intelligence, Reconciliation &amp; Audit Assurance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #14213D;
+      --primary-hover: #1f325c;
+      --accent: #C1272D;
+      --accent-hover: #a51f25;
+      --success: #107C41;
+      --success-bg: #EAF7EE;
+      --warning: #B25E02;
+      --warning-bg: #FFF4E5;
+      --danger: #D13438;
+      --danger-bg: #FDE7E9;
+      --info: #0078D4;
+      --info-bg: #EFF6FC;
+      --neutral-bg: #F8F9FA;
+      --surface-0: #FFFFFF;
+      --surface-1: #FFFFFF;
+      --surface-2: #F4F5F7;
+      --border: #E2E8F0;
+      --border-strong: #CBD5E1;
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --text-muted: #94A3B8;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--neutral-bg); color: var(--text-primary); font-family: var(--font-sans); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+    #root { font-family: var(--font-sans); color: var(--text-primary); }
+    .cp-wrap { max-width: 1260px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+    /* Header */
+    .cp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+    .cp-brand { display: flex; align-items: center; gap: 12px; }
+    .cp-mark { width: 42px; height: 42px; border-radius: var(--radius-md); background: linear-gradient(135deg, #14213D 0%, #243B6A 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 16.5px; letter-spacing: 0.5px; box-shadow: var(--shadow-sm); flex-shrink: 0; }
+    .cp-title { font-size: 19px; font-weight: 700; color: var(--primary); letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+    .cp-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 1px; }
+    .cp-header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    /* Role Selector */
+    .cp-role-tag { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .cp-role-select { background: transparent; border: none; font-size: 12px; font-weight: 600; color: var(--primary); outline: none; cursor: pointer; }
+
+    /* Navigation Tabs */
+    .cp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
+    .cp-tabs::-webkit-scrollbar { display: none; }
+    .cp-tab { padding: 9px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; border-bottom: 2.5px solid transparent; color: var(--text-secondary); user-select: none; transition: all 0.15s ease; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .cp-tab:hover:not(.active) { color: var(--primary); background: rgba(20, 33, 61, 0.03); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+    .cp-tab.active { color: var(--primary); border-bottom-color: var(--accent); font-weight: 600; }
+    .cp-tab.highlight { background: rgba(193, 39, 45, 0.04); }
+
+    /* Cards & Containers */
+    .cp-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow-sm); }
+    .cp-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+    .cp-section-title { font-size: 15px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    .cp-section-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Alert Cards */
+    .cp-alert-card { border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 14px; border-left: 4px solid var(--primary); background: #fff; border: 1px solid var(--border); border-left-width: 4px; box-shadow: var(--shadow-sm); }
+    .cp-alert-card.danger { border-left-color: var(--danger); }
+    .cp-alert-card.warning { border-left-color: var(--warning); }
+    .cp-alert-card.info { border-left-color: var(--info); }
+    .cp-alert-card-title { font-size: 13.5px; font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .cp-alert-card-detail { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 4px; }
+    .cp-alert-card-action { font-size: 12px; font-weight: 600; color: var(--primary); background: var(--surface-2); padding: 4px 8px; border-radius: var(--radius-sm); display: inline-block; margin-top: 4px; }
+
+    /* Grids & Stats */
+    .cp-grid-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .cp-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .cp-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .cp-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 18px; }
+
+    .cp-stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; box-shadow: var(--shadow-sm); }
+    .cp-stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .cp-stat-label { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+    .cp-stat-value { font-size: 20px; font-weight: 700; color: var(--primary); letter-spacing: -0.4px; line-height: 1.2; }
+    .cp-stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+    .cp-stat-pill { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 12px; }
+
+    .cp-stat.accent-border { border-left: 4px solid var(--primary); }
+    .cp-stat.income-border { border-left: 4px solid var(--success); }
+    .cp-stat.expense-border { border-left: 4px solid var(--danger); }
+    .cp-stat.receivable-border { border-left: 4px solid var(--warning); }
+    .cp-stat.info-border { border-left: 4px solid var(--info); }
+
+    /* Forms & Fields */
+    .cp-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .cp-field label { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; }
+    .cp-field input, .cp-field select, .cp-field textarea {
+      padding: 8.5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px;
+      background: var(--surface-2); color: var(--text-primary); font-family: var(--font-sans); transition: all 0.15s ease;
+    }
+    .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(20, 33, 61, 0.08); }
+    .cp-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cp-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+    /* Buttons */
+    .cp-btn { background: var(--primary); color: #fff; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s ease; text-decoration: none; font-family: var(--font-sans); }
+    .cp-btn:hover { background: var(--primary-hover); }
+    .cp-btn.secondary { background: var(--surface-0); color: var(--primary); border: 1px solid var(--border-strong); }
+    .cp-btn.secondary:hover { background: var(--surface-2); border-color: var(--primary); }
+    .cp-btn.accent { background: var(--accent); color: #fff; }
+    .cp-btn.accent:hover { background: var(--accent-hover); }
+    .cp-btn.danger { background: var(--surface-0); color: var(--danger); border: 1px solid var(--danger); padding: 5px 9px; font-size: 11.5px; }
+    .cp-btn.danger:hover { background: var(--danger-bg); }
+    .cp-btn.sm { padding: 5.5px 11px; font-size: 12px; }
+
+    /* Toolbars & Search */
+    .cp-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; background: var(--surface-1); padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+    .cp-toolbar-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; }
+    .cp-search { min-width: 180px; flex: 1; max-width: 300px; position: relative; }
+    .cp-search input { width: 100%; padding: 7px 10px 7px 28px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12.5px; background: var(--surface-2); font-family: var(--font-sans); }
+    .cp-search input:focus { outline: none; border-color: var(--primary); background: #fff; }
+    .cp-search-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--text-muted); pointer-events: none; }
+    .cp-select-filter { padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; background: var(--surface-2); color: var(--text-primary); font-family: var(--font-sans); }
+
+    /* Tables */
+    .cp-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+    .cp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+    .cp-table th { background: #FAFBFD; padding: 9px 11px; color: var(--text-secondary); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .cp-table td { padding: 10px 11px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-primary); }
+    .cp-table tr:last-child td { border-bottom: none; }
+    .cp-table tr:hover td { background: rgba(244, 245, 247, 0.5); }
+    .cp-table .cancelled-row { opacity: 0.6; background: #FFF8F8; }
+    .cp-table .cancelled-row td { text-decoration: line-through; }
+    .cp-table .cancelled-row td.no-strike { text-decoration: none; }
+
+    /* Status Pills */
+    .cp-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2.5px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .cp-pill.paid, .cp-pill.reconciled, .cp-pill.approved { background: var(--success-bg); color: var(--success); }
+    .cp-pill.partial, .cp-pill.unreconciled, .cp-pill.pending { background: var(--warning-bg); color: var(--warning); }
+    .cp-pill.unpaid, .cp-pill.flagged, .cp-pill.rejected, .cp-pill.locked, .cp-pill.exception { background: var(--danger-bg); color: var(--danger); }
+    .cp-pill.recorded, .cp-pill.open, .cp-pill.matched { background: var(--info-bg); color: var(--info); }
+    .cp-pill.cancelled, .cp-pill.closed { background: #F2F4F7; color: #667085; text-decoration: none !important; }
+    .cp-pill.category-pill { background: #F1F5F9; color: #334155; font-weight: 500; font-size: 10.5px; }
+
+    /* Priorities */
+    .cp-pill.prio-critical { background: #FCE8E6; color: #912018; font-weight: 700; border: 1px solid #FECDCA; }
+    .cp-pill.prio-high { background: #FEE4E2; color: #D92D20; font-weight: 600; }
+    .cp-pill.prio-medium { background: #FEF0C7; color: #B54708; font-weight: 600; }
+    .cp-pill.prio-low { background: var(--success-bg); color: var(--success); }
+
+    /* Modals & Dialogs */
+    .cp-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .cp-modal { background: #fff; border-radius: var(--radius-lg); width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
+    .cp-modal.large { max-width: 820px; }
+    .cp-modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #FAFBFD; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+    .cp-modal-title { font-size: 14.5px; font-weight: 700; color: var(--primary); }
+    .cp-modal-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); padding: 4px; line-height: 1; }
+    .cp-modal-body { padding: 18px; }
+    .cp-modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; background: #FAFBFD; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+
+    /* Statement & Receipt Paper */
+    .cp-statement-paper { background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 22px; color: var(--text-primary); }
+    .cp-statement-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--primary); padding-bottom: 12px; margin-bottom: 16px; }
+    .cp-receipt-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted var(--border); }
+    .cp-receipt-total-box { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 12px; border: 1px solid var(--border); }
+
+    /* Progress Bars */
+    .cp-progress-bar-bg { width: 100%; height: 7px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin-top: 5px; }
+    .cp-progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .cp-progress-bar-fill.normal { background: var(--success); }
+    .cp-progress-bar-fill.watch { background: var(--warning); }
+    .cp-progress-bar-fill.over { background: var(--danger); }
+
+    /* Empty states & Errors */
+    .cp-empty { text-align: center; padding: 36px 18px; color: var(--text-secondary); font-size: 13px; }
+    .cp-empty-title { font-size: 14.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+    .cp-error { color: var(--danger); font-size: 12px; font-weight: 500; margin-top: -4px; margin-bottom: 10px; background: var(--danger-bg); padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid rgba(209, 52, 56, 0.2); }
+    .cp-subnav { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px; overflow-x: auto; }
+    .cp-subnav-btn { background: transparent; border: none; padding: 5px 11px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm); font-family: var(--font-sans); white-space: nowrap; }
+    .cp-subnav-btn.active { background: var(--primary); color: #fff; }
+
+    @media print {
+      body * { visibility: hidden; }
+      .cp-printable-area, .cp-printable-area * { visibility: visible; }
+      .cp-printable-area { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+  (function() {
+    // ----------------------------------------------------
+    // STORAGE KEYS & CONFIGURATION (PHASES 1, 2, 3, 4)
+    // ----------------------------------------------------
+    const STORE_KEY_PROGRAMMES = 'clasptek:programmes';
+    const STORE_KEY_INVOICES = 'clasptek:invoices';
+    const STORE_KEY_PAYMENTS = 'clasptek:payments';
+    const STORE_KEY_COUNTERS = 'clasptek:counters';
+    const STORE_KEY_EXPENSES = 'clasptek:expenses';
+    const STORE_KEY_DIRECT_INCOME = 'clasptek:direct_income';
+    const STORE_KEY_INCOME_CATEGORIES = 'clasptek:income_categories';
+    const STORE_KEY_EXPENSE_CATEGORIES = 'clasptek:expense_categories';
+    const STORE_KEY_BUDGETS = 'clasptek:budgets';
+    const STORE_KEY_AUDIT_LOG = 'clasptek:finance_audit_log';
+    const STORE_KEY_USER_ROLE = 'clasptek:finance_user_role';
+    const STORE_KEY_COLLECTION_NOTES = 'clasptek:collection_notes';
+    const STORE_KEY_PAYMENT_REMINDERS = 'clasptek:payment_reminders';
+    const STORE_KEY_RECURRING_EXPENSES = 'clasptek:recurring_expenses';
+    const STORE_KEY_RECURRING_INVOICES = 'clasptek:recurring_invoices';
+    const STORE_KEY_FINANCE_PERIODS = 'clasptek:finance_periods';
+    const STORE_KEY_APPROVAL_SETTINGS = 'clasptek:finance_approval_settings';
+    const STORE_KEY_RECONCILIATIONS = 'clasptek:reconciliations';
+    const STORE_KEY_ANOMALIES_REVIEWED = 'clasptek:anomalies_reviewed';
+
+    const SHARED = true;
+    const DEFAULT_TENANT_ID = 'clasptek_main';
+
+    const DEFAULT_INCOME_CATEGORIES = [
+      'Student Tuition', 'IELTS', 'TOEFL', 'SAT', 'Tech Training', 'Corporate Training',
+      'Consulting', 'Registration Fee', 'Application/Processing Fee', 'Other Income'
+    ];
+
+    const DEFAULT_EXPENSE_CATEGORIES = {
+      'Staff & People': ['Salaries', 'Facilitator Fees', 'Staff Welfare', 'Training & Development', 'Recruitment'],
+      'Marketing': ['Advertising', 'Social Media', 'Design & Content', 'Printing', 'Promotional Materials'],
+      'Technology': ['Software Subscriptions', 'Hosting', 'Domains', 'Internet', 'Hardware', 'IT Services'],
+      'Operations': ['Rent', 'Utilities', 'Transport', 'Repairs & Maintenance', 'Facility & Welfare', 'Office Supplies'],
+      'Academic': ['Learning Materials', 'Examination Resources', 'Teaching Resources', 'Academic Services'],
+      'Administration': ['Bank Charges', 'Professional Services', 'Legal', 'Accounting', 'Office Administration'],
+      'Other': ['Miscellaneous']
+    };
+
+    const PAYMENT_METHODS = ['Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Other'];
+    const DEPARTMENTS = ['Operations', 'Academics', 'Marketing', 'Administration', 'Technology', 'Management', 'Finance'];
+
+    // ----------------------------------------------------
+    // SAFE FINANCIAL ARITHMETIC UTILITIES
+    // ----------------------------------------------------
+    function safeRound(n) {
+      return Math.round((Number(n) || 0) * 100) / 100;
+    }
+
+    function fmtMoney(n) {
+      const v = safeRound(n);
+      const absFormatted = Math.abs(v).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return (v < 0 ? '-\u20a6' : '\u20a6') + absFormatted;
+    }
+
+    function fmtDate(d) {
+      if (!d) return '\u2014';
+      try {
+        const parts = String(d).split('-');
+        if (parts.length === 3) {
+          const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        return d;
+      } catch (e) {
+        return d;
+      }
+    }
+
+    // ----------------------------------------------------
+    // APPLICATION STATE
+    // ----------------------------------------------------
+    let state = {
+      tab: 'dashboard',
+      currentRole: 'Super Admin',
+      incomeSubTab: 'invoiced',
+      invoiceSubTab: 'list',
+      expensesSubTab: 'ledger',
+      paymentsSubTab: 'ledger', // ledger, reconciliation, matching, analytics
+      reportsSubTab: 'pnl', // pnl, cashflow, contribution, budgets, auditor, audit
+      budgetsSubTab: 'budgets', // budgets, periods, approvalMatrix, integrity
+      programmes: [],
+      invoices: [],
+      payments: [],
+      expenses: [],
+      directIncome: [],
+      budgets: [],
+      auditLog: [],
+      collectionNotes: [],
+      paymentReminders: [],
+      recurringExpenses: [],
+      recurringInvoices: [],
+      financePeriods: [],
+      reconciliations: [],
+      anomaliesReviewed: [],
+      approvalSettings: {
+        tier1Limit: 100000,
+        tier2Limit: 500000,
+        tier2Role: 'Finance Manager',
+        tier3Role: 'Super Admin'
+      },
+      incomeCategories: [],
+      expenseCategories: {},
+      counters: { invoice: 11092041, receipt: 20001 },
+      loading: true,
+      modal: null,
+      filters: {
+        datePreset: 'this_month',
+        dateStart: '',
+        dateEnd: '',
+        incomeSearch: '',
+        incomeCategory: 'all',
+        incomeStatus: 'all',
+        expenseSearch: '',
+        expenseGroup: 'all',
+        expenseDept: 'all',
+        expenseMethod: 'all',
+        expenseStatus: 'active',
+        invoiceSearch: '',
+        invoiceStatus: 'all',
+        paymentSearch: '',
+        paymentMethod: 'all',
+        paymentReconStatus: 'all',
+        receivableSearch: '',
+        receivablePrio: 'all',
+        accountSearch: '',
+        accountFilter: 'all',
+        ledgerSearch: '',
+        ledgerType: 'all',
+        ledgerMethod: 'all',
+        budgetPeriod: new Date().toISOString().slice(0, 7)
+      }
+    };
+
+    // ----------------------------------------------------
+    // STORAGE & AUDIT LOG ENGINE
+    // ----------------------------------------------------
+    async function safeGet(key, fallback) {
+      try {
+        if (window.storage && typeof window.storage.get === 'function') {
+          const res = await window.storage.get(key, SHARED);
+          return res && res.value ? JSON.parse(res.value) : fallback;
+        } else if (typeof localStorage !== 'undefined') {
+          const item = localStorage.getItem(key);
+          return item ? JSON.parse(item) : fallback;
+        }
+        return fallback;
+      } catch (e) {
+        console.warn('Storage read fallback for', key, e);
+        return fallback;
+      }
+    }
+
+    async function safeSet(key, value) {
+      try {
+        if (window.storage && typeof window.storage.set === 'function') {
+          await window.storage.set(key, JSON.stringify(value), SHARED);
+        } else if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+      } catch (e) {
+        console.error('Storage set error for', key, e);
+      }
+    }
+
+    async function logAudit(action, entityType, entityId, reference, previousValue, newValue, reason = '') {
+      const entry = {
+        id: 'audit_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        tenant_id: DEFAULT_TENANT_ID,
+        action,
+        entityType,
+        entityId,
+        reference: reference || 'N/A',
+        previousValue: previousValue ? (typeof previousValue === 'string' ? previousValue : JSON.stringify(previousValue)) : null,
+        newValue: newValue ? (typeof newValue === 'string' ? newValue : JSON.stringify(newValue)) : null,
+        reason: reason || 'Standard operation',
+        performedBy: state.currentRole,
+        performedAt: new Date().toISOString()
+      };
+      state.auditLog.unshift(entry);
+      await safeSet(STORE_KEY_AUDIT_LOG, state.auditLog);
+    }
+
+    // Role Permission Helpers
+    function canRecord() { return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(state.currentRole); }
+    function canCancel() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
+    function canApprove() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
+    function canManageBudget() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
+    function canClosePeriod() { return ['Finance Manager', 'Super Admin'].includes(state.currentRole); }
+    function canLockPeriod() { return ['Super Admin'].includes(state.currentRole); }
+    function canExport() { return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(state.currentRole); }
+
+    function isPeriodLocked(dateStr) {
+      if (!dateStr) return false;
+      const periodKey = dateStr.slice(0, 7);
+      const p = state.financePeriods.find(fp => fp.period === periodKey);
+      return p && p.status === 'locked';
+    }
+
+    // Dynamic Tiered Approval Requirement Helper
+    function getRequiredApprovalRole(amount) {
+      const v = Number(amount) || 0;
+      if (v > state.approvalSettings.tier2Limit) return state.approvalSettings.tier3Role; // Super Admin
+      if (v > state.approvalSettings.tier1Limit) return state.approvalSettings.tier2Role; // Finance Manager
+      return 'None'; // Auto-approved
+    }
+
+    async function loadAll() {
+      state.loading = true;
+      render();
+
+      const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, role, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev] = await Promise.all([
+        safeGet(STORE_KEY_PROGRAMMES, []),
+        safeGet(STORE_KEY_INVOICES, []),
+        safeGet(STORE_KEY_PAYMENTS, []),
+        safeGet(STORE_KEY_COUNTERS, { invoice: 11092041, receipt: 20001 }),
+        safeGet(STORE_KEY_EXPENSES, []),
+        safeGet(STORE_KEY_DIRECT_INCOME, []),
+        safeGet(STORE_KEY_INCOME_CATEGORIES, DEFAULT_INCOME_CATEGORIES),
+        safeGet(STORE_KEY_EXPENSE_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES),
+        safeGet(STORE_KEY_BUDGETS, []),
+        safeGet(STORE_KEY_AUDIT_LOG, []),
+        safeGet(STORE_KEY_USER_ROLE, 'Super Admin'),
+        safeGet(STORE_KEY_COLLECTION_NOTES, []),
+        safeGet(STORE_KEY_PAYMENT_REMINDERS, []),
+        safeGet(STORE_KEY_RECURRING_EXPENSES, []),
+        safeGet(STORE_KEY_RECURRING_INVOICES, []),
+        safeGet(STORE_KEY_FINANCE_PERIODS, []),
+        safeGet(STORE_KEY_APPROVAL_SETTINGS, { tier1Limit: 100000, tier2Limit: 500000, tier2Role: 'Finance Manager', tier3Role: 'Super Admin' }),
+        safeGet(STORE_KEY_RECONCILIATIONS, []),
+        safeGet(STORE_KEY_ANOMALIES_REVIEWED, [])
+      ]);
+
+      state.programmes = Array.isArray(progs) ? progs : [];
+      state.invoices = (Array.isArray(invs) ? invs : []).map(i => ({
+        ...i,
+        category: i.category || 'Student Tuition',
+        dueDate: i.dueDate || i.date || new Date().toISOString().slice(0, 10),
+        tenant_id: i.tenant_id || DEFAULT_TENANT_ID
+      }));
+      state.payments = (Array.isArray(pays) ? pays : []).map(p => ({
+        ...p,
+        paymentMethod: p.paymentMethod || p.method || 'Bank Transfer',
+        reconciliationStatus: p.reconciliationStatus || 'unreconciled',
+        tenant_id: p.tenant_id || DEFAULT_TENANT_ID
+      }));
+      state.counters = cnts && cnts.invoice ? cnts : { invoice: 11092041, receipt: 20001 };
+      state.expenses = (Array.isArray(exps) ? exps : []).map(e => ({
+        ...e,
+        status: e.status || 'recorded',
+        tenant_id: e.tenant_id || DEFAULT_TENANT_ID
+      }));
+      state.directIncome = (Array.isArray(dirInc) ? dirInc : []).map(d => ({
+        ...d,
+        status: d.status || 'active',
+        tenant_id: d.tenant_id || DEFAULT_TENANT_ID
+      }));
+      state.budgets = Array.isArray(bdgs) ? bdgs : [];
+      state.auditLog = Array.isArray(audits) ? audits : [];
+      state.currentRole = role || 'Super Admin';
+      state.collectionNotes = Array.isArray(cNotes) ? cNotes : [];
+      state.paymentReminders = Array.isArray(pRems) ? pRems : [];
+      state.recurringExpenses = Array.isArray(rExps) ? rExps : [];
+      state.recurringInvoices = Array.isArray(rInvs) ? rInvs : [];
+      state.financePeriods = Array.isArray(fPeriods) ? fPeriods : [];
+      state.approvalSettings = appSet && appSet.tier2Limit ? appSet : { tier1Limit: 100000, tier2Limit: 500000, tier2Role: 'Finance Manager', tier3Role: 'Super Admin' };
+      state.reconciliations = Array.isArray(recons) ? recons : [];
+      state.anomaliesReviewed = Array.isArray(anomRev) ? anomRev : [];
+      state.incomeCategories = incCats && incCats.length ? incCats : DEFAULT_INCOME_CATEGORIES;
+      state.expenseCategories = expCats && Object.keys(expCats).length ? expCats : DEFAULT_EXPENSE_CATEGORIES;
+
+      state.loading = false;
+      render();
+    }
+
+    // ----------------------------------------------------
+    // INVOICE & RECEIVABLES CALCULATION ENGINE
+    // ----------------------------------------------------
+    function invoiceBalance(inv) {
+      const paid = safeRound(state.payments
+        .filter(p => p.invoiceId === inv.id)
+        .reduce((sum, p) => sum + Number(p.amount || 0), 0));
+      const total = safeRound(Number(inv.total) || 0);
+      const balance = Math.max(0, safeRound(total - paid));
+      return { paid, balance, total };
+    }
+
+    function invoiceStatus(inv) {
+      const { paid, total } = invoiceBalance(inv);
+      if (paid <= 0) return 'unpaid';
+      if (paid >= total && total > 0) return 'paid';
+      return 'partial';
+    }
+
+    function getReceivableAgeing(inv) {
+      const { balance } = invoiceBalance(inv);
+      if (balance <= 0) return { days: 0, bucket: 'current', label: 'Paid in Full', priority: 'Low', prioClass: 'prio-low' };
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const dueStr = inv.dueDate || inv.date || todayStr;
+      const today = new Date(todayStr + 'T00:00:00');
+      const due = new Date(dueStr + 'T00:00:00');
+      const daysOverdue = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+
+      if (daysOverdue <= 0) return { days: daysOverdue, bucket: 'current', label: 'Current', priority: 'Low', prioClass: 'prio-low' };
+      if (daysOverdue <= 30) return { days: daysOverdue, bucket: '1-30', label: `${daysOverdue}d (1–30d)`, priority: 'Medium', prioClass: 'prio-medium' };
+      if (daysOverdue <= 60) return { days: daysOverdue, bucket: '31-60', label: `${daysOverdue}d (31–60d)`, priority: 'High', prioClass: 'prio-high' };
+      if (daysOverdue <= 90) return { days: daysOverdue, bucket: '61-90', label: `${daysOverdue}d (61–90d)`, priority: 'Critical', prioClass: 'prio-critical' };
+      return { days: daysOverdue, bucket: '90plus', label: `${daysOverdue}d (90+d)`, priority: 'Critical', prioClass: 'prio-critical' };
+    }
+
+    function getDateRangeBounds(preset, customStart, customEnd) {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = now.getMonth();
+      const dd = now.getDate();
+      function toStr(d) { return d.toISOString().slice(0, 10); }
+
+      switch (preset) {
+        case 'today': return { start: toStr(now), end: toStr(now) };
+        case 'yesterday': return { start: toStr(new Date(yyyy, mm, dd - 1)), end: toStr(new Date(yyyy, mm, dd - 1)) };
+        case 'this_month': return { start: toStr(new Date(yyyy, mm, 1)), end: toStr(new Date(yyyy, mm + 1, 0)) };
+        case 'last_month': return { start: toStr(new Date(yyyy, mm - 1, 1)), end: toStr(new Date(yyyy, mm, 0)) };
+        case 'this_quarter': {
+          const q = Math.floor(mm / 3);
+          return { start: toStr(new Date(yyyy, q * 3, 1)), end: toStr(new Date(yyyy, q * 3 + 3, 0)) };
+        }
+        case 'this_year': return { start: toStr(new Date(yyyy, 0, 1)), end: toStr(new Date(yyyy, 11, 31)) };
+        case 'custom': return { start: customStart || '1970-01-01', end: customEnd || '2099-12-31' };
+        case 'all':
+        default: return { start: '1970-01-01', end: '2099-12-31' };
+      }
+    }
+
+    function isDateInRange(dStr, bounds) {
+      if (!dStr) return false;
+      const d = dStr.slice(0, 10);
+      return d >= bounds.start && d <= bounds.end;
+    }
+
+    function getFinancialMetrics(dateBounds = null) {
+      const bounds = dateBounds || { start: '1970-01-01', end: '2099-12-31' };
+
+      const filteredInvoices = state.invoices.filter(i => isDateInRange(i.date, bounds));
+      const totalInvoiced = safeRound(filteredInvoices.reduce((s, i) => s + Number(i.total || 0), 0));
+
+      const filteredPayments = state.payments.filter(p => isDateInRange(p.date, bounds));
+      const invoicePaymentsReceived = safeRound(filteredPayments.reduce((s, p) => s + Number(p.amount || 0), 0));
+
+      const activeDirectIncomeList = state.directIncome.filter(d => d.status !== 'cancelled' && isDateInRange(d.date, bounds));
+      const totalDirectIncome = safeRound(activeDirectIncomeList.reduce((s, d) => s + Number(d.amount || 0), 0));
+
+      const totalIncomeReceived = safeRound(invoicePaymentsReceived + totalDirectIncome);
+
+      const activeExpensesList = state.expenses.filter(e => e.status === 'recorded' && isDateInRange(e.date, bounds));
+      const totalExpenses = safeRound(activeExpensesList.reduce((s, e) => s + Number(e.amount || 0), 0));
+
+      const netFinancialPosition = safeRound(totalIncomeReceived - totalExpenses);
+      const outstandingReceivables = safeRound(state.invoices.reduce((s, inv) => s + invoiceBalance(inv).balance, 0));
+
+      const allTimeInvoiced = safeRound(state.invoices.reduce((s, i) => s + Number(i.total || 0), 0));
+      const allTimePayments = safeRound(state.payments.reduce((s, p) => s + Number(p.amount || 0), 0));
+      const collectionRate = allTimeInvoiced > 0 ? safeRound((allTimePayments / allTimeInvoiced) * 100) : 0;
+      const netMargin = totalIncomeReceived > 0 ? safeRound((netFinancialPosition / totalIncomeReceived) * 100) : 0;
+
+      // YTD metrics
+      const currentYear = new Date().getFullYear().toString();
+      const ytdPayments = state.payments.filter(p => (p.date || '').startsWith(currentYear)).reduce((s, p) => s + Number(p.amount || 0), 0);
+      const ytdDirect = state.directIncome.filter(d => d.status !== 'cancelled' && (d.date || '').startsWith(currentYear)).reduce((s, d) => s + Number(d.amount || 0), 0);
+      const ytdIncome = safeRound(ytdPayments + ytdDirect);
+      const ytdExpenses = safeRound(state.expenses.filter(e => e.status === 'recorded' && (e.date || '').startsWith(currentYear)).reduce((s, e) => s + Number(e.amount || 0), 0));
+      const ytdNet = safeRound(ytdIncome - ytdExpenses);
+
+      // MTD metrics
+      const curMonthKey = new Date().toISOString().slice(0, 7);
+      const mtdPayments = state.payments.filter(p => (p.date || '').startsWith(curMonthKey)).reduce((s, p) => s + Number(p.amount || 0), 0);
+      const mtdDirect = state.directIncome.filter(d => d.status !== 'cancelled' && (d.date || '').startsWith(curMonthKey)).reduce((s, d) => s + Number(d.amount || 0), 0);
+      const mtdIncome = safeRound(mtdPayments + mtdDirect);
+      const mtdExpenses = safeRound(state.expenses.filter(e => e.status === 'recorded' && (e.date || '').startsWith(curMonthKey)).reduce((s, e) => s + Number(e.amount || 0), 0));
+      const mtdNet = safeRound(mtdIncome - mtdExpenses);
+
+      return {
+        totalInvoiced, invoicePaymentsReceived, totalDirectIncome, totalIncomeReceived,
+        totalExpenses, netFinancialPosition, outstandingReceivables, collectionRate,
+        netMargin, ytdIncome, ytdExpenses, ytdNet, mtdIncome, mtdExpenses, mtdNet, curMonthKey
+      };
+    }
+
+    // ----------------------------------------------------
+    // STUDENT ACCOUNTS CONSOLIDATION
+    // ----------------------------------------------------
+    function getStudentAccounts() {
+      const map = {};
+      state.invoices.forEach(inv => {
+        const key = (inv.clientName || 'Student').toLowerCase().trim();
+        if (!map[key]) {
+          map[key] = {
+            id: 'acc_' + encodeURIComponent(key),
+            clientName: inv.clientName || 'Student',
+            phone: inv.phone || '',
+            email: inv.email || '',
+            programmes: new Set(),
+            invoices: [],
+            payments: [],
+            totalInvoiced: 0,
+            totalPaid: 0,
+            balance: 0
+          };
+        }
+        const acc = map[key];
+        if (inv.phone && !acc.phone) acc.phone = inv.phone;
+        if (inv.email && !acc.email) acc.email = inv.email;
+        if (inv.programmeName) acc.programmes.add(inv.programmeName);
+        acc.invoices.push(inv);
+        acc.totalInvoiced = safeRound(acc.totalInvoiced + Number(inv.total || 0));
+
+        const invPays = state.payments.filter(p => p.invoiceId === inv.id);
+        invPays.forEach(p => {
+          acc.payments.push(p);
+          acc.totalPaid = safeRound(acc.totalPaid + Number(p.amount || 0));
+        });
+      });
+
+      return Object.values(map).map(acc => {
+        acc.balance = Math.max(0, safeRound(acc.totalInvoiced - acc.totalPaid));
+        acc.programmesList = Array.from(acc.programmes).join(', ') || 'N/A';
+        return acc;
+      });
+    }
+
+    // ----------------------------------------------------
+    // UNIFIED FINANCIAL TRANSACTION LEDGER
+    // ----------------------------------------------------
+    function getUnifiedLedger() {
+      const items = [];
+      state.payments.forEach(p => {
+        const inv = state.invoices.find(i => i.id === p.invoiceId) || {};
+        items.push({
+          id: p.id, date: p.date, type: 'invoice_payment', typeLabel: 'Invoice Payment',
+          description: `Tuition Payment: ${inv.clientName || 'Student'} (${inv.programmeName || 'General'})`,
+          reference: p.reference ? `${p.reference} (RCP #${p.receiptNo})` : `RCP #${p.receiptNo}`,
+          income: Number(p.amount || 0), expense: 0, movement: Number(p.amount || 0),
+          method: p.paymentMethod || 'Bank Transfer', status: 'recorded'
+        });
+      });
+      state.directIncome.forEach(d => {
+        const isCancelled = d.status === 'cancelled';
+        items.push({
+          id: d.id, date: d.date, type: 'direct_income', typeLabel: 'Direct Income',
+          description: d.description || `${d.category} from ${d.clientSource || 'Client'}`,
+          reference: d.reference || `DI-${d.id.slice(-4)}`,
+          income: isCancelled ? 0 : Number(d.amount || 0), expense: 0, movement: isCancelled ? 0 : Number(d.amount || 0),
+          method: d.method || 'Bank Transfer', status: isCancelled ? 'cancelled' : 'active'
+        });
+      });
+      state.expenses.forEach(e => {
+        const isExcluded = e.status === 'cancelled' || e.status === 'pending_approval' || e.status === 'rejected';
+        items.push({
+          id: e.id, date: e.date, type: 'expense', typeLabel: 'Expense',
+          description: e.description || e.category,
+          reference: e.reference || `EXP-${e.id.slice(-4)}`,
+          income: 0, expense: isExcluded ? 0 : Number(e.amount || 0), movement: isExcluded ? 0 : -Number(e.amount || 0),
+          method: e.method || 'Bank Transfer', status: e.status
+        });
+      });
+      items.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
+      return items;
+    }
+
+    // ----------------------------------------------------
+    // MULTI-HORIZON CASH FLOW FORECASTING (30/60/90 DAYS)
+    // ----------------------------------------------------
+    function getMultiHorizonCashForecast() {
+      const now = new Date();
+      const baseMetrics = getFinancialMetrics();
+      const currentCash = baseMetrics.netFinancialPosition;
+
+      // 30-day forecast
+      const due30Receivables = state.invoices
+        .filter(i => {
+          const { balance } = invoiceBalance(i);
+          return balance > 0;
+        })
+        .reduce((s, i) => s + invoiceBalance(i).balance, 0);
+
+      const recurringMonthlyOutflows = state.recurringExpenses
+        .filter(r => r.active)
+        .reduce((s, r) => s + Number(r.amount || 0), 0);
+
+      const exp30Inflow = safeRound(due30Receivables * 0.7); // Expected 70% collection
+      const exp30Outflow = safeRound(recurringMonthlyOutflows + (baseMetrics.mtdExpenses * 0.8));
+      const proj30Cash = safeRound(currentCash + exp30Inflow - exp30Outflow);
+
+      // 60-day forecast
+      const exp60Inflow = safeRound(exp30Inflow * 1.8);
+      const exp60Outflow = safeRound(exp30Outflow * 2);
+      const proj60Cash = safeRound(currentCash + exp60Inflow - exp60Outflow);
+
+      // 90-day forecast
+      const exp90Inflow = safeRound(exp30Inflow * 2.7);
+      const exp90Outflow = safeRound(exp30Outflow * 3);
+      const proj90Cash = safeRound(currentCash + exp90Inflow - exp90Outflow);
+
+      return {
+        currentCash,
+        h30: { inflow: exp30Inflow, outflow: exp30Outflow, closing: proj30Cash },
+        h60: { inflow: exp60Inflow, outflow: exp60Outflow, closing: proj60Cash },
+        h90: { inflow: exp90Inflow, outflow: exp90Outflow, closing: proj90Cash }
+      };
+    }
+
+    // ----------------------------------------------------
+    // FINANCIAL ANOMALY DETECTOR
+    // ----------------------------------------------------
+    function detectFinancialAnomalies() {
+      const anomalies = [];
+
+      // 1. Unusually large expense (> ₦400,000)
+      state.expenses.filter(e => e.status === 'recorded' && Number(e.amount) >= 400000).forEach(e => {
+        anomalies.push({
+          id: 'anom_exp_' + e.id,
+          type: 'Unusually High Expense',
+          severity: 'HIGH',
+          what: `High value expense of ${fmtMoney(e.amount)} for "${e.description}"`,
+          why: 'Exceeds standard operational expenditure baseline.',
+          action: 'Audit invoice attached and verify budget approval.',
+          entityId: e.id,
+          amount: e.amount,
+          date: e.date
+        });
+      });
+
+      // 2. Duplicate payment amounts on the same day
+      const seenPayments = {};
+      state.payments.forEach(p => {
+        const key = `${p.date}_${p.amount}`;
+        if (seenPayments[key]) {
+          anomalies.push({
+            id: 'anom_dup_' + p.id,
+            type: 'Potential Duplicate Payment',
+            severity: 'MEDIUM',
+            what: `Duplicate payment amount of ${fmtMoney(p.amount)} recorded on ${p.date}`,
+            why: 'Multiple identical transactions on the same date may indicate double recording.',
+            action: 'Verify bank deposit reference and student receipt.',
+            entityId: p.id,
+            amount: p.amount,
+            date: p.date
+          });
+        } else {
+          seenPayments[key] = p;
+        }
+      });
+
+      return anomalies;
+    }
+
+    // ----------------------------------------------------
+    // ADMINISTRATIVE FINANCIAL INTEGRITY CHECKER
+    // ----------------------------------------------------
+    function runIntegrityAudit() {
+      const issues = [];
+
+      // Check orphaned payments
+      state.payments.forEach(p => {
+        const inv = state.invoices.find(i => i.id === p.invoiceId);
+        if (!inv) {
+          issues.push({
+            severity: 'CRITICAL',
+            issue: `Orphaned payment RCP #${p.receiptNo} (${fmtMoney(p.amount)}) without linked invoice.`,
+            remediation: 'Attach payment to valid student invoice or reassign ID.'
+          });
+        }
+      });
+
+      // Check payments without references
+      state.payments.filter(p => !p.reference || p.reference.trim() === '').forEach(p => {
+        issues.push({
+          severity: 'MEDIUM',
+          issue: `Payment RCP #${p.receiptNo} (${fmtMoney(p.amount)}) has no bank transaction reference.`,
+          remediation: 'Obtain bank deposit slip or NIBSS session ID.'
+        });
+      });
+
+      // Check over-allocated payments
+      state.invoices.forEach(inv => {
+        const paid = state.payments.filter(p => p.invoiceId === inv.id).reduce((s, p) => s + Number(p.amount || 0), 0);
+        if (paid > Number(inv.total)) {
+          issues.push({
+            severity: 'CRITICAL',
+            issue: `Invoice #${inv.invoiceNo} has overpayment: Paid ${fmtMoney(paid)} on total ${fmtMoney(inv.total)}.`,
+            remediation: 'Issue refund or reallocate excess payment to another invoice.'
+          });
+        }
+      });
+
+      return issues;
+    }
+
+    // ----------------------------------------------------
+    // CSV EXPORT UTILITY
+    // ----------------------------------------------------
+    function exportToCSV(filename, rows) {
+      if (!rows || !rows.length) { alert('No records available to export.'); return; }
+      const separator = ',';
+      const keys = Object.keys(rows[0]);
+      const headerMetadata = `# Report: ${filename.toUpperCase()}\n# Generated By: ${state.currentRole}\n# Generated At: ${new Date().toISOString()}\n# Tenant: ${DEFAULT_TENANT_ID}\n\n`;
+      const csvData = keys.join(separator) + '\n' + rows.map(row => {
+        return keys.map(k => {
+          let cell = row[k] === null || row[k] === undefined ? '' : String(row[k]);
+          cell = cell.replace(/"/g, '""');
+          if (cell.search(/("|,|\n)/g) >= 0) cell = `"${cell}"`;
+          return cell;
+        }).join(separator);
+      }).join('\n');
+
+      const blob = new Blob([headerMetadata + csvData], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      logAudit('EXPORT_CSV', 'report', filename, 'CSV Data Export');
+    }
+
+    // ----------------------------------------------------
+    // MAIN APP RENDERER
+    // ----------------------------------------------------
+    function render() {
+      const root = document.getElementById('root');
+      if (state.loading) {
+        root.innerHTML = '<div class="cp-wrap"><div class="cp-empty"><div class="cp-empty-title">Loading Clasptek Finance Enterprise System...</div></div></div>';
+        return;
+      }
+
+      const m = getFinancialMetrics();
+
+      root.innerHTML = `
+        <div class="cp-wrap">
+          <!-- Top Header -->
+          <div class="cp-header">
+            <div class="cp-brand">
+              <div class="cp-mark">CT</div>
+              <div>
+                <div class="cp-title">
+                  Clasptek Finance
+                  <span class="cp-pill" style="background:#14213D; color:#fff; font-size:10.5px;">Phase 4</span>
+                </div>
+                <div class="cp-sub">Financial intelligence, reconciliation &amp; audit assurance platform</div>
+              </div>
+            </div>
+
+            <!-- Role Selector & Quick Actions -->
+            <div class="cp-header-actions">
+              <div class="cp-role-tag">
+                <span>&#x1F464; Role:</span>
+                <select class="cp-role-select" id="roleSelector">
+                  <option value="Super Admin" ${state.currentRole === 'Super Admin' ? 'selected' : ''}>Super Admin</option>
+                  <option value="Finance Manager" ${state.currentRole === 'Finance Manager' ? 'selected' : ''}>Finance Manager</option>
+                  <option value="Finance Staff" ${state.currentRole === 'Finance Staff' ? 'selected' : ''}>Finance Staff</option>
+                  <option value="Finance Viewer" ${state.currentRole === 'Finance Viewer' ? 'selected' : ''}>Finance Viewer</option>
+                </select>
+              </div>
+
+              ${canRecord() ? `
+                <button class="cp-btn sm secondary" id="btnQuickDirectIncome">+ Direct Income</button>
+                <button class="cp-btn sm secondary" id="btnQuickExpense">+ Expense</button>
+                <button class="cp-btn sm accent" id="btnQuickInvoice">+ New Invoice</button>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Navigation Tabs -->
+          <div class="cp-tabs" id="mainTabs">
+            <div class="cp-tab ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">Dashboard</div>
+            <div class="cp-tab ${state.tab === 'accounts' ? 'active highlight' : 'highlight'}" data-tab="accounts">&#x1F465; Student Accounts</div>
+            <div class="cp-tab ${state.tab === 'receivables' ? 'active' : ''}" data-tab="receivables">&#x23F3; Collection Workspace</div>
+            <div class="cp-tab ${state.tab === 'income' ? 'active' : ''}" data-tab="income">Income</div>
+            <div class="cp-tab ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">Expenses ${state.expenses.filter(e => e.status === 'pending_approval').length > 0 ? `(${state.expenses.filter(e => e.status === 'pending_approval').length})` : ''}</div>
+            <div class="cp-tab ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices">Invoices</div>
+            <div class="cp-tab ${state.tab === 'payments' ? 'active' : ''}" data-tab="payments">Payments &amp; Reconciliation</div>
+            <div class="cp-tab ${state.tab === 'ledger' ? 'active' : ''}" data-tab="ledger">&#x1F4D6; Financial Ledger</div>
+            <div class="cp-tab ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">&#x1F4CA; Management Reports</div>
+            <div class="cp-tab ${state.tab === 'budgets' ? 'active' : ''}" data-tab="budgets">&#x1F6E1; Budgets &amp; Controls</div>
+            <div class="cp-tab ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">Programmes</div>
+          </div>
+
+          <!-- Tab Content Area -->
+          <div id="tabContent"></div>
+        </div>
+
+        <div id="modalContainer"></div>
+      `;
+
+      // Role switcher
+      document.getElementById('roleSelector').addEventListener('change', async (e) => {
+        state.currentRole = e.target.value;
+        await safeSet(STORE_KEY_USER_ROLE, state.currentRole);
+        render();
+      });
+
+      // Tab switcher
+      root.querySelectorAll('#mainTabs .cp-tab').forEach(t => {
+        t.addEventListener('click', () => {
+          state.tab = t.dataset.tab;
+          render();
+        });
+      });
+
+      // Quick Actions
+      const btnDir = document.getElementById('btnQuickDirectIncome');
+      if (btnDir) btnDir.addEventListener('click', () => openModal('recordDirectIncome'));
+      const btnExp = document.getElementById('btnQuickExpense');
+      if (btnExp) btnExp.addEventListener('click', () => openModal('recordExpense'));
+      const btnInv = document.getElementById('btnQuickInvoice');
+      if (btnInv) btnInv.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+
+      // Render Active Tab
+      const tabEl = document.getElementById('tabContent');
+      if (state.tab === 'dashboard') renderDashboard(tabEl, m);
+      else if (state.tab === 'accounts') renderStudentAccounts(tabEl);
+      else if (state.tab === 'receivables') renderCollectionWorkspace(tabEl, m);
+      else if (state.tab === 'income') renderIncome(tabEl, m);
+      else if (state.tab === 'expenses') renderExpenses(tabEl, m);
+      else if (state.tab === 'invoices') renderInvoices(tabEl, m);
+      else if (state.tab === 'payments') renderPaymentsAndReconciliation(tabEl, m);
+      else if (state.tab === 'ledger') renderFinancialLedger(tabEl);
+      else if (state.tab === 'reports') renderReports(tabEl);
+      else if (state.tab === 'budgets') renderBudgetsAndControls(tabEl);
+      else if (state.tab === 'programmes') renderProgrammes(tabEl);
+
+      renderModal();
+    }
+
+    // ----------------------------------------------------
+    // TAB 1: EXECUTIVE DASHBOARD (WITH CFO DRILL-DOWN)
+    // ----------------------------------------------------
+    function renderDashboard(el, m) {
+      const cashForecast = getMultiHorizonCashForecast();
+      const anomalies = detectFinancialAnomalies();
+      const pendingApprovals = state.expenses.filter(e => e.status === 'pending_approval');
+      const over60Receivables = state.invoices.filter(i => getReceivableAgeing(i).bucket === '60plus').reduce((s, i) => s + invoiceBalance(i).balance, 0);
+
+      // Scorecard
+      const collScore = m.collectionRate >= 75 ? 'Healthy' : m.collectionRate >= 50 ? 'Watch' : 'Attention Required';
+      const netMarginScore = m.netMargin >= 30 ? 'Healthy' : m.netMargin >= 10 ? 'Watch' : 'Attention Required';
+
+      el.innerHTML = `
+        <!-- Anomaly & Executive Warning Banners -->
+        ${anomalies.length > 0 ? `
+          <div class="cp-alert-card warning">
+            <div class="cp-alert-card-title">
+              <span>&#x26A0; Financial Anomaly Detected (${anomalies.length} Items Require Review)</span>
+              <button class="cp-btn sm secondary" id="btnViewAnomaliesModal">Review Anomalies &rarr;</button>
+            </div>
+            <div class="cp-alert-card-detail"><strong>WHAT:</strong> ${escapeHtml(anomalies[0].what)}.</div>
+            <div class="cp-alert-card-detail"><strong>WHY:</strong> ${escapeHtml(anomalies[0].why)}</div>
+            <div class="cp-alert-card-action">&#x1F449; ACTION: ${escapeHtml(anomalies[0].action)}</div>
+          </div>
+        ` : ''}
+
+        ${pendingApprovals.length > 0 ? `
+          <div class="cp-alert-card info">
+            <div class="cp-alert-card-title">
+              <span>&#x23F3; Approvals Pending (${pendingApprovals.length} Operational Items)</span>
+              <button class="cp-btn sm secondary" id="btnGoToApprovals">Open Queue &rarr;</button>
+            </div>
+            <div class="cp-alert-card-detail"><strong>WHAT:</strong> Tiered approval matrix requires Manager / Super Admin review before posting.</div>
+            <div class="cp-alert-card-action">&#x1F449; ACTION: Review expense justifications in the Expenses approval queue.</div>
+          </div>
+        ` : ''}
+
+        <!-- Top Executive KPI Grid with CFO Drill-Down Links -->
+        <div class="cp-grid-4">
+          <div class="cp-stat income-border" style="cursor:pointer;" id="cardDrillIncome" title="Click to view Income Ledger">
+            <div class="cp-stat-top"><div class="cp-stat-label">Month-to-Date Income</div><span class="cp-stat-pill" style="background:var(--success-bg); color:var(--success);">MTD &#x2197;</span></div>
+            <div class="cp-stat-value" style="color:var(--success);">${fmtMoney(m.mtdIncome)}</div>
+            <div class="cp-stat-sub">YTD: <strong>${fmtMoney(m.ytdIncome)}</strong> (Drill down)</div>
+          </div>
+
+          <div class="cp-stat expense-border" style="cursor:pointer;" id="cardDrillExpenses" title="Click to view Expense Ledger">
+            <div class="cp-stat-top"><div class="cp-stat-label">Month-to-Date Expenses</div><span class="cp-stat-pill" style="background:var(--danger-bg); color:var(--danger);">MTD &#x2198;</span></div>
+            <div class="cp-stat-value" style="color:var(--danger);">${fmtMoney(m.mtdExpenses)}</div>
+            <div class="cp-stat-sub">YTD: <strong>${fmtMoney(m.ytdExpenses)}</strong> (Drill down)</div>
+          </div>
+
+          <div class="cp-stat accent-border" style="cursor:pointer;" id="cardDrillPnl" title="Click to view Profit & Loss">
+            <div class="cp-stat-top"><div class="cp-stat-label">Net Financial Position</div><span class="cp-stat-pill" style="background:#EDF4FE; color:#175CD3;">All-Time</span></div>
+            <div class="cp-stat-value">${fmtMoney(m.netFinancialPosition)}</div>
+            <div class="cp-stat-sub">Net Margin: <strong>${m.totalIncomeReceived > 0 ? m.netMargin.toFixed(1) + '%' : 'N/A'}</strong> (P&amp;L)</div>
+          </div>
+
+          <div class="cp-stat receivable-border" style="cursor:pointer;" id="cardDrillReceivables" title="Click to view Collection Workspace">
+            <div class="cp-stat-top"><div class="cp-stat-label">Outstanding Receivables</div><span class="cp-stat-pill" style="background:var(--warning-bg); color:var(--warning);">Due</span></div>
+            <div class="cp-stat-value" style="color:var(--warning);">${fmtMoney(m.outstandingReceivables)}</div>
+            <div class="cp-stat-sub">Collection Rate: <strong>${m.collectionRate.toFixed(1)}%</strong> (Workspace)</div>
+          </div>
+        </div>
+
+        <!-- Multi-Horizon Cash Flow Forecasting (30 / 60 / 90 Days) -->
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1F4B5; Multi-Horizon Cash Flow Forecasting (30 / 60 / 90 Days)</div>
+              <div class="cp-section-desc">Dynamic projections combining verified receivables due, recurring expense commitments and historical trend</div>
+            </div>
+            <span class="cp-pill recorded">PROJECTED MODEL</span>
+          </div>
+
+          <div class="cp-grid-3">
+            <div class="cp-stat">
+              <div class="cp-stat-label">30-Day Cash Outlook</div>
+              <div class="cp-stat-value" style="color:${cashForecast.h30.closing >= 0 ? 'var(--primary)' : 'var(--danger)'}; font-size:18px;">${fmtMoney(cashForecast.h30.closing)}</div>
+              <div class="cp-stat-sub">Inflow: +${fmtMoney(cashForecast.h30.inflow)} | Outflow: -${fmtMoney(cashForecast.h30.outflow)}</div>
+            </div>
+            <div class="cp-stat">
+              <div class="cp-stat-label">60-Day Cash Outlook</div>
+              <div class="cp-stat-value" style="color:${cashForecast.h60.closing >= 0 ? 'var(--primary)' : 'var(--danger)'}; font-size:18px;">${fmtMoney(cashForecast.h60.closing)}</div>
+              <div class="cp-stat-sub">Inflow: +${fmtMoney(cashForecast.h60.inflow)} | Outflow: -${fmtMoney(cashForecast.h60.outflow)}</div>
+            </div>
+            <div class="cp-stat">
+              <div class="cp-stat-label">90-Day Cash Outlook</div>
+              <div class="cp-stat-value" style="color:${cashForecast.h90.closing >= 0 ? 'var(--primary)' : 'var(--danger)'}; font-size:18px;">${fmtMoney(cashForecast.h90.closing)}</div>
+              <div class="cp-stat-sub">Inflow: +${fmtMoney(cashForecast.h90.inflow)} | Outflow: -${fmtMoney(cashForecast.h90.outflow)}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Management Health Scorecard -->
+        <div class="cp-card">
+          <div class="cp-section-title">&#x1FA7A; Executive Financial Health Scorecard</div>
+          <div class="cp-section-desc" style="margin-bottom:14px;">Real-time health assessment against operational benchmarks</div>
+
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr><th>Health Dimension</th><th>Observed Value</th><th>Benchmark Target</th><th>Assurance Status</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:600;">Collection Rate</td>
+                  <td>${m.collectionRate.toFixed(1)}% invoice collection rate</td>
+                  <td>&ge; 75.0% target</td>
+                  <td><span class="cp-pill ${collScore === 'Healthy' ? 'paid' : collScore === 'Watch' ? 'partial' : 'unpaid'}">${collScore}</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600;">Net Profit Margin</td>
+                  <td>${m.totalIncomeReceived > 0 ? m.netMargin.toFixed(1) + '% net margin' : 'N/A'}</td>
+                  <td>&ge; 25.0% target</td>
+                  <td><span class="cp-pill ${netMarginScore === 'Healthy' ? 'paid' : netMarginScore === 'Watch' ? 'partial' : 'unpaid'}">${netMarginScore}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      // CFO Drill-Down Click Listeners
+      document.getElementById('cardDrillIncome').addEventListener('click', () => { state.tab = 'income'; render(); });
+      document.getElementById('cardDrillExpenses').addEventListener('click', () => { state.tab = 'expenses'; render(); });
+      document.getElementById('cardDrillPnl').addEventListener('click', () => { state.tab = 'reports'; state.reportsSubTab = 'pnl'; render(); });
+      document.getElementById('cardDrillReceivables').addEventListener('click', () => { state.tab = 'receivables'; render(); });
+
+      const btnApp = document.getElementById('btnGoToApprovals');
+      if (btnApp) btnApp.addEventListener('click', () => { state.tab = 'expenses'; state.expensesSubTab = 'approvals'; render(); });
+
+      const btnAnom = document.getElementById('btnViewAnomaliesModal');
+      if (btnAnom) btnAnom.addEventListener('click', () => openModal('reviewAnomalies', { anomalies }));
+    }
+
+    // ----------------------------------------------------
+    // TAB 2: STUDENT FINANCIAL ACCOUNTS
+    // ----------------------------------------------------
+    function renderStudentAccounts(el) {
+      let accounts = getStudentAccounts();
+      const q = state.filters.accountSearch.toLowerCase().trim();
+
+      if (q) {
+        accounts = accounts.filter(a =>
+          a.clientName.toLowerCase().includes(q) ||
+          a.phone.toLowerCase().includes(q) ||
+          a.email.toLowerCase().includes(q) ||
+          a.programmesList.toLowerCase().includes(q)
+        );
+      }
+
+      if (state.filters.accountFilter === 'outstanding') accounts = accounts.filter(a => a.balance > 0);
+      else if (state.filters.accountFilter === 'paid') accounts = accounts.filter(a => a.balance === 0);
+
+      el.innerHTML = `
+        <div class="cp-card-header">
+          <div>
+            <div class="cp-section-title">&#x1F465; Student &amp; Customer Financial Accounts</div>
+            <div class="cp-section-desc">Consolidated student accounts, running debit/credit ledgers and printable account statements</div>
+          </div>
+        </div>
+
+        <div class="cp-toolbar">
+          <div class="cp-toolbar-group">
+            <div class="cp-search">
+              <span class="cp-search-icon">&#x1F50D;</span>
+              <input type="text" id="accSearchInput" placeholder="Search student name, phone, email..." value="${escapeHtml(state.filters.accountSearch)}" />
+            </div>
+            <select class="cp-select-filter" id="accFilterStatus">
+              <option value="all" ${state.filters.accountFilter === 'all' ? 'selected' : ''}>All Accounts (${accounts.length})</option>
+              <option value="outstanding" ${state.filters.accountFilter === 'outstanding' ? 'selected' : ''}>With Outstanding Balance</option>
+              <option value="paid" ${state.filters.accountFilter === 'paid' ? 'selected' : ''}>Fully Settled</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Student / Client Name</th>
+                <th>Contact</th>
+                <th>Enrolled Programme(s)</th>
+                <th style="text-align:right;">Total Invoiced</th>
+                <th style="text-align:right;">Total Paid</th>
+                <th style="text-align:right;">Current Balance</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${accounts.map(acc => `
+                <tr>
+                  <td style="font-weight:700; color:var(--primary);">${escapeHtml(acc.clientName)}</td>
+                  <td style="font-size:12px;">${escapeHtml(acc.phone || acc.email || '\u2014')}</td>
+                  <td>${escapeHtml(acc.programmesList)}</td>
+                  <td style="text-align:right; font-weight:600;">${fmtMoney(acc.totalInvoiced)}</td>
+                  <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(acc.totalPaid)}</td>
+                  <td style="text-align:right; color:${acc.balance > 0 ? 'var(--warning)' : 'var(--text-muted)'}; font-weight:700;">${fmtMoney(acc.balance)}</td>
+                  <td><span class="cp-pill ${acc.balance <= 0 ? 'paid' : 'partial'}">${acc.balance <= 0 ? 'Settled' : 'Owing'}</span></td>
+                  <td>
+                    <button class="cp-btn sm secondary" data-view-statement="${encodeURIComponent(acc.clientName)}">&#x1F4D1; Statement</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.getElementById('accSearchInput').addEventListener('input', (e) => {
+        state.filters.accountSearch = e.target.value;
+        renderStudentAccounts(el);
+      });
+      document.getElementById('accFilterStatus').addEventListener('change', (e) => {
+        state.filters.accountFilter = e.target.value;
+        renderStudentAccounts(el);
+      });
+
+      el.querySelectorAll('[data-view-statement]').forEach(b => {
+        b.addEventListener('click', () => {
+          const name = decodeURIComponent(b.dataset.viewStatement);
+          const accounts = getStudentAccounts();
+          const acc = accounts.find(a => a.clientName.toLowerCase() === name.toLowerCase());
+          if (acc) openModal('studentStatement', { account: acc });
+        });
+      });
+    }
+
+    // ----------------------------------------------------
+    // TAB 3: RECEIVABLES COLLECTION WORKSPACE (6-TIER)
+    // ----------------------------------------------------
+    function renderCollectionWorkspace(el, m) {
+      const unpaidInvoices = state.invoices.filter(i => invoiceBalance(i).balance > 0);
+      let list = unpaidInvoices.slice();
+
+      const q = state.filters.receivableSearch.toLowerCase().trim();
+      if (q) {
+        list = list.filter(i =>
+          (i.clientName || '').toLowerCase().includes(q) ||
+          String(i.invoiceNo || '').includes(q) ||
+          (i.programmeName || '').toLowerCase().includes(q)
+        );
+      }
+
+      if (state.filters.receivablePrio !== 'all') {
+        list = list.filter(i => getReceivableAgeing(i).priority === state.filters.receivablePrio);
+      }
+
+      el.innerHTML = `
+        <div class="cp-card-header">
+          <div>
+            <div class="cp-section-title">&#x23F3; Receivables Collection Workspace</div>
+            <div class="cp-section-desc">6-Tier Ageing Analysis (Current, 1–30d, 31–60d, 61–90d, 90+d) with automated reminders and notes</div>
+          </div>
+          ${canExport() ? `<button class="cp-btn sm secondary" id="btnExportCollections">&#x1F4E5; Export Queue CSV</button>` : ''}
+        </div>
+
+        <div class="cp-toolbar">
+          <div class="cp-toolbar-group">
+            <div class="cp-search">
+              <span class="cp-search-icon">&#x1F50D;</span>
+              <input type="text" id="collSearchInp" placeholder="Search collection queue..." value="${escapeHtml(state.filters.receivableSearch)}" />
+            </div>
+            <select class="cp-select-filter" id="collPrioFilter">
+              <option value="all" ${state.filters.receivablePrio === 'all' ? 'selected' : ''}>All Priorities</option>
+              <option value="Critical" ${state.filters.receivablePrio === 'Critical' ? 'selected' : ''}>Critical (61+ Days Overdue)</option>
+              <option value="High" ${state.filters.receivablePrio === 'High' ? 'selected' : ''}>High (31–60 Days Overdue)</option>
+              <option value="Medium" ${state.filters.receivablePrio === 'Medium' ? 'selected' : ''}>Medium (1–30 Days Overdue)</option>
+              <option value="Low" ${state.filters.receivablePrio === 'Low' ? 'selected' : ''}>Low (Current)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Priority</th>
+                <th>Student / Client</th>
+                <th>Programme</th>
+                <th>Invoice #</th>
+                <th>Due Date</th>
+                <th style="text-align:right;">Outstanding</th>
+                <th>Days Overdue</th>
+                <th>Follow-up Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(inv => {
+                const { balance } = invoiceBalance(inv);
+                const ageing = getReceivableAgeing(inv);
+                const notes = state.collectionNotes.filter(n => n.invoiceId === inv.id);
+
+                return `
+                  <tr>
+                    <td><span class="cp-pill ${ageing.prioClass}">${ageing.priority}</span></td>
+                    <td style="font-weight:700; color:var(--primary);">${escapeHtml(inv.clientName)}</td>
+                    <td>${escapeHtml(inv.programmeName)}</td>
+                    <td style="font-weight:600;">#${inv.invoiceNo}</td>
+                    <td>${fmtDate(inv.dueDate)}</td>
+                    <td style="text-align:right; font-weight:700; color:var(--warning);">${fmtMoney(balance)}</td>
+                    <td style="font-weight:600;">${ageing.days > 0 ? ageing.days + 'd' : 'On Time'}</td>
+                    <td>
+                      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="cp-btn sm secondary" data-reminder-inv="${inv.id}">&#x1F4E7; Reminder</button>
+                        <button class="cp-btn sm secondary" data-note-inv="${inv.id}">&#x1F4DD; Note (${notes.length})</button>
+                        ${canRecord() ? `<button class="cp-btn sm accent" data-pay-inv="${inv.id}">+ Pay</button>` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.getElementById('collSearchInp').addEventListener('input', (e) => {
+        state.filters.receivableSearch = e.target.value;
+        renderCollectionWorkspace(el, m);
+      });
+      document.getElementById('collPrioFilter').addEventListener('change', (e) => {
+        state.filters.receivablePrio = e.target.value;
+        renderCollectionWorkspace(el, m);
+      });
+
+      const expBtn = document.getElementById('btnExportCollections');
+      if (expBtn) {
+        expBtn.addEventListener('click', () => {
+          exportToCSV('clasptek_collection_queue', list.map(inv => {
+            const { balance } = invoiceBalance(inv);
+            const ageing = getReceivableAgeing(inv);
+            return {
+              Priority: ageing.priority,
+              Student: inv.clientName,
+              Programme: inv.programmeName,
+              InvoiceNo: inv.invoiceNo,
+              DueDate: inv.dueDate,
+              Outstanding: balance,
+              DaysOverdue: ageing.days
+            };
+          }));
+        });
+      }
+
+      el.querySelectorAll('[data-reminder-inv]').forEach(b => {
+        b.addEventListener('click', () => {
+          const inv = state.invoices.find(i => i.id === b.dataset.reminderInv);
+          if (inv) openModal('sendReminder', { invoice: inv });
+        });
+      });
+      el.querySelectorAll('[data-note-inv]').forEach(b => {
+        b.addEventListener('click', () => {
+          const inv = state.invoices.find(i => i.id === b.dataset.noteInv);
+          if (inv) openModal('collectionNotes', { invoice: inv });
+        });
+      });
+      el.querySelectorAll('[data-pay-inv]').forEach(b => {
+        b.addEventListener('click', () => {
+          const inv = state.invoices.find(i => i.id === b.dataset.payInv);
+          if (inv) openModal('recordPayment', { invoice: inv });
+        });
+      });
+    }
+
+    // ----------------------------------------------------
+    // TAB 4 & 5: INCOME & EXPENSES (WITH TIERED APPROVALS)
+    // ----------------------------------------------------
+    function renderIncome(el, m) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.incomeSubTab === 'invoiced' ? 'active' : ''}" id="tabIncInvoiced">Invoiced Income (${state.invoices.length})</button>
+          <button class="cp-subnav-btn ${state.incomeSubTab === 'direct' ? 'active' : ''}" id="tabIncDirect">Direct Income (${state.directIncome.filter(d => d.status !== 'cancelled').length})</button>
+          ${canRecord() ? `<div style="margin-left:auto;"><button class="cp-btn sm accent" id="btnRecordDirectIncomeModal">+ Record Direct Income</button></div>` : ''}
+        </div>
+        <div id="incomeViewContent"></div>
+      `;
+
+      document.getElementById('tabIncInvoiced').addEventListener('click', () => { state.incomeSubTab = 'invoiced'; render(); });
+      document.getElementById('tabIncDirect').addEventListener('click', () => { state.incomeSubTab = 'direct'; render(); });
+      const btnModal = document.getElementById('btnRecordDirectIncomeModal');
+      if (btnModal) btnModal.addEventListener('click', () => openModal('recordDirectIncome'));
+
+      const container = document.getElementById('incomeViewContent');
+      if (state.incomeSubTab === 'invoiced') {
+        container.innerHTML = `
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Invoice No.</th><th>Date</th><th>Student / Client</th><th>Programme</th>
+                  <th style="text-align:right;">Invoiced</th><th style="text-align:right;">Collected</th><th style="text-align:right;">Outstanding</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.invoices.slice().reverse().map(inv => {
+                  const { paid, balance, total } = invoiceBalance(inv);
+                  const st = invoiceStatus(inv);
+                  return `
+                    <tr>
+                      <td style="font-weight:700; color:var(--primary);">#${inv.invoiceNo}</td>
+                      <td>${fmtDate(inv.date)}</td>
+                      <td style="font-weight:600;">${escapeHtml(inv.clientName)}</td>
+                      <td>${escapeHtml(inv.programmeName)}</td>
+                      <td style="text-align:right; font-weight:600;">${fmtMoney(total)}</td>
+                      <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(paid)}</td>
+                      <td style="text-align:right; color:${balance > 0 ? 'var(--warning)' : 'var(--text-muted)'}; font-weight:600;">${fmtMoney(balance)}</td>
+                      <td><span class="cp-pill ${st}">${st.toUpperCase()}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Category</th><th>Source / Client</th><th style="text-align:right;">Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.directIncome.slice().reverse().map(d => {
+                  const isCancelled = d.status === 'cancelled';
+                  return `
+                    <tr class="${isCancelled ? 'cancelled-row' : ''}">
+                      <td>${fmtDate(d.date)}</td>
+                      <td>${escapeHtml(d.category)}</td>
+                      <td style="font-weight:600;">${escapeHtml(d.clientSource || '\u2014')}</td>
+                      <td style="text-align:right; font-weight:700; color:${isCancelled ? 'var(--text-muted)' : 'var(--success)'};">${fmtMoney(d.amount)}</td>
+                      <td>${escapeHtml(d.method || 'Bank Transfer')}</td>
+                      <td style="font-family:monospace; font-size:12px;">${escapeHtml(d.reference || '\u2014')}</td>
+                      <td class="no-strike"><span class="cp-pill ${isCancelled ? 'cancelled' : 'paid'}">${isCancelled ? 'VOIDED' : 'ACTIVE'}</span></td>
+                      <td class="no-strike">
+                        ${!isCancelled && canCancel() ? `<button class="cp-btn danger" data-void-dir-income="${d.id}">Void</button>` : '\u2014'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        container.querySelectorAll('[data-void-dir-income]').forEach(b => {
+          b.addEventListener('click', () => {
+            const item = state.directIncome.find(d => d.id === b.dataset.voidDirIncome);
+            if (item) openModal('cancelDirectIncome', { item });
+          });
+        });
+      }
+    }
+
+    function renderExpenses(el, m) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.expensesSubTab === 'ledger' ? 'active' : ''}" id="subTabExpLedger">Expense Ledger</button>
+          <button class="cp-subnav-btn ${state.expensesSubTab === 'approvals' ? 'active' : ''}" id="subTabExpApprovals">&#x23F3; Tiered Approvals (${state.expenses.filter(e => e.status === 'pending_approval').length})</button>
+          ${canRecord() ? `<div style="margin-left:auto;"><button class="cp-btn sm accent" id="btnOpenExpModal">+ Record Expense</button></div>` : ''}
+        </div>
+        <div id="expensesSubContent"></div>
+      `;
+
+      document.getElementById('subTabExpLedger').addEventListener('click', () => { state.expensesSubTab = 'ledger'; render(); });
+      document.getElementById('subTabExpApprovals').addEventListener('click', () => { state.expensesSubTab = 'approvals'; render(); });
+      const bModal = document.getElementById('btnOpenExpModal');
+      if (bModal) bModal.addEventListener('click', () => openModal('recordExpense'));
+
+      const container = document.getElementById('expensesSubContent');
+      if (state.expensesSubTab === 'approvals') {
+        const pending = state.expenses.filter(e => e.status === 'pending_approval');
+        container.innerHTML = `
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x23F3; Tiered Approval Queue</div>
+              <div class="cp-section-desc">Tier 2 (> ${fmtMoney(state.approvalSettings.tier1Limit)}): ${state.approvalSettings.tier2Role} | Tier 3 (> ${fmtMoney(state.approvalSettings.tier2Limit)}): ${state.approvalSettings.tier3Role}</div>
+            </div>
+          </div>
+
+          ${pending.length === 0 ? `
+            <div class="cp-card"><div class="cp-empty"><div class="cp-empty-title">&#x2705; No expenses awaiting approval</div></div></div>
+          ` : `
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Category</th><th>Description</th><th style="text-align:right;">Amount</th><th>Vendor</th><th>Required Role</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${pending.map(e => {
+                    const reqRole = getRequiredApprovalRole(e.amount);
+                    const isAuthorized = (reqRole === 'Finance Manager' && ['Finance Manager', 'Super Admin'].includes(state.currentRole)) ||
+                                         (reqRole === 'Super Admin' && state.currentRole === 'Super Admin');
+                    return `
+                      <tr>
+                        <td>${fmtDate(e.date)}</td>
+                        <td>${escapeHtml(e.category)}</td>
+                        <td style="font-weight:600;">${escapeHtml(e.description)}</td>
+                        <td style="text-align:right; font-weight:700; color:var(--danger);">${fmtMoney(e.amount)}</td>
+                        <td>${escapeHtml(e.vendor || '\u2014')}</td>
+                        <td><span class="cp-pill warning">${reqRole}</span></td>
+                        <td>
+                          ${isAuthorized ? `
+                            <div style="display:flex; gap:6px;">
+                              <button class="cp-btn sm accent" data-approve-exp="${e.id}">&#x2714; Approve</button>
+                              <button class="cp-btn sm danger" data-reject-exp="${e.id}">&#x2716; Reject</button>
+                            </div>
+                          ` : `<span style="font-size:11px; color:var(--text-muted);">${reqRole} only</span>`}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        `;
+
+        container.querySelectorAll('[data-approve-exp]').forEach(b => {
+          b.addEventListener('click', async () => {
+            const exp = state.expenses.find(e => e.id === b.dataset.approveExp);
+            if (exp) {
+              exp.status = 'recorded';
+              exp.approvedAt = new Date().toISOString();
+              exp.approvedBy = state.currentRole;
+              await safeSet(STORE_KEY_EXPENSES, state.expenses);
+              await logAudit('APPROVE_EXPENSE', 'expense', exp.id, exp.description, 'pending_approval', 'recorded');
+              render();
+            }
+          });
+        });
+
+        container.querySelectorAll('[data-reject-exp]').forEach(b => {
+          b.addEventListener('click', async () => {
+            const reason = prompt('Enter justification for rejecting this expense:');
+            if (reason) {
+              const exp = state.expenses.find(e => e.id === b.dataset.rejectExp);
+              if (exp) {
+                exp.status = 'rejected';
+                exp.rejectedReason = reason;
+                exp.rejectedAt = new Date().toISOString();
+                exp.rejectedBy = state.currentRole;
+                await safeSet(STORE_KEY_EXPENSES, state.expenses);
+                await logAudit('REJECT_EXPENSE', 'expense', exp.id, exp.description, 'pending_approval', 'rejected', reason);
+                render();
+              }
+            }
+          });
+        });
+      } else {
+        container.innerHTML = `
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Category</th><th>Description</th><th style="text-align:right;">Amount</th><th>Vendor</th><th>Department</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.expenses.slice().reverse().map(e => {
+                  const isCancelled = e.status === 'cancelled';
+                  return `
+                    <tr class="${isCancelled ? 'cancelled-row' : ''}">
+                      <td>${fmtDate(e.date)}</td>
+                      <td>${escapeHtml(e.category)}</td>
+                      <td style="font-weight:600;">${escapeHtml(e.description)}</td>
+                      <td style="text-align:right; font-weight:700; color:${isCancelled ? 'var(--text-muted)' : 'var(--danger)'};">${fmtMoney(e.amount)}</td>
+                      <td>${escapeHtml(e.vendor || '\u2014')}</td>
+                      <td><span class="cp-pill category-pill">${escapeHtml(e.department || 'General')}</span></td>
+                      <td class="no-strike"><span class="cp-pill ${e.status}">${e.status.toUpperCase()}</span></td>
+                      <td class="no-strike">
+                        ${e.status === 'recorded' && canCancel() ? `<button class="cp-btn danger" data-cancel-exp="${e.id}">Void</button>` : '\u2014'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        container.querySelectorAll('[data-cancel-exp]').forEach(b => {
+          b.addEventListener('click', () => {
+            const exp = state.expenses.find(e => e.id === b.dataset.cancelExp);
+            if (exp) openModal('cancelExpense', { expense: exp });
+          });
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // TAB 6: INVOICES
+    // ----------------------------------------------------
+    function renderInvoices(el, m) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.invoiceSubTab === 'list' ? 'active' : ''}" id="tabInvList">All Invoices (${state.invoices.length})</button>
+          ${canRecord() ? `<button class="cp-subnav-btn ${state.invoiceSubTab === 'new' ? 'active' : ''}" id="tabInvNew">+ Create Invoice</button>` : ''}
+        </div>
+        <div id="invoiceSubContent"></div>
+      `;
+
+      document.getElementById('tabInvList').addEventListener('click', () => { state.invoiceSubTab = 'list'; render(); });
+      const newBtn = document.getElementById('tabInvNew');
+      if (newBtn) newBtn.addEventListener('click', () => { state.invoiceSubTab = 'new'; render(); });
+
+      const container = document.getElementById('invoiceSubContent');
+      if (state.invoiceSubTab === 'new') {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const defaultDueStr = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        container.innerHTML = `
+          <div class="cp-card">
+            <div class="cp-card-header"><div class="cp-section-title">&#x1F4C4; Generate New Invoice</div></div>
+            <div class="cp-row2">
+              <div class="cp-field"><label>Student / Client Name *</label><input id="nInvClient" placeholder="e.g. Emmanuel Ajadi" /></div>
+              <div class="cp-field"><label>Phone Number</label><input id="nInvPhone" placeholder="+234..." /></div>
+            </div>
+            <div class="cp-row2">
+              <div class="cp-field"><label>Email Address</label><input id="nInvEmail" type="email" placeholder="client@example.com" /></div>
+              <div class="cp-field"><label>Category</label><select id="nInvCat">${state.incomeCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+            </div>
+            <div class="cp-row2">
+              <div class="cp-field"><label>Programme *</label><select id="nInvProg">${state.programmes.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Total Amount (\u20a6) *</label><input id="nInvAmount" type="number" min="1" placeholder="450000" /></div>
+            </div>
+            <div class="cp-row2">
+              <div class="cp-field"><label>Invoice Date *</label><input id="nInvDate" type="date" value="${todayStr}" /></div>
+              <div class="cp-field"><label>Due Date *</label><input id="nInvDueDate" type="date" value="${defaultDueStr}" /></div>
+            </div>
+            <div id="nInvError" class="cp-error" style="display:none;"></div>
+            <button class="cp-btn accent" id="btnSubmitNewInvoice">Issue Invoice</button>
+          </div>
+        `;
+
+        document.getElementById('btnSubmitNewInvoice').addEventListener('click', async () => {
+          const client = document.getElementById('nInvClient').value.trim();
+          const amt = Number(document.getElementById('nInvAmount').value);
+          const dateStr = document.getElementById('nInvDate').value;
+          const errEl = document.getElementById('nInvError');
+
+          if (!client || !amt || amt <= 0) { errEl.textContent = 'Please provide client name and valid total.'; errEl.style.display = 'block'; return; }
+          if (isPeriodLocked(dateStr)) { errEl.textContent = 'Financial period is locked.'; errEl.style.display = 'block'; return; }
+
+          const prog = state.programmes.find(p => p.id === document.getElementById('nInvProg').value) || { id: 'custom', name: 'General Training' };
+
+          state.counters.invoice += 1;
+          const inv = {
+            id: 'inv_' + Date.now(),
+            tenant_id: DEFAULT_TENANT_ID,
+            invoiceNo: state.counters.invoice,
+            clientName: client,
+            phone: document.getElementById('nInvPhone').value.trim(),
+            email: document.getElementById('nInvEmail').value.trim(),
+            programmeId: prog.id,
+            programmeName: prog.name,
+            category: document.getElementById('nInvCat').value,
+            price: amt,
+            discount: 0,
+            total: amt,
+            date: dateStr,
+            dueDate: document.getElementById('nInvDueDate').value,
+            createdAt: new Date().toISOString(),
+            createdBy: state.currentRole
+          };
+
+          state.invoices.push(inv);
+          await safeSet(STORE_KEY_INVOICES, state.invoices);
+          await safeSet(STORE_KEY_COUNTERS, state.counters);
+          await logAudit('CREATE_INVOICE', 'invoice', inv.id, `#${inv.invoiceNo}`, null, inv);
+          state.invoiceSubTab = 'list';
+          render();
+        });
+      } else {
+        container.innerHTML = `
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th><th>Date</th><th>Student / Client</th><th>Programme</th>
+                  <th style="text-align:right;">Total</th><th style="text-align:right;">Paid</th><th style="text-align:right;">Balance</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.invoices.slice().reverse().map(inv => {
+                  const { paid, balance, total } = invoiceBalance(inv);
+                  const st = invoiceStatus(inv);
+                  return `
+                    <tr>
+                      <td style="font-weight:700; color:var(--primary);">#${inv.invoiceNo}</td>
+                      <td>${fmtDate(inv.date)}</td>
+                      <td style="font-weight:600;">${escapeHtml(inv.clientName)}</td>
+                      <td>${escapeHtml(inv.programmeName)}</td>
+                      <td style="text-align:right; font-weight:600;">${fmtMoney(total)}</td>
+                      <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(paid)}</td>
+                      <td style="text-align:right; color:${balance > 0 ? 'var(--warning)' : 'var(--text-muted)'}; font-weight:700;">${fmtMoney(balance)}</td>
+                      <td><span class="cp-pill ${st}">${st.toUpperCase()}</span></td>
+                      <td>${balance > 0 && canRecord() ? `<button class="cp-btn sm secondary" data-pay-inv-id="${inv.id}">+ Pay</button>` : '\u2014'}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        container.querySelectorAll('[data-pay-inv-id]').forEach(b => {
+          b.addEventListener('click', () => {
+            const inv = state.invoices.find(i => i.id === b.dataset.payInvId);
+            if (inv) openModal('recordPayment', { invoice: inv });
+          });
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // TAB 7: PAYMENTS & FULL RECONCILIATION ENGINE
+    // ----------------------------------------------------
+    function renderPaymentsAndReconciliation(el, m) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.paymentsSubTab === 'ledger' ? 'active' : ''}" id="pSubTabLedger">Payment Ledger</button>
+          <button class="cp-subnav-btn ${state.paymentsSubTab === 'reconciliation' ? 'active' : ''}" id="pSubTabRecon">&#x2696; Bank Account Reconciliation</button>
+        </div>
+        <div id="paymentSubArea"></div>
+      `;
+
+      document.getElementById('pSubTabLedger').addEventListener('click', () => { state.paymentsSubTab = 'ledger'; render(); });
+      document.getElementById('pSubTabRecon').addEventListener('click', () => { state.paymentsSubTab = 'reconciliation'; render(); });
+
+      const container = document.getElementById('paymentSubArea');
+      if (state.paymentsSubTab === 'reconciliation') {
+        const curMonth = new Date().toISOString().slice(0, 7);
+        const expectedBankCash = m.netFinancialPosition;
+        const latestRecon = state.reconciliations[0] || null;
+
+        container.innerHTML = `
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x2696; Monthly Financial Account &amp; Bank Reconciliation</div>
+              <div class="cp-section-desc">Reconcile expected system liquidity with actual bank statement balances (Variance = Actual &minus; Expected)</div>
+            </div>
+            ${canRecord() ? `<button class="cp-btn sm accent" id="btnOpenNewReconciliationModal">+ Perform Bank Reconciliation</button>` : ''}
+          </div>
+
+          <div class="cp-grid-3" style="margin-bottom:16px;">
+            <div class="cp-stat">
+              <div class="cp-stat-label">Expected System Balance</div>
+              <div class="cp-stat-value">${fmtMoney(expectedBankCash)}</div>
+              <div class="cp-stat-sub">Sum of verified receipts &minus; approved spend</div>
+            </div>
+            <div class="cp-stat">
+              <div class="cp-stat-label">Latest Statement Actual</div>
+              <div class="cp-stat-value" style="color:var(--primary);">${latestRecon ? fmtMoney(latestRecon.actualBalance) : '\u20a60.00'}</div>
+              <div class="cp-stat-sub">From Bank Statement (${latestRecon ? latestRecon.period : curMonth})</div>
+            </div>
+            <div class="cp-stat">
+              <div class="cp-stat-label">Reconciliation Variance</div>
+              <div class="cp-stat-value" style="color:${latestRecon && latestRecon.variance === 0 ? 'var(--success)' : 'var(--warning)'};">
+                ${latestRecon ? fmtMoney(latestRecon.variance) : '\u20a60.00'}
+              </div>
+              <div class="cp-stat-sub">${latestRecon ? latestRecon.status : 'No reconciliations recorded'}</div>
+            </div>
+          </div>
+
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Period</th><th>Account</th><th>Expected Balance</th><th>Actual Bank Balance</th><th>Variance</th><th>Status</th><th>Reconciled By</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.reconciliations.length === 0 ? `
+                  <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:20px;">No historical bank account reconciliations found.</td></tr>
+                ` : state.reconciliations.map(r => `
+                  <tr>
+                    <td style="font-weight:700; color:var(--primary);">${r.period}</td>
+                    <td>${escapeHtml(r.account || 'Main Corporate Bank')}</td>
+                    <td>${fmtMoney(r.expectedBalance)}</td>
+                    <td style="font-weight:600;">${fmtMoney(r.actualBalance)}</td>
+                    <td style="font-weight:700; color:${r.variance === 0 ? 'var(--success)' : 'var(--danger)'};">${fmtMoney(r.variance)}</td>
+                    <td><span class="cp-pill ${r.status === 'RECONCILED' ? 'paid' : 'exception'}">${r.status}</span></td>
+                    <td>${escapeHtml(r.reconciledBy || 'Admin')}</td>
+                    <td>${fmtDate(r.reconciledAt.slice(0, 10))}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        const bNewRecon = document.getElementById('btnOpenNewReconciliationModal');
+        if (bNewRecon) bNewRecon.addEventListener('click', () => openModal('newReconciliation', { expectedBalance: expectedBankCash }));
+      } else {
+        container.innerHTML = `
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Receipt #</th><th>Date</th><th>Student / Client</th><th style="text-align:right;">Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.payments.slice().reverse().map(p => {
+                  const inv = state.invoices.find(i => i.id === p.invoiceId) || {};
+                  const recon = p.reconciliationStatus || 'unreconciled';
+                  return `
+                    <tr>
+                      <td style="font-weight:700; color:var(--accent);">#${p.receiptNo}</td>
+                      <td>${fmtDate(p.date)}</td>
+                      <td style="font-weight:600;">${escapeHtml(inv.clientName || '\u2014')}</td>
+                      <td style="text-align:right; font-weight:700; color:var(--success);">${fmtMoney(p.amount)}</td>
+                      <td>${escapeHtml(p.paymentMethod || 'Bank Transfer')}</td>
+                      <td style="font-family:monospace; font-size:12px;">${escapeHtml(p.reference || '\u2014')}</td>
+                      <td><span class="cp-pill ${recon}">${recon.toUpperCase()}</span></td>
+                      <td>
+                        <div style="display:flex; gap:6px;">
+                          <button class="cp-btn sm secondary" data-view-pay-receipt="${p.id}">&#x1F5A8; Receipt</button>
+                          ${recon !== 'reconciled' && canRecord() ? `<button class="cp-btn sm secondary" data-reconcile-pay="${p.id}" style="color:var(--success);">&#x2714;</button>` : ''}
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        container.querySelectorAll('[data-view-pay-receipt]').forEach(b => {
+          b.addEventListener('click', () => {
+            const pay = state.payments.find(p => p.id === b.dataset.viewPayReceipt);
+            if (pay) {
+              const inv = state.invoices.find(i => i.id === pay.invoiceId);
+              openModal('viewReceipt', { payment: pay, invoice: inv });
+            }
+          });
+        });
+
+        container.querySelectorAll('[data-reconcile-pay]').forEach(b => {
+          b.addEventListener('click', async () => {
+            const pay = state.payments.find(p => p.id === b.dataset.reconcilePay);
+            if (pay) {
+              pay.reconciliationStatus = 'reconciled';
+              pay.reconciledAt = new Date().toISOString();
+              pay.reconciledBy = state.currentRole;
+              await safeSet(STORE_KEY_PAYMENTS, state.payments);
+              await logAudit('RECONCILE_PAYMENT', 'payment', pay.id, `RCP #${pay.receiptNo}`, 'unreconciled', 'reconciled');
+              render();
+            }
+          });
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // TAB 8: UNIFIED FINANCIAL TRANSACTION LEDGER
+    // ----------------------------------------------------
+    function renderFinancialLedger(el) {
+      const bounds = getDateRangeBounds(state.filters.datePreset, state.filters.dateStart, state.filters.dateEnd);
+      const items = getUnifiedLedger().filter(item => isDateInRange(item.date, bounds));
+
+      const totalIncome = safeRound(items.reduce((s, i) => s + i.income, 0));
+      const totalExpenses = safeRound(items.reduce((s, i) => s + i.expense, 0));
+      const netMovement = safeRound(totalIncome - totalExpenses);
+
+      el.innerHTML = `
+        <div class="cp-card-header">
+          <div>
+            <div class="cp-section-title">&#x1F4D6; Unified Financial Transaction Ledger</div>
+            <div class="cp-section-desc">Consolidated chronological record of all verified payments received, direct income and approved business expenditures</div>
+          </div>
+          ${canExport() ? `<button class="cp-btn sm secondary" id="btnExportLedgerCSV">&#x1F4E5; Export Ledger CSV</button>` : ''}
+        </div>
+
+        <div class="cp-grid-3" style="margin-bottom:16px;">
+          <div class="cp-stat income-border"><div class="cp-stat-label">Total Verified Income</div><div class="cp-stat-value" style="color:var(--success);">${fmtMoney(totalIncome)}</div></div>
+          <div class="cp-stat expense-border"><div class="cp-stat-label">Total Approved Expenses</div><div class="cp-stat-value" style="color:var(--danger);">${fmtMoney(totalExpenses)}</div></div>
+          <div class="cp-stat accent-border"><div class="cp-stat-label">Net Financial Movement</div><div class="cp-stat-value">${fmtMoney(netMovement)}</div></div>
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Type</th><th>Description</th><th>Reference</th>
+                <th style="text-align:right;">Income (\u20a6)</th><th style="text-align:right;">Expense (\u20a6)</th><th style="text-align:right;">Net Movement</th><th>Method</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr class="${item.status === 'cancelled' ? 'cancelled-row' : ''}">
+                  <td>${fmtDate(item.date)}</td>
+                  <td><span class="cp-pill ${item.type === 'expense' ? 'unpaid' : 'paid'}">${item.typeLabel}</span></td>
+                  <td style="font-weight:600;">${escapeHtml(item.description)}</td>
+                  <td style="font-family:monospace; font-size:12px;">${escapeHtml(item.reference)}</td>
+                  <td style="text-align:right; font-weight:700; color:var(--success);">${item.income > 0 ? fmtMoney(item.income) : '\u2014'}</td>
+                  <td style="text-align:right; font-weight:700; color:var(--danger);">${item.expense > 0 ? fmtMoney(item.expense) : '\u2014'}</td>
+                  <td style="text-align:right; font-weight:700; color:${item.movement >= 0 ? 'var(--primary)' : 'var(--danger)'};">${item.movement !== 0 ? (item.movement > 0 ? '+' : '') + fmtMoney(item.movement) : '\u2014'}</td>
+                  <td>${escapeHtml(item.method)}</td>
+                  <td class="no-strike"><span class="cp-pill ${item.status}">${item.status.toUpperCase()}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      const expBtn = document.getElementById('btnExportLedgerCSV');
+      if (expBtn) {
+        expBtn.addEventListener('click', () => {
+          exportToCSV('clasptek_financial_ledger', items.map(i => ({
+            Date: i.date, Type: i.typeLabel, Description: i.description, Reference: i.reference,
+            Income: i.income, Expense: i.expense, NetMovement: i.movement, Method: i.method, Status: i.status
+          })));
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // TAB 9: MANAGEMENT REPORTING SUITE & AUDITOR TRACEABILITY
+    // ----------------------------------------------------
+    function renderReports(el) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.reportsSubTab === 'pnl' ? 'active' : ''}" id="repSubPnl">&#x1F4D1; Profit &amp; Loss</button>
+          <button class="cp-subnav-btn ${state.reportsSubTab === 'cashflow' ? 'active' : ''}" id="repSubCashflow">&#x1F4B5; Cash Flow</button>
+          <button class="cp-subnav-btn ${state.reportsSubTab === 'contribution' ? 'active' : ''}" id="repSubContribution">&#x1F393; Programme Net Contribution</button>
+          <button class="cp-subnav-btn ${state.reportsSubTab === 'auditor' ? 'active' : ''}" id="repSubAuditor">&#x1F50E; Auditor Traceability</button>
+          <button class="cp-subnav-btn ${state.reportsSubTab === 'audit' ? 'active' : ''}" id="repSubAudit">&#x1F4DD; Audit Log (${state.auditLog.length})</button>
+        </div>
+        <div id="reportsSubContent"></div>
+      `;
+
+      document.getElementById('repSubPnl').addEventListener('click', () => { state.reportsSubTab = 'pnl'; render(); });
+      document.getElementById('repSubCashflow').addEventListener('click', () => { state.reportsSubTab = 'cashflow'; render(); });
+      document.getElementById('repSubContribution').addEventListener('click', () => { state.reportsSubTab = 'contribution'; render(); });
+      document.getElementById('repSubAuditor').addEventListener('click', () => { state.reportsSubTab = 'auditor'; render(); });
+      document.getElementById('repSubAudit').addEventListener('click', () => { state.reportsSubTab = 'audit'; render(); });
+
+      const container = document.getElementById('reportsSubContent');
+      if (state.reportsSubTab === 'cashflow') renderCashFlowStatement(container);
+      else if (state.reportsSubTab === 'contribution') renderProgrammeContributionReport(container);
+      else if (state.reportsSubTab === 'auditor') renderAuditorTraceabilityView(container);
+      else if (state.reportsSubTab === 'audit') renderAuditLogView(container);
+      else renderProfitAndLossStatement(container);
+    }
+
+    function renderProfitAndLossStatement(el) {
+      const bounds = getDateRangeBounds(state.filters.datePreset, state.filters.dateStart, state.filters.dateEnd);
+      const m = getFinancialMetrics(bounds);
+
+      el.innerHTML = `
+        <div class="cp-card cp-printable-area">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">Clasptek Finance &mdash; Profit &amp; Loss Statement</div>
+              <div class="cp-section-desc">Reporting Period: ${bounds.start} to ${bounds.end}</div>
+            </div>
+            <button class="cp-btn sm secondary no-print" onclick="window.print();">&#x1F5A8; Print Statement</button>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <div style="font-weight:700; color:var(--success); margin-bottom:8px;">1. Operating Revenue &amp; Income</div>
+            <div class="cp-receipt-row"><span>Student Tuition &amp; Invoice Payments</span><span style="font-weight:600;">${fmtMoney(m.invoicePaymentsReceived)}</span></div>
+            <div class="cp-receipt-row"><span>Direct Business Income</span><span style="font-weight:600;">${fmtMoney(m.totalDirectIncome)}</span></div>
+            <div class="cp-receipt-row" style="font-weight:700; border-top:1.5px solid var(--primary); padding-top:6px; color:var(--success);">
+              <span>TOTAL REVENUE</span><span>${fmtMoney(m.totalIncomeReceived)}</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <div style="font-weight:700; color:var(--danger); margin-bottom:8px;">2. Operating Expenses</div>
+            <div class="cp-receipt-row"><span>Approved Operational &amp; Academic Expenses</span><span style="font-weight:600;">${fmtMoney(m.totalExpenses)}</span></div>
+            <div class="cp-receipt-row" style="font-weight:700; border-top:1.5px solid var(--primary); padding-top:6px; color:var(--danger);">
+              <span>TOTAL EXPENSES</span><span>${fmtMoney(m.totalExpenses)}</span>
+            </div>
+          </div>
+
+          <div style="background:var(--surface-2); padding:14px; border-radius:var(--radius-md);">
+            <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:800; color:var(--primary);">
+              <span>NET OPERATING PROFIT / (LOSS)</span>
+              <span style="color:${m.netFinancialPosition >= 0 ? 'var(--primary)' : 'var(--danger)'};">${fmtMoney(m.netFinancialPosition)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCashFlowStatement(el) {
+      const bounds = getDateRangeBounds(state.filters.datePreset, state.filters.dateStart, state.filters.dateEnd);
+      const m = getFinancialMetrics(bounds);
+
+      el.innerHTML = `
+        <div class="cp-card cp-printable-area">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">Clasptek Finance &mdash; Cash Flow Statement</div>
+              <div class="cp-section-desc">Inflows, Outflows and Net Cash Movement for ${bounds.start} to ${bounds.end}</div>
+            </div>
+            <button class="cp-btn sm secondary no-print" onclick="window.print();">&#x1F5A8; Print Cash Flow</button>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <div style="font-weight:700; color:var(--success); margin-bottom:8px;">Cash Inflows</div>
+            <div class="cp-receipt-row"><span>Invoice Collections Received</span><span style="font-weight:600;">${fmtMoney(m.invoicePaymentsReceived)}</span></div>
+            <div class="cp-receipt-row"><span>Direct Income Inflows</span><span style="font-weight:600;">${fmtMoney(m.totalDirectIncome)}</span></div>
+            <div class="cp-receipt-row" style="font-weight:700; border-top:1.5px solid var(--primary); padding-top:6px; color:var(--success);">
+              <span>TOTAL CASH INFLOWS</span><span>${fmtMoney(m.totalIncomeReceived)}</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <div style="font-weight:700; color:var(--danger); margin-bottom:8px;">Cash Outflows</div>
+            <div class="cp-receipt-row"><span>Operational Cash Outflows</span><span style="font-weight:600;">${fmtMoney(m.totalExpenses)}</span></div>
+            <div class="cp-receipt-row" style="font-weight:700; border-top:1.5px solid var(--primary); padding-top:6px; color:var(--danger);">
+              <span>TOTAL CASH OUTFLOWS</span><span>${fmtMoney(m.totalExpenses)}</span>
+            </div>
+          </div>
+
+          <div style="background:var(--surface-2); padding:14px; border-radius:var(--radius-md);">
+            <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:800; color:var(--primary);">
+              <span>NET CASH MOVEMENT</span>
+              <span style="color:${m.netFinancialPosition >= 0 ? 'var(--primary)' : 'var(--danger)'};">${fmtMoney(m.netFinancialPosition)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProgrammeContributionReport(el) {
+      const stats = state.programmes.map(p => {
+        const pInvs = state.invoices.filter(i => i.programmeId === p.id);
+        const invoiced = pInvs.reduce((s, i) => s + Number(i.total || 0), 0);
+        const collected = pInvs.reduce((s, i) => s + invoiceBalance(i).paid, 0);
+        const pExps = state.expenses.filter(e => e.status === 'recorded' && e.programmeId === p.id).reduce((s, e) => s + Number(e.amount || 0), 0);
+        const netContrib = safeRound(collected - pExps);
+        const contribMargin = collected > 0 ? safeRound((netContrib / collected) * 100).toFixed(1) : '0.0';
+
+        return { name: p.name, invoiced, collected, expenses: pExps, netContrib, contribMargin };
+      });
+
+      el.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1F393; Programme Net Contribution Analysis</div>
+              <div class="cp-section-desc">Programme payments received minus directly attributable programme expenses (without overhead allocation)</div>
+            </div>
+            ${canExport() ? `<button class="cp-btn sm secondary" id="btnExportProgContrib">&#x1F4E5; Export CSV</button>` : ''}
+          </div>
+
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Programme</th>
+                  <th style="text-align:right;">Invoiced</th>
+                  <th style="text-align:right;">Payments Received</th>
+                  <th style="text-align:right;">Direct Expenses</th>
+                  <th style="text-align:right;">Net Contribution</th>
+                  <th style="text-align:right;">Contribution Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stats.map(s => `
+                  <tr>
+                    <td style="font-weight:600;">${escapeHtml(s.name)}</td>
+                    <td style="text-align:right;">${fmtMoney(s.invoiced)}</td>
+                    <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(s.collected)}</td>
+                    <td style="text-align:right; color:var(--danger);">${fmtMoney(s.expenses)}</td>
+                    <td style="text-align:right; font-weight:700; color:${s.netContrib >= 0 ? 'var(--primary)' : 'var(--danger)'};">${fmtMoney(s.netContrib)}</td>
+                    <td style="text-align:right;"><span class="cp-pill ${Number(s.contribMargin) >= 40 ? 'paid' : 'partial'}">${s.contribMargin}%</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      const expBtn = document.getElementById('btnExportProgContrib');
+      if (expBtn) {
+        expBtn.addEventListener('click', () => {
+          exportToCSV('programme_net_contribution', stats.map(s => ({
+            Programme: s.name, Invoiced: s.invoiced, PaymentsReceived: s.collected,
+            DirectExpenses: s.expenses, NetContribution: s.netContrib, ContributionMargin: `${s.contribMargin}%`
+          })));
+        });
+      }
+    }
+
+    function renderAuditorTraceabilityView(el) {
+      el.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1F50E; Auditor Financial Traceability Engine</div>
+              <div class="cp-section-desc">Audit tool allowing authorized auditors to trace any financial transaction back to source invoices, payments, approvals and immutable log events</div>
+            </div>
+          </div>
+
+          <div class="cp-field" style="max-width:400px; margin-bottom:16px;">
+            <label>Search Receipt / Invoice / Reference</label>
+            <input type="text" id="auditorSearchInp" placeholder="e.g. 20001, 11092041, NIBSS..." />
+          </div>
+
+          <div id="auditorTraceResults">
+            <div class="cp-empty" style="padding:20px 0;">Enter an identifier above to trace source records.</div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('auditorSearchInp').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        const resultsEl = document.getElementById('auditorTraceResults');
+        if (!q) { resultsEl.innerHTML = '<div class="cp-empty" style="padding:20px 0;">Enter an identifier above to trace source records.</div>'; return; }
+
+        const matchedPays = state.payments.filter(p => String(p.receiptNo).includes(q) || (p.reference || '').toLowerCase().includes(q));
+        const matchedInvs = state.invoices.filter(i => String(i.invoiceNo).includes(q) || (i.clientName || '').toLowerCase().includes(q));
+        const matchedExps = state.expenses.filter(ex => ex.id.includes(q) || (ex.description || '').toLowerCase().includes(q));
+
+        resultsEl.innerHTML = `
+          <div style="font-size:13px; margin-bottom:12px; font-weight:700;">Trace Results (${matchedPays.length + matchedInvs.length + matchedExps.length} records found):</div>
+          ${matchedPays.map(p => {
+            const inv = state.invoices.find(i => i.id === p.invoiceId) || {};
+            const audits = state.auditLog.filter(a => a.entityId === p.id);
+            return `
+              <div style="background:var(--surface-2); padding:12px; border-radius:var(--radius-sm); margin-bottom:8px; font-size:12.5px;">
+                <div style="font-weight:700; color:var(--primary);">Payment Receipt #${p.receiptNo} &mdash; ${fmtMoney(p.amount)}</div>
+                <div>Source Invoice: <strong>Invoice #${inv.invoiceNo || 'N/A'}</strong> (${inv.clientName || 'N/A'} &middot; ${inv.programmeName || 'N/A'})</div>
+                <div>Payment Method: ${p.paymentMethod} &middot; Reference: <code>${p.reference || 'N/A'}</code></div>
+                <div style="margin-top:6px; font-size:11.5px; color:var(--text-secondary);">
+                  <strong>Audit Trail:</strong> ${audits.length > 0 ? `${audits[0].action} by ${audits[0].performedBy} at ${audits[0].performedAt}` : 'Historical seed record'}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        `;
+      });
+    }
+
+    function renderAuditLogView(el) {
+      el.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1F4DD; Immutable Finance Audit Log</div>
+              <div class="cp-section-desc">Chronological history of all financial records, cancellations, approvals and period locks</div>
+            </div>
+            ${canExport() ? `<button class="cp-btn sm secondary" id="btnExpAudit">&#x1F4E5; Export Audit CSV</button>` : ''}
+          </div>
+
+          <div class="cp-table-wrap">
+            <table class="cp-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th><th>Action</th><th>Entity</th><th>Reference</th><th>Performed By</th><th>Reason / Justification</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.auditLog.map(a => `
+                  <tr>
+                    <td style="font-size:11.5px; font-family:monospace;">${a.performedAt ? a.performedAt.slice(0, 19).replace('T', ' ') : '\u2014'}</td>
+                    <td><span class="cp-pill recorded">${escapeHtml(a.action)}</span></td>
+                    <td style="font-weight:600;">${escapeHtml(a.entityType)}</td>
+                    <td style="font-family:monospace; font-size:12px;">${escapeHtml(a.reference || '\u2014')}</td>
+                    <td>${escapeHtml(a.performedBy || 'Admin')}</td>
+                    <td style="font-size:12px;">${escapeHtml(a.reason || '\u2014')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      const expBtn = document.getElementById('btnExpAudit');
+      if (expBtn) {
+        expBtn.addEventListener('click', () => {
+          exportToCSV('clasptek_audit_log', state.auditLog.map(a => ({
+            Timestamp: a.performedAt, Action: a.action, Entity: a.entityType,
+            Reference: a.reference, PerformedBy: a.performedBy, Reason: a.reason
+          })));
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // TAB 10: BUDGETS, PERIOD LOCKS, APPROVAL MATRIX & INTEGRITY
+    // ----------------------------------------------------
+    function renderBudgetsAndControls(el) {
+      el.innerHTML = `
+        <div class="cp-subnav">
+          <button class="cp-subnav-btn ${state.budgetsSubTab === 'budgets' ? 'active' : ''}" id="subTabBudgets">&#x1F6E1; Spending Budgets</button>
+          <button class="cp-subnav-btn ${state.budgetsSubTab === 'periods' ? 'active' : ''}" id="subTabPeriods">&#x1F512; Financial Periods &amp; 12-Step Close</button>
+          <button class="cp-subnav-btn ${state.budgetsSubTab === 'approvalMatrix' ? 'active' : ''}" id="subTabMatrix">&#x2699; Approval Matrix Config</button>
+          <button class="cp-subnav-btn ${state.budgetsSubTab === 'integrity' ? 'active' : ''}" id="subTabIntegrity">&#x1FA7A; Financial Integrity Checker</button>
+        </div>
+        <div id="budgetSubArea"></div>
+      `;
+
+      document.getElementById('subTabBudgets').addEventListener('click', () => { state.budgetsSubTab = 'budgets'; render(); });
+      document.getElementById('subTabPeriods').addEventListener('click', () => { state.budgetsSubTab = 'periods'; render(); });
+      document.getElementById('subTabMatrix').addEventListener('click', () => { state.budgetsSubTab = 'approvalMatrix'; render(); });
+      document.getElementById('subTabIntegrity').addEventListener('click', () => { state.budgetsSubTab = 'integrity'; render(); });
+
+      const container = document.getElementById('budgetSubArea');
+      if (state.budgetsSubTab === 'periods') renderFinancialPeriodsAndClosing(container);
+      else if (state.budgetsSubTab === 'approvalMatrix') renderApprovalMatrixConfig(container);
+      else if (state.budgetsSubTab === 'integrity') renderFinancialIntegrityChecker(container);
+      else renderBudgetsIntelligenceView(container);
+    }
+
+    function renderBudgetsIntelligenceView(el) {
+      const curPeriod = state.filters.budgetPeriod || new Date().toISOString().slice(0, 7);
+      const budgetItems = state.budgets.filter(b => b.period === curPeriod);
+
+      el.innerHTML = `
+        <div class="cp-card-header">
+          <div>
+            <div class="cp-section-title">&#x1F6E1; Corporate Budget Intelligence (${curPeriod})</div>
+            <div class="cp-section-desc">Budget utilization, remaining allowances, and automated variance thresholds</div>
+          </div>
+          ${canManageBudget() ? `<button class="cp-btn sm accent" id="btnOpenBudgetModal">+ Set Budget Target</button>` : ''}
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Category Group</th>
+                <th style="text-align:right;">Budget (\u20a6)</th>
+                <th style="text-align:right;">Actual Spend (\u20a6)</th>
+                <th style="text-align:right;">Remaining (\u20a6)</th>
+                <th style="text-align:right;">Variance (\u20a6)</th>
+                <th style="text-align:right;">Utilization %</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${budgetItems.length === 0 ? `
+                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">No budgets established for ${curPeriod}. Click Set Budget Target to add one.</td></tr>
+              ` : budgetItems.map(b => {
+                const actual = safeRound(state.expenses
+                  .filter(e => e.status === 'recorded' && (e.date || '').startsWith(b.period) && (e.categoryGroup === b.categoryGroup || b.categoryGroup === 'all'))
+                  .reduce((s, e) => s + Number(e.amount || 0), 0));
+                const budgetAmt = safeRound(Number(b.budgetAmount) || 1);
+                const variance = safeRound(budgetAmt - actual);
+                const remaining = Math.max(0, variance);
+                const usagePct = safeRound((actual / budgetAmt) * 100);
+                const isOver = actual > budgetAmt;
+                const isWarning = usagePct >= 80 && !isOver;
+
+                return `
+                  <tr>
+                    <td style="font-weight:700; color:var(--primary);">${escapeHtml(b.categoryGroup)}</td>
+                    <td style="text-align:right; font-weight:600;">${fmtMoney(budgetAmt)}</td>
+                    <td style="text-align:right; font-weight:600; color:${isOver ? 'var(--danger)' : 'var(--primary)'};">${fmtMoney(actual)}</td>
+                    <td style="text-align:right; font-weight:600;">${fmtMoney(remaining)}</td>
+                    <td style="text-align:right; font-weight:700; color:${variance >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmtMoney(variance)}</td>
+                    <td style="text-align:right;">${usagePct}%</td>
+                    <td><span class="cp-pill ${isOver ? 'unpaid' : isWarning ? 'partial' : 'paid'}">${isOver ? 'OVER BUDGET' : isWarning ? 'WARNING (80%)' : 'ON BUDGET'}</span></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      const bBtn = document.getElementById('btnOpenBudgetModal');
+      if (bBtn) bBtn.addEventListener('click', () => openModal('setBudget'));
+    }
+
+    function renderFinancialPeriodsAndClosing(el) {
+      el.innerHTML = `
+        <div class="cp-card-header">
+          <div>
+            <div class="cp-section-title">&#x1F512; Financial Periods &amp; 12-Step Month-End Closing</div>
+            <div class="cp-section-desc">Strict period locking and 12-point compliance close verification checklist</div>
+          </div>
+          ${canClosePeriod() ? `<button class="cp-btn sm accent" id="btnCloseMonthModal">&#x1F512; 12-Step Month-End Close</button>` : ''}
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr><th>Period</th><th>Status</th><th>Closed Date</th><th>Closed By</th><th>Control Actions</th></tr>
+            </thead>
+            <tbody>
+              ${['2026-08', '2026-07', '2026-06'].map(pStr => {
+                const fp = state.financePeriods.find(p => p.period === pStr) || { status: 'open' };
+                const isLocked = fp.status === 'locked';
+                return `
+                  <tr>
+                    <td style="font-weight:700; color:var(--primary);">${pStr}</td>
+                    <td><span class="cp-pill ${isLocked ? 'locked' : 'open'}">${isLocked ? 'LOCKED' : 'OPEN'}</span></td>
+                    <td>${fp.closedAt ? fmtDate(fp.closedAt.slice(0, 10)) : '\u2014'}</td>
+                    <td>${escapeHtml(fp.closedBy || '\u2014')}</td>
+                    <td>
+                      ${isLocked && canLockPeriod() ? `<button class="cp-btn sm danger" data-unlock-p="${pStr}">Reopen Period</button>` :
+                        !isLocked && canClosePeriod() ? `<button class="cp-btn sm secondary" data-lock-p="${pStr}">Lock Period</button>` : '\u2014'}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      const bClose = document.getElementById('btnCloseMonthModal');
+      if (bClose) bClose.addEventListener('click', () => openModal('closeMonthChecklist'));
+
+      el.querySelectorAll('[data-lock-p]').forEach(b => {
+        b.addEventListener('click', async () => {
+          const p = b.dataset.lockP;
+          let entry = state.financePeriods.find(fp => fp.period === p);
+          if (!entry) { entry = { id: 'fp_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, period: p }; state.financePeriods.push(entry); }
+          entry.status = 'locked'; entry.lockedAt = new Date().toISOString(); entry.lockedBy = state.currentRole;
+          await safeSet(STORE_KEY_FINANCE_PERIODS, state.financePeriods);
+          await logAudit('LOCK_PERIOD', 'period', p, `Locked Period ${p}`);
+          render();
+        });
+      });
+
+      el.querySelectorAll('[data-unlock-p]').forEach(b => {
+        b.addEventListener('click', async () => {
+          const reason = prompt('Please enter the mandatory reason for reopening this locked period:');
+          if (reason) {
+            const p = b.dataset.unlockP;
+            const entry = state.financePeriods.find(fp => fp.period === p);
+            if (entry) {
+              entry.status = 'open';
+              await safeSet(STORE_KEY_FINANCE_PERIODS, state.financePeriods);
+              await logAudit('REOPEN_PERIOD', 'period', p, `Reopened Period ${p}`, 'locked', 'open', reason);
+              render();
+            }
+          }
+        });
+      });
+    }
+
+    function renderApprovalMatrixConfig(el) {
+      el.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x2699; Configurable Tiered Approval Matrix</div>
+              <div class="cp-section-desc">Manage monetary approval thresholds and assigned authorization roles (Super Admin configurable)</div>
+            </div>
+          </div>
+
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Tier 1 Limit (\u20a6) [Staff Auto-Approved]</label>
+              <input id="cfgTier1" type="number" value="${state.approvalSettings.tier1Limit}" ${state.currentRole !== 'Super Admin' ? 'disabled' : ''} />
+            </div>
+            <div class="cp-field">
+              <label>Tier 2 Limit (\u20a6) [Manager Required]</label>
+              <input id="cfgTier2" type="number" value="${state.approvalSettings.tier2Limit}" ${state.currentRole !== 'Super Admin' ? 'disabled' : ''} />
+            </div>
+          </div>
+
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Tier 2 Approver Role</label>
+              <input value="${state.approvalSettings.tier2Role}" disabled />
+            </div>
+            <div class="cp-field">
+              <label>Tier 3 Approver Role (Above Tier 2)</label>
+              <input value="${state.approvalSettings.tier3Role}" disabled />
+            </div>
+          </div>
+
+          ${state.currentRole === 'Super Admin' ? `
+            <button class="cp-btn accent" id="btnSaveApprovalMatrix">Save Matrix Configuration</button>
+          ` : '<div class="cp-note">Note: Only Super Admin can modify company approval thresholds.</div>'}
+        </div>
+      `;
+
+      const bSave = document.getElementById('btnSaveApprovalMatrix');
+      if (bSave) {
+        bSave.addEventListener('click', async () => {
+          const t1 = Number(document.getElementById('cfgTier1').value);
+          const t2 = Number(document.getElementById('cfgTier2').value);
+          if (t1 <= 0 || t2 <= t1) { alert('Tier 2 limit must be strictly greater than Tier 1 limit.'); return; }
+
+          state.approvalSettings.tier1Limit = t1;
+          state.approvalSettings.tier2Limit = t2;
+          await safeSet(STORE_KEY_APPROVAL_SETTINGS, state.approvalSettings);
+          await logAudit('UPDATE_APPROVAL_MATRIX', 'approval_settings', 'config', `T1: ${fmtMoney(t1)}, T2: ${fmtMoney(t2)}`);
+          alert('Approval matrix successfully updated!');
+          render();
+        });
+      }
+    }
+
+    function renderFinancialIntegrityChecker(el) {
+      const issues = runIntegrityAudit();
+
+      el.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1FA7A; Administrative Financial Integrity &amp; Consistency Scanner</div>
+              <div class="cp-section-desc">Automated audit scan detecting orphaned records, missing references and balance discrepancies</div>
+            </div>
+            <button class="cp-btn sm secondary" id="btnRerunIntegrityAudit">&#x1F504; Re-scan Ledger</button>
+          </div>
+
+          ${issues.length === 0 ? `
+            <div class="cp-empty" style="padding:24px 0;">
+              <div class="cp-empty-title" style="color:var(--success);">&#x2705; All Financial Integrity Scans Passed Cleanly</div>
+              <div>Zero orphaned records, zero balance inconsistencies, and zero overpayments detected across active ledgers.</div>
+            </div>
+          ` : `
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead><tr><th>Severity</th><th>Detected Discrepancy</th><th>Remediation Action</th></tr></thead>
+                <tbody>
+                  ${issues.map(iss => `
+                    <tr>
+                      <td><span class="cp-pill ${iss.severity === 'CRITICAL' ? 'unpaid' : 'partial'}">${iss.severity}</span></td>
+                      <td style="font-weight:600;">${escapeHtml(iss.issue)}</td>
+                      <td style="font-size:12px; color:var(--text-secondary);">${escapeHtml(iss.remediation)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      `;
+
+      document.getElementById('btnRerunIntegrityAudit').addEventListener('click', () => { renderFinancialIntegrityChecker(el); });
+    }
+
+    // ----------------------------------------------------
+    // TAB 11: PROGRAMMES
+    // ----------------------------------------------------
+    function renderProgrammes(el) {
+      el.innerHTML = `
+        ${canRecord() ? `
+          <div class="cp-card">
+            <div class="cp-section-title">&#x2795; Add a Programme</div>
+            <div class="cp-row3" style="margin-top:12px;">
+              <div class="cp-field"><label>Programme Name *</label><input id="pName" placeholder="Cybersecurity Professional" /></div>
+              <div class="cp-field"><label>Price (\u20a6) *</label><input id="pPrice" type="number" placeholder="480000" /></div>
+              <div class="cp-field"><label>Discount (\u20a6)</label><input id="pDiscount" type="number" placeholder="30000" /></div>
+            </div>
+            <button class="cp-btn accent" id="addProgramme">Add Programme</button>
+          </div>
+        ` : ''}
+
+        <div class="cp-card">
+          <div class="cp-section-title">&#x1F4D8; Registered Academic Catalog</div>
+          <div class="cp-table-wrap" style="margin-top:12px;">
+            <table class="cp-table">
+              <thead><tr><th>Name</th><th style="text-align:right;">Standard Price</th><th style="text-align:right;">Standard Discount</th></tr></thead>
+              <tbody>
+                ${state.programmes.map(p => `
+                  <tr>
+                    <td style="font-weight:600;">${escapeHtml(p.name)}</td>
+                    <td style="text-align:right;">${fmtMoney(p.price)}</td>
+                    <td style="text-align:right;">${fmtMoney(p.discount)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      const addBtn = document.getElementById('addProgramme');
+      if (addBtn) {
+        addBtn.addEventListener('click', async () => {
+          const name = document.getElementById('pName').value.trim();
+          const price = Number(document.getElementById('pPrice').value);
+          if (!name || !price) { alert('Enter name and price.'); return; }
+
+          const prog = {
+            id: 'prog_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, name, price,
+            discount: Number(document.getElementById('pDiscount').value || 0), createdAt: new Date().toISOString()
+          };
+
+          state.programmes.push(prog);
+          await safeSet(STORE_KEY_PROGRAMMES, state.programmes);
+          await logAudit('CREATE_PROGRAMME', 'programme', prog.id, prog.name, null, prog);
+          render();
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // MODALS ENGINE
+    // ----------------------------------------------------
+    function openModal(type, data = {}) {
+      state.modal = { type, data };
+      renderModal();
+    }
+
+    function closeModal() {
+      state.modal = null;
+      renderModal();
+    }
+
+    function renderModal() {
+      const container = document.getElementById('modalContainer');
+      if (!container) return;
+      if (!state.modal) { container.innerHTML = ''; return; }
+
+      const { type, data } = state.modal;
+      if (type === 'recordDirectIncome') renderRecordDirectIncomeModal(container);
+      else if (type === 'recordExpense') renderRecordExpenseModal(container);
+      else if (type === 'recordPayment') renderRecordPaymentModal(container, data.invoice);
+      else if (type === 'viewReceipt') renderViewReceiptModal(container, data.payment, data.invoice);
+      else if (type === 'studentStatement') renderStudentStatementModal(container, data.account);
+      else if (type === 'sendReminder') renderSendReminderModal(container, data.invoice);
+      else if (type === 'collectionNotes') renderCollectionNotesModal(container, data.invoice);
+      else if (type === 'closeMonthChecklist') renderCloseMonthChecklistModal(container);
+      else if (type === 'setBudget') renderSetBudgetModal(container);
+      else if (type === 'cancelExpense') renderCancelExpenseModal(container, data.expense);
+      else if (type === 'cancelDirectIncome') renderCancelDirectIncomeModal(container, data.item);
+      else if (type === 'newReconciliation') renderNewReconciliationModal(container, data.expectedBalance);
+      else if (type === 'reviewAnomalies') renderReviewAnomaliesModal(container, data.anomalies);
+    }
+
+    function renderNewReconciliationModal(container, expectedBalance) {
+      const curMonth = new Date().toISOString().slice(0, 7);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header">
+              <div class="cp-modal-title">&#x2696; Record Bank Statement Reconciliation</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div class="cp-field"><label>Reconciliation Period *</label><input id="mRecPeriod" type="month" value="${curMonth}" /></div>
+              <div class="cp-field"><label>Account Name *</label><input id="mRecAccount" value="Main Corporate Bank (GTB/Access)" /></div>
+              <div class="cp-field"><label>Expected System Balance (\u20a6)</label><input id="mRecExpected" value="${expectedBalance}" disabled /></div>
+              <div class="cp-field"><label>Actual Bank Statement Ending Balance (\u20a6) *</label><input id="mRecActual" type="number" placeholder="Enter bank statement balance..." /></div>
+              <div class="cp-field"><label>Reconciliation Notes / Exception Reasons</label><textarea id="mRecNotes" rows="2" placeholder="e.g. Cleared all deposits, no unmatched items..."></textarea></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mRecCancel">Cancel</button>
+              <button class="cp-btn accent" id="mRecSubmit">Save &amp; Lock Reconciliation</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mRecCancel').addEventListener('click', closeModal);
+      document.getElementById('mRecSubmit').addEventListener('click', async () => {
+        const actual = Number(document.getElementById('mRecActual').value);
+        const period = document.getElementById('mRecPeriod').value;
+        const exp = Number(expectedBalance) || 0;
+        const variance = safeRound(actual - exp);
+        const status = variance === 0 ? 'RECONCILED' : 'EXCEPTION';
+
+        const recon = {
+          id: 'recon_' + Date.now(),
+          tenant_id: DEFAULT_TENANT_ID,
+          period,
+          account: document.getElementById('mRecAccount').value.trim(),
+          expectedBalance: exp,
+          actualBalance: actual,
+          variance,
+          status,
+          notes: document.getElementById('mRecNotes').value.trim(),
+          reconciledAt: new Date().toISOString(),
+          reconciledBy: state.currentRole
+        };
+
+        state.reconciliations.unshift(recon);
+        await safeSet(STORE_KEY_RECONCILIATIONS, state.reconciliations);
+        await logAudit('SAVE_RECONCILIATION', 'reconciliation', recon.id, `${recon.period} (Variance: ${fmtMoney(variance)})`, null, recon);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderReviewAnomaliesModal(container, anomalies) {
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal large">
+            <div class="cp-modal-header">
+              <div class="cp-modal-title">&#x26A0; Financial Anomaly Review &amp; Clearance</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                ${anomalies.map((anom, idx) => `
+                  <div style="background:var(--surface-2); padding:12px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span class="cp-pill ${anom.severity === 'HIGH' ? 'unpaid' : 'partial'}">${anom.severity}: ${escapeHtml(anom.type)}</span>
+                      <span style="font-size:12px; color:var(--text-muted);">${fmtDate(anom.date)}</span>
+                    </div>
+                    <div style="font-weight:700; margin-top:6px; color:var(--primary);">${escapeHtml(anom.what)}</div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(anom.why)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mAnomClose">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mAnomClose').addEventListener('click', closeModal);
+    }
+
+    function renderStudentStatementModal(container, acc) {
+      const invs = acc.invoices || [];
+      const pays = acc.payments || [];
+      const rows = [];
+      invs.forEach(i => {
+        rows.push({ date: i.date, ref: `INV #${i.invoiceNo}`, desc: `Tuition Charge: ${i.programmeName}`, debit: Number(i.total || 0), credit: 0 });
+      });
+      pays.forEach(p => {
+        rows.push({ date: p.date, ref: `RCP #${p.receiptNo}`, desc: `Payment Received (${p.paymentMethod || 'Bank Transfer'})`, debit: 0, credit: Number(p.amount || 0) });
+      });
+      rows.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+
+      let running = 0;
+      rows.forEach(r => {
+        running = safeRound(running + (r.debit - r.credit));
+        r.balance = running;
+      });
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal large">
+            <div class="cp-modal-header no-print">
+              <div class="cp-modal-title">&#x1F4D1; Student Financial Statement</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div class="cp-statement-paper cp-printable-area">
+                <div class="cp-statement-header">
+                  <div>
+                    <div style="font-size:18px; font-weight:800; color:var(--primary);">CLASPTEK FINANCE</div>
+                    <div style="font-size:12px; color:var(--text-secondary);">Student Financial Account Statement</div>
+                  </div>
+                  <div style="text-align:right; font-size:12px;">
+                    <div>Date Issued: <strong>${new Date().toLocaleDateString('en-GB')}</strong></div>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                  <div style="font-size:15px; font-weight:700; color:var(--primary);">${escapeHtml(acc.clientName)}</div>
+                  <div style="font-size:12px; color:var(--text-secondary);">Phone: ${escapeHtml(acc.phone || 'N/A')} &middot; Email: ${escapeHtml(acc.email || 'N/A')}</div>
+                  <div style="font-size:12px; color:var(--text-secondary);">Programme(s): ${escapeHtml(acc.programmesList)}</div>
+                </div>
+
+                <div class="cp-table-wrap" style="margin-bottom:16px;">
+                  <table class="cp-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th><th>Reference</th><th>Description</th>
+                        <th style="text-align:right;">Charge / Debit</th><th style="text-align:right;">Payment / Credit</th><th style="text-align:right;">Running Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows.map(r => `
+                        <tr>
+                          <td>${fmtDate(r.date)}</td>
+                          <td style="font-family:monospace; font-size:11.5px;">${escapeHtml(r.ref)}</td>
+                          <td>${escapeHtml(r.desc)}</td>
+                          <td style="text-align:right;">${r.debit > 0 ? fmtMoney(r.debit) : '\u2014'}</td>
+                          <td style="text-align:right; color:var(--success);">${r.credit > 0 ? fmtMoney(r.credit) : '\u2014'}</td>
+                          <td style="text-align:right; font-weight:700; color:${r.balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(r.balance)}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px; border-radius:var(--radius-sm);">
+                  <div style="font-size:14px; font-weight:700; color:var(--primary);">Closing Outstanding Balance:</div>
+                  <div style="font-size:16px; font-weight:800; color:${acc.balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(acc.balance)}</div>
+                </div>
+              </div>
+            </div>
+            <div class="cp-modal-footer no-print">
+              <button class="cp-btn secondary" id="mCloseStmt">Close</button>
+              <button class="cp-btn accent" onclick="window.print();">&#x1F5A8; Print Statement</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseStmt').addEventListener('click', closeModal);
+    }
+
+    function renderSendReminderModal(container, inv) {
+      const { balance } = invoiceBalance(inv);
+      const ageing = getReceivableAgeing(inv);
+      const defaultMsg = `Dear ${inv.clientName},\n\nThis is an official reminder from Clasptek Finance regarding Invoice #${inv.invoiceNo} for ${inv.programmeName}.\nOutstanding Balance: ${fmtMoney(balance)}\nDue Date: ${fmtDate(inv.dueDate)}\n\nPlease ensure payment is completed promptly. Thank you for choosing Clasptek!`;
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x1F4E7; Payment Reminder Generator</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div style="font-size:13px; margin-bottom:10px;">Recipient: <strong>${escapeHtml(inv.clientName)}</strong> &middot; Priority: <span class="cp-pill ${ageing.prioClass}">${ageing.priority}</span></div>
+              <div class="cp-field"><label>Reminder Channel</label><select id="mRemChannel"><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option><option value="SMS">SMS</option></select></div>
+              <div class="cp-field"><label>Reminder Message</label><textarea id="mRemMsg" rows="6">${escapeHtml(defaultMsg)}</textarea></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mRemClose">Cancel</button>
+              <button class="cp-btn secondary" id="mBtnCopyRem">&#x1F4CB; Copy Message</button>
+              <button class="cp-btn accent" id="mBtnLogRem">Log Reminder Sent</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mRemClose').addEventListener('click', closeModal);
+      document.getElementById('mBtnCopyRem').addEventListener('click', () => {
+        navigator.clipboard.writeText(document.getElementById('mRemMsg').value);
+        alert('Reminder message copied to clipboard!');
+      });
+      document.getElementById('mBtnLogRem').addEventListener('click', async () => {
+        const reminder = {
+          id: 'rem_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, invoiceId: inv.id,
+          channel: document.getElementById('mRemChannel').value, message: document.getElementById('mRemMsg').value,
+          sentBy: state.currentRole, sentAt: new Date().toISOString()
+        };
+        state.paymentReminders.push(reminder);
+        await safeSet(STORE_KEY_PAYMENT_REMINDERS, state.paymentReminders);
+        await logAudit('SEND_REMINDER', 'reminder', reminder.id, `Invoice #${inv.invoiceNo} (${reminder.channel})`);
+        alert('Reminder logged in audit trail!');
+        closeModal();
+      });
+    }
+
+    function renderCollectionNotesModal(container, inv) {
+      const notes = state.collectionNotes.filter(n => n.invoiceId === inv.id);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x1F4DD; Collection Follow-up Notes</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div style="font-size:13px; margin-bottom:12px;">Invoice <strong>#${inv.invoiceNo}</strong> &mdash; ${escapeHtml(inv.clientName)}</div>
+              <div class="cp-field"><label>Add Follow-up Note</label><textarea id="mNewNoteText" rows="2" placeholder="e.g. Student promised transfer on Friday..."></textarea></div>
+              <button class="cp-btn sm accent" id="btnAddNoteSubmit" style="margin-bottom:14px;">Save Note</button>
+              <div style="font-weight:700; font-size:12.5px; margin-bottom:6px;">Historical Notes:</div>
+              ${notes.length === 0 ? '<div style="font-size:12px; color:var(--text-muted);">No notes recorded.</div>' : `
+                <div style="max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+                  ${notes.map(n => `
+                    <div style="background:var(--surface-2); padding:8px 10px; border-radius:var(--radius-sm); font-size:12px;">
+                      <div>${escapeHtml(n.note)}</div>
+                      <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">${fmtDate(n.createdAt.slice(0,10))} &middot; by ${escapeHtml(n.createdBy)}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              `}
+            </div>
+            <div class="cp-modal-footer"><button class="cp-btn secondary" id="mNotesClose">Close</button></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mNotesClose').addEventListener('click', closeModal);
+      document.getElementById('btnAddNoteSubmit').addEventListener('click', async () => {
+        const text = document.getElementById('mNewNoteText').value.trim();
+        if (!text) return;
+        const note = { id: 'note_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, invoiceId: inv.id, note: text, createdBy: state.currentRole, createdAt: new Date().toISOString() };
+        state.collectionNotes.push(note);
+        await safeSet(STORE_KEY_COLLECTION_NOTES, state.collectionNotes);
+        await logAudit('ADD_COLLECTION_NOTE', 'collection_note', note.id, `Invoice #${inv.invoiceNo}`);
+        openModal('collectionNotes', { invoice: inv });
+      });
+    }
+
+    function renderCloseMonthChecklistModal(container) {
+      const curMonth = new Date().toISOString().slice(0, 7);
+      const unrec = state.payments.filter(p => (p.reconciliationStatus || 'unreconciled') === 'unreconciled').length;
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal large">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x1F512; 12-Step Month-End Financial Close: ${curMonth}</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div style="font-size:13px; margin-bottom:12px;">Pre-close compliance verification checklist:</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12.5px;">
+                <label><input type="checkbox" checked /> 1. All revenue &amp; income recorded</label>
+                <label><input type="checkbox" checked /> 2. Operating expenses reviewed</label>
+                <label><input type="checkbox" checked /> 3. Outstanding invoices checked</label>
+                <label><input type="checkbox" checked /> 4. Receivables ageing audited</label>
+                <label><input type="checkbox" ${unrec === 0 ? 'checked' : ''} /> 5. Payments reconciled (${unrec} unrec)</label>
+                <label><input type="checkbox" checked /> 6. Expenses approved</label>
+                <label><input type="checkbox" checked /> 7. Reversals &amp; adjustments audited</label>
+                <label><input type="checkbox" checked /> 8. Budget variances reviewed</label>
+                <label><input type="checkbox" checked /> 9. Exceptions resolved</label>
+                <label><input type="checkbox" checked /> 10. Management reports prepared</label>
+                <label><input type="checkbox" checked /> 11. Audit logs inspected</label>
+                <label><input type="checkbox" checked /> 12. Final period locking authorization</label>
+              </div>
+              ${unrec > 0 ? `<div class="cp-error" style="margin-top:12px;">Warning: ${unrec} payment(s) remain unreconciled. Super Admin override required if proceeding.</div>` : ''}
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCloseClose">Cancel</button>
+              <button class="cp-btn accent" id="mConfirmCloseMonth">Verify &amp; Lock Period</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseClose').addEventListener('click', closeModal);
+      document.getElementById('mConfirmCloseMonth').addEventListener('click', async () => {
+        let fp = state.financePeriods.find(p => p.period === curMonth);
+        if (!fp) { fp = { id: 'fp_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, period: curMonth }; state.financePeriods.push(fp); }
+        fp.status = 'locked'; fp.closedAt = new Date().toISOString(); fp.closedBy = state.currentRole; fp.lockedAt = new Date().toISOString(); fp.lockedBy = state.currentRole;
+        await safeSet(STORE_KEY_FINANCE_PERIODS, state.financePeriods);
+        await logAudit('CLOSE_MONTH_12STEP', 'period', curMonth, `12-Step Closed & Locked ${curMonth}`);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderRecordDirectIncomeModal(container) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x2795; Record Direct Income</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div class="cp-field"><label>Date *</label><input id="mDate" type="date" value="${todayStr}" /></div>
+              <div class="cp-field"><label>Category *</label><select id="mCategory">${state.incomeCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Source / Client</label><input id="mClient" placeholder="e.g. Chevron Ltd" /></div>
+              <div class="cp-field"><label>Amount (\u20a6) *</label><input id="mAmount" type="number" min="1" placeholder="250000" /></div>
+              <div class="cp-field"><label>Payment Method</label><select id="mMethod">${PAYMENT_METHODS.map(pm => `<option value="${escapeHtml(pm)}">${escapeHtml(pm)}</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Reference</label><input id="mRef" placeholder="e.g. NIBSS/TRX/983421" /></div>
+              <div id="mError" class="cp-error" style="display:none;"></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCancel">Cancel</button>
+              <button class="cp-btn accent" id="mSubmit">Save Direct Income</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCancel').addEventListener('click', closeModal);
+      document.getElementById('mSubmit').addEventListener('click', async () => {
+        const amt = Number(document.getElementById('mAmount').value);
+        const dateStr = document.getElementById('mDate').value;
+        const errEl = document.getElementById('mError');
+
+        if (!amt || amt <= 0) { errEl.textContent = 'Enter valid amount.'; errEl.style.display = 'block'; return; }
+        if (isPeriodLocked(dateStr)) { errEl.textContent = 'This financial period is locked.'; errEl.style.display = 'block'; return; }
+
+        const directItem = {
+          id: 'dirinc_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, date: dateStr,
+          category: document.getElementById('mCategory').value, clientSource: document.getElementById('mClient').value.trim(),
+          amount: amt, method: document.getElementById('mMethod').value, reference: document.getElementById('mRef').value.trim(),
+          status: 'active', createdAt: new Date().toISOString(), createdBy: state.currentRole
+        };
+
+        state.directIncome.push(directItem);
+        await safeSet(STORE_KEY_DIRECT_INCOME, state.directIncome);
+        await logAudit('CREATE_DIRECT_INCOME', 'direct_income', directItem.id, directItem.reference, null, directItem);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderRecordExpenseModal(container) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const groups = Object.keys(state.expenseCategories);
+      const initialSubs = state.expenseCategories[groups[0]] || ['Miscellaneous'];
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal large">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x2795; Record Business Expense</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div class="cp-row2">
+                <div class="cp-field"><label>Date *</label><input id="mExpDate" type="date" value="${todayStr}" /></div>
+                <div class="cp-field"><label>Amount (\u20a6) *</label><input id="mExpAmount" type="number" min="1" placeholder="85000" /></div>
+              </div>
+              <div class="cp-row2">
+                <div class="cp-field"><label>Category Group *</label><select id="mExpGroup">${groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('')}</select></div>
+                <div class="cp-field"><label>Subcategory *</label><select id="mExpSub">${initialSubs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select></div>
+              </div>
+              <div class="cp-field"><label>Description / Purpose *</label><input id="mExpDesc" placeholder="e.g. Training facility generator diesel" /></div>
+              <div class="cp-row2">
+                <div class="cp-field"><label>Vendor / Payee</label><input id="mExpVendor" placeholder="e.g. TotalEnergies" /></div>
+                <div class="cp-field"><label>Department</label><select id="mExpDept">${DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}</select></div>
+              </div>
+              <div class="cp-field"><label>Payment Method *</label><select id="mExpMethod">${PAYMENT_METHODS.map(pm => `<option value="${escapeHtml(pm)}">${escapeHtml(pm)}</option>`).join('')}</select></div>
+              <div id="mExpError" class="cp-error" style="display:none;"></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCancel">Cancel</button>
+              <button class="cp-btn accent" id="mSubmit">Save Expense</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const grpSelect = document.getElementById('mExpGroup');
+      const subSelect = document.getElementById('mExpSub');
+      grpSelect.addEventListener('change', () => {
+        const subs = state.expenseCategories[grpSelect.value] || ['Miscellaneous'];
+        subSelect.innerHTML = subs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      });
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCancel').addEventListener('click', closeModal);
+      document.getElementById('mSubmit').addEventListener('click', async () => {
+        const amt = Number(document.getElementById('mExpAmount').value);
+        const desc = document.getElementById('mExpDesc').value.trim();
+        const dateStr = document.getElementById('mExpDate').value;
+        const errEl = document.getElementById('mExpError');
+
+        if (!amt || !desc) { errEl.textContent = 'Fill in required fields.'; errEl.style.display = 'block'; return; }
+        if (isPeriodLocked(dateStr)) { errEl.textContent = 'This financial period is locked.'; errEl.style.display = 'block'; return; }
+
+        const reqRole = getRequiredApprovalRole(amt);
+        const requiresApproval = (reqRole === 'Finance Manager' && state.currentRole === 'Finance Staff') ||
+                                 (reqRole === 'Super Admin' && ['Finance Staff', 'Finance Manager'].includes(state.currentRole));
+        const initialStatus = requiresApproval ? 'pending_approval' : 'recorded';
+
+        const expense = {
+          id: 'exp_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, date: dateStr,
+          categoryGroup: grpSelect.value, category: subSelect.value, description: desc,
+          amount: amt, vendor: document.getElementById('mExpVendor').value.trim(),
+          department: document.getElementById('mExpDept').value, method: document.getElementById('mExpMethod').value,
+          status: initialStatus, createdAt: new Date().toISOString(), createdBy: state.currentRole
+        };
+
+        state.expenses.push(expense);
+        await safeSet(STORE_KEY_EXPENSES, state.expenses);
+        await logAudit('CREATE_EXPENSE', 'expense', expense.id, expense.description, null, expense);
+
+        if (requiresApproval) alert(`Expense of ${fmtMoney(amt)} submitted for ${reqRole} approval.`);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderRecordPaymentModal(container, inv) {
+      const { balance, total, paid } = invoiceBalance(inv);
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x1F4B5; Record Invoice Payment</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div class="cp-receipt-total-box" style="margin-bottom:14px;">
+                <div style="font-weight:700; color:var(--primary);">Invoice #${inv.invoiceNo} &mdash; ${escapeHtml(inv.clientName)}</div>
+                <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-top:4px;">
+                  <span>Invoice Total: ${fmtMoney(total)}</span>
+                  <span>Paid: <strong style="color:var(--success);">${fmtMoney(paid)}</strong></span>
+                </div>
+                <div style="font-weight:700; color:var(--warning); margin-top:2px;">Outstanding: ${fmtMoney(balance)}</div>
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field"><label>Payment Date *</label><input id="mPayDate" type="date" value="${todayStr}" /></div>
+                <div class="cp-field"><label>Amount (\u20a6) *</label><input id="mPayAmount" type="number" min="1" max="${balance}" value="${balance}" /></div>
+              </div>
+              <div class="cp-field"><label>Payment Method *</label><select id="mPayMethod">${PAYMENT_METHODS.map(pm => `<option value="${escapeHtml(pm)}">${escapeHtml(pm)}</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Reference</label><input id="mPayRef" placeholder="e.g. GTB/TRF/019284" /></div>
+              <div id="mPayError" class="cp-error" style="display:none;"></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCancel">Cancel</button>
+              <button class="cp-btn accent" id="mSubmit">Confirm Payment &amp; Issue Receipt</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCancel').addEventListener('click', closeModal);
+      document.getElementById('mSubmit').addEventListener('click', async () => {
+        const amt = Number(document.getElementById('mPayAmount').value);
+        const dateStr = document.getElementById('mPayDate').value;
+        const errEl = document.getElementById('mPayError');
+
+        if (!amt || amt <= 0 || amt > balance) { errEl.textContent = 'Invalid payment amount.'; errEl.style.display = 'block'; return; }
+        if (isPeriodLocked(dateStr)) { errEl.textContent = 'This financial period is locked.'; errEl.style.display = 'block'; return; }
+
+        state.counters.receipt += 1;
+        const payment = {
+          id: 'pay_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, receiptNo: state.counters.receipt,
+          invoiceId: inv.id, amount: amt, paymentMethod: document.getElementById('mPayMethod').value,
+          reference: document.getElementById('mPayRef').value.trim(), reconciliationStatus: 'unreconciled',
+          date: dateStr, createdAt: new Date().toISOString(), createdBy: state.currentRole
+        };
+
+        state.payments.push(payment);
+        await safeSet(STORE_KEY_PAYMENTS, state.payments);
+        await safeSet(STORE_KEY_COUNTERS, state.counters);
+        await logAudit('RECORD_PAYMENT', 'payment', payment.id, `RCP #${payment.receiptNo}`, null, payment);
+
+        openModal('viewReceipt', { payment, invoice: inv });
+        render();
+      });
+    }
+
+    function renderViewReceiptModal(container, payment, invoice) {
+      const inv = invoice || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student', total: payment.amount };
+      const { balance } = invoiceBalance(inv);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal large">
+            <div class="cp-modal-header no-print"><div class="cp-modal-title">&#x1F9FE; Official Payment Receipt</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div class="cp-statement-paper cp-printable-area">
+                <div class="cp-statement-header">
+                  <div>
+                    <div style="font-size:18px; font-weight:800; color:var(--primary);">CLASPTEK FINANCE</div>
+                    <div style="font-size:12px; color:var(--text-secondary);">Official Payment Receipt</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:14px; font-weight:700; color:var(--accent);">RECEIPT #${payment.receiptNo}</div>
+                    <div style="font-size:11.5px; color:var(--text-secondary);">Date: ${fmtDate(payment.date)}</div>
+                  </div>
+                </div>
+
+                <div class="cp-receipt-row"><span>Student / Client</span><span style="font-weight:700;">${escapeHtml(inv.clientName)}</span></div>
+                <div class="cp-receipt-row"><span>Applied Invoice</span><span>Invoice #${inv.invoiceNo}</span></div>
+                <div class="cp-receipt-row"><span>Payment Method</span><span>${escapeHtml(payment.paymentMethod || 'Bank Transfer')}</span></div>
+                <div class="cp-receipt-row"><span>Reference</span><span style="font-family:monospace;">${escapeHtml(payment.reference || '\u2014')}</span></div>
+                <div class="cp-receipt-row" style="border-top:1.5px solid var(--primary); border-bottom:1.5px solid var(--primary); padding:8px 0; font-size:15px; font-weight:800; color:var(--success);">
+                  <span>AMOUNT PAID</span><span>${fmtMoney(payment.amount)}</span>
+                </div>
+                <div class="cp-receipt-row"><span>Remaining Balance</span><span style="font-weight:700;">${fmtMoney(balance)}</span></div>
+              </div>
+            </div>
+            <div class="cp-modal-footer no-print">
+              <button class="cp-btn secondary" id="mCloseRec">Close</button>
+              <button class="cp-btn accent" onclick="window.print();">&#x1F5A8; Print Receipt</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseRec').addEventListener('click', closeModal);
+    }
+
+    function renderSetBudgetModal(container) {
+      const curMonth = state.filters.budgetPeriod || new Date().toISOString().slice(0, 7);
+      const groups = Object.keys(state.expenseCategories);
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title">&#x1F6E1; Set Spending Budget</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div class="cp-row2">
+                <div class="cp-field"><label>Month *</label><input type="month" id="mBMonth" value="${curMonth}" /></div>
+                <div class="cp-field"><label>Budget (\u20a6) *</label><input type="number" id="mBAmt" min="1" placeholder="500000" /></div>
+              </div>
+              <div class="cp-field"><label>Category Group *</label><select id="mBGroup">${groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('')}</select></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mBCancel">Cancel</button>
+              <button class="cp-btn accent" id="mBSave">Save Target</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mBCancel').addEventListener('click', closeModal);
+      document.getElementById('mBSave').addEventListener('click', async () => {
+        const amt = Number(document.getElementById('mBAmt').value);
+        const month = document.getElementById('mBMonth').value;
+        if (!amt) return;
+
+        const budget = {
+          id: 'bdg_' + Date.now(), tenant_id: DEFAULT_TENANT_ID, period: month,
+          categoryGroup: document.getElementById('mBGroup').value, budgetAmount: amt,
+          status: 'active', createdAt: new Date().toISOString(), createdBy: state.currentRole
+        };
+
+        state.budgets.push(budget);
+        await safeSet(STORE_KEY_BUDGETS, state.budgets);
+        await logAudit('SET_BUDGET', 'budget', budget.id, `${budget.categoryGroup} (${budget.period})`, null, budget);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderCancelExpenseModal(container, expense) {
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title" style="color:var(--danger);">&#x26A0; Void Expense</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div style="font-size:13px; margin-bottom:12px;">Void expense of <strong>${fmtMoney(expense.amount)}</strong> (${escapeHtml(expense.description)})?</div>
+              <div class="cp-field"><label>Reason *</label><textarea id="mVoidReason" rows="2" placeholder="Audit justification..."></textarea></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mVoidCancel">Cancel</button>
+              <button class="cp-btn danger" id="mConfirmVoid">Confirm Void</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mVoidCancel').addEventListener('click', closeModal);
+      document.getElementById('mConfirmVoid').addEventListener('click', async () => {
+        const reason = document.getElementById('mVoidReason').value.trim();
+        if (!reason) return;
+
+        expense.status = 'cancelled';
+        expense.cancelledReason = reason;
+        expense.cancelledAt = new Date().toISOString();
+        expense.cancelledBy = state.currentRole;
+
+        await safeSet(STORE_KEY_EXPENSES, state.expenses);
+        await logAudit('CANCEL_EXPENSE', 'expense', expense.id, expense.description, 'recorded', 'cancelled', reason);
+        closeModal();
+        render();
+      });
+    }
+
+    function renderCancelDirectIncomeModal(container, item) {
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header"><div class="cp-modal-title" style="color:var(--danger);">&#x26A0; Void Direct Income</div><button class="cp-modal-close" id="mClose">&times;</button></div>
+            <div class="cp-modal-body">
+              <div style="font-size:13px; margin-bottom:12px;">Void direct income of <strong>${fmtMoney(item.amount)}</strong> (${escapeHtml(item.category)})?</div>
+              <div class="cp-field"><label>Reason *</label><textarea id="mDirVoidReason" rows="2" placeholder="Audit reason..."></textarea></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mDirVoidCancel">Cancel</button>
+              <button class="cp-btn danger" id="mConfirmDirVoid">Confirm Void</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mDirVoidCancel').addEventListener('click', closeModal);
+      document.getElementById('mConfirmDirVoid').addEventListener('click', async () => {
+        const reason = document.getElementById('mDirVoidReason').value.trim();
+        if (!reason) return;
+
+        item.status = 'cancelled';
+        item.cancelledReason = reason;
+        item.cancelledAt = new Date().toISOString();
+        item.cancelledBy = state.currentRole;
+
+        await safeSet(STORE_KEY_DIRECT_INCOME, state.directIncome);
+        await logAudit('CANCEL_DIRECT_INCOME', 'direct_income', item.id, item.category, 'active', 'cancelled', reason);
+        closeModal();
+        render();
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // Initialize application
+    loadAll();
+  })();
+  </script>
+</body>
+</html>

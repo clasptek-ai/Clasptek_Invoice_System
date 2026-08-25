@@ -1,0 +1,14 @@
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# VS Code & IDE settings
+.vscode/
+.idea/
+
+# Environment / scratch files
+.env
+.env.local
+scratch/
