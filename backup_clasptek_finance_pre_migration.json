@@ -1,0 +1,296 @@
+{
+  "metadata": {
+    "system": "Clasptek Finance Management System",
+    "phase": "Phase 5 Production Migration",
+    "exported_at": "2026-08-25T21:48:18.758Z",
+    "tenant_id": "clasptek_main",
+    "author": "Clasptek Automated Audit & Backup Engine"
+  },
+  "stores": {
+    "clasptek:programmes": [
+      {
+        "id": "prog_1",
+        "tenant_id": "clasptek_main",
+        "name": "Full-Stack Software Engineering",
+        "price": 450000,
+        "discount": 0,
+        "code": "FSE",
+        "allow_installments": true,
+        "installment_first_pct": 60,
+        "installment_second_pct": 40
+      },
+      {
+        "id": "prog_2",
+        "tenant_id": "clasptek_main",
+        "name": "Data Science & Machine Learning",
+        "price": 500000,
+        "discount": 50000,
+        "code": "DSML",
+        "allow_installments": true,
+        "installment_first_pct": 60,
+        "installment_second_pct": 40
+      },
+      {
+        "id": "prog_3",
+        "tenant_id": "clasptek_main",
+        "name": "Cybersecurity & Ethical Hacking",
+        "price": 400000,
+        "discount": 0,
+        "code": "CYBER",
+        "allow_installments": true,
+        "installment_first_pct": 60,
+        "installment_second_pct": 40
+      }
+    ],
+    "clasptek:invoices": [
+      {
+        "id": "inv_1724600001",
+        "tenant_id": "clasptek_main",
+        "invoiceNo": 11092041,
+        "invoice_display_no": "INV-11092041",
+        "clientName": "Samuel Adebayo",
+        "student_name": "Samuel Adebayo",
+        "student_email": "samuel.a@example.com",
+        "student_phone": "08031234567",
+        "programmeId": "prog_1",
+        "programmeName": "Full-Stack Software Engineering",
+        "date": "2026-08-01",
+        "dueDate": "2026-08-15",
+        "plan": "installment",
+        "installments_count": 2,
+        "base_price": 450000,
+        "discount": 0,
+        "total": 450000,
+        "income_category": "Student Tuition",
+        "status": "partial",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "inv_1724600002",
+        "tenant_id": "clasptek_main",
+        "invoiceNo": 11092042,
+        "invoice_display_no": "INV-11092042",
+        "clientName": "Chioma Okonkwo",
+        "student_name": "Chioma Okonkwo",
+        "student_email": "chioma.o@example.com",
+        "student_phone": "08059876543",
+        "programmeId": "prog_2",
+        "programmeName": "Data Science & Machine Learning",
+        "date": "2026-08-05",
+        "dueDate": "2026-08-20",
+        "plan": "full",
+        "installments_count": 1,
+        "base_price": 500000,
+        "discount": 50000,
+        "total": 450000,
+        "income_category": "Student Tuition",
+        "status": "paid",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "inv_1724600003",
+        "tenant_id": "clasptek_main",
+        "invoiceNo": 11092043,
+        "invoice_display_no": "INV-11092043",
+        "clientName": "Tunde Bakare",
+        "student_name": "Tunde Bakare",
+        "student_email": "tunde.b@example.com",
+        "student_phone": "08023456789",
+        "programmeId": "prog_3",
+        "programmeName": "Cybersecurity & Ethical Hacking",
+        "date": "2026-08-10",
+        "dueDate": "2026-08-25",
+        "plan": "installment",
+        "installments_count": 2,
+        "base_price": 400000,
+        "discount": 0,
+        "total": 400000,
+        "income_category": "Student Tuition",
+        "status": "partial",
+        "source": "legacy_localstorage"
+      }
+    ],
+    "clasptek:payments": [
+      {
+        "id": "pay_1724600101",
+        "tenant_id": "clasptek_main",
+        "receiptNo": 20001,
+        "receipt_display_no": "REC-20001",
+        "invoiceId": "inv_1724600001",
+        "amount": 270000,
+        "paymentMethod": "Bank Transfer",
+        "reference": "GTB/NIP/2938472",
+        "date": "2026-08-02",
+        "reconciliationStatus": "reconciled",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "pay_1724600102",
+        "tenant_id": "clasptek_main",
+        "receiptNo": 20002,
+        "receipt_display_no": "REC-20002",
+        "invoiceId": "inv_1724600002",
+        "amount": 450000,
+        "paymentMethod": "Card",
+        "reference": "PAYSTACK/CHG/849201",
+        "date": "2026-08-05",
+        "reconciliationStatus": "reconciled",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "pay_1724600103",
+        "tenant_id": "clasptek_main",
+        "receiptNo": 20003,
+        "receipt_display_no": "REC-20003",
+        "invoiceId": "inv_1724600003",
+        "amount": 240000,
+        "paymentMethod": "Bank Transfer",
+        "reference": "ACCESS/TRF/019283",
+        "date": "2026-08-11",
+        "reconciliationStatus": "reconciled",
+        "source": "legacy_localstorage"
+      }
+    ],
+    "clasptek:direct_income": [
+      {
+        "id": "dir_1724600201",
+        "tenant_id": "clasptek_main",
+        "date": "2026-08-12",
+        "category": "Corporate Training",
+        "clientSource": "First Bank Nigeria",
+        "amount": 350000,
+        "method": "Bank Transfer",
+        "reference": "FBN/CORP/984210",
+        "status": "active",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "dir_1724600202",
+        "tenant_id": "clasptek_main",
+        "date": "2026-08-18",
+        "category": "Registration Fee",
+        "clientSource": "Multiple Applicants",
+        "amount": 75000,
+        "method": "POS",
+        "reference": "POS/BAT/009124",
+        "status": "active",
+        "source": "legacy_localstorage"
+      }
+    ],
+    "clasptek:expenses": [
+      {
+        "id": "exp_1724600301",
+        "tenant_id": "clasptek_main",
+        "date": "2026-08-03",
+        "categoryGroup": "Staff & People",
+        "category": "Facilitator Fees",
+        "description": "Instructor Honorarium for Software Engineering Phase 1",
+        "vendor": "Lead Facilitator",
+        "department": "Academics",
+        "method": "Bank Transfer",
+        "amount": 180000,
+        "status": "recorded",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "exp_1724600302",
+        "tenant_id": "clasptek_main",
+        "date": "2026-08-08",
+        "categoryGroup": "Operations",
+        "category": "Utilities",
+        "description": "Diesel generator power for Lekki learning facility",
+        "vendor": "TotalEnergies Ltd",
+        "department": "Operations",
+        "method": "Bank Transfer",
+        "amount": 95000,
+        "status": "recorded",
+        "source": "legacy_localstorage"
+      },
+      {
+        "id": "exp_1724600303",
+        "tenant_id": "clasptek_main",
+        "date": "2026-08-14",
+        "categoryGroup": "Technology",
+        "category": "Software Subscriptions",
+        "description": "Cloud AWS Lab Hosting & Supabase Database",
+        "vendor": "Amazon Web Services",
+        "department": "Technology",
+        "method": "Card",
+        "amount": 65000,
+        "status": "recorded",
+        "source": "legacy_localstorage"
+      }
+    ],
+    "clasptek:budgets": [
+      {
+        "id": "bdg_1",
+        "tenant_id": "clasptek_main",
+        "period": "2026-08",
+        "categoryGroup": "Staff & People",
+        "budgetAmount": 500000,
+        "status": "active"
+      },
+      {
+        "id": "bdg_2",
+        "tenant_id": "clasptek_main",
+        "period": "2026-08",
+        "categoryGroup": "Operations",
+        "budgetAmount": 300000,
+        "status": "active"
+      },
+      {
+        "id": "bdg_3",
+        "tenant_id": "clasptek_main",
+        "period": "2026-08",
+        "categoryGroup": "Technology",
+        "budgetAmount": 150000,
+        "status": "active"
+      }
+    ],
+    "clasptek:counters": {
+      "invoice": 11092043,
+      "receipt": 20003
+    },
+    "clasptek:finance_periods": [
+      {
+        "id": "fp_1",
+        "tenant_id": "clasptek_main",
+        "period": "2026-07",
+        "status": "locked",
+        "notes": "July 2026 Closed & Locked"
+      },
+      {
+        "id": "fp_2",
+        "tenant_id": "clasptek_main",
+        "period": "2026-08",
+        "status": "open",
+        "notes": "Active Month"
+      }
+    ],
+    "clasptek:reconciliations": [
+      {
+        "id": "recon_1",
+        "tenant_id": "clasptek_main",
+        "period": "2026-07",
+        "account": "Main Corporate Bank",
+        "expectedBalance": 850000,
+        "actualBalance": 850000,
+        "variance": 0,
+        "status": "RECONCILED"
+      }
+    ],
+    "clasptek:finance_audit_log": [
+      {
+        "id": "aud_1",
+        "tenant_id": "clasptek_main",
+        "action": "INIT_SYSTEM",
+        "entity_type": "system",
+        "entity_id": "sys",
+        "reference": "Initial Setup",
+        "performedBy": "Super Admin",
+        "performedAt": "2026-08-01T08:00:00.000Z",
+        "source": "legacy_localstorage"
+      }
+    ]
+  }
+}
