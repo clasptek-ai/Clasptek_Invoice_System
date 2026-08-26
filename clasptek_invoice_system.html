@@ -66,422 +66,94 @@
       flex-shrink: 0;
     }
 
-    .cp-sidebar.collapsed {
-      width: var(--sidebar-collapsed-width);
-    }
-
+    .cp-sidebar.collapsed { width: var(--sidebar-collapsed-width); }
     .cp-sidebar.collapsed .cp-sidebar-brand-text,
     .cp-sidebar.collapsed .cp-nav-label,
     .cp-sidebar.collapsed .cp-nav-section-title,
     .cp-sidebar.collapsed .cp-user-info-text,
-    .cp-sidebar.collapsed .cp-conn-text {
-      display: none;
-    }
+    .cp-sidebar.collapsed .cp-conn-text { display: none; }
+    .cp-sidebar.collapsed .cp-sidebar-header { justify-content: center; padding: 16px 8px; }
+    .cp-sidebar.collapsed .cp-nav-item { justify-content: center; padding: 10px; }
 
-    .cp-sidebar.collapsed .cp-sidebar-header {
-      justify-content: center;
-      padding: 16px 8px;
-    }
-
-    .cp-sidebar.collapsed .cp-nav-item {
-      justify-content: center;
-      padding: 10px;
-    }
-
-    .cp-sidebar-header {
-      padding: 18px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      gap: 10px;
-    }
-
-    .cp-sidebar-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-      color: inherit;
-    }
-
-    .cp-sidebar-logo {
-      height: 34px;
-      width: auto;
-      object-fit: contain;
-    }
-
-    .cp-sidebar-brand-text {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .cp-brand-name {
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--primary);
-      line-height: 1.2;
-    }
-
-    .cp-brand-sub {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
+    .cp-sidebar-header { padding: 18px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); gap: 10px; }
+    .cp-sidebar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .cp-sidebar-logo { height: 34px; width: auto; object-fit: contain; }
+    .cp-sidebar-brand-text { display: flex; flex-direction: column; }
+    .cp-brand-name { font-size: 13.5px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+    .cp-brand-sub { font-size: 10.5px; color: var(--text-muted); font-weight: 500; }
 
     .cp-collapse-btn {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-      width: 28px;
-      height: 28px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      transition: all 0.15s ease;
+      background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all 0.15s ease;
     }
     .cp-collapse-btn:hover { background: var(--surface-2); color: var(--primary); }
 
     /* Navigation Menu */
-    .cp-sidebar-nav {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px 10px;
-    }
-
-    .cp-nav-section {
-      margin-bottom: 16px;
-    }
-
-    .cp-nav-section-title {
-      font-size: 10.5px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      padding: 4px 10px 6px;
-    }
+    .cp-sidebar-nav { flex: 1; overflow-y: auto; padding: 14px 10px; }
+    .cp-nav-section { margin-bottom: 16px; }
+    .cp-nav-section-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; padding: 4px 10px 6px; }
 
     .cp-nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8.5px 12px;
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.15s ease;
-      margin-bottom: 2px;
-      user-select: none;
+      display: flex; align-items: center; gap: 10px; padding: 8.5px 12px;
+      border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 13px; font-weight: 500;
+      cursor: pointer; text-decoration: none; transition: all 0.15s ease; margin-bottom: 2px; user-select: none;
     }
-
-    .cp-nav-item:hover {
-      background: var(--surface-2);
-      color: var(--primary);
-    }
-
-    .cp-nav-item.active {
-      background: rgba(20, 33, 61, 0.08);
-      color: var(--primary);
-      font-weight: 600;
-    }
-
-    .cp-nav-icon {
-      font-size: 15px;
-      width: 20px;
-      text-align: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .cp-nav-badge {
-      margin-left: auto;
-      background: var(--surface-2);
-      color: var(--text-secondary);
-      padding: 2px 7px;
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .cp-nav-item.active .cp-nav-badge {
-      background: var(--primary);
-      color: #fff;
-    }
+    .cp-nav-item:hover { background: var(--surface-2); color: var(--primary); }
+    .cp-nav-item.active { background: rgba(20, 33, 61, 0.08); color: var(--primary); font-weight: 600; }
+    .cp-nav-icon { font-size: 15px; width: 20px; text-align: center; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .cp-nav-badge { margin-left: auto; background: var(--surface-2); color: var(--text-secondary); padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .cp-nav-item.active .cp-nav-badge { background: var(--primary); color: #fff; }
 
     /* Sidebar Footer */
-    .cp-sidebar-footer {
-      padding: 12px 14px;
-      border-top: 1px solid var(--border);
-      background: #FAFAFA;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .cp-conn-pill {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11.5px;
-      font-weight: 600;
-      padding: 4px 8px;
-      border-radius: 20px;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-    }
-
-    .cp-conn-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #94A3B8;
-    }
-
+    .cp-sidebar-footer { padding: 12px 14px; border-top: 1px solid var(--border); background: #FAFAFA; display: flex; flex-direction: column; gap: 10px; }
+    .cp-conn-pill { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary); }
+    .cp-conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #94A3B8; }
     .cp-conn-dot.connected { background: var(--success); }
     .cp-conn-dot.fallback { background: var(--warning); }
 
-    .cp-user-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
+    .cp-user-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .cp-user-info { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+    .cp-user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; }
+    .cp-user-info-text { display: flex; flex-direction: column; overflow: hidden; }
+    .cp-user-name { font-size: 12.5px; font-weight: 700; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cp-user-role { font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .cp-user-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      overflow: hidden;
-    }
-
-    .cp-user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: var(--primary);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 12.5px;
-      flex-shrink: 0;
-    }
-
-    .cp-user-info-text {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .cp-user-name {
-      font-size: 12.5px;
-      font-weight: 700;
-      color: var(--primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .cp-user-role {
-      font-size: 11px;
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .cp-signout-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 15px;
-      padding: 4px;
-      border-radius: var(--radius-sm);
-      transition: color 0.15s ease;
-    }
+    .cp-signout-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; padding: 4px; border-radius: var(--radius-sm); transition: color 0.15s ease; }
     .cp-signout-btn:hover { color: var(--danger); }
 
     /* Main Area */
-    .cp-main-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      overflow-x: hidden;
-    }
+    .cp-main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-x: hidden; }
 
     /* Topbar Header */
-    .cp-topbar {
-      height: var(--header-height);
-      background: #FFFFFF;
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 90;
-      gap: 16px;
-    }
-
-    .cp-topbar-left {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex: 1;
-    }
-
-    .cp-breadcrumb {
-      font-size: 13.5px;
-      font-weight: 600;
-      color: var(--primary);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
+    .cp-topbar { height: var(--header-height); background: #FFFFFF; border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 90; gap: 16px; }
+    .cp-topbar-left { display: flex; align-items: center; gap: 16px; flex: 1; }
+    .cp-breadcrumb { font-size: 13.5px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .cp-breadcrumb span { color: var(--text-muted); font-weight: 400; }
 
     /* Global Omni-Search */
-    .cp-omni-search {
-      position: relative;
-      width: 100%;
-      max-width: 420px;
-    }
+    .cp-omni-search { position: relative; width: 100%; max-width: 440px; }
+    .cp-omni-input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface-2); font-size: 12.5px; font-family: var(--font-sans); color: var(--text-primary); transition: all 0.15s ease; }
+    .cp-omni-input:focus { outline: none; background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(20, 33, 61, 0.08); }
+    .cp-omni-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-muted); pointer-events: none; }
 
-    .cp-omni-input {
-      width: 100%;
-      padding: 8px 12px 8px 34px;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      background: var(--surface-2);
-      font-size: 12.5px;
-      font-family: var(--font-sans);
-      color: var(--text-primary);
-      transition: all 0.15s ease;
-    }
-
-    .cp-omni-input:focus {
-      outline: none;
-      background: #fff;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(20, 33, 61, 0.08);
-    }
-
-    .cp-omni-icon {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 13px;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
-
-    .cp-search-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      right: 0;
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
-      max-height: 380px;
-      overflow-y: auto;
-      z-index: 200;
-      display: none;
-    }
-
+    .cp-search-dropdown { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); max-height: 420px; overflow-y: auto; z-index: 200; display: none; }
     .cp-search-dropdown.active { display: block; }
-
-    .cp-search-group-title {
-      font-size: 10.5px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 8px 12px 4px;
-      background: var(--surface-2);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .cp-search-result-item {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: background 0.15s ease;
-      font-size: 12.5px;
-    }
-
+    .cp-search-result-item { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s ease; font-size: 12.5px; }
     .cp-search-result-item:last-child { border-bottom: none; }
     .cp-search-result-item:hover { background: var(--surface-2); }
 
-    .cp-topbar-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .cp-topbar-right { display: flex; align-items: center; gap: 12px; }
 
     /* Action Dropdown Menu */
-    .cp-dropdown-wrap {
-      position: relative;
-    }
-
-    .cp-dropdown-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
-      min-width: 200px;
-      z-index: 200;
-      display: none;
-      padding: 4px 0;
-    }
-
+    .cp-dropdown-wrap { position: relative; }
+    .cp-dropdown-menu { position: absolute; top: calc(100% + 6px); right: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); min-width: 200px; z-index: 200; display: none; padding: 4px 0; }
     .cp-dropdown-menu.active { display: block; }
-
-    .cp-dropdown-item {
-      padding: 9px 14px;
-      font-size: 12.5px;
-      font-weight: 500;
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.15s ease;
-    }
+    .cp-dropdown-item { padding: 9px 14px; font-size: 12.5px; font-weight: 500; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.15s ease; }
     .cp-dropdown-item:hover { background: var(--surface-2); color: var(--primary); }
 
     /* Content Area */
-    .cp-content-view {
-      padding: 24px;
-      flex: 1;
-      max-width: 1400px;
-      width: 100%;
-      margin: 0 auto;
-    }
+    .cp-content-view { padding: 24px; flex: 1; max-width: 1400px; width: 100%; margin: 0 auto; }
 
     /* Cards & Containers */
     .cp-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
@@ -491,6 +163,7 @@
 
     /* Grids & Stats */
     .cp-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .cp-grid-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .cp-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 20px; }
     .cp-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 20px; }
 
@@ -504,6 +177,18 @@
     .cp-stat.income-border { border-left: 4px solid var(--success); }
     .cp-stat.expense-border { border-left: 4px solid var(--danger); }
     .cp-stat.receivable-border { border-left: 4px solid var(--warning); }
+    .cp-stat.info-border { border-left: 4px solid var(--info); }
+
+    /* Customer Journey Timeline Visualizer */
+    .cp-journey-bar { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 20px; position: relative; }
+    .cp-journey-bar::before { content: ""; position: absolute; top: 14px; left: 24px; right: 24px; height: 3px; background: var(--border); z-index: 1; }
+    .cp-journey-step { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; text-align: center; }
+    .cp-journey-dot { width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); transition: all 0.2s ease; }
+    .cp-journey-step.completed .cp-journey-dot { background: var(--success); border-color: var(--success); color: #fff; }
+    .cp-journey-step.current .cp-journey-dot { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 0 0 3px rgba(20, 33, 61, 0.15); }
+    .cp-journey-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+    .cp-journey-step.completed .cp-journey-label { color: var(--success); font-weight: 700; }
+    .cp-journey-step.current .cp-journey-label { color: var(--primary); font-weight: 800; }
 
     /* Forms & Fields */
     .cp-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
@@ -524,6 +209,8 @@
     .cp-btn.secondary:hover { background: var(--surface-2); border-color: var(--primary); }
     .cp-btn.accent { background: var(--accent); color: #fff; }
     .cp-btn.accent:hover { background: var(--accent-hover); }
+    .cp-btn.success { background: var(--success); color: #fff; }
+    .cp-btn.success:hover { background: #0c6334; }
     .cp-btn.danger { background: var(--surface-0); color: var(--danger); border: 1px solid var(--danger); padding: 5px 9px; font-size: 11.5px; }
     .cp-btn.danger:hover { background: var(--danger-bg); }
     .cp-btn.sm { padding: 5.5px 11px; font-size: 12px; }
@@ -538,10 +225,10 @@
 
     /* Status Badges */
     .cp-pill { display: inline-flex; align-items: center; padding: 3px 8.5px; border-radius: 12px; font-size: 11.5px; font-weight: 600; text-transform: capitalize; }
-    .cp-pill.paid, .cp-pill.reconciled, .cp-pill.approved, .cp-pill.recorded, .cp-pill.active { background: var(--success-bg); color: var(--success); }
-    .cp-pill.partial, .cp-pill.pending_approval, .cp-pill.pending, .cp-pill.unreconciled, .cp-pill.open { background: var(--warning-bg); color: var(--warning); }
-    .cp-pill.unpaid, .cp-pill.rejected, .cp-pill.cancelled, .cp-pill.voided, .cp-pill.locked, .cp-pill.discrepancy { background: var(--danger-bg); color: var(--danger); }
-    .cp-pill.category-pill { background: var(--surface-2); color: var(--text-secondary); font-weight: 500; }
+    .cp-pill.paid, .cp-pill.fully_paid, .cp-pill.reconciled, .cp-pill.approved, .cp-pill.recorded, .cp-pill.active, .cp-pill.enrolled, .cp-pill.converted { background: var(--success-bg); color: var(--success); }
+    .cp-pill.partial, .cp-pill.partially_paid, .cp-pill.pending_approval, .cp-pill.pending, .cp-pill.unreconciled, .cp-pill.open, .cp-pill.interested, .cp-pill.contacted, .cp-pill.invoice_requested, .cp-pill.invoice_issued, .cp-pill.payment_pending { background: var(--warning-bg); color: var(--warning); }
+    .cp-pill.unpaid, .cp-pill.rejected, .cp-pill.cancelled, .cp-pill.voided, .cp-pill.locked, .cp-pill.discrepancy, .cp-pill.lost, .cp-pill.overdue { background: var(--danger-bg); color: var(--danger); }
+    .cp-pill.category-pill, .cp-pill.new { background: var(--surface-2); color: var(--text-secondary); font-weight: 600; }
 
     /* Priority Badges */
     .prio-low { background: #F1F5F9; color: #475569; }
@@ -550,46 +237,24 @@
     .prio-critical { background: #FEE2E2; color: #991B1B; font-weight: 700; }
 
     /* Empty States */
-    .cp-empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      background: #FFFFFF;
-      border: 1px dashed var(--border);
-      border-radius: var(--radius-md);
-      margin: 12px 0;
-    }
-
-    .cp-empty-icon {
-      font-size: 38px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    }
-
-    .cp-empty-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 4px;
-    }
-
-    .cp-empty-desc {
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      max-width: 420px;
-      margin: 0 auto 16px;
-      line-height: 1.5;
-    }
+    .cp-empty-state { text-align: center; padding: 48px 24px; background: #FFFFFF; border: 1px dashed var(--border); border-radius: var(--radius-md); margin: 12px 0; }
+    .cp-empty-icon { font-size: 38px; color: var(--text-muted); margin-bottom: 12px; }
+    .cp-empty-title { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .cp-empty-desc { font-size: 12.5px; color: var(--text-secondary); max-width: 420px; margin: 0 auto 16px; line-height: 1.5; }
 
     /* Modals & Overlays */
     .cp-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 16px; backdrop-filter: blur(2px); }
     .cp-modal { background: #fff; border-radius: var(--radius-lg); width: 100%; max-width: 580px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
     .cp-modal.large { max-width: 840px; }
     .cp-modal.doc-modal { max-width: 890px; }
+    .cp-modal.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 100%; max-width: 540px; height: 100vh; max-height: 100vh; border-radius: 0; animation: slideIn 0.2s ease-out; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
     .cp-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
     .cp-modal-title { font-size: 15px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
     .cp-modal-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 4px; }
     .cp-modal-close:hover { color: var(--danger); }
-    .cp-modal-body { padding: 18px; overflow-y: auto; }
+    .cp-modal-body { padding: 18px; overflow-y: auto; flex: 1; }
     .cp-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 
     /* A4 Document Paper for Invoices & Receipts */
@@ -648,7 +313,7 @@
   <script>
   (function() {
     // ----------------------------------------------------
-    // STORAGE KEYS & CONFIGURATION (PHASES 1–6 PRODUCTION)
+    // STORAGE KEYS & CONFIGURATION (PHASES 1–7 PRODUCTION)
     // ----------------------------------------------------
     const STORE_KEY_PROGRAMMES = 'clasptek:programmes';
     const STORE_KEY_INVOICES = 'clasptek:invoices';
@@ -661,17 +326,19 @@
     const STORE_KEY_BUDGETS = 'clasptek:budgets';
     const STORE_KEY_AUDIT_LOG = 'clasptek:finance_audit_log';
     const STORE_KEY_AUTH_SESSION = 'clasptek:auth_session';
+    const STORE_KEY_ENQUIRIES = 'clasptek:enquiries';
+    const STORE_KEY_ENROLMENTS = 'clasptek:enrolments';
+    const STORE_KEY_CUSTOMERS = 'clasptek:customers';
     const SHARED = true;
     const DEFAULT_TENANT_ID = 'clasptek_main';
 
     const SYSTEM_ACCOUNTS = [
       { id: 'usr_admin', email: 'admin@clasptek.org', name: 'Emmanuel', role: 'Super Admin', title: 'Managing Director & Super Admin', tenant_id: DEFAULT_TENANT_ID },
       { id: 'usr_manager', email: 'manager@clasptek.org', name: 'Chioma Okonkwo', role: 'Finance Manager', title: 'Head of Finance & Operations', tenant_id: DEFAULT_TENANT_ID },
-      { id: 'usr_staff', email: 'staff@clasptek.org', name: 'Tunde Bakare', role: 'Finance Staff', title: 'Finance & Billing Specialist', tenant_id: DEFAULT_TENANT_ID },
+      { id: 'usr_staff', email: 'staff@clasptek.org', name: 'Tunde Bakare', role: 'Finance Staff', title: 'Finance & Admissions Specialist', tenant_id: DEFAULT_TENANT_ID },
       { id: 'usr_viewer', email: 'auditor@clasptek.org', name: 'External Auditor', role: 'Finance Viewer', title: 'Audit & Compliance Viewer', tenant_id: DEFAULT_TENANT_ID }
     ];
 
-    const STORE_KEY_USER_ROLE = 'clasptek:finance_user_role';
     const STORE_KEY_COLLECTION_NOTES = 'clasptek:collection_notes';
     const STORE_KEY_PAYMENT_REMINDERS = 'clasptek:payment_reminders';
     const STORE_KEY_RECURRING_EXPENSES = 'clasptek:recurring_expenses';
@@ -699,6 +366,7 @@
 
     const PAYMENT_METHODS = ['Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Other'];
     const DEPARTMENTS = ['Operations', 'Academics', 'Marketing', 'Administration', 'Technology', 'Management', 'Finance'];
+    const ENQUIRY_SOURCES = ['Website', 'WhatsApp', 'Referral / Word of Mouth', 'Social Media (Instagram/LinkedIn)', 'Walk-in', 'Corporate Partner', 'Other'];
 
     // ----------------------------------------------------
     // SAFE FINANCIAL ARITHMETIC UTILITIES
@@ -749,16 +417,9 @@
       tab: 'dashboard',
       sidebarCollapsed: false,
       searchQuery: '',
-      auth: {
-        isAuthenticated: false,
-        user: null
-      },
-      incomeSubTab: 'invoiced',
+      auth: { isAuthenticated: false, user: null },
       invoiceSubTab: 'list',
-      expensesSubTab: 'ledger',
-      paymentsSubTab: 'ledger',
-      reportsSubTab: 'pnl',
-      budgetsSubTab: 'budgets',
+      enquiriesSubTab: 'all',
       programmes: [],
       invoices: [],
       payments: [],
@@ -766,6 +427,9 @@
       directIncome: [],
       budgets: [],
       auditLog: [],
+      enquiries: [],
+      enrolments: [],
+      customers: [],
       collectionNotes: [],
       paymentReminders: [],
       recurringExpenses: [],
@@ -773,49 +437,20 @@
       financePeriods: [],
       reconciliations: [],
       anomaliesReviewed: [],
-      approvalSettings: {
-        tier1Limit: 100000,
-        tier2Limit: 500000,
-        tier2Role: 'Finance Manager',
-        tier3Role: 'Super Admin'
-      },
+      approvalSettings: { tier1Limit: 100000, tier2Limit: 500000, tier2Role: 'Finance Manager', tier3Role: 'Super Admin' },
       incomeCategories: [],
       expenseCategories: {},
-      counters: { invoice: 11092041, receipt: 20001 },
-      supabase: {
-        endpoint: 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/',
-        anonKey: '',
-        status: 'fallback',
-        lastChecked: null,
-        probeResult: null,
-        authUser: null
-      },
+      counters: { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101 },
+      supabase: { endpoint: 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/', anonKey: '', status: 'fallback' },
       loading: true,
       modal: null,
       filters: {
-        datePreset: 'this_month',
-        dateStart: '',
-        dateEnd: '',
-        incomeSearch: '',
-        incomeCategory: 'all',
-        incomeStatus: 'all',
-        expenseSearch: '',
-        expenseGroup: 'all',
-        expenseDept: 'all',
-        expenseMethod: 'all',
-        expenseStatus: 'active',
-        invoiceSearch: '',
-        invoiceStatus: 'all',
-        paymentSearch: '',
-        paymentMethod: 'all',
-        paymentReconStatus: 'all',
-        receivableSearch: '',
-        receivablePrio: 'all',
+        enquirySearch: '',
+        enquiryStatus: 'all',
         accountSearch: '',
-        accountFilter: 'all',
-        ledgerSearch: '',
-        ledgerType: 'all',
-        ledgerMethod: 'all',
+        invoiceSearch: '',
+        paymentSearch: '',
+        expenseSearch: '',
         budgetPeriod: new Date().toISOString().slice(0, 7)
       }
     };
@@ -901,21 +536,8 @@
       return ['Finance Manager', 'Super Admin'].includes(r);
     }
 
-    function canClosePeriod() {
-      const r = getRole();
-      return ['Finance Manager', 'Super Admin'].includes(r);
-    }
-
     function canLockPeriod() {
       return getRole() === 'Super Admin';
-    }
-
-    function canReopenPeriod() {
-      return getRole() === 'Super Admin';
-    }
-
-    function canExport() {
-      return true;
     }
 
     function isReadOnly() {
@@ -943,11 +565,11 @@
       state.loading = true;
       render();
 
-      const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, authSession, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg] = await Promise.all([
+      const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, authSession, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg, enqs, enrls, custs] = await Promise.all([
         safeGet(STORE_KEY_PROGRAMMES, []),
         safeGet(STORE_KEY_INVOICES, []),
         safeGet(STORE_KEY_PAYMENTS, []),
-        safeGet(STORE_KEY_COUNTERS, { invoice: 11092041, receipt: 20001 }),
+        safeGet(STORE_KEY_COUNTERS, { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101 }),
         safeGet(STORE_KEY_EXPENSES, []),
         safeGet(STORE_KEY_DIRECT_INCOME, []),
         safeGet(STORE_KEY_INCOME_CATEGORIES, DEFAULT_INCOME_CATEGORIES),
@@ -963,7 +585,10 @@
         safeGet(STORE_KEY_APPROVAL_SETTINGS, { tier1Limit: 100000, tier2Limit: 500000, tier2Role: 'Finance Manager', tier3Role: 'Super Admin' }),
         safeGet(STORE_KEY_RECONCILIATIONS, []),
         safeGet(STORE_KEY_ANOMALIES_REVIEWED, []),
-        safeGet(STORE_KEY_SUPABASE_CONFIG, { endpoint: 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/', anonKey: '', status: 'fallback' })
+        safeGet(STORE_KEY_SUPABASE_CONFIG, { endpoint: 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/', anonKey: '', status: 'fallback' }),
+        safeGet(STORE_KEY_ENQUIRIES, []),
+        safeGet(STORE_KEY_ENROLMENTS, []),
+        safeGet(STORE_KEY_CUSTOMERS, [])
       ]);
 
       state.programmes = Array.isArray(progs) ? progs : [];
@@ -986,7 +611,7 @@
         reconciliationStatus: p.reconciliationStatus || 'unreconciled',
         tenant_id: p.tenant_id || DEFAULT_TENANT_ID
       }));
-      state.counters = cnts && cnts.invoice ? cnts : { invoice: 11092041, receipt: 20001 };
+      state.counters = cnts && cnts.invoice ? cnts : { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101 };
       state.expenses = (Array.isArray(exps) ? exps : []).map(e => ({
         ...e,
         status: e.status || 'recorded',
@@ -999,7 +624,10 @@
       }));
       state.budgets = Array.isArray(bdgs) ? bdgs : [];
       state.auditLog = Array.isArray(audits) ? audits : [];
-      
+      state.enquiries = Array.isArray(enqs) ? enqs : [];
+      state.enrolments = Array.isArray(enrls) ? enrls : [];
+      state.customers = Array.isArray(custs) ? custs : [];
+
       if (authSession && authSession.user) {
         state.auth = { isAuthenticated: true, user: authSession.user };
       } else {
@@ -1017,9 +645,7 @@
       state.anomaliesReviewed = Array.isArray(anomRev) ? anomRev : [];
       state.incomeCategories = incCats && incCats.length ? incCats : DEFAULT_INCOME_CATEGORIES;
       state.expenseCategories = expCats && Object.keys(expCats).length ? expCats : DEFAULT_EXPENSE_CATEGORIES;
-      if (sbCfg) {
-        state.supabase = { ...state.supabase, ...sbCfg };
-      }
+      if (sbCfg) state.supabase = { ...state.supabase, ...sbCfg };
 
       state.loading = false;
       render();
@@ -1044,6 +670,47 @@
       return 'partial';
     }
 
+    function getEnquiryFinancialStatus(enquiry) {
+      const linkedInvoices = state.invoices.filter(i => (enquiry.id && i.enquiryId === enquiry.id) || (enquiry.name && i.clientName.trim().toLowerCase() === enquiry.name.trim().toLowerCase()));
+      if (linkedInvoices.length === 0) return { status: 'NO_INVOICE', label: 'No Invoice', pillClass: 'new', total: 0, paid: 0, balance: 0 };
+
+      let totalInv = 0;
+      let totalPaid = 0;
+      let isOverdue = false;
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      linkedInvoices.forEach(inv => {
+        const { total, paid, balance } = invoiceBalance(inv);
+        totalInv = safeRound(totalInv + total);
+        totalPaid = safeRound(totalPaid + paid);
+        if (balance > 0 && (inv.dueDate || inv.date || todayStr) < todayStr) {
+          isOverdue = true;
+        }
+      });
+
+      const balance = Math.max(0, safeRound(totalInv - totalPaid));
+      if (totalPaid >= totalInv && totalInv > 0) return { status: 'FULLY_PAID', label: 'Fully Paid', pillClass: 'fully_paid', total: totalInv, paid: totalPaid, balance: 0 };
+      if (isOverdue) return { status: 'OVERDUE', label: 'Overdue', pillClass: 'overdue', total: totalInv, paid: totalPaid, balance };
+      if (totalPaid > 0) return { status: 'PARTIALLY_PAID', label: 'Partially Paid', pillClass: 'partially_paid', total: totalInv, paid: totalPaid, balance };
+      return { status: 'PAYMENT_PENDING', label: 'Payment Pending', pillClass: 'payment_pending', total: totalInv, paid: totalPaid, balance };
+    }
+
+    function getEnquiryNextAction(enquiry) {
+      const fin = getEnquiryFinancialStatus(enquiry);
+      const isEnrolled = state.enrolments.some(en => en.enquiryId === enquiry.id || (enquiry.name && en.studentName.trim().toLowerCase() === enquiry.name.trim().toLowerCase()));
+
+      if (enquiry.status === 'NEW') return { label: 'Contact Prospect', action: 'contact', btnClass: 'accent' };
+      if (enquiry.status === 'CONTACTED' || enquiry.status === 'INTERESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
+      if (enquiry.status === 'INVOICE_REQUESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
+      if (fin.status === 'NO_INVOICE') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'secondary' };
+      if (fin.status === 'FULLY_PAID' && !isEnrolled) return { label: 'Enrol Student', action: 'enrol', btnClass: 'success' };
+      if (fin.status === 'PARTIALLY_PAID' && !isEnrolled) return { label: 'Enrol / Pay Balance', action: 'enrol_or_pay', btnClass: 'accent' };
+      if (fin.status === 'PAYMENT_PENDING' || fin.status === 'OVERDUE') return { label: 'Record Payment', action: 'record_payment', btnClass: 'accent' };
+      if (isEnrolled && fin.balance > 0) return { label: 'Follow Up Balance', action: 'follow_up', btnClass: 'secondary' };
+      if (isEnrolled && fin.balance === 0) return { label: 'View Student Profile', action: 'view_profile', btnClass: 'secondary' };
+      return { label: 'View Details', action: 'view', btnClass: 'secondary' };
+    }
+
     function getReceivableAgeing(inv) {
       const { balance } = invoiceBalance(inv);
       if (balance <= 0) return { days: 0, bucket: 'current', label: 'Paid in Full', priority: 'Low', prioClass: 'prio-low' };
@@ -1061,52 +728,13 @@
       return { days: daysOverdue, bucket: '90plus', label: `${daysOverdue}d (90+d)`, priority: 'Critical', prioClass: 'prio-critical' };
     }
 
-    function getDateRangeBounds(preset, customStart, customEnd) {
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = now.getMonth();
-      const dd = now.getDate();
-      function toStr(d) { return d.toISOString().slice(0, 10); }
-
-      switch (preset) {
-        case 'today': return { start: toStr(now), end: toStr(now) };
-        case 'yesterday': return { start: toStr(new Date(yyyy, mm, dd - 1)), end: toStr(new Date(yyyy, mm, dd - 1)) };
-        case 'this_month': return { start: toStr(new Date(yyyy, mm, 1)), end: toStr(new Date(yyyy, mm + 1, 0)) };
-        case 'last_month': return { start: toStr(new Date(yyyy, mm - 1, 1)), end: toStr(new Date(yyyy, mm, 0)) };
-        case 'this_quarter': {
-          const q = Math.floor(mm / 3);
-          return { start: toStr(new Date(yyyy, q * 3, 1)), end: toStr(new Date(yyyy, q * 3 + 3, 0)) };
-        }
-        case 'this_year': return { start: toStr(new Date(yyyy, 0, 1)), end: toStr(new Date(yyyy, 11, 31)) };
-        case 'custom': return { start: customStart || '1970-01-01', end: customEnd || '2099-12-31' };
-        case 'all':
-        default: return { start: '1970-01-01', end: '2099-12-31' };
-      }
-    }
-
-    function isDateInRange(dStr, bounds) {
-      if (!dStr) return false;
-      const d = dStr.slice(0, 10);
-      return d >= bounds.start && d <= bounds.end;
-    }
-
-    function getFinancialMetrics(dateBounds = null) {
-      const bounds = dateBounds || { start: '1970-01-01', end: '2099-12-31' };
-
-      const filteredInvoices = state.invoices.filter(i => isDateInRange(i.date, bounds));
-      const totalInvoiced = safeRound(filteredInvoices.reduce((s, i) => s + Number(i.total || 0), 0));
-
-      const filteredPayments = state.payments.filter(p => isDateInRange(p.date, bounds));
-      const totalPaymentsReceived = safeRound(filteredPayments.reduce((s, p) => s + Number(p.amount || 0), 0));
-
-      const filteredDirectIncome = state.directIncome.filter(d => d.status !== 'cancelled' && isDateInRange(d.date, bounds));
-      const totalDirectIncome = safeRound(filteredDirectIncome.reduce((s, d) => s + Number(d.amount || 0), 0));
-
+    function getFinancialMetrics() {
+      const totalInvoiced = safeRound(state.invoices.reduce((s, i) => s + Number(i.total || 0), 0));
+      const totalPaymentsReceived = safeRound(state.payments.reduce((s, p) => s + Number(p.amount || 0), 0));
+      const totalDirectIncome = safeRound(state.directIncome.filter(d => d.status !== 'cancelled').reduce((s, d) => s + Number(d.amount || 0), 0));
       const totalIncomeReceived = safeRound(totalPaymentsReceived + totalDirectIncome);
 
-      const filteredExpenses = state.expenses.filter(e => (e.status === 'recorded' || e.status === 'approved') && isDateInRange(e.date, bounds));
-      const totalExpenses = safeRound(filteredExpenses.reduce((s, e) => s + Number(e.amount || 0), 0));
-
+      const totalExpenses = safeRound(state.expenses.filter(e => e.status === 'recorded' || e.status === 'approved').reduce((s, e) => s + Number(e.amount || 0), 0));
       const netFinancialPosition = safeRound(totalIncomeReceived - totalExpenses);
 
       const outstandingReceivables = safeRound(state.invoices.reduce((s, inv) => {
@@ -1114,27 +742,37 @@
         return s + balance;
       }, 0));
 
+      const overdueReceivables = safeRound(state.invoices.reduce((s, inv) => {
+        const { balance } = invoiceBalance(inv);
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (balance > 0 && (inv.dueDate || inv.date || todayStr) < todayStr) return s + balance;
+        return s;
+      }, 0));
+
       const collectionRate = totalInvoiced > 0 ? safeRound((totalPaymentsReceived / totalInvoiced) * 100) : 100;
 
-      const thisMonthBounds = getDateRangeBounds('this_month');
-      const thisYearBounds = getDateRangeBounds('this_year');
+      // Pipeline Conversion Analytics (Phase 7 Real Record Calculations)
+      const totalEnquiries = state.enquiries.length;
+      const qualifiedEnquiries = state.enquiries.filter(e => e.status !== 'LOST').length || 1;
+      const enquiriesWithInvoice = state.enquiries.filter(e => {
+        return state.invoices.some(i => (i.enquiryId && i.enquiryId === e.id) || (e.name && i.clientName.trim().toLowerCase() === e.name.trim().toLowerCase()));
+      }).length;
 
-      const mtdInvoices = state.invoices.filter(i => isDateInRange(i.date, thisMonthBounds));
-      const mtdPayments = state.payments.filter(p => isDateInRange(p.date, thisMonthBounds));
-      const mtdDirect = state.directIncome.filter(d => d.status !== 'cancelled' && isDateInRange(d.date, thisMonthBounds));
-      const mtdExpensesRec = state.expenses.filter(e => (e.status === 'recorded' || e.status === 'approved') && isDateInRange(e.date, thisMonthBounds));
+      const totalIssuedInvoices = state.invoices.length;
+      const invoicesWithPayment = state.invoices.filter(i => invoiceBalance(i).paid > 0).length;
+      const invoicesFullyPaid = state.invoices.filter(i => invoiceStatus(i) === 'paid').length;
 
-      const mtdIncome = safeRound(mtdPayments.reduce((s, p) => s + Number(p.amount || 0), 0) + mtdDirect.reduce((s, d) => s + Number(d.amount || 0), 0));
-      const mtdExpenses = safeRound(mtdExpensesRec.reduce((s, e) => s + Number(e.amount || 0), 0));
-      const mtdNet = safeRound(mtdIncome - mtdExpenses);
+      const totalEnrolments = state.enrolments.length;
+      const paidEnrolments = state.enrolments.filter(en => {
+        const invs = state.invoices.filter(i => i.clientName.trim().toLowerCase() === en.studentName.trim().toLowerCase());
+        return invs.some(i => invoiceBalance(i).paid > 0);
+      }).length;
 
-      const ytdPayments = state.payments.filter(p => isDateInRange(p.date, thisYearBounds));
-      const ytdDirect = state.directIncome.filter(d => d.status !== 'cancelled' && isDateInRange(d.date, thisYearBounds));
-      const ytdExpensesRec = state.expenses.filter(e => (e.status === 'recorded' || e.status === 'approved') && isDateInRange(e.date, thisYearBounds));
-
-      const ytdIncome = safeRound(ytdPayments.reduce((s, p) => s + Number(p.amount || 0), 0) + ytdDirect.reduce((s, d) => s + Number(d.amount || 0), 0));
-      const ytdExpenses = safeRound(ytdExpensesRec.reduce((s, e) => s + Number(e.amount || 0), 0));
-      const ytdNet = safeRound(ytdIncome - ytdExpenses);
+      const convEnquiryToInvoice = safeRound((enquiriesWithInvoice / qualifiedEnquiries) * 100);
+      const convInvoiceToPayment = totalIssuedInvoices > 0 ? safeRound((invoicesWithPayment / totalIssuedInvoices) * 100) : 0;
+      const convInvoiceToFull = totalIssuedInvoices > 0 ? safeRound((invoicesFullyPaid / totalIssuedInvoices) * 100) : 0;
+      const convPaymentToEnrol = invoicesWithPayment > 0 ? Math.min(100, safeRound((totalEnrolments / invoicesWithPayment) * 100)) : 0;
+      const convOverall = totalEnquiries > 0 ? safeRound((totalEnrolments / totalEnquiries) * 100) : 0;
 
       return {
         totalInvoiced,
@@ -1144,18 +782,56 @@
         totalExpenses,
         netFinancialPosition,
         outstandingReceivables,
+        overdueReceivables,
         collectionRate,
-        mtdIncome,
-        mtdExpenses,
-        mtdNet,
-        ytdIncome,
-        ytdExpenses,
-        ytdNet
+        pipeline: {
+          totalEnquiries,
+          newEnquiries: state.enquiries.filter(e => e.status === 'NEW').length,
+          contacted: state.enquiries.filter(e => e.status === 'CONTACTED' || e.status === 'INTERESTED').length,
+          invoiceRequested: state.enquiries.filter(e => e.status === 'INVOICE_REQUESTED').length,
+          invoicesIssued: totalIssuedInvoices,
+          awaitingPayment: state.invoices.filter(i => invoiceStatus(i) === 'unpaid').length,
+          partiallyPaid: state.invoices.filter(i => invoiceStatus(i) === 'partial').length,
+          fullyPaid: invoicesFullyPaid,
+          enrolledStudents: totalEnrolments,
+          convEnquiryToInvoice,
+          convInvoiceToPayment,
+          convInvoiceToFull,
+          convPaymentToEnrol,
+          convOverall
+        }
       };
     }
 
     function getStudentAccountSummaries() {
       const studentMap = {};
+
+      // Seed from enquiries
+      state.enquiries.forEach(enq => {
+        const key = enq.name.trim();
+        if (key && !studentMap[key]) {
+          studentMap[key] = {
+            clientName: key,
+            phone: enq.phone || '',
+            email: enq.email || '',
+            parentName: '',
+            invoices: [],
+            payments: [],
+            enrolments: [],
+            enquiries: [enq],
+            followups: [],
+            totalInvoiced: 0,
+            totalPaid: 0,
+            balance: 0,
+            programmes: new Set([enq.programmeName].filter(Boolean))
+          };
+        } else if (key && studentMap[key]) {
+          studentMap[key].enquiries.push(enq);
+          if (enq.programmeName) studentMap[key].programmes.add(enq.programmeName);
+        }
+      });
+
+      // Seed from invoices
       state.invoices.forEach(inv => {
         const key = inv.clientName.trim();
         if (!studentMap[key]) {
@@ -1166,6 +842,9 @@
             parentName: inv.parentName || '',
             invoices: [],
             payments: [],
+            enrolments: [],
+            enquiries: [],
+            followups: [],
             totalInvoiced: 0,
             totalPaid: 0,
             balance: 0,
@@ -1174,9 +853,13 @@
         }
         studentMap[key].invoices.push(inv);
         studentMap[key].totalInvoiced = safeRound(studentMap[key].totalInvoiced + Number(inv.total || 0));
+        if (inv.phone && !studentMap[key].phone) studentMap[key].phone = inv.phone;
+        if (inv.email && !studentMap[key].email) studentMap[key].email = inv.email;
+        if (inv.parentName) studentMap[key].parentName = inv.parentName;
         if (inv.programmeName) studentMap[key].programmes.add(inv.programmeName);
       });
 
+      // Link payments
       state.payments.forEach(p => {
         const inv = state.invoices.find(i => i.id === p.invoiceId);
         if (inv) {
@@ -1188,134 +871,32 @@
         }
       });
 
+      // Link enrolments
+      state.enrolments.forEach(en => {
+        const key = en.studentName.trim();
+        if (studentMap[key]) {
+          studentMap[key].enrolments.push(en);
+          if (en.programmeName) studentMap[key].programmes.add(en.programmeName);
+        }
+      });
+
+      // Link follow-up notes
+      state.collectionNotes.forEach(cn => {
+        const inv = state.invoices.find(i => i.id === cn.invoiceId);
+        if (inv) {
+          const key = inv.clientName.trim();
+          if (studentMap[key]) studentMap[key].followups.push(cn);
+        }
+      });
+
       return Object.values(studentMap).map(acc => {
         acc.balance = Math.max(0, safeRound(acc.totalInvoiced - acc.totalPaid));
         acc.programmesList = Array.from(acc.programmes).join(', ') || 'General';
-        acc.status = acc.balance === 0 ? 'Fully Paid' : (acc.totalPaid > 0 ? 'Partial Balance' : 'Outstanding');
+        acc.isEnrolled = acc.enrolments.length > 0;
+        acc.financialStatus = acc.balance === 0 && acc.totalInvoiced > 0 ? 'FULLY_PAID' : (acc.totalPaid > 0 ? 'PARTIALLY_PAID' : (acc.totalInvoiced > 0 ? 'PAYMENT_PENDING' : 'NO_INVOICE'));
+        acc.status = acc.balance === 0 && acc.totalInvoiced > 0 ? 'Fully Paid' : (acc.totalPaid > 0 ? 'Partial Balance' : (acc.totalInvoiced > 0 ? 'Outstanding' : 'Prospect'));
         return acc;
       });
-    }
-
-    function getUnifiedLedger() {
-      const items = [];
-      state.payments.forEach(p => {
-        const inv = state.invoices.find(i => i.id === p.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student' };
-        items.push({
-          id: p.id,
-          date: p.date,
-          type: 'Payment Inflow (Tuition)',
-          description: `Payment for Invoice #${inv.invoiceNo} (${inv.clientName})`,
-          reference: p.reference || `RCP #${p.receiptNo}`,
-          category: 'Student Tuition',
-          method: p.paymentMethod || 'Bank Transfer',
-          inflow: Number(p.amount || 0),
-          outflow: 0,
-          status: 'recorded'
-        });
-      });
-
-      state.directIncome.forEach(d => {
-        items.push({
-          id: d.id,
-          date: d.date,
-          type: 'Direct Income Inflow',
-          description: `${d.category} - ${d.clientSource || 'Direct Client'}`,
-          reference: d.reference || 'N/A',
-          category: d.category,
-          method: d.method || 'Bank Transfer',
-          inflow: Number(d.amount || 0),
-          outflow: 0,
-          status: d.status
-        });
-      });
-
-      state.expenses.forEach(e => {
-        items.push({
-          id: e.id,
-          date: e.date,
-          type: 'Expense Outflow',
-          description: `[${e.categoryGroup}] ${e.description} (${e.vendor || 'Vendor'})`,
-          reference: e.id,
-          category: e.category,
-          method: e.method || 'Bank Transfer',
-          inflow: 0,
-          outflow: Number(e.amount || 0),
-          status: e.status
-        });
-      });
-
-      items.sort((a, b) => (b.date > a.date ? 1 : a.date < b.date ? -1 : 0));
-      return items;
-    }
-
-    function getMultiHorizonCashForecast() {
-      const baseMetrics = getFinancialMetrics();
-      const currentCash = baseMetrics.netFinancialPosition;
-
-      const due30Receivables = state.invoices
-        .filter(i => invoiceBalance(i).balance > 0)
-        .reduce((s, i) => s + invoiceBalance(i).balance, 0);
-
-      const recurringMonthlyOutflows = state.recurringExpenses
-        .filter(r => r.active)
-        .reduce((s, r) => s + Number(r.amount || 0), 0);
-
-      const exp30Inflow = safeRound(due30Receivables * 0.7);
-      const exp30Outflow = safeRound(recurringMonthlyOutflows + (baseMetrics.mtdExpenses * 0.8));
-      const proj30Cash = safeRound(currentCash + exp30Inflow - exp30Outflow);
-
-      const exp60Inflow = safeRound(exp30Inflow * 1.8);
-      const exp60Outflow = safeRound(exp30Outflow * 2);
-      const proj60Cash = safeRound(currentCash + exp60Inflow - exp60Outflow);
-
-      const exp90Inflow = safeRound(exp30Inflow * 2.7);
-      const exp90Outflow = safeRound(exp30Outflow * 3);
-      const proj90Cash = safeRound(currentCash + exp90Inflow - exp90Outflow);
-
-      return {
-        currentCash,
-        h30: { inflow: exp30Inflow, outflow: exp30Outflow, closing: proj30Cash },
-        h60: { inflow: exp60Inflow, outflow: exp60Outflow, closing: proj60Cash },
-        h90: { inflow: exp90Inflow, outflow: exp90Outflow, closing: proj60Cash }
-      };
-    }
-
-    function detectFinancialAnomalies() {
-      const anomalies = [];
-      state.expenses.filter(e => (e.status === 'recorded' || e.status === 'approved') && Number(e.amount) >= 400000).forEach(e => {
-        anomalies.push({
-          id: 'anom_exp_' + e.id,
-          type: 'Unusually High Expense',
-          severity: 'HIGH',
-          what: `High value expense of ${fmtMoney(e.amount)} for "${e.description}"`,
-          why: 'Exceeds standard operational expenditure baseline.',
-          action: 'Audit invoice attached and verify budget approval.',
-          entityId: e.id,
-          amount: e.amount,
-          date: e.date
-        });
-      });
-
-      const seenPayments = {};
-      state.payments.forEach(p => {
-        const key = `${p.date}_${p.amount}`;
-        if (seenPayments[key]) {
-          anomalies.push({
-            id: 'anom_dup_' + p.id,
-            type: 'Potential Duplicate Payment',
-            severity: 'MEDIUM',
-            what: `Duplicate payment amount of ${fmtMoney(p.amount)} recorded on ${p.date}`,
-            why: 'Multiple identical transactions on the same date may indicate double recording.',
-            action: 'Verify bank deposit reference and student receipt.',
-            entityId: p.id,
-            amount: p.amount,
-            date: p.date
-          });
-        } else {
-          seenPayments[key] = p;
-        }
-      });
-      return anomalies;
     }
 
     function exportToCSV(filename, rows) {
@@ -1323,7 +904,7 @@
       const separator = ',';
       const keys = Object.keys(rows[0]);
       const actorInfo = state.auth.user ? `${state.auth.user.name} (${state.auth.user.role})` : 'System';
-      const headerMetadata = `# Report: ${filename.toUpperCase()}\n# Generated By: ${actorInfo}\n# Generated At: ${new Date().toISOString()}\n# Tenant: ${DEFAULT_TENANT_ID}\n# Mode: ${state.supabase.status === 'connected' ? 'SUPABASE_PRODUCTION' : 'LOCAL_STORAGE'}\n\n`;
+      const headerMetadata = `# Report: ${filename.toUpperCase()}\n# Generated By: ${actorInfo}\n# Generated At: ${new Date().toISOString()}\n# Tenant: ${DEFAULT_TENANT_ID}\n\n`;
       const csvData = keys.join(separator) + '\n' + rows.map(row => {
         return keys.map(k => {
           let cell = row[k] === null || row[k] === undefined ? '' : String(row[k]);
@@ -1342,28 +923,41 @@
     }
 
     // ----------------------------------------------------
-    // GLOBAL OMNI-SEARCH ENGINE (PHASE 6)
+    // GLOBAL OMNI-SEARCH ENGINE (PHASE 7 ENHANCED)
     // ----------------------------------------------------
     function searchGlobalEntities(query) {
       if (!query || query.trim().length < 2) return [];
       const q = query.trim().toLowerCase();
       const results = [];
 
-      // 1. Search Students
+      // 1. Search Enquiries
+      state.enquiries.filter(e => e.name.toLowerCase().includes(q) || (e.phone && e.phone.includes(q)) || (e.email && e.email.toLowerCase().includes(q))).slice(0, 3).forEach(e => {
+        const fin = getEnquiryFinancialStatus(e);
+        results.push({
+          type: 'Enquiry',
+          title: e.name,
+          subtitle: `Programme: ${e.programmeName || 'General'} &middot; Status: ${e.status}`,
+          tag: fin.label,
+          tagClass: fin.pillClass,
+          action: () => { state.tab = 'enquiries'; openModal('enquiryDetail', { enquiry: e }); render(); }
+        });
+      });
+
+      // 2. Search Students / Accounts
       const students = getStudentAccountSummaries();
-      students.filter(s => s.clientName.toLowerCase().includes(q) || s.phone.includes(q) || s.email.toLowerCase().includes(q)).slice(0, 4).forEach(s => {
+      students.filter(s => s.clientName.toLowerCase().includes(q) || s.phone.includes(q) || s.email.toLowerCase().includes(q)).slice(0, 3).forEach(s => {
         results.push({
           type: 'Student',
           title: s.clientName,
           subtitle: `Phone: ${s.phone || 'N/A'} &middot; Balance: ${fmtMoney(s.balance)}`,
           tag: s.status,
           tagClass: s.balance === 0 ? 'paid' : 'partial',
-          action: () => { state.tab = 'studentAccounts'; openModal('studentStatement', { account: s }); render(); }
+          action: () => { state.tab = 'studentAccounts'; openModal('studentProfile', { account: s }); render(); }
         });
       });
 
-      // 2. Search Invoices
-      state.invoices.filter(i => String(i.invoiceNo).includes(q) || (i.invoice_display_no && i.invoice_display_no.toLowerCase().includes(q)) || i.clientName.toLowerCase().includes(q)).slice(0, 4).forEach(inv => {
+      // 3. Search Invoices
+      state.invoices.filter(i => String(i.invoiceNo).includes(q) || (i.invoice_display_no && i.invoice_display_no.toLowerCase().includes(q)) || i.clientName.toLowerCase().includes(q)).slice(0, 3).forEach(inv => {
         const { balance, total } = invoiceBalance(inv);
         results.push({
           type: 'Invoice',
@@ -1375,8 +969,8 @@
         });
       });
 
-      // 3. Search Payments & Receipts
-      state.payments.filter(p => String(p.receiptNo).includes(q) || (p.reference && p.reference.toLowerCase().includes(q)) || String(p.amount).includes(q)).slice(0, 4).forEach(p => {
+      // 4. Search Payments / Receipts
+      state.payments.filter(p => String(p.receiptNo).includes(q) || (p.reference && p.reference.toLowerCase().includes(q)) || String(p.amount).includes(q)).slice(0, 3).forEach(p => {
         const inv = state.invoices.find(i => i.id === p.invoiceId);
         results.push({
           type: 'Receipt',
@@ -1388,8 +982,8 @@
         });
       });
 
-      // 4. Search Programmes
-      state.programmes.filter(pr => pr.name.toLowerCase().includes(q) || pr.id.toLowerCase().includes(q)).slice(0, 3).forEach(pr => {
+      // 5. Search Programmes
+      state.programmes.filter(pr => pr.name.toLowerCase().includes(q) || pr.id.toLowerCase().includes(q)).slice(0, 2).forEach(pr => {
         results.push({
           type: 'Programme',
           title: pr.name,
@@ -1413,7 +1007,7 @@
             <div class="cp-auth-header">
               <img src="assets/clasptek_logo.png" alt="Clasptek Logo" />
               <div class="cp-auth-title">Clasptek Finance Management System</div>
-              <div class="cp-auth-sub">Enterprise Financial Intelligence &amp; Multi-Tenant Ledger</div>
+              <div class="cp-auth-sub">Enterprise Financial Intelligence &amp; Customer Workflow</div>
             </div>
 
             <div class="cp-field">
@@ -1426,16 +1020,8 @@
               <input type="password" id="authPassword" placeholder="••••••••••••" value="password123" />
             </div>
 
-            <div id="authError" class="cp-error" style="display:none; margin-bottom:12px;"></div>
-
             <button class="cp-btn accent" id="btnSignIn" style="width:100%; padding:10px; font-size:13.5px;">Sign In to Enterprise Workspace</button>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:12px;">
-              <span style="color:var(--text-muted);">Protected by Supabase RBAC</span>
-              <a href="#" id="btnForgotPassword" style="color:var(--accent); text-decoration:none; font-weight:600;">Forgot Password?</a>
-            </div>
-
-            <!-- Instant Role Access Launcher for QA / Testing -->
             <div class="cp-auth-demo-box">
               <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px;">Switch Authenticated Account:</div>
               <div class="cp-demo-btn-grid">
@@ -1461,11 +1047,6 @@
         render();
       });
 
-      document.getElementById('btnForgotPassword').addEventListener('click', (e) => {
-        e.preventDefault();
-        alert('Password recovery instructions sent to your registered Clasptek email address.');
-      });
-
       root.querySelectorAll('.btnQuickLogin').forEach(b => {
         b.addEventListener('click', async () => {
           const role = b.dataset.role;
@@ -1479,7 +1060,7 @@
     }
 
     // ----------------------------------------------------
-    // MAIN APP RENDERER WITH PHASE 6 ENTERPRISE SIDEBAR
+    // MAIN APP RENDERER
     // ----------------------------------------------------
     function render() {
       const root = document.getElementById('root');
@@ -1503,11 +1084,11 @@
         return (i.dueDate || i.date || todayStr) < todayStr;
       }).length;
 
-      const pendingAppCount = state.expenses.filter(e => e.status === 'pending_approval').length;
+      const activeEnquiriesCount = state.enquiries.filter(e => e.status !== 'ENROLLED' && e.status !== 'LOST').length;
 
-      // Breadcrumb Name
       const tabLabels = {
         dashboard: 'Dashboard',
+        enquiries: 'Enquiries & Admissions',
         studentAccounts: 'Students & Clients',
         invoices: 'Invoices',
         payments: 'Payments & Receipts',
@@ -1527,7 +1108,6 @@
           <!-- Left Collapsible Sidebar -->
           <aside class="cp-sidebar ${state.sidebarCollapsed ? 'collapsed' : ''}" id="appSidebar">
             <div>
-              <!-- Sidebar Header with Official Logo -->
               <div class="cp-sidebar-header">
                 <a href="#" class="cp-sidebar-brand" id="brandLogoLink">
                   <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-sidebar-logo" />
@@ -1547,6 +1127,10 @@
                   <div class="cp-nav-item ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">
                     <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">Dashboard</span>
                   </div>
+                  <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries">
+                    <span class="cp-nav-icon">&#x1F4E5;</span><span class="cp-nav-label">Enquiries</span>
+                    ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
+                  </div>
                   <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts">
                     <span class="cp-nav-icon">&#x1F465;</span><span class="cp-nav-label">Students &amp; Clients</span>
                   </div>
@@ -1560,7 +1144,6 @@
                   </div>
                   <div class="cp-nav-item ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">
                     <span class="cp-nav-icon">&#x1F4B8;</span><span class="cp-nav-label">Expenses</span>
-                    ${pendingAppCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning); color:#fff;">${pendingAppCount}</span>` : ''}
                   </div>
                   <div class="cp-nav-item ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">
                     <span class="cp-nav-icon">&#x1F393;</span><span class="cp-nav-label">Programmes</span>
@@ -1601,15 +1184,12 @@
               </nav>
             </div>
 
-            <!-- Sidebar Footer: Supabase Status & Authenticated Identity -->
+            <!-- Sidebar Footer -->
             <div class="cp-sidebar-footer">
-              <!-- Supabase Connection Status -->
-              <div class="cp-conn-pill" id="sidebarSupabaseStatus" style="cursor:pointer;" title="Click to view Supabase connection details">
+              <div class="cp-conn-pill" id="sidebarSupabaseStatus" style="cursor:pointer;">
                 <span class="cp-conn-dot ${state.supabase.status === 'connected' ? 'connected' : 'fallback'}"></span>
                 <span class="cp-conn-text">${state.supabase.status === 'connected' ? 'Supabase Connected' : 'Local Mode'}</span>
               </div>
-
-              <!-- Authenticated User Card -->
               <div class="cp-user-card">
                 <div class="cp-user-info">
                   <div class="cp-user-avatar">${escapeHtml(initials)}</div>
@@ -1625,28 +1205,25 @@
 
           <!-- Main Viewport Area -->
           <div class="cp-main-area">
-            <!-- Top Global Header -->
             <header class="cp-topbar">
               <div class="cp-topbar-left">
-                <!-- Breadcrumb -->
                 <div class="cp-breadcrumb">
                   <span>Workspace</span> / <strong>${tabLabels[state.tab] || 'Dashboard'}</strong>
                 </div>
 
-                <!-- Global Omni-Search -->
                 <div class="cp-omni-search">
                   <span class="cp-omni-icon">&#x1F50D;</span>
-                  <input type="text" class="cp-omni-input" id="globalSearchInput" placeholder="Search students, invoices, payments, programmes..." autocomplete="off" />
+                  <input type="text" class="cp-omni-input" id="globalSearchInput" placeholder="Search enquiries, students, invoices, receipts, programmes..." autocomplete="off" />
                   <div class="cp-search-dropdown" id="searchDropdown"></div>
                 </div>
               </div>
 
               <div class="cp-topbar-right">
-                <!-- Quick Actions Single Dropdown -->
                 ${canRecord() ? `
                   <div class="cp-dropdown-wrap">
                     <button class="cp-btn accent sm" id="btnQuickActionToggle">+ New Transaction &#x25BE;</button>
                     <div class="cp-dropdown-menu" id="quickActionMenu">
+                      <div class="cp-dropdown-item" id="qaNewEnquiry">&#x1F4E5; New Enquiry</div>
                       <div class="cp-dropdown-item" id="qaNewInvoice">&#x1F4C4; Create Invoice</div>
                       <div class="cp-dropdown-item" id="qaRecordPayment">&#x1F9FE; Record Payment</div>
                       <div class="cp-dropdown-item" id="qaRecordExpense">&#x1F4B8; Log Expense</div>
@@ -1655,14 +1232,12 @@
                   </div>
                 ` : ''}
 
-                <!-- Alerts Pill -->
                 ${overdueCount > 0 ? `
                   <div class="cp-pill" style="background:var(--warning-bg); color:var(--warning); cursor:pointer; font-size:11.5px;" id="btnOverdueHeaderAlert">
                     &#x26A0;&#xFE0F; ${overdueCount} Overdue
                   </div>
                 ` : ''}
 
-                <!-- User Profile Tag (Read-Only) -->
                 <div class="cp-role-tag">
                   <span style="font-weight:700; color:var(--primary);">${escapeHtml(user.name)}</span>
                   <span style="color:var(--text-muted);">|</span>
@@ -1671,12 +1246,10 @@
               </div>
             </header>
 
-            <!-- Dynamic Content View Container -->
             <main class="cp-content-view" id="contentView"></main>
           </div>
         </div>
 
-        <!-- Global Modal Root -->
         <div id="modalRoot"></div>
       `;
 
@@ -1688,24 +1261,20 @@
         });
       });
 
-      // Sidebar Collapse Toggle
       document.getElementById('btnToggleSidebar').addEventListener('click', () => {
         state.sidebarCollapsed = !state.sidebarCollapsed;
         const sb = document.getElementById('appSidebar');
         if (sb) sb.classList.toggle('collapsed', state.sidebarCollapsed);
       });
 
-      // Sign Out
       document.getElementById('btnSidebarSignOut').addEventListener('click', async () => {
         state.auth = { isAuthenticated: false, user: null };
         await safeSet(STORE_KEY_AUTH_SESSION, null);
         render();
       });
 
-      // Supabase Status Click
       document.getElementById('sidebarSupabaseStatus').addEventListener('click', () => openModal('supabaseModal'));
 
-      // Quick Actions Toggle
       const qaToggle = document.getElementById('btnQuickActionToggle');
       const qaMenu = document.getElementById('quickActionMenu');
       if (qaToggle && qaMenu) {
@@ -1713,7 +1282,12 @@
           e.stopPropagation();
           qaMenu.classList.toggle('active');
         });
-        document.addEventListener('click', () => qaMenu.classList.remove('active'));
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+          document.addEventListener('click', () => qaMenu.classList.remove('active'));
+        }
+
+        const qaEnq = document.getElementById('qaNewEnquiry');
+        if (qaEnq) qaEnq.addEventListener('click', () => openModal('newEnquiry'));
 
         const qaInv = document.getElementById('qaNewInvoice');
         if (qaInv) qaInv.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
@@ -1735,7 +1309,7 @@
       const btnAlert = document.getElementById('btnOverdueHeaderAlert');
       if (btnAlert) btnAlert.addEventListener('click', () => { state.tab = 'receivables'; render(); });
 
-      // Omni-Search Input Handling
+      // Omni-Search
       const omniInput = document.getElementById('globalSearchInput');
       const searchDropdown = document.getElementById('searchDropdown');
       if (omniInput && searchDropdown) {
@@ -1776,16 +1350,19 @@
           }
         });
 
-        document.addEventListener('click', (e) => {
-          if (!omniInput.contains(e.target) && !searchDropdown.contains(e.target)) {
-            searchDropdown.classList.remove('active');
-          }
-        });
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+          document.addEventListener('click', (e) => {
+            if (!omniInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+              searchDropdown.classList.remove('active');
+            }
+          });
+        }
       }
 
-      // Render Active Tab Content
+      // Render View Routing
       const contentView = document.getElementById('contentView');
       if (state.tab === 'dashboard') renderDashboardTab(contentView);
+      else if (state.tab === 'enquiries') renderEnquiriesTab(contentView);
       else if (state.tab === 'studentAccounts') renderStudentAccountsTab(contentView);
       else if (state.tab === 'invoices') renderInvoicesTab(contentView);
       else if (state.tab === 'payments') renderPaymentsTab(contentView);
@@ -1819,44 +1396,44 @@
       const container = document.getElementById('modalRoot');
       if (!container) return;
 
-      if (type === 'viewInvoice') renderViewInvoiceModal(container, data.invoice);
+      if (type === 'newEnquiry') renderNewEnquiryModal(container);
+      else if (type === 'enquiryDetail') renderEnquiryDetailModal(container, data.enquiry);
+      else if (type === 'enrolStudent') renderEnrolStudentModal(container, data);
+      else if (type === 'studentProfile') renderStudentProfileModal(container, data.account);
+      else if (type === 'viewInvoice') renderViewInvoiceModal(container, data.invoice);
       else if (type === 'viewReceipt') renderViewReceiptModal(container, data.payment, data.invoice);
       else if (type === 'recordPayment') renderRecordPaymentModal(container, data.invoice);
       else if (type === 'recordExpense') renderRecordExpenseModal(container);
       else if (type === 'recordDirectIncome') renderRecordDirectIncomeModal(container);
-      else if (type === 'studentStatement') renderStudentStatementModal(container, data.account);
       else if (type === 'sendReminder') renderSendReminderModal(container, data.invoice);
       else if (type === 'collectionNotes') renderCollectionNotesModal(container, data.invoice);
       else if (type === 'addProgramme') renderAddProgrammeModal(container);
       else if (type === 'editProgramme') renderEditProgrammeModal(container, data.programme);
       else if (type === 'setBudget') renderSetBudgetModal(container);
       else if (type === 'cancelExpense') renderCancelExpenseModal(container, data.expense);
-      else if (type === 'cancelDirectIncome') renderCancelDirectIncomeModal(container, data.item);
-      else if (type === 'newReconciliation') renderNewReconciliationModal(container, data.expectedBalance);
-      else if (type === 'reviewAnomalies') renderReviewAnomaliesModal(container, data.anomalies);
       else if (type === 'supabaseModal') renderSupabaseModal(container);
     }
 
     // ----------------------------------------------------
-    // TAB 1: DASHBOARD
+    // TAB 1: DASHBOARD (DUAL PIPELINE & FINANCIAL ENGINE)
     // ----------------------------------------------------
     function renderDashboardTab(container) {
       const m = getFinancialMetrics();
-      const fc = getMultiHorizonCashForecast();
+      const p = m.pipeline;
 
       container.innerHTML = `
-        <!-- Top Metrics Cards -->
+        <!-- Financial Position Top Metrics -->
         <div class="cp-grid-4">
           <div class="cp-stat income-border">
             <div class="cp-stat-top"><span class="cp-stat-label">Total Revenue Collected</span><span class="cp-pill paid">Inflow</span></div>
             <div class="cp-stat-value" style="color:var(--success);">${fmtMoney(m.totalIncomeReceived)}</div>
-            <div class="cp-stat-sub">MTD: ${fmtMoney(m.mtdIncome)} &middot; YTD: ${fmtMoney(m.ytdIncome)}</div>
+            <div class="cp-stat-sub">Tuition: ${fmtMoney(m.totalPaymentsReceived)} &middot; Direct: ${fmtMoney(m.totalDirectIncome)}</div>
           </div>
 
           <div class="cp-stat expense-border">
-            <div class="cp-stat-top"><span class="cp-stat-label">Total Operational Expenses</span><span class="cp-pill cancelled">Outflow</span></div>
+            <div class="cp-stat-top"><span class="cp-stat-label">Operational Expenses</span><span class="cp-pill cancelled">Outflow</span></div>
             <div class="cp-stat-value" style="color:var(--danger);">${fmtMoney(m.totalExpenses)}</div>
-            <div class="cp-stat-sub">MTD: ${fmtMoney(m.mtdExpenses)} &middot; YTD: ${fmtMoney(m.ytdExpenses)}</div>
+            <div class="cp-stat-sub">Active &amp; Approved Commitments</div>
           </div>
 
           <div class="cp-stat accent-border">
@@ -1868,125 +1445,273 @@
           <div class="cp-stat receivable-border">
             <div class="cp-stat-top"><span class="cp-stat-label">Outstanding Receivables</span><span class="cp-pill partial">Due</span></div>
             <div class="cp-stat-value" style="color:var(--warning);">${fmtMoney(m.outstandingReceivables)}</div>
-            <div class="cp-stat-sub">Collection Rate: ${m.collectionRate}%</div>
+            <div class="cp-stat-sub">Overdue: ${fmtMoney(m.overdueReceivables)} &middot; Collection Rate: ${m.collectionRate}%</div>
           </div>
         </div>
 
-        <!-- Middle Row: Cash Flow Forecast & Quick Action Hub -->
-        <div class="cp-grid-2">
-          <!-- 30/60/90 Day Cash Flow Projection -->
-          <div class="cp-card">
-            <div class="cp-card-header">
-              <div>
-                <div class="cp-section-title">&#x1F4C8; Multi-Horizon Cash Flow Forecast</div>
-                <div class="cp-section-desc">Deterministic 30, 60, and 90-day liquidity projections based on receivables &amp; recurring commitments.</div>
-              </div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:10px;">
-              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">30-Day Outlook</div>
-                <div style="font-size:15px; font-weight:800; color:var(--primary); margin-top:4px;">${fmtMoney(fc.h30.closing)}</div>
-                <div style="font-size:10.5px; color:var(--success); margin-top:2px;">+${fmtMoney(fc.h30.inflow)} in</div>
-                <div style="font-size:10.5px; color:var(--danger);">-${fmtMoney(fc.h30.outflow)} out</div>
-              </div>
-
-              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">60-Day Outlook</div>
-                <div style="font-size:15px; font-weight:800; color:var(--primary); margin-top:4px;">${fmtMoney(fc.h60.closing)}</div>
-                <div style="font-size:10.5px; color:var(--success); margin-top:2px;">+${fmtMoney(fc.h60.inflow)} in</div>
-                <div style="font-size:10.5px; color:var(--danger);">-${fmtMoney(fc.h60.outflow)} out</div>
-              </div>
-
-              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">90-Day Outlook</div>
-                <div style="font-size:15px; font-weight:800; color:var(--primary); margin-top:4px;">${fmtMoney(fc.h90.closing)}</div>
-                <div style="font-size:10.5px; color:var(--success); margin-top:2px;">+${fmtMoney(fc.h90.inflow)} in</div>
-                <div style="font-size:10.5px; color:var(--danger);">-${fmtMoney(fc.h90.outflow)} out</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Navigation Hub -->
-          <div class="cp-card">
-            <div class="cp-card-header">
-              <div>
-                <div class="cp-section-title">&#x26A1; Operational Quick Actions</div>
-                <div class="cp-section-desc">Direct shortcuts to frequent financial workflows.</div>
-              </div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
-              <button class="cp-btn secondary" id="dashBtnNewInv" style="justify-content:flex-start; padding:12px;">&#x1F4C4; Create New Invoice</button>
-              <button class="cp-btn secondary" id="dashBtnRecordPay" style="justify-content:flex-start; padding:12px;">&#x1F9FE; Record Student Payment</button>
-              <button class="cp-btn secondary" id="dashBtnNewExp" style="justify-content:flex-start; padding:12px;">&#x1F4B8; Log Programme Expense</button>
-              <button class="cp-btn secondary" id="dashBtnReceivables" style="justify-content:flex-start; padding:12px;">&#x23F3; Collection Follow-ups</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Financial Invoices & Activity -->
+        <!-- Business Admissions Pipeline -->
         <div class="cp-card">
           <div class="cp-card-header">
             <div>
-              <div class="cp-section-title">&#x1F4C4; Recent Invoices &amp; Billing Activity</div>
-              <div class="cp-section-desc">Latest tuition invoices issued to students and corporate clients.</div>
+              <div class="cp-section-title">&#x1F4CA; Business Pipeline &amp; Customer Journey</div>
+              <div class="cp-section-desc">Real-time funnel tracking from initial prospect enquiry to active cohort enrolment.</div>
             </div>
-            <button class="cp-btn secondary sm" id="dashViewAllInvoices">View All Invoices &rarr;</button>
+            <button class="cp-btn sm secondary" id="dashViewEnquiriesBtn">View Enquiries Workspace &rarr;</button>
           </div>
 
-          <div class="cp-table-wrap">
-            <table class="cp-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th><th>Date</th><th>Student / Client</th><th>Programme</th>
-                  <th style="text-align:right;">Total</th><th style="text-align:right;">Paid</th>
-                  <th style="text-align:right;">Balance</th><th>Status</th><th style="text-align:center;">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${state.invoices.slice().reverse().slice(0, 5).map(inv => {
-                  const { paid, balance, total } = invoiceBalance(inv);
-                  const st = invoiceStatus(inv);
-                  return `
-                    <tr>
-                      <td style="font-weight:700; font-family:monospace;">#${inv.invoiceNo}</td>
-                      <td>${fmtDate(inv.date)}</td>
-                      <td style="font-weight:600;">${escapeHtml(inv.clientName)}</td>
-                      <td>${escapeHtml(inv.programmeName)}</td>
-                      <td style="text-align:right;">${fmtMoney(total)}</td>
-                      <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(paid)}</td>
-                      <td style="text-align:right; font-weight:700; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(balance)}</td>
-                      <td><span class="cp-pill ${st}">${st.toUpperCase()}</span></td>
-                      <td style="text-align:center;">
-                        <button class="cp-btn sm secondary btnDashViewInv" data-id="${inv.id}">View / PDF</button>
-                      </td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+          <div class="cp-grid-5">
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">1. New Enquiries</div>
+              <div style="font-size:20px; font-weight:800; color:var(--primary); margin-top:4px;">${p.newEnquiries}</div>
+              <div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px;">Total: ${p.totalEnquiries} Leads</div>
+            </div>
+
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">2. Invoices Issued</div>
+              <div style="font-size:20px; font-weight:800; color:var(--primary); margin-top:4px;">${p.invoicesIssued}</div>
+              <div style="font-size:10.5px; color:var(--info); margin-top:2px;">${p.convEnquiryToInvoice}% Conv. Rate</div>
+            </div>
+
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">3. Awaiting Payment</div>
+              <div style="font-size:20px; font-weight:800; color:var(--warning); margin-top:4px;">${p.awaitingPayment}</div>
+              <div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px;">Partial: ${p.partiallyPaid}</div>
+            </div>
+
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">4. Fully Paid</div>
+              <div style="font-size:20px; font-weight:800; color:var(--success); margin-top:4px;">${p.fullyPaid}</div>
+              <div style="font-size:10.5px; color:var(--success); margin-top:2px;">${p.convInvoiceToFull}% Full Paid</div>
+            </div>
+
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; text-align:center;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">5. Enrolled Students</div>
+              <div style="font-size:20px; font-weight:800; color:var(--primary); margin-top:4px;">${p.enrolledStudents}</div>
+              <div style="font-size:10.5px; color:var(--accent); font-weight:700; margin-top:2px;">${p.convOverall}% Overall Conv.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle Row: Operational Actions & Recent Activity -->
+        <div class="cp-grid-2">
+          <!-- Quick Action Hub -->
+          <div class="cp-card">
+            <div class="cp-card-header">
+              <div>
+                <div class="cp-section-title">&#x26A1; Operational Actions</div>
+                <div class="cp-section-desc">Shortcuts for admissions, billing, and collections.</div>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <button class="cp-btn secondary" id="dashBtnNewEnq" style="justify-content:flex-start; padding:12px;">&#x1F4E5; New Prospect Enquiry</button>
+              <button class="cp-btn secondary" id="dashBtnNewInv" style="justify-content:flex-start; padding:12px;">&#x1F4C4; Create Tuition Invoice</button>
+              <button class="cp-btn secondary" id="dashBtnRecordPay" style="justify-content:flex-start; padding:12px;">&#x1F9FE; Record Student Payment</button>
+              <button class="cp-btn secondary" id="dashBtnReceivables" style="justify-content:flex-start; padding:12px;">&#x23F3; Collection Follow-ups</button>
+            </div>
+          </div>
+
+          <!-- Conversion Analytics Details -->
+          <div class="cp-card">
+            <div class="cp-card-header">
+              <div>
+                <div class="cp-section-title">&#x1F4D8; Admissions Conversion Efficiency</div>
+                <div class="cp-section-desc">Conversion performance across customer touchpoints.</div>
+              </div>
+            </div>
+            <div style="font-size:12.5px; line-height:1.8;">
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border); padding:5px 0;">
+                <span>Enquiry &rarr; Invoice Conversion:</span><strong>${p.convEnquiryToInvoice}%</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border); padding:5px 0;">
+                <span>Invoice &rarr; Payment Conversion:</span><strong>${p.convInvoiceToPayment}%</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border); padding:5px 0;">
+                <span>Payment &rarr; Enrolment Conversion:</span><strong>${p.convPaymentToEnrol}%</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; font-weight:800; color:var(--primary);">
+                <span>Overall Lead-to-Enrolment:</span><span>${p.convOverall}%</span>
+              </div>
+            </div>
           </div>
         </div>
       `;
 
+      document.getElementById('dashViewEnquiriesBtn').addEventListener('click', () => { state.tab = 'enquiries'; render(); });
+      document.getElementById('dashBtnNewEnq').addEventListener('click', () => openModal('newEnquiry'));
       document.getElementById('dashBtnNewInv').addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
       document.getElementById('dashBtnRecordPay').addEventListener('click', () => {
         const unpaid = state.invoices.find(i => invoiceBalance(i).balance > 0) || state.invoices[0];
         if (unpaid) openModal('recordPayment', { invoice: unpaid });
       });
-      document.getElementById('dashBtnNewExp').addEventListener('click', () => openModal('recordExpense'));
       document.getElementById('dashBtnReceivables').addEventListener('click', () => { state.tab = 'receivables'; render(); });
-      document.getElementById('dashViewAllInvoices').addEventListener('click', () => { state.tab = 'invoices'; render(); });
+    }
 
-      container.querySelectorAll('.btnDashViewInv').forEach(b => {
+    // ----------------------------------------------------
+    // TAB 2: ENQUIRIES & ADMISSIONS WORKSPACE (PHASE 7)
+    // ----------------------------------------------------
+    function renderEnquiriesTab(container) {
+      const q = (state.filters.enquirySearch || '').toLowerCase();
+      const filtered = state.enquiries.filter(e => {
+        return e.name.toLowerCase().includes(q) || (e.phone && e.phone.includes(q)) || (e.programmeName && e.programmeName.toLowerCase().includes(q)) || (e.source && e.source.toLowerCase().includes(q));
+      });
+
+      const totalNew = state.enquiries.filter(e => e.status === 'NEW').length;
+      const totalContacted = state.enquiries.filter(e => e.status === 'CONTACTED' || e.status === 'INTERESTED').length;
+      const totalInvReq = state.enquiries.filter(e => e.status === 'INVOICE_REQUESTED').length;
+      const totalInvIss = state.enquiries.filter(e => e.status === 'INVOICE_ISSUED').length;
+      const totalEnrolled = state.enquiries.filter(e => e.status === 'ENROLLED').length;
+      const totalLost = state.enquiries.filter(e => e.status === 'LOST').length;
+
+      container.innerHTML = `
+        <div class="cp-card">
+          <div class="cp-card-header">
+            <div>
+              <div class="cp-section-title">&#x1F4E5; Enquiries &amp; Admissions Pipeline</div>
+              <div class="cp-section-desc">Track prospective students from enquiry through invoice issuance, payment, and cohort enrolment.</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="cp-btn sm secondary" id="btnExportEnquiries">&#x1F4E5; Export CSV</button>
+              ${canRecord() ? '<button class="cp-btn sm accent" id="btnNewEnquiryBtn">+ New Enquiry</button>' : ''}
+            </div>
+          </div>
+
+          <!-- Summary Status Grid -->
+          <div class="cp-grid-5" style="margin-bottom:16px;">
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">New Leads</div>
+              <div style="font-size:17px; font-weight:800; color:var(--primary); margin-top:2px;">${totalNew}</div>
+            </div>
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Contacted / Interested</div>
+              <div style="font-size:17px; font-weight:800; color:var(--info); margin-top:2px;">${totalContacted}</div>
+            </div>
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Invoice Requested</div>
+              <div style="font-size:17px; font-weight:800; color:var(--warning); margin-top:2px;">${totalInvReq}</div>
+            </div>
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Invoice Issued</div>
+              <div style="font-size:17px; font-weight:800; color:var(--primary); margin-top:2px;">${totalInvIss}</div>
+            </div>
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Enrolled</div>
+              <div style="font-size:17px; font-weight:800; color:var(--success); margin-top:2px;">${totalEnrolled}</div>
+            </div>
+          </div>
+
+          <div class="cp-field" style="max-width:320px; margin-bottom:14px;">
+            <input type="text" id="enquirySearchInput" placeholder="Filter by name, phone, or programme..." value="${escapeHtml(state.filters.enquirySearch)}" />
+          </div>
+
+          ${filtered.length === 0 ? `
+            <div class="cp-empty-state">
+              <div class="cp-empty-icon">&#x1F4E5;</div>
+              <div class="cp-empty-title">No enquiries recorded yet</div>
+              <div class="cp-empty-desc">Capture incoming student enquiries to begin the admissions and billing workflow.</div>
+              ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyNewEnquiry">+ Log First Enquiry</button>' : ''}
+            </div>
+          ` : `
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead>
+                  <tr>
+                    <th>Prospect Name</th><th>Interested Programme</th><th>Source</th><th>Enquiry Date</th>
+                    <th>Assigned Staff</th><th>Journey Stage</th><th>Financial Status</th><th style="text-align:center;">Next Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filtered.slice().reverse().map(e => {
+                    const fin = getEnquiryFinancialStatus(e);
+                    const nxt = getEnquiryNextAction(e);
+                    return `
+                      <tr>
+                        <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenEnquiryDetail" data-id="${e.id}">
+                          ${escapeHtml(e.name)}<br/><span style="color:var(--text-muted); font-size:11px;">${escapeHtml(e.phone || '')}</span>
+                        </td>
+                        <td>${escapeHtml(e.programmeName || 'General Interest')}</td>
+                        <td><span class="cp-pill category-pill">${escapeHtml(e.source || 'Direct')}</span></td>
+                        <td>${fmtDate(e.enquiryDate)}</td>
+                        <td>${escapeHtml(e.assignedStaff || 'Admissions')}</td>
+                        <td><span class="cp-pill ${e.status.toLowerCase()}">${e.status.replace('_', ' ')}</span></td>
+                        <td><span class="cp-pill ${fin.pillClass}">${fin.label}</span></td>
+                        <td style="text-align:center;">
+                          <div class="cp-action-group">
+                            <button class="cp-btn sm ${nxt.btnClass} btnNextAction" data-id="${e.id}" data-action="${nxt.action}">${nxt.label}</button>
+                            <button class="cp-btn sm secondary btnOpenEnquiryDetail" data-id="${e.id}" title="View Details">&#x1F441;&#xFE0F;</button>
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      `;
+
+      document.getElementById('enquirySearchInput').addEventListener('input', (e) => {
+        state.filters.enquirySearch = e.target.value;
+        render();
+      });
+
+      document.getElementById('btnExportEnquiries').addEventListener('click', () => {
+        exportToCSV('Admissions_Enquiries', filtered.map(e => ({
+          Name: e.name, Phone: e.phone, Email: e.email, Programme: e.programmeName,
+          Source: e.source, Date: e.enquiryDate, Assigned: e.assignedStaff, Status: e.status
+        })));
+      });
+
+      const btnNew = document.getElementById('btnNewEnquiryBtn');
+      if (btnNew) btnNew.addEventListener('click', () => openModal('newEnquiry'));
+
+      const btnEmpty = document.getElementById('btnEmptyNewEnquiry');
+      if (btnEmpty) btnEmpty.addEventListener('click', () => openModal('newEnquiry'));
+
+      container.querySelectorAll('.btnOpenEnquiryDetail').forEach(b => {
         b.addEventListener('click', () => {
-          const inv = state.invoices.find(i => i.id === b.dataset.id);
-          if (inv) openModal('viewInvoice', { invoice: inv });
+          const enq = state.enquiries.find(e => e.id === b.dataset.id);
+          if (enq) openModal('enquiryDetail', { enquiry: enq });
+        });
+      });
+
+      container.querySelectorAll('.btnNextAction').forEach(b => {
+        b.addEventListener('click', () => {
+          const enq = state.enquiries.find(e => e.id === b.dataset.id);
+          const act = b.dataset.action;
+          if (!enq) return;
+
+          if (act === 'contact') {
+            enq.status = 'CONTACTED';
+            safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+            logAudit('UPDATE_ENQUIRY', 'enquiry', enq.id, 'Marked Contacted');
+            render();
+          } else if (act === 'create_invoice') {
+            state.tab = 'invoices';
+            state.invoiceSubTab = 'new';
+            state.pendingEnquiryForInvoice = enq;
+            render();
+          } else if (act === 'record_payment') {
+            const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enq.id) || i.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+            if (inv) openModal('recordPayment', { invoice: inv });
+          } else if (act === 'enrol' || act === 'enrol_or_pay') {
+            openModal('enrolStudent', { enquiry: enq });
+          } else if (act === 'follow_up') {
+            const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enq.id) || i.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+            if (inv) openModal('collectionNotes', { invoice: inv });
+          } else if (act === 'view_profile') {
+            const students = getStudentAccountSummaries();
+            const acc = students.find(s => s.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+            if (acc) openModal('studentProfile', { account: acc });
+          } else {
+            openModal('enquiryDetail', { enquiry: enq });
+          }
         });
       });
     }
 
     // ----------------------------------------------------
-    // TAB 2: STUDENTS & CLIENTS
+    // TAB 3: STUDENTS & CLIENTS (COMPLETE PROFILE)
     // ----------------------------------------------------
     function renderStudentAccountsTab(container) {
       const students = getStudentAccountSummaries();
@@ -1997,8 +1722,8 @@
         <div class="cp-card">
           <div class="cp-card-header">
             <div>
-              <div class="cp-section-title">&#x1F465; Students &amp; Client Accounts</div>
-              <div class="cp-section-desc">Unified ledger accounts, cumulative billing, payments, and balances by student.</div>
+              <div class="cp-section-title">&#x1F465; Students &amp; Client Ledger Profiles</div>
+              <div class="cp-section-desc">Unified customer directory, active enrolments, billing history, and payment statements.</div>
             </div>
             <div style="display:flex; gap:8px;">
               <button class="cp-btn sm secondary" id="btnExportStudents">&#x1F4E5; Export CSV</button>
@@ -2014,8 +1739,7 @@
             <div class="cp-empty-state">
               <div class="cp-empty-icon">&#x1F465;</div>
               <div class="cp-empty-title">No students or clients yet</div>
-              <div class="cp-empty-desc">Students will appear here once their first tuition invoice is generated.</div>
-              ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyCreateInvoice">+ Create Student Invoice</button>' : ''}
+              <div class="cp-empty-desc">Students will appear here once financial activity or an enquiry is recorded.</div>
             </div>
           ` : `
             <div class="cp-table-wrap">
@@ -2023,22 +1747,25 @@
                 <thead>
                   <tr>
                     <th>Student / Client Name</th><th>Contact Details</th><th>Enrolled Programmes</th>
-                    <th style="text-align:right;">Total Invoiced</th><th style="text-align:right;">Total Paid</th>
+                    <th>Enrolment Status</th><th style="text-align:right;">Total Invoiced</th><th style="text-align:right;">Total Paid</th>
                     <th style="text-align:right;">Balance Due</th><th>Account Status</th><th style="text-align:center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${filtered.map((s, idx) => `
                     <tr>
-                      <td style="font-weight:700; color:var(--primary);">${escapeHtml(s.clientName)}</td>
+                      <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenStudentProfile" data-idx="${idx}">
+                        ${escapeHtml(s.clientName)}
+                      </td>
                       <td>${escapeHtml(s.phone || 'N/A')}<br/><span style="color:var(--text-muted); font-size:11px;">${escapeHtml(s.email || '')}</span></td>
                       <td>${escapeHtml(s.programmesList)}</td>
+                      <td><span class="cp-pill ${s.isEnrolled ? 'enrolled' : 'new'}">${s.isEnrolled ? 'Enrolled' : 'Pre-Enrolment'}</span></td>
                       <td style="text-align:right;">${fmtMoney(s.totalInvoiced)}</td>
                       <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(s.totalPaid)}</td>
                       <td style="text-align:right; font-weight:800; color:${s.balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(s.balance)}</td>
-                      <td><span class="cp-pill ${s.balance === 0 ? 'paid' : 'partial'}">${s.status}</span></td>
+                      <td><span class="cp-pill ${s.balance === 0 && s.totalInvoiced > 0 ? 'paid' : (s.totalPaid > 0 ? 'partial' : 'new')}">${s.status}</span></td>
                       <td style="text-align:center;">
-                        <button class="cp-btn sm secondary btnViewStatement" data-idx="${idx}">&#x1F4D3; Account Statement</button>
+                        <button class="cp-btn sm secondary btnOpenStudentProfile" data-idx="${idx}">&#x1F464; Complete Profile</button>
                       </td>
                     </tr>
                   `).join('')}
@@ -2054,43 +1781,46 @@
         render();
       });
 
-      const btnEmpty = document.getElementById('btnEmptyCreateInvoice');
-      if (btnEmpty) btnEmpty.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+      document.getElementById('btnExportStudents').addEventListener('click', () => {
+        exportToCSV('Student_Accounts', filtered.map(s => ({
+          Student_Name: s.clientName, Phone: s.phone, Email: s.email,
+          Programmes: s.programmesList, Enrolled: s.isEnrolled ? 'Yes' : 'No',
+          Total_Invoiced: s.totalInvoiced, Total_Paid: s.totalPaid, Balance: s.balance, Status: s.status
+        })));
+      });
 
       const btnNew = document.getElementById('btnStudentNewInvoice');
       if (btnNew) btnNew.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
 
-      document.getElementById('btnExportStudents').addEventListener('click', () => {
-        exportToCSV('Student_Accounts', filtered.map(s => ({
-          Student_Name: s.clientName, Phone: s.phone, Email: s.email,
-          Programmes: s.programmesList, Total_Invoiced: s.totalInvoiced,
-          Total_Paid: s.totalPaid, Balance: s.balance, Status: s.status
-        })));
-      });
-
-      container.querySelectorAll('.btnViewStatement').forEach(b => {
+      container.querySelectorAll('.btnOpenStudentProfile').forEach(b => {
         b.addEventListener('click', () => {
           const acc = filtered[Number(b.dataset.idx)];
-          if (acc) openModal('studentStatement', { account: acc });
+          if (acc) openModal('studentProfile', { account: acc });
         });
       });
     }
 
     // ----------------------------------------------------
-    // TAB 3: INVOICES
+    // TAB 4: INVOICES (BUILDER & SEAMLESS INHERITANCE)
     // ----------------------------------------------------
     function renderInvoicesTab(container) {
       if (state.invoiceSubTab === 'new') {
         const todayStr = new Date().toISOString().slice(0, 10);
         const existingStudents = Array.from(new Set(state.invoices.map(i => i.clientName.trim()))).filter(Boolean);
-        const defaultProg = state.programmes[0] || { id: 'prog_1', name: 'Professional Training Program', price: 450000 };
+        const pendingEnq = state.pendingEnquiryForInvoice;
+        const defaultProg = (pendingEnq && pendingEnq.programmeId ? state.programmes.find(p => p.id === pendingEnq.programmeId) : null) || state.programmes[0] || { id: 'prog_1', name: 'Professional Training Program', price: 450000 };
+
+        const initialClient = pendingEnq ? pendingEnq.name : '';
+        const initialPhone = pendingEnq ? pendingEnq.phone : '';
+        const initialEmail = pendingEnq ? pendingEnq.email : '';
+        const initialProgId = defaultProg.id;
 
         container.innerHTML = `
           <div class="cp-card" style="max-width:840px; margin:0 auto;">
             <div class="cp-card-header">
               <div>
                 <div class="cp-section-title">&#x1F4DD; Professional Invoice Builder</div>
-                <div class="cp-section-desc">Generate official tuition invoice for student enrollment.</div>
+                <div class="cp-section-desc">${pendingEnq ? `Generating official invoice for Enquiry: ${escapeHtml(pendingEnq.name)}` : 'Generate official tuition invoice for student enrollment.'}</div>
               </div>
               <button class="cp-btn secondary sm" id="btnCancelNewInv">Back to Invoices List</button>
             </div>
@@ -2098,27 +1828,27 @@
             <!-- Existing Customer Autocomplete -->
             <div style="background:var(--surface-2); padding:12px 14px; border-radius:var(--radius-sm); margin-bottom:16px; border:1px solid var(--border);">
               <div class="cp-field" style="margin-bottom:0;">
-                <label>Select Existing Student (Autofill Contact &amp; Parent Details)</label>
+                <label>Select Existing Student / Prospect</label>
                 <select id="invCustomerSelect">
-                  <option value="">-- New Student / Client --</option>
+                  <option value="">${pendingEnq ? `-- Selected: ${escapeHtml(pendingEnq.name)} --` : '-- New Student / Client --'}</option>
                   ${existingStudents.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
                 </select>
               </div>
             </div>
 
             <div class="cp-row2">
-              <div class="cp-field"><label>Student / Client Name *</label><input id="invClient" placeholder="e.g. Samuel Adebayo" /></div>
+              <div class="cp-field"><label>Student / Client Name *</label><input id="invClient" value="${escapeHtml(initialClient)}" placeholder="e.g. Samuel Adebayo" /></div>
               <div class="cp-field"><label>Parent / Guardian Name (Optional)</label><input id="invParent" placeholder="e.g. Mr. &amp; Mrs. Adebayo" /></div>
             </div>
 
             <div class="cp-row3">
-              <div class="cp-field"><label>Phone Number *</label><input id="invPhone" placeholder="08031234567" /></div>
-              <div class="cp-field"><label>Email Address *</label><input id="invEmail" type="email" placeholder="student@example.com" /></div>
+              <div class="cp-field"><label>Phone Number *</label><input id="invPhone" value="${escapeHtml(initialPhone)}" placeholder="08031234567" /></div>
+              <div class="cp-field"><label>Email Address *</label><input id="invEmail" type="email" value="${escapeHtml(initialEmail)}" placeholder="student@example.com" /></div>
               <div class="cp-field"><label>Revenue Category</label><select id="invCat">${state.incomeCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
             </div>
 
             <div class="cp-row2">
-              <div class="cp-field"><label>Target Programme *</label><select id="invProg">${state.programmes.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}</select></div>
+              <div class="cp-field"><label>Target Programme *</label><select id="invProg">${state.programmes.map(p => `<option value="${p.id}" ${p.id === initialProgId ? 'selected' : ''}>${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}</select></div>
               <div class="cp-field"><label>Payment Plan *</label><select id="invPlan"><option value="full">Full Upfront Payment</option><option value="installment">60 / 40 Installment Schedule</option></select></div>
             </div>
 
@@ -2166,7 +1896,7 @@
 
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
               <button class="cp-btn secondary" id="btnCancelNewInv2">Cancel</button>
-              <button class="cp-btn accent" id="btnSaveInvoice">&#x2714; Generate &amp; Issue Invoice</button>
+              <button class="cp-btn accent" id="btnSaveInvoice">&#x2714; Issue &amp; Generate Invoice</button>
             </div>
           </div>
         `;
@@ -2203,8 +1933,8 @@
             const qty = Number(row.querySelector('.item-qty').value || 1);
             const pr = Number(row.querySelector('.item-price').value || 0);
             const dc = Number(row.querySelector('.item-disc').value || 0);
-            const lineTot = Math.max(0, safeRound((qty * pr) - dc));
-            grand = safeRound(grand + lineTot);
+            const lineAmt = Math.max(0, safeRound((qty * pr) - dc));
+            grand = safeRound(grand + lineAmt);
           });
           const lbl = document.getElementById('lblCalculatedTotal');
           if (lbl) lbl.textContent = fmtMoney(grand);
@@ -2243,8 +1973,8 @@
           });
         });
 
-        document.getElementById('btnCancelNewInv').addEventListener('click', () => { state.invoiceSubTab = 'list'; render(); });
-        document.getElementById('btnCancelNewInv2').addEventListener('click', () => { state.invoiceSubTab = 'list'; render(); });
+        document.getElementById('btnCancelNewInv').addEventListener('click', () => { state.pendingEnquiryForInvoice = null; state.invoiceSubTab = 'list'; render(); });
+        document.getElementById('btnCancelNewInv2').addEventListener('click', () => { state.pendingEnquiryForInvoice = null; state.invoiceSubTab = 'list'; render(); });
 
         document.getElementById('btnSaveInvoice').addEventListener('click', async () => {
           const client = document.getElementById('invClient').value.trim();
@@ -2279,6 +2009,7 @@
           const inv = {
             id: 'inv_' + Date.now(),
             tenant_id: DEFAULT_TENANT_ID,
+            enquiryId: state.pendingEnquiryForInvoice ? state.pendingEnquiryForInvoice.id : null,
             invoiceNo: state.counters.invoice,
             invoice_display_no: docNo,
             clientName: client,
@@ -2304,6 +2035,18 @@
           };
 
           state.invoices.push(inv);
+
+          // Update linked enquiry status
+          if (state.pendingEnquiryForInvoice) {
+            const enq = state.enquiries.find(e => e.id === state.pendingEnquiryForInvoice.id);
+            if (enq) {
+              enq.status = 'INVOICE_ISSUED';
+              enq.updatedAt = new Date().toISOString();
+              await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+            }
+            state.pendingEnquiryForInvoice = null;
+          }
+
           await safeSet(STORE_KEY_INVOICES, state.invoices);
           await safeSet(STORE_KEY_COUNTERS, state.counters);
           await logAudit('CREATE_INVOICE', 'invoice', inv.id, `Invoice #${inv.invoiceNo} (${inv.clientName})`, null, inv);
@@ -2396,10 +2139,10 @@
         });
 
         const btnNew = document.getElementById('btnNewInvBtn');
-        if (btnNew) btnNew.addEventListener('click', () => { state.invoiceSubTab = 'new'; render(); });
+        if (btnNew) btnNew.addEventListener('click', () => { state.pendingEnquiryForInvoice = null; state.invoiceSubTab = 'new'; render(); });
 
         const btnEmpty = document.getElementById('btnEmptyNewInvoice');
-        if (btnEmpty) btnEmpty.addEventListener('click', () => { state.invoiceSubTab = 'new'; render(); });
+        if (btnEmpty) btnEmpty.addEventListener('click', () => { state.pendingEnquiryForInvoice = null; state.invoiceSubTab = 'new'; render(); });
 
         container.querySelectorAll('.btnViewInv').forEach(b => {
           b.addEventListener('click', () => {
@@ -2425,7 +2168,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 4: PAYMENTS & RECEIPTS
+    // TAB 5: PAYMENTS & RECEIPTS
     // ----------------------------------------------------
     function renderPaymentsTab(container) {
       const q = (state.filters.paymentSearch || '').toLowerCase();
@@ -2457,7 +2200,6 @@
               <div class="cp-empty-icon">&#x1F9FE;</div>
               <div class="cp-empty-title">No payments recorded</div>
               <div class="cp-empty-desc">Record a tuition deposit or payment against an existing invoice.</div>
-              ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyRecordPay">+ Record Payment</button>' : ''}
             </div>
           ` : `
             <div class="cp-table-wrap">
@@ -2516,14 +2258,6 @@
         });
       }
 
-      const btnEmpty = document.getElementById('btnEmptyRecordPay');
-      if (btnEmpty) {
-        btnEmpty.addEventListener('click', () => {
-          const unpaid = state.invoices.find(i => invoiceBalance(i).balance > 0) || state.invoices[0];
-          if (unpaid) openModal('recordPayment', { invoice: unpaid });
-        });
-      }
-
       container.querySelectorAll('.btnViewRec').forEach(b => {
         b.addEventListener('click', () => {
           const p = state.payments.find(pm => pm.id === b.dataset.id);
@@ -2534,7 +2268,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 5: EXPENSES
+    // TAB 6: EXPENSES
     // ----------------------------------------------------
     function renderExpensesTab(container) {
       const q = (state.filters.expenseSearch || '').toLowerCase();
@@ -2545,7 +2279,7 @@
           <div class="cp-card-header">
             <div>
               <div class="cp-section-title">&#x1F4B8; Operational &amp; Programme Expenses</div>
-              <div class="cp-section-desc">Track and approve facilitator fees, technology subscriptions, facilities, and administration expenses.</div>
+              <div class="cp-section-desc">Track facilitator fees, technology subscriptions, facilities, and administration expenses.</div>
             </div>
             <div style="display:flex; gap:8px;">
               <button class="cp-btn sm secondary" id="btnExportExpenses">&#x1F4E5; Export CSV</button>
@@ -2562,7 +2296,6 @@
               <div class="cp-empty-icon">&#x1F4B8;</div>
               <div class="cp-empty-title">No expenses recorded</div>
               <div class="cp-empty-desc">Track operational, facilitator, marketing and programme expenses.</div>
-              ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyLogExp">+ Log Expense</button>' : ''}
             </div>
           ` : `
             <div class="cp-table-wrap">
@@ -2576,7 +2309,7 @@
                 </thead>
                 <tbody>
                   ${filtered.slice().reverse().map(e => `
-                    <tr class="${e.status === 'cancelled' ? 'cancelled-row' : ''}">
+                    <tr>
                       <td>${fmtDate(e.date)}</td>
                       <td style="font-weight:600;">${escapeHtml(e.categoryGroup)}</td>
                       <td>${escapeHtml(e.category)}</td>
@@ -2617,9 +2350,6 @@
       const btnLog = document.getElementById('btnLogExpenseBtn');
       if (btnLog) btnLog.addEventListener('click', () => openModal('recordExpense'));
 
-      const btnEmpty = document.getElementById('btnEmptyLogExp');
-      if (btnEmpty) btnEmpty.addEventListener('click', () => openModal('recordExpense'));
-
       container.querySelectorAll('.btnApproveExp').forEach(b => {
         b.addEventListener('click', async () => {
           const exp = state.expenses.find(e => e.id === b.dataset.id);
@@ -2643,7 +2373,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 6: PROGRAMMES
+    // TAB 7: PROGRAMMES
     // ----------------------------------------------------
     function renderProgrammesTab(container) {
       container.innerHTML = `
@@ -2661,7 +2391,6 @@
               <div class="cp-empty-icon">&#x1F393;</div>
               <div class="cp-empty-title">No programmes catalogued</div>
               <div class="cp-empty-desc">Add Clasptek coaching and tech training programmes.</div>
-              ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyAddProg">+ Add Programme</button>' : ''}
             </div>
           ` : `
             <div class="cp-table-wrap">
@@ -2698,9 +2427,6 @@
       const btnAdd = document.getElementById('btnAddProgBtn');
       if (btnAdd) btnAdd.addEventListener('click', () => openModal('addProgramme'));
 
-      const btnEmpty = document.getElementById('btnEmptyAddProg');
-      if (btnEmpty) btnEmpty.addEventListener('click', () => openModal('addProgramme'));
-
       container.querySelectorAll('.btnEditProg').forEach(b => {
         b.addEventListener('click', () => {
           const p = state.programmes.find(pr => pr.id === b.dataset.id);
@@ -2710,7 +2436,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 7: RECEIVABLES & COLLECTIONS
+    // TAB 8: RECEIVABLES & COLLECTIONS
     // ----------------------------------------------------
     function renderReceivablesTab(container) {
       const outstandingInvoices = state.invoices.filter(i => invoiceBalance(i).balance > 0);
@@ -2805,7 +2531,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 8: BUDGETS
+    // TAB 9: BUDGETS
     // ----------------------------------------------------
     function renderBudgetsTab(container) {
       const curPeriod = state.filters.budgetPeriod || new Date().toISOString().slice(0, 7);
@@ -2820,17 +2546,11 @@
             ${canManageBudget() ? '<button class="cp-btn sm accent" id="btnSetBudgetBtn">+ Set Budget Allocation</button>' : ''}
           </div>
 
-          <div style="margin-bottom:14px; display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; font-weight:700;">Period:</label>
-            <input type="month" id="budgetPeriodSelector" value="${curPeriod}" style="padding:6px 10px; font-size:12.5px;" />
-          </div>
-
           ${state.budgets.length === 0 ? `
             <div class="cp-empty-state">
               <div class="cp-empty-icon">&#x2696;&#xFE0F;</div>
               <div class="cp-empty-title">No budget allocations defined</div>
               <div class="cp-empty-desc">Establish monthly expenditure limits across departments and categories.</div>
-              ${canManageBudget() ? '<button class="cp-btn accent sm" id="btnEmptySetBudget">+ Set Budget</button>' : ''}
             </div>
           ` : `
             <div class="cp-table-wrap">
@@ -2871,20 +2591,12 @@
         </div>
       `;
 
-      document.getElementById('budgetPeriodSelector').addEventListener('change', (e) => {
-        state.filters.budgetPeriod = e.target.value;
-        render();
-      });
-
       const btnSet = document.getElementById('btnSetBudgetBtn');
       if (btnSet) btnSet.addEventListener('click', () => openModal('setBudget'));
-
-      const btnEmpty = document.getElementById('btnEmptySetBudget');
-      if (btnEmpty) btnEmpty.addEventListener('click', () => openModal('setBudget'));
     }
 
     // ----------------------------------------------------
-    // TAB 9: REPORTS
+    // TAB 10: REPORTS
     // ----------------------------------------------------
     function renderReportsTab(container) {
       const m = getFinancialMetrics();
@@ -2900,7 +2612,6 @@
           </div>
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:10px;">
-            <!-- P&L Statement Summary -->
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:800; color:var(--primary); margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:6px;">
                 Profit &amp; Loss Statement (All-Time)
@@ -2918,14 +2629,13 @@
                 <span>Operational &amp; Facilitator Outflows:</span><strong>-${fmtMoney(m.totalExpenses)}</strong>
               </div>
               <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:15px; font-weight:800; color:var(--primary); border-top:2px solid var(--primary); margin-top:10px; padding-top:8px;">
-                <span>Net Operating Profit / (Loss):</span><span>${fmtMoney(m.netFinancialPosition)}</span>
+                <span>Net Operating Profit:</span><span>${fmtMoney(m.netFinancialPosition)}</span>
               </div>
             </div>
 
-            <!-- Operational Overview -->
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:800; color:var(--primary); margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:6px;">
-                Key Performance Indicators
+                Conversion &amp; Key Performance Indicators
               </div>
               <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:13px;">
                 <span>Gross Invoiced Value:</span><strong>${fmtMoney(m.totalInvoiced)}</strong>
@@ -2934,13 +2644,10 @@
                 <span>Collection Efficiency:</span><strong style="color:var(--success);">${m.collectionRate}%</strong>
               </div>
               <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:13px;">
-                <span>Outstanding Tuition:</span><strong style="color:var(--warning);">${fmtMoney(m.outstandingReceivables)}</strong>
+                <span>Enquiry &rarr; Invoice Rate:</span><strong>${m.pipeline.convEnquiryToInvoice}%</strong>
               </div>
               <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:13px;">
-                <span>Month-to-Date Net Surplus:</span><strong>${fmtMoney(m.mtdNet)}</strong>
-              </div>
-              <div style="display:flex; justify-content:space-between; padding:6px 0; font-size:13px;">
-                <span>Year-to-Date Net Surplus:</span><strong>${fmtMoney(m.ytdNet)}</strong>
+                <span>Overall Lead Conversion:</span><strong style="color:var(--primary);">${m.pipeline.convOverall}%</strong>
               </div>
             </div>
           </div>
@@ -2960,7 +2667,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 10: USERS & ROLES (ADMINISTRATION)
+    // TAB 11: USERS & ROLES
     // ----------------------------------------------------
     function renderUsersRolesTab(container) {
       container.innerHTML = `
@@ -2972,12 +2679,10 @@
             </div>
           </div>
 
-          <div class="cp-table-wrap" style="margin-bottom:20px;">
+          <div class="cp-table-wrap">
             <table class="cp-table">
               <thead>
-                <tr>
-                  <th>User ID</th><th>Full Name</th><th>Work Email</th><th>System Role</th><th>Title / Scope</th><th>Status</th>
-                </tr>
+                <tr><th>User ID</th><th>Full Name</th><th>Work Email</th><th>System Role</th><th>Title / Scope</th><th>Status</th></tr>
               </thead>
               <tbody>
                 ${SYSTEM_ACCOUNTS.map(acc => `
@@ -2993,40 +2698,12 @@
               </tbody>
             </table>
           </div>
-
-          <!-- Permissions Matrix Documentation -->
-          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
-            <div style="font-size:13.5px; font-weight:700; color:var(--primary); margin-bottom:8px;">Enterprise Role Permission Matrix</div>
-            <div class="cp-table-wrap">
-              <table class="cp-table" style="font-size:12px;">
-                <thead>
-                  <tr>
-                    <th>Role</th><th>Invoices &amp; Payments</th><th>Expense Approval</th><th>Period Lock / Reopen</th><th>Settings &amp; Audit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="font-weight:700;">Super Admin</td><td>Full Access</td><td>Full (All amounts)</td><td>Full Rights</td><td>Full Rights</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight:700;">Finance Manager</td><td>Full Access</td><td>Up to ₦500,000</td><td>View Only</td><td>View Only</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight:700;">Finance Staff</td><td>Create &amp; Record</td><td>None</td><td>None</td><td>None</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight:700;">Finance Viewer</td><td>Read-Only</td><td>Read-Only</td><td>Read-Only</td><td>Read-Only</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       `;
     }
 
     // ----------------------------------------------------
-    // TAB 11: FINANCIAL CONTROLS (ADMINISTRATION)
+    // TAB 12: FINANCIAL CONTROLS
     // ----------------------------------------------------
     function renderFinancialControlsTab(container) {
       const curMonth = new Date().toISOString().slice(0, 7);
@@ -3041,8 +2718,7 @@
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px;">
-            <!-- Period Locking -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:6px;">Accounting Period Status (${curMonth})</div>
               <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">
@@ -3055,7 +2731,6 @@
               ` : '<div style="font-size:11.5px; color:var(--text-muted);">Period locking restricted to Super Admin.</div>'}
             </div>
 
-            <!-- Approval Thresholds -->
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:6px;">Approval Tiers</div>
               <div style="font-size:12px; color:var(--text-secondary); line-height:1.6;">
@@ -3073,11 +2748,8 @@
         btnLock.addEventListener('click', async () => {
           const idx = state.financePeriods.findIndex(p => p.period === curMonth);
           const newStatus = isLocked ? 'open' : 'locked';
-          if (idx >= 0) {
-            state.financePeriods[idx].status = newStatus;
-          } else {
-            state.financePeriods.push({ period: curMonth, status: newStatus, lockedAt: new Date().toISOString() });
-          }
+          if (idx >= 0) state.financePeriods[idx].status = newStatus;
+          else state.financePeriods.push({ period: curMonth, status: newStatus, lockedAt: new Date().toISOString() });
           await safeSet(STORE_KEY_FINANCE_PERIODS, state.financePeriods);
           await logAudit('PERIOD_LOCK_TOGGLE', 'period', curMonth, `Set to ${newStatus}`);
           render();
@@ -3086,7 +2758,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 12: AUDIT LOG (ADMINISTRATION)
+    // TAB 13: AUDIT LOG
     // ----------------------------------------------------
     function renderAuditLogTab(container) {
       container.innerHTML = `
@@ -3094,7 +2766,7 @@
           <div class="cp-card-header">
             <div>
               <div class="cp-section-title">&#x1F4DC; Immutable Financial Audit Log</div>
-              <div class="cp-section-desc">Chronological history of all financial mutations, invoices, payments, and administrative actions.</div>
+              <div class="cp-section-desc">Chronological history of all financial mutations, invoices, payments, enquiries, and admissions.</div>
             </div>
             <button class="cp-btn sm secondary" id="btnExportAuditLog">&#x1F4E5; Export Audit CSV</button>
           </div>
@@ -3102,9 +2774,7 @@
           <div class="cp-table-wrap">
             <table class="cp-table">
               <thead>
-                <tr>
-                  <th>Timestamp</th><th>Action</th><th>Entity</th><th>Reference</th><th>Actor</th><th>Role</th>
-                </tr>
+                <tr><th>Timestamp</th><th>Action</th><th>Entity</th><th>Reference</th><th>Actor</th><th>Role</th></tr>
               </thead>
               <tbody>
                 ${state.auditLog.slice(0, 50).map(a => `
@@ -3129,7 +2799,7 @@
     }
 
     // ----------------------------------------------------
-    // TAB 13: SETTINGS & BACKUPS (ADMINISTRATION)
+    // TAB 14: SETTINGS & BACKUPS
     // ----------------------------------------------------
     function renderSettingsTab(container) {
       container.innerHTML = `
@@ -3144,17 +2814,13 @@
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:6px;">Supabase Production REST Endpoint</div>
-              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; font-family:monospace; word-break:break-all;">
-                ${escapeHtml(state.supabase.endpoint)}
-              </div>
+              <div style="font-family:monospace; font-size:12px; word-break:break-all; margin-bottom:12px;">${escapeHtml(state.supabase.endpoint)}</div>
               <button class="cp-btn secondary sm" id="btnLaunchSupabaseModal">&#x26A1; Launch Supabase &amp; Migration Diagnostic</button>
             </div>
 
             <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
               <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:6px;">Data Backup &amp; Archival</div>
-              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
-                Download complete JSON snapshot of all records.
-              </div>
+              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">Download complete JSON snapshot of all records.</div>
               <button class="cp-btn accent sm" id="btnDownloadBackupJson">&#x1F4E5; Export Full JSON Backup</button>
             </div>
           </div>
@@ -3173,6 +2839,8 @@
           expenses: state.expenses,
           directIncome: state.directIncome,
           budgets: state.budgets,
+          enquiries: state.enquiries,
+          enrolments: state.enrolments,
           auditLog: state.auditLog,
           counters: state.counters
         };
@@ -3185,7 +2853,517 @@
     }
 
     // ----------------------------------------------------
-    // PROFESSIONAL A4 INVOICE VIEWER & DOCUMENT ENGINE
+    // MODALS: PHASE 7 ENQUIRY, ENROLMENT, & JOURNEY PROFILE
+    // ----------------------------------------------------
+    function renderNewEnquiryModal(container) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const defaultProg = state.programmes[0] || { id: 'prog_1', name: 'General Tech Programme' };
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header">
+              <div class="cp-modal-title">&#x1F4E5; Log New Prospect Enquiry</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div class="cp-field">
+                <label>Prospect Full Name *</label>
+                <input id="enqName" placeholder="e.g. Samuel Aransiola" />
+              </div>
+
+              <!-- Duplicate Customer Warning Container -->
+              <div id="duplicateWarningBox" style="display:none; background:var(--warning-bg); border:1px solid var(--warning); padding:10px 12px; border-radius:var(--radius-sm); margin-bottom:12px; font-size:12px; color:var(--text-primary);">
+                <div style="font-weight:700; color:var(--warning);">&#x26A0;&#xFE0F; Possible existing customer found!</div>
+                <div id="duplicateMsg" style="margin-top:2px;"></div>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                  <button class="cp-btn secondary sm" id="btnUseExistingCustomer" type="button">Use Existing Contact Details</button>
+                  <button class="cp-btn secondary sm" id="btnIgnoreDuplicate" type="button">Keep As New Prospect</button>
+                </div>
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field"><label>Phone Number *</label><input id="enqPhone" placeholder="08031234567" /></div>
+                <div class="cp-field"><label>Email Address</label><input id="enqEmail" type="email" placeholder="samuel@example.com" /></div>
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field">
+                  <label>Interested Programme *</label>
+                  <select id="enqProg">
+                    ${state.programmes.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${fmtMoney(p.price)})</option>`).join('')}
+                  </select>
+                </div>
+                <div class="cp-field">
+                  <label>Training Mode</label>
+                  <select id="enqMode">
+                    <option value="Live Interactive Onsite Class">Live Interactive Onsite Class</option>
+                    <option value="Live Online Virtual Class">Live Online Virtual Class</option>
+                    <option value="Hybrid (Onsite + Virtual)">Hybrid (Onsite + Virtual)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field">
+                  <label>Lead Source *</label>
+                  <select id="enqSource">
+                    ${ENQUIRY_SOURCES.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="cp-field">
+                  <label>Enquiry Date *</label>
+                  <input id="enqDate" type="date" value="${todayStr}" />
+                </div>
+              </div>
+
+              <div class="cp-field">
+                <label>Initial Notes / Discussion Summary</label>
+                <textarea id="enqNotes" rows="2" placeholder="e.g. Inquired about weekend cohort for Cybersecurity. Requested brochure and tuition breakdown."></textarea>
+              </div>
+
+              <div id="enqFormErr" class="cp-error" style="display:none;"></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCancelEnq">Cancel</button>
+              <button class="cp-btn accent" id="btnSaveEnquiry">&#x2714; Save Enquiry</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const nameInput = document.getElementById('enqName');
+      const phoneInput = document.getElementById('enqPhone');
+      const dupBox = document.getElementById('duplicateWarningBox');
+      const dupMsg = document.getElementById('duplicateMsg');
+      let matchedExisting = null;
+
+      function checkDuplicate() {
+        const valName = nameInput.value.trim().toLowerCase();
+        const valPhone = phoneInput.value.trim();
+
+        if (valName.length > 2 || valPhone.length > 5) {
+          const allStudents = getStudentAccountSummaries();
+          matchedExisting = allStudents.find(s => (valName.length > 2 && s.clientName.toLowerCase() === valName) || (valPhone.length > 5 && s.phone === valPhone));
+          if (matchedExisting) {
+            dupMsg.innerHTML = `Student <strong>${escapeHtml(matchedExisting.clientName)}</strong> (${escapeHtml(matchedExisting.phone || 'No phone')}) is already in the ledger with ${matchedExisting.invoices.length} invoice(s).`;
+            dupBox.style.display = 'block';
+            return;
+          }
+        }
+        dupBox.style.display = 'none';
+      }
+
+      nameInput.addEventListener('blur', checkDuplicate);
+      phoneInput.addEventListener('blur', checkDuplicate);
+
+      document.getElementById('btnUseExistingCustomer').addEventListener('click', () => {
+        if (matchedExisting) {
+          nameInput.value = matchedExisting.clientName;
+          if (matchedExisting.phone) phoneInput.value = matchedExisting.phone;
+          if (matchedExisting.email) document.getElementById('enqEmail').value = matchedExisting.email;
+          dupBox.style.display = 'none';
+        }
+      });
+
+      document.getElementById('btnIgnoreDuplicate').addEventListener('click', () => {
+        dupBox.style.display = 'none';
+      });
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCancelEnq').addEventListener('click', closeModal);
+
+      document.getElementById('btnSaveEnquiry').addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        const phone = phoneInput.value.trim();
+        const progId = document.getElementById('enqProg').value;
+        const prog = state.programmes.find(p => p.id === progId);
+        const errEl = document.getElementById('enqFormErr');
+
+        if (!name || !prog) { errEl.textContent = 'Please provide prospect name and programme.'; errEl.style.display = 'block'; return; }
+
+        state.counters.enquiry = (state.counters.enquiry || 1000) + 1;
+        const newEnq = {
+          id: 'enq_' + Date.now(),
+          tenant_id: DEFAULT_TENANT_ID,
+          name,
+          phone,
+          email: document.getElementById('enqEmail').value.trim(),
+          programmeId: prog.id,
+          programmeName: prog.name,
+          trainingMode: document.getElementById('enqMode').value,
+          source: document.getElementById('enqSource').value,
+          enquiryDate: document.getElementById('enqDate').value,
+          assignedStaff: state.auth.user ? state.auth.user.name : 'Admissions Staff',
+          notes: document.getElementById('enqNotes').value.trim(),
+          status: 'NEW',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        state.enquiries.push(newEnq);
+        await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+        await safeSet(STORE_KEY_COUNTERS, state.counters);
+        await logAudit('CREATE_ENQUIRY', 'enquiry', newEnq.id, `Enquiry for ${newEnq.name} (${newEnq.programmeName})`, null, newEnq);
+
+        closeModal();
+        openModal('enquiryDetail', { enquiry: newEnq });
+        render();
+      });
+    }
+
+    function renderEnquiryDetailModal(container, enquiry) {
+      const fin = getEnquiryFinancialStatus(enquiry);
+      const isEnrolled = state.enrolments.some(en => en.enquiryId === enquiry.id || (enquiry.name && en.studentName.trim().toLowerCase() === enquiry.name.trim().toLowerCase()));
+
+      const step1Class = 'completed';
+      const step2Class = enquiry.status !== 'NEW' && enquiry.status !== 'LOST' ? 'completed' : 'current';
+      const step3Class = fin.total > 0 ? 'completed' : (enquiry.status === 'INVOICE_REQUESTED' ? 'current' : '');
+      const step4Class = fin.paid > 0 ? (fin.balance === 0 ? 'completed' : 'current') : '';
+      const step5Class = isEnrolled ? 'completed' : (fin.paid > 0 ? 'current' : '');
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal drawer">
+            <div class="cp-modal-header">
+              <div class="cp-modal-title">&#x1F4E5; ${escapeHtml(enquiry.name)} &mdash; Enquiry Details</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <!-- Customer Journey Visualizer -->
+              <div class="cp-journey-bar">
+                <div class="cp-journey-step ${step1Class}">
+                  <div class="cp-journey-dot">&#x2714;</div>
+                  <div class="cp-journey-label">Enquiry</div>
+                </div>
+                <div class="cp-journey-step ${step2Class}">
+                  <div class="cp-journey-dot">2</div>
+                  <div class="cp-journey-label">Interest</div>
+                </div>
+                <div class="cp-journey-step ${step3Class}">
+                  <div class="cp-journey-dot">3</div>
+                  <div class="cp-journey-label">Invoice</div>
+                </div>
+                <div class="cp-journey-step ${step4Class}">
+                  <div class="cp-journey-dot">4</div>
+                  <div class="cp-journey-label">Payment</div>
+                </div>
+                <div class="cp-journey-step ${step5Class}">
+                  <div class="cp-journey-dot">5</div>
+                  <div class="cp-journey-label">Enrolment</div>
+                </div>
+              </div>
+
+              <!-- Section 1: Person & Contact -->
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px;">
+                <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Prospect Information</div>
+                <div style="font-size:15px; font-weight:800; color:var(--primary);">${escapeHtml(enquiry.name)}</div>
+                <div style="font-size:12.5px; color:var(--text-secondary); margin-top:3px;">
+                  Phone: <strong>${escapeHtml(enquiry.phone || 'N/A')}</strong> &middot; Email: <strong>${escapeHtml(enquiry.email || 'N/A')}</strong>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                  Lead Source: ${escapeHtml(enquiry.source || 'Direct')} &middot; Assigned: ${escapeHtml(enquiry.assignedStaff || 'Admissions')}
+                </div>
+              </div>
+
+              <!-- Section 2: Programme Interest -->
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px;">
+                <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Programme Interest</div>
+                <div style="font-size:13.5px; font-weight:700; color:var(--primary);">${escapeHtml(enquiry.programmeName || 'General Tech Programme')}</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Training Mode: <strong>${escapeHtml(enquiry.trainingMode || 'Live Interactive Onsite Class')}</strong></div>
+              </div>
+
+              <!-- Section 3: Financial Standing -->
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Financial Standing</span>
+                  <span class="cp-pill ${fin.pillClass}">${fin.label}</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:12px; margin-top:8px;">
+                  <div><span style="color:var(--text-muted);">Invoiced:</span><br/><strong>${fmtMoney(fin.total)}</strong></div>
+                  <div><span style="color:var(--text-muted);">Paid:</span><br/><strong style="color:var(--success);">${fmtMoney(fin.paid)}</strong></div>
+                  <div><span style="color:var(--text-muted);">Balance:</span><br/><strong style="color:${fin.balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(fin.balance)}</strong></div>
+                </div>
+              </div>
+
+              <!-- Section 4: Follow-up & Communication Notes -->
+              <div style="margin-bottom:14px;">
+                <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Admissions &amp; Follow-up History</div>
+                <div style="background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; max-height:140px; overflow-y:auto; font-size:12px;">
+                  ${enquiry.notes ? `<div style="padding:4px 0; border-bottom:1px solid var(--border);"><strong>Initial Note:</strong> ${escapeHtml(enquiry.notes)}</div>` : ''}
+                  <div style="color:var(--text-muted); padding:4px 0;">Logged on ${fmtDate(enquiry.enquiryDate)} by ${escapeHtml(enquiry.assignedStaff)}</div>
+                </div>
+              </div>
+
+              <!-- Context-Aware Actions Container -->
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
+                ${canRecord() ? `
+                  ${fin.status === 'NO_INVOICE' ? `
+                    <button class="cp-btn accent" id="btnDrawerCreateInv">&#x1F4C4; Create Tuition Invoice</button>
+                  ` : `
+                    <button class="cp-btn secondary" id="btnDrawerViewInv">&#x1F4C4; View Issued Invoice</button>
+                  `}
+
+                  ${fin.balance > 0 ? `
+                    <button class="cp-btn success" id="btnDrawerPay">&#x1F9FE; Record Tuition Payment</button>
+                  ` : ''}
+
+                  ${!isEnrolled && (fin.paid > 0 || fin.status === 'FULLY_PAID') ? `
+                    <button class="cp-btn success" id="btnDrawerEnrol">&#x1F393; Enrol Student into Cohort</button>
+                  ` : ''}
+
+                  <button class="cp-btn secondary sm" id="btnDrawerAddNote">&#x1F4DD; Add Follow-up Note</button>
+                ` : ''}
+              </div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCloseDrawer">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseDrawer').addEventListener('click', closeModal);
+
+      const btnCreate = document.getElementById('btnDrawerCreateInv');
+      if (btnCreate) {
+        btnCreate.addEventListener('click', () => {
+          closeModal();
+          state.tab = 'invoices';
+          state.invoiceSubTab = 'new';
+          state.pendingEnquiryForInvoice = enquiry;
+          render();
+        });
+      }
+
+      const btnView = document.getElementById('btnDrawerViewInv');
+      if (btnView) {
+        btnView.addEventListener('click', () => {
+          const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enquiry.id) || i.clientName.trim().toLowerCase() === enquiry.name.trim().toLowerCase());
+          if (inv) { closeModal(); openModal('viewInvoice', { invoice: inv }); }
+        });
+      }
+
+      const btnPay = document.getElementById('btnDrawerPay');
+      if (btnPay) {
+        btnPay.addEventListener('click', () => {
+          const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enquiry.id) || i.clientName.trim().toLowerCase() === enquiry.name.trim().toLowerCase());
+          if (inv) { closeModal(); openModal('recordPayment', { invoice: inv }); }
+        });
+      }
+
+      const btnEnrol = document.getElementById('btnDrawerEnrol');
+      if (btnEnrol) {
+        btnEnrol.addEventListener('click', () => {
+          closeModal();
+          openModal('enrolStudent', { enquiry });
+        });
+      }
+
+      const btnNote = document.getElementById('btnDrawerAddNote');
+      if (btnNote) {
+        btnNote.addEventListener('click', () => {
+          const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enquiry.id) || i.clientName.trim().toLowerCase() === enquiry.name.trim().toLowerCase());
+          if (inv) { closeModal(); openModal('collectionNotes', { invoice: inv }); }
+          else alert('Add a note directly in the enquiry record or create an invoice first.');
+        });
+      }
+    }
+
+    function renderEnrolStudentModal(container, data) {
+      const enq = data.enquiry || { name: data.studentName || 'Student', programmeName: 'Training Programme', trainingMode: 'Live Interactive Onsite Class' };
+      const todayStr = new Date().toISOString().slice(0, 10);
+      state.counters.student = (state.counters.student || 100) + 1;
+      const autoId = `CLP-${new Date().getFullYear()}-${state.counters.student}`;
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal">
+            <div class="cp-modal-header">
+              <div class="cp-modal-title">&#x1F393; Official Student Cohort Enrolment</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div style="background:var(--surface-2); padding:12px; border-radius:var(--radius-sm); margin-bottom:14px; font-size:12.5px;">
+                <strong>Student:</strong> ${escapeHtml(enq.name)} &middot; <strong>Programme:</strong> ${escapeHtml(enq.programmeName)}
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field"><label>Student ID / Reg No *</label><input id="enrlStudentId" value="${autoId}" /></div>
+                <div class="cp-field"><label>Enrolment Date *</label><input id="enrlDate" type="date" value="${todayStr}" /></div>
+              </div>
+
+              <div class="cp-row2">
+                <div class="cp-field"><label>Cohort / Batch Name *</label><input id="enrlCohort" value="${new Date().getFullYear()} Cohort Alpha" /></div>
+                <div class="cp-field"><label>Training Mode *</label><select id="enrlMode"><option value="Live Interactive Onsite Class">Live Interactive Onsite Class</option><option value="Live Online Virtual Class">Live Online Virtual Class</option><option value="Hybrid (Onsite + Virtual)">Hybrid (Onsite + Virtual)</option></select></div>
+              </div>
+
+              <div class="cp-field"><label>Admissions Remarks / Special Instructions</label><textarea id="enrlRemarks" rows="2" placeholder="e.g. Student provided transcript. Admitted for onsite training cohort."></textarea></div>
+            </div>
+            <div class="cp-modal-footer">
+              <button class="cp-btn secondary" id="mCancelEnrl">Cancel</button>
+              <button class="cp-btn success" id="btnSaveEnrolment">&#x2714; Complete Enrolment</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCancelEnrl').addEventListener('click', closeModal);
+
+      document.getElementById('btnSaveEnrolment').addEventListener('click', async () => {
+        const sId = document.getElementById('enrlStudentId').value.trim();
+        const cohort = document.getElementById('enrlCohort').value.trim();
+        const eDate = document.getElementById('enrlDate').value;
+
+        const newEnrolment = {
+          id: 'enrl_' + Date.now(),
+          tenant_id: DEFAULT_TENANT_ID,
+          enquiryId: enq.id || null,
+          studentName: enq.name,
+          programmeId: enq.programmeId || null,
+          programmeName: enq.programmeName,
+          studentId: sId,
+          cohort,
+          enrolmentDate: eDate,
+          trainingMode: document.getElementById('enrlMode').value,
+          remarks: document.getElementById('enrlRemarks').value.trim(),
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          enrolledBy: state.auth.user ? state.auth.user.name : 'Admissions'
+        };
+
+        state.enrolments.push(newEnrolment);
+        if (enq.id) {
+          const matchedEnq = state.enquiries.find(e => e.id === enq.id);
+          if (matchedEnq) matchedEnq.status = 'ENROLLED';
+          await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+        }
+
+        await safeSet(STORE_KEY_ENROLMENTS, state.enrolments);
+        await safeSet(STORE_KEY_COUNTERS, state.counters);
+        await logAudit('ENROL_STUDENT', 'enrolment', newEnrolment.id, `Enrolled ${newEnrolment.studentName} into ${newEnrolment.cohort}`, null, newEnrolment);
+
+        closeModal();
+        state.tab = 'studentAccounts';
+        render();
+      });
+    }
+
+    function renderStudentProfileModal(container, account) {
+      const isEnrolled = account.enrolments && account.enrolments.length > 0;
+      const latestEnrolment = isEnrolled ? account.enrolments[account.enrolments.length - 1] : null;
+
+      container.innerHTML = `
+        <div class="cp-modal-overlay">
+          <div class="cp-modal doc-modal">
+            <div class="cp-modal-header no-print">
+              <div class="cp-modal-title">&#x1F464; Student Lifecycle Profile &mdash; ${escapeHtml(account.clientName)}</div>
+              <button class="cp-modal-close" id="mClose">&times;</button>
+            </div>
+            <div class="cp-modal-body">
+              <div class="cp-doc-paper cp-printable-area">
+                <!-- Header -->
+                <div class="cp-doc-header">
+                  <div style="display:flex; align-items:center; gap:16px;">
+                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:48px; width:auto;" />
+                    <div>
+                      <div style="font-size:16px; font-weight:800; color:var(--primary);">CLASPTEK COACHING LIMITED</div>
+                      <div style="font-size:11px; color:var(--text-secondary);">Student Account &amp; Journey Profile &middot; clasptek.org</div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:18px; font-weight:900; color:var(--primary);">STUDENT PROFILE</div>
+                    <div style="font-size:12px; color:var(--text-secondary);">Generated: ${fmtDate(new Date().toISOString().slice(0, 10))}</div>
+                  </div>
+                </div>
+
+                <!-- 5-Stage Journey Progress -->
+                <div class="cp-journey-bar" style="margin:12px 0 20px;">
+                  <div class="cp-journey-step completed"><div class="cp-journey-dot">&#x2714;</div><div class="cp-journey-label">Enquiry</div></div>
+                  <div class="cp-journey-step completed"><div class="cp-journey-dot">&#x2714;</div><div class="cp-journey-label">Programme</div></div>
+                  <div class="cp-journey-step ${account.invoices.length > 0 ? 'completed' : ''}"><div class="cp-journey-dot">3</div><div class="cp-journey-label">Invoiced</div></div>
+                  <div class="cp-journey-step ${account.totalPaid > 0 ? (account.balance === 0 ? 'completed' : 'current') : ''}"><div class="cp-journey-dot">4</div><div class="cp-journey-label">Payment</div></div>
+                  <div class="cp-journey-step ${isEnrolled ? 'completed' : ''}"><div class="cp-journey-dot">5</div><div class="cp-journey-label">Enrolled</div></div>
+                </div>
+
+                <!-- Personal & Enrolment Information -->
+                <div class="cp-doc-meta-grid">
+                  <div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">PERSONAL / CONTACT:</div>
+                    <div style="font-size:15px; font-weight:800; color:var(--primary);">${escapeHtml(account.clientName)}</div>
+                    ${account.parentName ? `<div style="font-size:12px; color:var(--text-secondary);">Parent: ${escapeHtml(account.parentName)}</div>` : ''}
+                    <div style="font-size:12px;">Phone: <strong>${escapeHtml(account.phone || 'N/A')}</strong> &middot; Email: <strong>${escapeHtml(account.email || 'N/A')}</strong></div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div><strong>Enrolment Status:</strong> <span class="cp-pill ${isEnrolled ? 'enrolled' : 'new'}">${isEnrolled ? 'Enrolled' : 'Pre-Enrolment'}</span></div>
+                    ${latestEnrolment ? `<div><strong>Cohort:</strong> ${escapeHtml(latestEnrolment.cohort)} &middot; <strong>ID:</strong> ${escapeHtml(latestEnrolment.studentId || 'N/A')}</div>` : ''}
+                    <div style="font-size:13.5px; font-weight:800; color:${account.balance > 0 ? 'var(--warning)' : 'var(--success)'}; margin-top:4px;">
+                      Outstanding Balance: ${fmtMoney(account.balance)}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Invoices Table -->
+                <div style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:6px;">Invoices Issued</div>
+                <table class="cp-doc-table" style="margin-bottom:16px;">
+                  <thead><tr><th>Invoice #</th><th>Date</th><th>Programme</th><th style="text-align:right;">Total</th><th style="text-align:right;">Paid</th><th>Status</th></tr></thead>
+                  <tbody>
+                    ${account.invoices.map(i => `
+                      <tr>
+                        <td style="font-weight:700; font-family:monospace;">#${i.invoiceNo}</td>
+                        <td>${fmtDate(i.date)}</td>
+                        <td>${escapeHtml(i.programmeName)}</td>
+                        <td style="text-align:right;">${fmtMoney(i.total)}</td>
+                        <td style="text-align:right; color:var(--success); font-weight:600;">${fmtMoney(invoiceBalance(i).paid)}</td>
+                        <td><span class="cp-pill ${invoiceStatus(i)}">${invoiceStatus(i).toUpperCase()}</span></td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+
+                <!-- Payments Table -->
+                <div style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:6px;">Payments Received</div>
+                <table class="cp-doc-table">
+                  <thead><tr><th>Receipt #</th><th>Date</th><th>Method</th><th>Reference</th><th style="text-align:right;">Amount Paid</th></tr></thead>
+                  <tbody>
+                    ${account.payments.length === 0 ? '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No payments recorded.</td></tr>' : account.payments.map(p => `
+                      <tr>
+                        <td style="font-weight:700; font-family:monospace;">#${p.receiptNo}</td>
+                        <td>${fmtDate(p.date)}</td>
+                        <td>${escapeHtml(p.paymentMethod || 'Bank Transfer')}</td>
+                        <td style="font-family:monospace;">${escapeHtml(p.reference || '—')}</td>
+                        <td style="text-align:right; font-weight:700; color:var(--success);">${fmtMoney(p.amount)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="cp-modal-footer no-print">
+              <button class="cp-btn secondary" id="mCloseProf">Close</button>
+              ${!isEnrolled && canRecord() ? `<button class="cp-btn success" id="btnEnrolFromProfile">&#x1F393; Enrol Student</button>` : ''}
+              <button class="cp-btn primary" onclick="window.print();">&#x1F5A8; Print Statement</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('mClose').addEventListener('click', closeModal);
+      document.getElementById('mCloseProf').addEventListener('click', closeModal);
+
+      const btnEnrol = document.getElementById('btnEnrolFromProfile');
+      if (btnEnrol) {
+        btnEnrol.addEventListener('click', () => {
+          closeModal();
+          openModal('enrolStudent', { studentName: account.clientName, programmeName: account.programmesList });
+        });
+      }
+    }
+
+    // ----------------------------------------------------
+    // DOCUMENT MODALS: A4 INVOICES, RECEIPTS, PAYMENTS
     // ----------------------------------------------------
     function renderViewInvoiceModal(container, inv) {
       const { balance, paid, total } = invoiceBalance(inv);
@@ -3205,58 +3383,44 @@
         <div class="cp-modal-overlay">
           <div class="cp-modal doc-modal">
             <div class="cp-modal-header no-print">
-              <div class="cp-modal-title">&#x1F4C4; Clasptek Official Invoice &mdash; ${escapeHtml(docNo)}</div>
+              <div class="cp-modal-title">&#x1F4C4; Official Invoice &mdash; ${escapeHtml(docNo)}</div>
               <button class="cp-modal-close" id="mClose">&times;</button>
             </div>
             <div class="cp-modal-body">
               <div class="cp-doc-paper cp-printable-area">
-                <!-- Document Header -->
                 <div class="cp-doc-header">
                   <div style="display:flex; align-items:center; gap:16px;">
-                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; object-fit:contain;" />
+                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto;" />
                     <div>
-                      <div style="font-size:16px; font-weight:800; color:var(--primary); letter-spacing:-0.2px;">CLASPTEK COACHING LIMITED</div>
-                      <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.4; margin-top:2px;">
-                        1, Baptist Close Off Access Ibiyemi Avenue<br/>
-                        Access International School Bus-stop, Magboro, Ogun 110115 NG<br/>
+                      <div style="font-size:16px; font-weight:800; color:var(--primary);">CLASPTEK COACHING LIMITED</div>
+                      <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.4;">
+                        1, Baptist Close Off Access Ibiyemi Avenue, Magboro, Ogun 110115 NG<br/>
                         Phone: <strong>+2347041316925</strong> &middot; Email: <strong>info@clasptek.org</strong>
                       </div>
                     </div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:24px; font-weight:900; color:var(--primary); letter-spacing:1px;">INVOICE</div>
-                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace; margin-top:2px;">${escapeHtml(docNo)}</div>
+                    <div style="font-size:24px; font-weight:900; color:var(--primary);">INVOICE</div>
+                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace;">${escapeHtml(docNo)}</div>
                   </div>
                 </div>
 
-                <!-- Bill To & Document Metadata -->
                 <div class="cp-doc-meta-grid">
                   <div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">BILL TO:</div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">BILL TO:</div>
                     <div style="font-size:14px; font-weight:800; color:var(--primary);">${escapeHtml(inv.clientName)}</div>
-                    ${inv.parentName ? `<div style="font-size:12px; color:var(--text-secondary);">Parent/Guardian: ${escapeHtml(inv.parentName)}</div>` : ''}
-                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Phone: <strong>${escapeHtml(inv.phone || 'N/A')}</strong></div>
-                    <div style="font-size:12px; color:var(--text-secondary);">Email: <strong>${escapeHtml(inv.email || 'N/A')}</strong></div>
+                    ${inv.parentName ? `<div style="font-size:12px;">Parent/Guardian: ${escapeHtml(inv.parentName)}</div>` : ''}
+                    <div style="font-size:12px;">Phone: <strong>${escapeHtml(inv.phone || 'N/A')}</strong> &middot; Email: <strong>${escapeHtml(inv.email || 'N/A')}</strong></div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:12px; margin-bottom:3px;"><strong>Invoice Date:</strong> ${fmtDate(inv.date)}</div>
-                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Due Date:</strong> <span style="color:var(--accent); font-weight:700;">${fmtDate(inv.dueDate)}</span></div>
-                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Plan:</strong> ${inv.plan === 'installment' ? '60 / 40 Installment Schedule' : 'Full Upfront Payment'}</div>
-                    <div style="font-size:12px;"><strong>Invoice Status:</strong> <span class="cp-pill ${invoiceStatus(inv)}">${invoiceStatus(inv).toUpperCase()}</span></div>
+                    <div style="font-size:12px;"><strong>Invoice Date:</strong> ${fmtDate(inv.date)}</div>
+                    <div style="font-size:12px;"><strong>Due Date:</strong> <span style="color:var(--accent); font-weight:700;">${fmtDate(inv.dueDate)}</span></div>
+                    <div style="font-size:12px;"><strong>Plan:</strong> ${inv.plan === 'installment' ? '60 / 40 Installment Schedule' : 'Full Upfront Payment'}</div>
                   </div>
                 </div>
 
-                <!-- Multi-Item Line Table -->
                 <table class="cp-doc-table">
-                  <thead>
-                    <tr>
-                      <th style="width:50%;">ITEM</th>
-                      <th style="text-align:center; width:10%;">QUANTITY</th>
-                      <th style="text-align:right; width:15%;">PRICE</th>
-                      <th style="text-align:right; width:10%;">DISCOUNT</th>
-                      <th style="text-align:right; width:15%;">AMOUNT</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>ITEM</th><th style="text-align:center;">QTY</th><th style="text-align:right;">PRICE</th><th style="text-align:right;">DISCOUNT</th><th style="text-align:right;">AMOUNT</th></tr></thead>
                   <tbody>
                     ${items.map(it => `
                       <tr>
@@ -3270,7 +3434,6 @@
                   </tbody>
                 </table>
 
-                <!-- Financial Totals Block -->
                 <div class="cp-doc-totals">
                   <div class="cp-doc-totals-box">
                     <div class="cp-doc-total-row"><span>Subtotal:</span><span>${fmtMoney(subtotal)}</span></div>
@@ -3283,32 +3446,13 @@
                   </div>
                 </div>
 
-                <!-- Structured Programme & Payment Information -->
-                <div class="cp-doc-box">
-                  <div style="font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">&#x1F393; Programme &amp; Training Details</div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">
-                    <div><strong>Programme:</strong> ${escapeHtml(inv.programmeName)}</div>
-                    <div><strong>Duration:</strong> ${escapeHtml(inv.duration || '5 Months')}</div>
-                    <div><strong>Training Mode:</strong> ${escapeHtml(inv.trainingMode || 'Live Interactive Onsite Class')}</div>
-                    <div><strong>Lecture Schedule:</strong> ${escapeHtml(inv.schedule || 'Weekdays')}</div>
-                  </div>
-                </div>
-
-                <!-- Payment Instructions -->
                 <div class="cp-doc-box" style="border-left-color:var(--success);">
-                  <div style="font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">&#x1F3E6; Official Bank Payment Instructions</div>
+                  <div style="font-size:12.5px; font-weight:700; color:var(--primary); margin-bottom:4px;">&#x1F3E6; Official Bank Payment Details</div>
                   <div style="font-size:12px; line-height:1.5;">
-                    Bank Name: <strong>Guaranty Trust Bank (GTBank)</strong> &middot; Account Number: <strong style="font-family:monospace; font-size:13px;">0849201938</strong> &middot; Account Name: <strong>Clasptek Coaching Limited</strong><br/>
-                    <em>Kindly use Student Name (${escapeHtml(inv.clientName)}) or Invoice #${inv.invoiceNo} as transaction reference.</em>
+                    Bank: <strong>Guaranty Trust Bank (GTBank)</strong> &middot; Account Number: <strong style="font-family:monospace; font-size:13px;">0849201938</strong> &middot; Name: <strong>Clasptek Coaching Limited</strong>
                   </div>
                 </div>
 
-                <!-- Important Notes & Terms -->
-                <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.5; margin-bottom:14px;">
-                  <strong>Important Information:</strong> Once payment is confirmed, onboarding materials, curriculum schedules, and student credentials will be shared. Kindly send proof of payment via WhatsApp or email to <strong>info@clasptek.org</strong>.
-                </div>
-
-                <!-- Document Footer & Authorization -->
                 <div class="cp-doc-footer">
                   <div>
                     <div style="font-weight:700; color:var(--primary);">Thank you for choosing Clasptek Coaching Limited!</div>
@@ -3316,7 +3460,7 @@
                   </div>
                   <div style="text-align:right;">
                     <div style="font-size:11.5px; font-weight:700; color:var(--primary);">Authorized Signatory</div>
-                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(inv.createdBy || 'Finance Operations')} &middot; Clasptek Finance</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${escapeHtml(inv.createdBy || 'Finance Operations')}</div>
                   </div>
                 </div>
               </div>
@@ -3342,12 +3486,9 @@
       }
     }
 
-    // ----------------------------------------------------
-    // PROFESSIONAL A4 RECEIPT VIEWER & DOCUMENT ENGINE
-    // ----------------------------------------------------
     function renderViewReceiptModal(container, payment, invoice) {
       const inv = invoice || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student', total: payment.amount };
-      const { balance, total, paid } = invoiceBalance(inv);
+      const { balance, total } = invoiceBalance(inv);
       const receiptDisplayNo = formatDocNo('receipt', payment.receiptNo, payment.date);
 
       container.innerHTML = `
@@ -3359,54 +3500,38 @@
             </div>
             <div class="cp-modal-body">
               <div class="cp-doc-paper cp-printable-area">
-                <!-- Header -->
                 <div class="cp-doc-header">
                   <div style="display:flex; align-items:center; gap:16px;">
-                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; object-fit:contain;" />
+                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto;" />
                     <div>
-                      <div style="font-size:16px; font-weight:800; color:var(--primary); letter-spacing:-0.2px;">CLASPTEK COACHING LIMITED</div>
-                      <div style="font-size:11.5px; color:var(--text-secondary); line-height:1.4; margin-top:2px;">
-                        1, Baptist Close Off Access Ibiyemi Avenue<br/>
-                        Access International School Bus-stop, Magboro, Ogun 110115 NG<br/>
-                        Phone: <strong>+2347041316925</strong> &middot; Email: <strong>info@clasptek.org</strong>
-                      </div>
+                      <div style="font-size:16px; font-weight:800; color:var(--primary);">CLASPTEK COACHING LIMITED</div>
+                      <div style="font-size:11.5px; color:var(--text-secondary);">1, Baptist Close Off Access Ibiyemi Avenue, Magboro, Ogun 110115 NG</div>
                     </div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:24px; font-weight:900; color:var(--success); letter-spacing:1px;">OFFICIAL RECEIPT</div>
-                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace; margin-top:2px;">${escapeHtml(receiptDisplayNo)}</div>
-                    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Payment Date: <strong>${fmtDate(payment.date)}</strong></div>
+                    <div style="font-size:24px; font-weight:900; color:var(--success);">OFFICIAL RECEIPT</div>
+                    <div style="font-size:13.5px; font-weight:700; color:var(--accent); font-family:monospace;">${escapeHtml(receiptDisplayNo)}</div>
                   </div>
                 </div>
 
-                <!-- Received From & Payment Metadata -->
                 <div class="cp-doc-meta-grid">
                   <div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">RECEIVED FROM:</div>
+                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">RECEIVED FROM:</div>
                     <div style="font-size:14px; font-weight:800; color:var(--primary);">${escapeHtml(inv.clientName)}</div>
-                    <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Phone: <strong>${escapeHtml(inv.phone || 'N/A')}</strong> &middot; Email: <strong>${escapeHtml(inv.email || 'N/A')}</strong></div>
-                    <div style="font-size:12px; color:var(--text-secondary);">Applied Target: <strong>Invoice #${inv.invoiceNo} &mdash; ${escapeHtml(inv.programmeName)}</strong></div>
+                    <div>Applied to: <strong>Invoice #${inv.invoiceNo} &mdash; ${escapeHtml(inv.programmeName)}</strong></div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:12px; margin-bottom:3px;"><strong>Payment Method:</strong> ${escapeHtml(payment.paymentMethod || 'Bank Transfer')}</div>
-                    <div style="font-size:12px; margin-bottom:3px;"><strong>Transaction Ref:</strong> <span style="font-family:monospace; font-weight:700;">${escapeHtml(payment.reference || '—')}</span></div>
-                    <div style="font-size:12px;"><strong>Reconciliation:</strong> <span class="cp-pill ${payment.reconciliationStatus === 'reconciled' ? 'reconciled' : 'unreconciled'}">${(payment.reconciliationStatus || 'recorded').toUpperCase()}</span></div>
+                    <div><strong>Payment Method:</strong> ${escapeHtml(payment.paymentMethod || 'Bank Transfer')}</div>
+                    <div><strong>Reference:</strong> <span style="font-family:monospace; font-weight:700;">${escapeHtml(payment.reference || '—')}</span></div>
+                    <div><strong>Payment Date:</strong> ${fmtDate(payment.date)}</div>
                   </div>
                 </div>
 
-                <!-- Amount Breakdown Table -->
                 <table class="cp-doc-table">
-                  <thead>
-                    <tr>
-                      <th>PAYMENT DESCRIPTION</th>
-                      <th style="text-align:right;">TOTAL INVOICED</th>
-                      <th style="text-align:right;">AMOUNT PAID</th>
-                      <th style="text-align:right;">OUTSTANDING BALANCE</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>PAYMENT DESCRIPTION</th><th style="text-align:right;">TOTAL INVOICED</th><th style="text-align:right;">AMOUNT PAID</th><th style="text-align:right;">OUTSTANDING BALANCE</th></tr></thead>
                   <tbody>
                     <tr>
-                      <td style="font-weight:600;">Tuition / Service Fee Payment (${escapeHtml(inv.programmeName)})</td>
+                      <td style="font-weight:600;">Tuition / Fee Payment (${escapeHtml(inv.programmeName)})</td>
                       <td style="text-align:right;">${fmtMoney(total)}</td>
                       <td style="text-align:right; font-weight:800; color:var(--success); font-size:13.5px;">${fmtMoney(payment.amount)}</td>
                       <td style="text-align:right; font-weight:700; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(balance)}</td>
@@ -3414,19 +3539,6 @@
                   </tbody>
                 </table>
 
-                <!-- Summary Box -->
-                <div class="cp-doc-box" style="border-left-color:var(--success); display:flex; justify-content:space-between; align-items:center;">
-                  <div>
-                    <div style="font-size:13px; font-weight:700; color:var(--primary);">Payment Confirmation Notice</div>
-                    <div style="font-size:11.5px; color:var(--text-secondary);">This document serves as authoritative proof of payment received by Clasptek Coaching Limited.</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style="font-size:11px; color:var(--text-secondary);">CONFIRMED AMOUNT</div>
-                    <div style="font-size:18px; font-weight:900; color:var(--success);">${fmtMoney(payment.amount)}</div>
-                  </div>
-                </div>
-
-                <!-- Document Footer -->
                 <div class="cp-doc-footer">
                   <div>
                     <div style="font-weight:700; color:var(--primary);">Thank you for choosing Clasptek Coaching Limited!</div>
@@ -3434,7 +3546,7 @@
                   </div>
                   <div style="text-align:right;">
                     <div style="font-size:11.5px; font-weight:700; color:var(--primary);">Authorized Finance Operations</div>
-                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(payment.createdBy || 'Finance Operations')} &middot; Clasptek Finance</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${escapeHtml(payment.createdBy || 'Finance Operations')}</div>
                   </div>
                 </div>
               </div>
@@ -3451,9 +3563,6 @@
       document.getElementById('mCloseRec').addEventListener('click', closeModal);
     }
 
-    // ----------------------------------------------------
-    // OTHER OPERATIONAL MODALS
-    // ----------------------------------------------------
     function renderRecordPaymentModal(container, inv) {
       const { balance, total, paid } = invoiceBalance(inv);
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -3678,97 +3787,8 @@
       });
     }
 
-    function renderStudentStatementModal(container, account) {
-      container.innerHTML = `
-        <div class="cp-modal-overlay">
-          <div class="cp-modal doc-modal">
-            <div class="cp-modal-header no-print">
-              <div class="cp-modal-title">&#x1F4D3; Official Student Account Statement &mdash; ${escapeHtml(account.clientName)}</div>
-              <button class="cp-modal-close" id="mClose">&times;</button>
-            </div>
-            <div class="cp-modal-body">
-              <div class="cp-doc-paper cp-printable-area">
-                <div class="cp-doc-header">
-                  <div style="display:flex; align-items:center; gap:16px;">
-                    <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; object-fit:contain;" />
-                    <div>
-                      <div style="font-size:16px; font-weight:800; color:var(--primary);">CLASPTEK COACHING LIMITED</div>
-                      <div style="font-size:11.5px; color:var(--text-secondary);">1, Baptist Close Off Access Ibiyemi Avenue, Magboro, Ogun NG</div>
-                    </div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style="font-size:22px; font-weight:900; color:var(--primary);">STUDENT STATEMENT</div>
-                    <div style="font-size:12px; color:var(--text-secondary);">Date: ${fmtDate(new Date().toISOString().slice(0, 10))}</div>
-                  </div>
-                </div>
-
-                <div class="cp-doc-meta-grid">
-                  <div>
-                    <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">STUDENT:</div>
-                    <div style="font-size:14px; font-weight:800; color:var(--primary);">${escapeHtml(account.clientName)}</div>
-                    <div>Phone: ${escapeHtml(account.phone || 'N/A')} &middot; Email: ${escapeHtml(account.email || 'N/A')}</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div><strong>Total Invoiced:</strong> ${fmtMoney(account.totalInvoiced)}</div>
-                    <div><strong>Total Paid:</strong> <span style="color:var(--success); font-weight:700;">${fmtMoney(account.totalPaid)}</span></div>
-                    <div style="font-size:13.5px; font-weight:800; color:${account.balance > 0 ? 'var(--warning)' : 'var(--success)'};">
-                      Balance Due: ${fmtMoney(account.balance)}
-                    </div>
-                  </div>
-                </div>
-
-                <div style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:6px;">Invoices &amp; Charges</div>
-                <table class="cp-doc-table" style="margin-bottom:18px;">
-                  <thead>
-                    <tr><th>Invoice #</th><th>Date</th><th>Programme</th><th style="text-align:right;">Amount</th><th>Status</th></tr>
-                  </thead>
-                  <tbody>
-                    ${account.invoices.map(i => `
-                      <tr>
-                        <td style="font-weight:700; font-family:monospace;">#${i.invoiceNo}</td>
-                        <td>${fmtDate(i.date)}</td>
-                        <td>${escapeHtml(i.programmeName)}</td>
-                        <td style="text-align:right; font-weight:700;">${fmtMoney(i.total)}</td>
-                        <td><span class="cp-pill ${invoiceStatus(i)}">${invoiceStatus(i).toUpperCase()}</span></td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-
-                <div style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:6px;">Recorded Payments</div>
-                <table class="cp-doc-table">
-                  <thead>
-                    <tr><th>Receipt #</th><th>Date</th><th>Method</th><th>Reference</th><th style="text-align:right;">Amount Paid</th></tr>
-                  </thead>
-                  <tbody>
-                    ${account.payments.length === 0 ? '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No payments recorded.</td></tr>' : account.payments.map(p => `
-                      <tr>
-                        <td style="font-weight:700; font-family:monospace;">#${p.receiptNo}</td>
-                        <td>${fmtDate(p.date)}</td>
-                        <td>${escapeHtml(p.paymentMethod || 'Bank Transfer')}</td>
-                        <td style="font-family:monospace; font-size:11.5px;">${escapeHtml(p.reference || '—')}</td>
-                        <td style="text-align:right; font-weight:700; color:var(--success);">${fmtMoney(p.amount)}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div class="cp-modal-footer no-print">
-              <button class="cp-btn secondary" id="mCloseStat">Close</button>
-              <button class="cp-btn primary" onclick="window.print();">&#x1F5A8; Print Statement</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById('mClose').addEventListener('click', closeModal);
-      document.getElementById('mCloseStat').addEventListener('click', closeModal);
-    }
-
     function renderSendReminderModal(container, inv) {
       const { balance } = invoiceBalance(inv);
-      const todayStr = new Date().toISOString().slice(0, 10);
 
       container.innerHTML = `
         <div class="cp-modal-overlay">
@@ -3779,10 +3799,8 @@
             </div>
             <div class="cp-modal-body">
               <div style="background:var(--surface-2); padding:12px; border-radius:var(--radius-sm); margin-bottom:14px; font-size:12.5px;">
-                <strong>Student:</strong> ${escapeHtml(inv.clientName)} &middot; <strong>Phone:</strong> ${escapeHtml(inv.phone || 'N/A')}<br/>
-                <strong>Outstanding Balance:</strong> ${fmtMoney(balance)} &middot; <strong>Due Date:</strong> ${fmtDate(inv.dueDate)}
+                <strong>Student:</strong> ${escapeHtml(inv.clientName)} &middot; <strong>Outstanding:</strong> ${fmtMoney(balance)}
               </div>
-
               <div class="cp-field"><label>Reminder Channel</label><select id="remChannel"><option value="WhatsApp">WhatsApp</option><option value="Email">Email</option><option value="SMS">SMS</option><option value="Phone Call">Phone Call</option></select></div>
               <div class="cp-field"><label>Message Content</label><textarea id="remMsg" rows="4">Dear ${inv.clientName}, kindly be reminded that your tuition balance of ${fmtMoney(balance)} for ${inv.programmeName} is due. Official Payment Details: GTBank 0849201938 (Clasptek Coaching Limited). Thank you!</textarea></div>
             </div>
@@ -3820,7 +3838,7 @@
         <div class="cp-modal-overlay">
           <div class="cp-modal">
             <div class="cp-modal-header">
-              <div class="cp-modal-title">&#x1F4DD; Collection Notes &mdash; Invoice #${inv.invoiceNo}</div>
+              <div class="cp-modal-title">&#x1F4DD; Follow-up &amp; Collection Notes &mdash; Invoice #${inv.invoiceNo}</div>
               <button class="cp-modal-close" id="mClose">&times;</button>
             </div>
             <div class="cp-modal-body">
@@ -3829,14 +3847,14 @@
               </div>
 
               <div class="cp-field">
-                <label>Add New Note / Follow-up Record</label>
-                <textarea id="newCollNote" rows="2" placeholder="e.g. Student promised to pay 50% balance by Friday via bank transfer."></textarea>
+                <label>Add New Follow-up Note</label>
+                <textarea id="newCollNote" rows="2" placeholder="e.g. Spoke with student via phone; promised ₦100,000 transfer by Friday."></textarea>
               </div>
               <button class="cp-btn secondary sm" id="btnAddCollNoteBtn" style="margin-bottom:14px;">+ Add Note</button>
 
-              <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:6px; text-transform:uppercase;">Note History</div>
+              <div style="font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:6px; text-transform:uppercase;">Communication History</div>
               <div style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px;">
-                ${notes.length === 0 ? '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:12px;">No notes recorded.</div>' : notes.slice().reverse().map(n => `
+                ${notes.length === 0 ? '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:12px;">No follow-up notes recorded.</div>' : notes.slice().reverse().map(n => `
                   <div style="padding:6px 0; border-bottom:1px solid var(--border); font-size:12px;">
                     <div>${escapeHtml(n.note)}</div>
                     <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">${n.createdBy || 'Staff'} &middot; ${fmtDate((n.createdAt || '').slice(0, 10))}</div>
@@ -3865,7 +3883,7 @@
             createdBy: state.auth.user ? state.auth.user.name : 'Staff'
           });
           await safeSet(STORE_KEY_COLLECTION_NOTES, state.collectionNotes);
-          await logAudit('ADD_COLLECTION_NOTE', 'invoice', inv.id, text);
+          await logAudit('ADD_FOLLOWUP', 'invoice', inv.id, text);
           renderCollectionNotesModal(container, inv);
         }
       });
@@ -3901,12 +3919,7 @@
         const name = document.getElementById('newProgName').value.trim();
         const price = Number(document.getElementById('newProgPrice').value || 0);
         if (name && price > 0) {
-          const prog = {
-            id: 'prog_' + Date.now(),
-            name,
-            price,
-            category: document.getElementById('newProgCat').value.trim() || 'Academic'
-          };
+          const prog = { id: 'prog_' + Date.now(), name, price, category: document.getElementById('newProgCat').value.trim() || 'Academic' };
           state.programmes.push(prog);
           await safeSet(STORE_KEY_PROGRAMMES, state.programmes);
           await logAudit('ADD_PROGRAMME', 'programme', prog.id, prog.name);
@@ -3991,7 +4004,6 @@
           const idx = state.budgets.findIndex(b => b.category === cat && b.department === dept);
           if (idx >= 0) state.budgets[idx].amount = amt;
           else state.budgets.push({ id: 'bdg_' + Date.now(), category: cat, department: dept, amount: amt, period: curPeriod });
-
           await safeSet(STORE_KEY_BUDGETS, state.budgets);
           await logAudit('SET_BUDGET', 'budget', cat, `${cat} cap ${amt}`);
           closeModal();
@@ -4044,35 +4056,22 @@
         <div class="cp-modal-overlay">
           <div class="cp-modal large">
             <div class="cp-modal-header">
-              <div class="cp-modal-title">&#x26A1; Supabase Connection &amp; Pre-Flight Verification</div>
+              <div class="cp-modal-title">&#x26A1; Supabase Connection &amp; Migration Diagnostic</div>
               <button class="cp-modal-close" id="mClose">&times;</button>
             </div>
             <div class="cp-modal-body">
               <div style="background:var(--surface-2); padding:14px; border-radius:var(--radius-sm); margin-bottom:16px;">
                 <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:4px;">Live REST Endpoint:</div>
                 <div style="font-family:monospace; font-size:12px; word-break:break-all;">${escapeHtml(state.supabase.endpoint)}</div>
-                <div style="font-size:11.5px; color:var(--text-secondary); margin-top:4px;">
-                  Tenant Isolation: <strong>${DEFAULT_TENANT_ID}</strong> &middot; Authentication: <strong>Enforced</strong>
-                </div>
               </div>
-
-              <div class="cp-field">
-                <label>Anon Public Key (Optional for live probe)</label>
-                <input id="sbAnonKeyInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="${escapeHtml(state.supabase.anonKey)}" />
-              </div>
-
-              <button class="cp-btn secondary sm" id="btnRunSbProbe" style="margin-bottom:16px;">&#x1F504; Test Live REST Connectivity</button>
-              <div id="sbProbeResult" style="display:none; padding:10px; border-radius:var(--radius-sm); margin-bottom:16px; font-size:12px;"></div>
-
-              <div style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:8px;">Pre-Migration Record Inventory</div>
               <div class="cp-table-wrap">
                 <table class="cp-table" style="font-size:12px;">
-                  <thead><tr><th>Entity</th><th>Record Count</th><th>Calculated Total</th></tr></thead>
+                  <thead><tr><th>Entity</th><th>Record Count</th><th>Calculated Financial Total</th></tr></thead>
                   <tbody>
                     <tr><td>Invoices</td><td>${state.invoices.length}</td><td style="text-align:right; font-weight:700;">${fmtMoney(state.invoices.reduce((s, i) => s + Number(i.total || 0), 0))}</td></tr>
                     <tr><td>Payments</td><td>${state.payments.length}</td><td style="text-align:right; font-weight:700; color:var(--success);">${fmtMoney(state.payments.reduce((s, p) => s + Number(p.amount || 0), 0))}</td></tr>
-                    <tr><td>Expenses</td><td>${state.expenses.length}</td><td style="text-align:right; font-weight:700; color:var(--danger);">${fmtMoney(state.expenses.reduce((s, e) => s + Number(e.amount || 0), 0))}</td></tr>
-                    <tr><td>Programmes</td><td>${state.programmes.length}</td><td style="text-align:right;">—</td></tr>
+                    <tr><td>Enquiries</td><td>${state.enquiries.length}</td><td style="text-align:right;">—</td></tr>
+                    <tr><td>Enrolments</td><td>${state.enrolments.length}</td><td style="text-align:right;">—</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -4086,28 +4085,6 @@
 
       document.getElementById('mClose').addEventListener('click', closeModal);
       document.getElementById('mCloseSb').addEventListener('click', closeModal);
-
-      document.getElementById('btnRunSbProbe').addEventListener('click', async () => {
-        const key = document.getElementById('sbAnonKeyInput').value.trim();
-        const resBox = document.getElementById('sbProbeResult');
-        resBox.style.display = 'block';
-        resBox.style.background = 'var(--surface-2)';
-        resBox.textContent = 'Probing Supabase REST Endpoint...';
-
-        const result = await supabaseProbe(state.supabase.endpoint, key);
-        if (result.success) {
-          resBox.style.background = 'var(--success-bg)';
-          resBox.style.color = 'var(--success)';
-          resBox.textContent = '✓ ' + result.message;
-          state.supabase.status = 'connected';
-          state.supabase.anonKey = key;
-          await safeSet(STORE_KEY_SUPABASE_CONFIG, state.supabase);
-        } else {
-          resBox.style.background = 'var(--warning-bg)';
-          resBox.style.color = 'var(--warning)';
-          resBox.textContent = '! ' + result.message + ' (Operating safely in Local Mode)';
-        }
-      });
     }
 
     // ----------------------------------------------------
