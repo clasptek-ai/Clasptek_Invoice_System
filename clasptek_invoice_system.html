@@ -926,7 +926,7 @@ function getReceivableAgeing(inv) {
 }
 
 // ----------------------------------------------------
-// PAYSLIP & EXPENSE INTEGRATION ENGINE (PHASE 8)
+// PAYSLIP & EXPENSE INTEGRATION ENGINE (PHASE 8 MULTI-STAGE PAYROLL WORKFLOW)
 // ----------------------------------------------------
 function calculatePayslipTotals(basicPay, allowances = [], deductions = []) {
   const basic = Number(basicPay) || 0;
@@ -938,7 +938,12 @@ function calculatePayslipTotals(basicPay, allowances = [], deductions = []) {
 }
 
 async function integratePayslipExpense(payslip) {
-  // Prevent duplicate expense integration
+  // CRITICAL: Only create expense when payslip is actually PAID
+  if (payslip.status !== 'paid') {
+    console.warn('Attempted to integrate expense for unpaid payslip', payslip.payslipNo);
+    return null;
+  }
+
   const payslipRef = 'PAYSLIP-' + payslip.payslipNo;
   const existing = state.expenses.find(e => 
     (e.sourceId && e.sourceId === payslip.id) ||
@@ -959,17 +964,17 @@ async function integratePayslipExpense(payslip) {
     sourceId: payslip.id,
     sourceReference: payslipRef,
     reference: payslipRef,
-    date: payslip.payDate || new Date().toISOString().slice(0, 10),
+    date: payslip.actualPaymentDate || payslip.payDate || new Date().toISOString().slice(0, 10),
     categoryGroup: 'Staff & People',
     category: expenseCat,
     description: `Payroll Disbursement: ${payslip.employeeName} (${payslip.payPeriod}) - ${payslip.role}`,
     vendor: payslip.employeeName,
     department: payslip.department || 'Academics',
-    amount: payslip.netPay,
+    amount: payslip.paidAmount || payslip.netPay,
     paymentMethod: payslip.paymentMethod || 'Bank Transfer',
     status: 'approved',
-    approvedBy: state.auth.user ? state.auth.user.name : 'Finance Operations',
-    approvedAt: new Date().toISOString(),
+    approvedBy: payslip.approvedBy || (state.auth.user ? state.auth.user.name : 'Finance Operations'),
+    approvedAt: payslip.approvedAt || new Date().toISOString(),
     createdAt: new Date().toISOString(),
     createdBy: state.auth.user ? state.auth.user.name : 'Finance Operations'
   };
@@ -979,7 +984,7 @@ async function integratePayslipExpense(payslip) {
 
   await safeSet(STORE_KEY_EXPENSES, state.expenses);
   await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
-  await logAudit('PAYSLIP_EXPENSE_INTEGRATION', 'expense', newExpense.id, `Linked ${payslipRef} as ${expenseCat} expense (₦${payslip.netPay})`, null, newExpense);
+  await logAudit('PAYSLIP_EXPENSE_INTEGRATION', 'expense', newExpense.id, `Linked ${payslipRef} as ${expenseCat} expense (₦${newExpense.amount})`, null, newExpense);
 
   return newExpense;
 }
@@ -1007,9 +1012,13 @@ function getFinancialMetrics() {
 
   const collectionRate = totalInvoiced > 0 ? safeRound((totalPaymentsReceived / totalInvoiced) * 100) : 100;
 
-  // Payroll KPI Metrics
-  const totalPayrollDisbursed = safeRound(state.payslips.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.netPay || 0), 0));
-  const pendingPayrollApproval = safeRound(state.payslips.filter(p => p.status === 'draft').reduce((s, p) => s + Number(p.netPay || 0), 0));
+  // Multi-Stage Payroll KPI Metrics
+  const totalPayrollDisbursed = safeRound(state.payslips.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.paidAmount || p.netPay || 0), 0));
+  const awaitingMonthEndPayment = safeRound(state.payslips.filter(p => p.status === 'approved').reduce((s, p) => s + Number(p.netPay || 0), 0));
+  const pendingApproval = safeRound(state.payslips.filter(p => p.status === 'acknowledged').reduce((s, p) => s + Number(p.netPay || 0), 0));
+  const pendingAcknowledgement = safeRound(state.payslips.filter(p => p.status === 'issued').reduce((s, p) => s + Number(p.netPay || 0), 0));
+  const draftPayroll = safeRound(state.payslips.filter(p => p.status === 'draft').reduce((s, p) => s + Number(p.netPay || 0), 0));
+  const openQueriesCount = state.payslips.filter(p => p.queries && p.queries.some(q => q.status === 'open' || q.status === 'under_review')).length;
 
   // Pipeline Conversion Analytics
   const totalEnquiries = state.enquiries.length;
@@ -1042,8 +1051,13 @@ function getFinancialMetrics() {
     collectionRate,
     payroll: {
       totalDisbursed: totalPayrollDisbursed,
-      pendingApproval: pendingPayrollApproval,
-      paidPayslipsCount: state.payslips.filter(p => p.status === 'paid').length
+      awaitingPayment: awaitingMonthEndPayment,
+      pendingApproval,
+      pendingAcknowledgement,
+      draftPayroll,
+      openQueriesCount,
+      paidPayslipsCount: state.payslips.filter(p => p.status === 'paid').length,
+      approvedPayslipsCount: state.payslips.filter(p => p.status === 'approved').length
     },
     pipeline: {
       totalEnquiries,
@@ -1666,6 +1680,9 @@ function renderModal(type, data) {
   else if (type === 'viewReceipt') renderViewReceiptModal(container, data.payment, data.invoice);
   else if (type === 'generatePayslip') renderGeneratePayslipModal(container, data);
   else if (type === 'viewPayslip') renderViewPayslipModal(container, data.payslip);
+  else if (type === 'acknowledgePayslip') renderAcknowledgePayslipModal(container, data.payslip);
+  else if (type === 'raisePayrollQuery') renderRaisePayrollQueryModal(container, data.payslip);
+  else if (type === 'resolvePayrollQuery') renderResolvePayrollQueryModal(container, data.payslip);
   else if (type === 'approvePayslip') renderApprovePayslipModal(container, data.payslip);
   else if (type === 'payPayslip') renderPayPayslipModal(container, data.payslip);
   else if (type === 'cancelPayslip') renderCancelPayslipModal(container, data.payslip);
@@ -1699,7 +1716,7 @@ function renderDashboardTab(container) {
       <div class="cp-kpi-card">
         <div class="cp-kpi-label">Operational Expenses</div>
         <div class="cp-kpi-val" style="color:var(--danger);">${fmtMoney(m.totalExpenses)}</div>
-        <div class="cp-kpi-sub">Approved &amp; Disbursed Operations</div>
+        <div class="cp-kpi-sub">Disbursed Operating Cashflow</div>
       </div>
       <div class="cp-kpi-card">
         <div class="cp-kpi-label">Net Financial Position</div>
@@ -1707,9 +1724,9 @@ function renderDashboardTab(container) {
         <div class="cp-kpi-sub">Operating Margin: ${m.totalIncomeReceived > 0 ? safeRound((m.netFinancialPosition / m.totalIncomeReceived) * 100) : 0}%</div>
       </div>
       <div class="cp-kpi-card">
-        <div class="cp-kpi-label">Total Payroll Disbursed</div>
-        <div class="cp-kpi-val" style="color:var(--primary);">${fmtMoney(m.payroll.totalDisbursed)}</div>
-        <div class="cp-kpi-sub">Pending Approval: <strong style="color:var(--warning);">${fmtMoney(m.payroll.pendingApproval)}</strong></div>
+        <div class="cp-kpi-label">Payroll Awaiting Month-End Pay</div>
+        <div class="cp-kpi-val" style="color:var(--warning);">${fmtMoney(m.payroll.awaitingPayment)}</div>
+        <div class="cp-kpi-sub">Approved Liabilities &middot; Disbursed: <strong>${fmtMoney(m.payroll.totalDisbursed)}</strong></div>
       </div>
     </div>
 
@@ -2678,7 +2695,7 @@ function renderPaymentsTab(container) {
 }
 
 // ----------------------------------------------------
-// TAB 6: STAFF & FACILITATOR PAYSLIPS (PHASE 8 COMPLETE)
+// TAB 6: STAFF & FACILITATOR PAYSLIPS (PHASE 8 MULTI-STAGE LIFECYCLE)
 // ----------------------------------------------------
 function renderPayslipsTab(container) {
   const q = (state.filters.payslipSearch || '').toLowerCase();
@@ -2690,50 +2707,68 @@ function renderPayslipsTab(container) {
     const matchesQ = ps.employeeName.toLowerCase().includes(q) || String(ps.payslipNo).includes(q) || (ps.role && ps.role.toLowerCase().includes(q));
     const matchesPeriod = !periodFilter || ps.payPeriod === periodFilter;
     const matchesType = typeFilter === 'all' || ps.employeeType === typeFilter;
-    const matchesStatus = statusFilter === 'all' || ps.status === statusFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter === 'has_query') {
+      matchesStatus = ps.queries && ps.queries.some(query => query.status === 'open' || query.status === 'under_review');
+    } else if (statusFilter !== 'all') {
+      matchesStatus = ps.status === statusFilter;
+    }
+
     return matchesQ && matchesPeriod && matchesType && matchesStatus;
   });
 
-  const totalDisbursed = safeRound(state.payslips.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.netPay || 0), 0));
-  const pendingApproval = safeRound(state.payslips.filter(p => p.status === 'draft').reduce((s, p) => s + Number(p.netPay || 0), 0));
-  const awaitingDisbursement = safeRound(state.payslips.filter(p => p.status === 'approved').reduce((s, p) => s + Number(p.netPay || 0), 0));
-  const staffCount = state.personnel.filter(p => p.type === 'staff').length;
-  const facilitatorCount = state.personnel.filter(p => p.type === 'facilitator').length;
+  const m = getFinancialMetrics();
+  const payM = m.payroll;
 
   container.innerHTML = `
-    <!-- Top KPI Grid -->
-    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:18px;">
+    <!-- Top KPI Grid: Multi-Stage Workflow Overview -->
+    <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-bottom:18px;">
       <div class="cp-kpi-card" style="padding:12px 14px;">
-        <div class="cp-kpi-label">Total Disbursed</div>
-        <div class="cp-kpi-val" style="font-size:20px; color:var(--success);">${fmtMoney(totalDisbursed)}</div>
-        <div class="cp-kpi-sub">Approved &amp; Paid Payroll</div>
+        <div class="cp-kpi-label">1. In Preparation</div>
+        <div class="cp-kpi-val" style="font-size:18px; color:var(--text-secondary);">${fmtMoney(payM.draftPayroll)}</div>
+        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'draft').length} Drafts</div>
       </div>
       <div class="cp-kpi-card" style="padding:12px 14px;">
-        <div class="cp-kpi-label">Pending Approval</div>
-        <div class="cp-kpi-val" style="font-size:20px; color:var(--warning);">${fmtMoney(pendingApproval)}</div>
-        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'draft').length} Draft Payslips</div>
+        <div class="cp-kpi-label">2. Issued (Review)</div>
+        <div class="cp-kpi-val" style="font-size:18px; color:var(--info);">${fmtMoney(payM.pendingAcknowledgement)}</div>
+        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'issued').length} Awaiting Acknowledged</div>
       </div>
       <div class="cp-kpi-card" style="padding:12px 14px;">
-        <div class="cp-kpi-label">Awaiting Payment</div>
-        <div class="cp-kpi-val" style="font-size:20px; color:var(--info);">${fmtMoney(awaitingDisbursement)}</div>
-        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'approved').length} Approved Awaiting Pay</div>
+        <div class="cp-kpi-label">3. Acknowledged</div>
+        <div class="cp-kpi-val" style="font-size:18px; color:var(--primary);">${fmtMoney(payM.pendingApproval)}</div>
+        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'acknowledged').length} Pending Approval</div>
       </div>
-      <div class="cp-kpi-card" style="padding:12px 14px;">
-        <div class="cp-kpi-label">Active Personnel</div>
-        <div class="cp-kpi-val" style="font-size:20px; color:var(--primary);">${staffCount + facilitatorCount}</div>
-        <div class="cp-kpi-sub">${staffCount} Staff &middot; ${facilitatorCount} Facilitators</div>
+      <div class="cp-kpi-card" style="padding:12px 14px; border:1.5px solid var(--warning);">
+        <div class="cp-kpi-label" style="color:var(--warning);">4. Awaiting Month-End Pay</div>
+        <div class="cp-kpi-val" style="font-size:18px; color:var(--warning);">${fmtMoney(payM.awaitingPayment)}</div>
+        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'approved').length} Approved Liabilities</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px; border:1.5px solid var(--success);">
+        <div class="cp-kpi-label" style="color:var(--success);">5. Paid / Disbursed</div>
+        <div class="cp-kpi-val" style="font-size:18px; color:var(--success);">${fmtMoney(payM.totalDisbursed)}</div>
+        <div class="cp-kpi-sub">${state.payslips.filter(p => p.status === 'paid').length} Finalized Payments</div>
       </div>
     </div>
+
+    ${payM.openQueriesCount > 0 ? `
+      <div style="background:#FFFBEB; border:1.5px solid var(--warning); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:#92400E;">
+        <div>
+          &#x26A0;&#xFE0F; <strong>Active Payroll Queries:</strong> There are <strong>${payM.openQueriesCount}</strong> payslip(s) with open employee/facilitator queries awaiting review. Approval is blocked until queries are resolved.
+        </div>
+        <button class="cp-btn sm secondary" id="btnFilterOpenQueries" style="border-color:var(--warning); color:#92400E;">View Open Queries</button>
+      </div>
+    ` : ''}
 
     <div class="cp-card">
       <div class="cp-card-header">
         <div>
-          <div class="cp-section-title">&#x1F4B3; Staff &amp; Facilitator Payslips</div>
-          <div class="cp-section-desc">Generate monthly payroll, approve compensation, print confidential payslips, and integrate expenses with zero double-counting.</div>
+          <div class="cp-section-title">&#x1F4B3; Staff &amp; Facilitator Payroll Workspace</div>
+          <div class="cp-section-desc">Generate pre-payment payslips, collect employee review &amp; acknowledgements, authorize finance approvals, and disburse month-end payments.</div>
         </div>
         <div style="display:flex; gap:8px;">
           <button class="cp-btn sm secondary" id="btnExportPayslips">&#x1F4E5; Export Payroll CSV</button>
-          ${canRecord() ? '<button class="cp-btn sm accent" id="btnNewPayslipBtn">+ Generate Payslip</button>' : ''}
+          ${canRecord() ? '<button class="cp-btn sm accent" id="btnNewPayslipBtn">+ Prepare Payslip</button>' : ''}
         </div>
       </div>
 
@@ -2749,13 +2784,16 @@ function renderPayslipsTab(container) {
             <option value="facilitator" ${typeFilter === 'facilitator' ? 'selected' : ''}>Facilitators / Trainers</option>
           </select>
         </div>
-        <div class="cp-field" style="margin:0; width:160px;">
+        <div class="cp-field" style="margin:0; width:220px;">
           <select id="payslipStatusSelect">
-            <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Statuses</option>
-            <option value="draft" ${statusFilter === 'draft' ? 'selected' : ''}>Draft</option>
-            <option value="approved" ${statusFilter === 'approved' ? 'selected' : ''}>Approved</option>
-            <option value="paid" ${statusFilter === 'paid' ? 'selected' : ''}>Paid</option>
+            <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Workflow Statuses</option>
+            <option value="draft" ${statusFilter === 'draft' ? 'selected' : ''}>Draft (Preparation)</option>
+            <option value="issued" ${statusFilter === 'issued' ? 'selected' : ''}>Issued (Pending Review)</option>
+            <option value="acknowledged" ${statusFilter === 'acknowledged' ? 'selected' : ''}>Acknowledged (Ready for Approval)</option>
+            <option value="approved" ${statusFilter === 'approved' ? 'selected' : ''}>Approved (Awaiting Payment)</option>
+            <option value="paid" ${statusFilter === 'paid' ? 'selected' : ''}>Paid (Disbursed)</option>
             <option value="cancelled" ${statusFilter === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+            <option value="has_query" ${statusFilter === 'has_query' ? 'selected' : ''}>⚠️ Under Query</option>
           </select>
         </div>
       </div>
@@ -2763,49 +2801,80 @@ function renderPayslipsTab(container) {
       ${filtered.length === 0 ? `
         <div class="cp-empty-state">
           <div class="cp-empty-icon">&#x1F4B3;</div>
-          <div class="cp-empty-title">No payslips generated</div>
-          <div class="cp-empty-desc">Generate monthly payroll for staff and master facilitators.</div>
-          ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyGeneratePayslip">+ Generate Payslip</button>' : ''}
+          <div class="cp-empty-title">No payslips match your filter</div>
+          <div class="cp-empty-desc">Prepare monthly payroll statements for staff and facilitators before month-end settlement.</div>
+          ${canRecord() ? '<button class="cp-btn accent sm" id="btnEmptyGeneratePayslip">+ Prepare Payslip</button>' : ''}
         </div>
       ` : `
         <div class="cp-table-wrap">
           <table class="cp-table">
             <thead>
               <tr>
-                <th>Payslip #</th><th>Pay Period</th><th>Employee Name</th><th>Type</th>
+                <th>Payslip #</th><th>Period &amp; Target Pay Date</th><th>Employee / Facilitator</th><th>Type</th>
                 <th>Department &amp; Role</th><th style="text-align:right;">Gross Pay</th>
                 <th style="text-align:right;">Deductions</th><th style="text-align:right;">Net Pay</th>
-                <th>Status</th><th style="text-align:center;">Actions</th>
+                <th>Workflow Status</th><th style="text-align:center;">Actions</th>
               </tr>
             </thead>
             <tbody>
-              ${filtered.slice().reverse().map(ps => `
-                <tr>
-                  <td style="font-weight:700; font-family:monospace;">#${ps.payslipNo}</td>
-                  <td><strong>${escapeHtml(ps.payPeriod)}</strong><br/><span style="font-size:10.5px; color:var(--text-muted);">${fmtDate(ps.payDate)}</span></td>
-                  <td style="font-weight:700; color:var(--primary);">${escapeHtml(ps.employeeName)}</td>
-                  <td><span class="cp-pill ${ps.employeeType === 'facilitator' ? 'category-pill' : 'new'}">${escapeHtml(ps.employeeType.toUpperCase())}</span></td>
-                  <td>${escapeHtml(ps.department)}<br/><span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(ps.role)}</span></td>
-                  <td style="text-align:right; font-weight:600;">${fmtMoney(ps.grossPay)}</td>
-                  <td style="text-align:right; color:var(--danger);">${ps.totalDeductions > 0 ? '-' + fmtMoney(ps.totalDeductions) : '₦0.00'}</td>
-                  <td style="text-align:right; font-weight:800; color:var(--success);">${fmtMoney(ps.netPay)}</td>
-                  <td><span class="cp-pill ${ps.status}">${escapeHtml(ps.status.toUpperCase())}</span></td>
-                  <td style="text-align:center;">
-                    <div class="cp-action-group" style="display:flex; justify-content:center; gap:6px;">
-                      <button class="cp-btn sm secondary btnViewPayslip" data-id="${ps.id}" title="View confidential payslip">&#x1F4C4; View / Print</button>
-                      ${ps.status === 'draft' && canApprove() ? `
-                        <button class="cp-btn sm accent btnApprovePayslip" data-id="${ps.id}">Approve</button>
-                      ` : ''}
-                      ${ps.status === 'approved' && canApprove() ? `
-                        <button class="cp-btn sm success btnPayPayslip" data-id="${ps.id}">Disburse / Pay</button>
-                      ` : ''}
-                      ${(ps.status === 'draft' || ps.status === 'approved') && canCancel() ? `
-                        <button class="cp-btn sm danger btnCancelPayslip" data-id="${ps.id}" title="Cancel Payslip">&times;</button>
-                      ` : ''}
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
+              ${filtered.slice().reverse().map(ps => {
+                const hasOpenQuery = ps.queries && ps.queries.some(q => q.status === 'open' || q.status === 'under_review');
+                let statusBadge = '';
+                if (ps.status === 'draft') statusBadge = '<span class="cp-pill draft">1. DRAFT</span>';
+                else if (ps.status === 'issued') statusBadge = '<span class="cp-pill new">2. ISSUED</span>';
+                else if (ps.status === 'acknowledged') statusBadge = '<span class="cp-pill active" style="background:#E0E7FF; color:#3730A3;">3. ACKNOWLEDGED</span>';
+                else if (ps.status === 'approved') statusBadge = '<span class="cp-pill partial" style="background:#FEF3C7; color:#92400E; font-weight:800;">4. APPROVED (AWAITING PAY)</span>';
+                else if (ps.status === 'paid') statusBadge = '<span class="cp-pill paid">5. PAID &amp; DISBURSED</span>';
+                else if (ps.status === 'cancelled') statusBadge = '<span class="cp-pill cancelled">CANCELLED</span>';
+
+                return `
+                  <tr>
+                    <td style="font-weight:700; font-family:monospace;">#${ps.payslipNo}</td>
+                    <td><strong>${escapeHtml(ps.payPeriod)}</strong><br/><span style="font-size:10.5px; color:var(--text-muted);">${fmtDate(ps.payDate)}</span></td>
+                    <td style="font-weight:700; color:var(--primary);">${escapeHtml(ps.employeeName)}</td>
+                    <td><span class="cp-pill ${ps.employeeType === 'facilitator' ? 'category-pill' : 'new'}">${escapeHtml(ps.employeeType.toUpperCase())}</span></td>
+                    <td>${escapeHtml(ps.department)}<br/><span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(ps.role)}</span></td>
+                    <td style="text-align:right; font-weight:600;">${fmtMoney(ps.grossPay)}</td>
+                    <td style="text-align:right; color:var(--danger);">${ps.totalDeductions > 0 ? '-' + fmtMoney(ps.totalDeductions) : '₦0.00'}</td>
+                    <td style="text-align:right; font-weight:800; color:var(--primary); font-size:13px;">${fmtMoney(ps.netPay)}</td>
+                    <td>
+                      ${statusBadge}
+                      ${hasOpenQuery ? `<div style="margin-top:4px;"><span class="cp-pill prio-high" style="font-size:10px;">⚠️ Query Pending</span></div>` : ''}
+                    </td>
+                    <td style="text-align:center;">
+                      <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
+                        <button class="cp-btn sm secondary btnViewPayslip" data-id="${ps.id}" title="View official printable payslip document">&#x1F4C4; View / Print</button>
+                        
+                        ${ps.status === 'draft' && canRecord() ? `
+                          <button class="cp-btn sm accent btnIssuePayslip" data-id="${ps.id}" title="Issue to employee for review">Issue</button>
+                        ` : ''}
+
+                        ${ps.status === 'issued' ? `
+                          <button class="cp-btn sm success btnAckPayslip" data-id="${ps.id}" title="Employee review &amp; acknowledgement">Acknowledge</button>
+                          <button class="cp-btn sm secondary btnRaiseQuery" data-id="${ps.id}" title="Raise Discrepancy Query" style="color:#B45309;">Raise Query</button>
+                        ` : ''}
+
+                        ${ps.status === 'acknowledged' ? `
+                          ${canApprove() ? `<button class="cp-btn sm accent btnApprovePayslip" data-id="${ps.id}" ${hasOpenQuery ? 'disabled title="Resolve open queries before approval"' : 'title="Approve for month-end disbursement"'}>Approve Payroll</button>` : ''}
+                          <button class="cp-btn sm secondary btnRaiseQuery" data-id="${ps.id}" title="Raise Discrepancy Query" style="color:#B45309;">Raise Query</button>
+                        ` : ''}
+
+                        ${ps.status === 'approved' && canApprove() ? `
+                          <button class="cp-btn sm success btnPayPayslip" data-id="${ps.id}" title="Disburse month-end payment &amp; create expense">Mark as Paid</button>
+                        ` : ''}
+
+                        ${hasOpenQuery ? `
+                          <button class="cp-btn sm warning btnReviewQuery" data-id="${ps.id}" style="background:#FFFBEB; border-color:var(--warning); color:#92400E;">Review Query</button>
+                        ` : ''}
+
+                        ${(ps.status === 'draft' || ps.status === 'issued' || ps.status === 'acknowledged' || ps.status === 'approved') && canCancel() ? `
+                          <button class="cp-btn sm danger btnCancelPayslip" data-id="${ps.id}" title="Cancel / Void Payslip">&times;</button>
+                        ` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
         </div>
@@ -2828,6 +2897,14 @@ function renderPayslipsTab(container) {
     render();
   });
 
+  const btnFilterQueries = document.getElementById('btnFilterOpenQueries');
+  if (btnFilterQueries) {
+    btnFilterQueries.addEventListener('click', () => {
+      state.filters.payslipStatus = 'has_query';
+      render();
+    });
+  }
+
   document.getElementById('btnExportPayslips').addEventListener('click', () => {
     exportToCSV('Payroll_Ledger', filtered.map(p => ({
       Payslip_No: p.payslipNo, Period: p.payPeriod, Date: p.payDate, Employee: p.employeeName,
@@ -2843,6 +2920,41 @@ function renderPayslipsTab(container) {
     b.addEventListener('click', () => {
       const ps = state.payslips.find(p => p.id === b.dataset.id);
       if (ps) openModal('viewPayslip', { payslip: ps });
+    });
+  });
+
+  container.querySelectorAll('.btnIssuePayslip').forEach(b => {
+    b.addEventListener('click', async () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) {
+        ps.status = 'issued';
+        ps.issuedAt = new Date().toISOString();
+        ps.issuedBy = state.auth.user ? state.auth.user.name : 'Finance Operations';
+        await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+        await logAudit('ISSUE_PAYSLIP', 'payslip', ps.id, `Issued Payslip #${ps.payslipNo} for ${ps.employeeName} review`);
+        render();
+      }
+    });
+  });
+
+  container.querySelectorAll('.btnAckPayslip').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('acknowledgePayslip', { payslip: ps });
+    });
+  });
+
+  container.querySelectorAll('.btnRaiseQuery').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('raisePayrollQuery', { payslip: ps });
+    });
+  });
+
+  container.querySelectorAll('.btnReviewQuery').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('resolvePayrollQuery', { payslip: ps });
     });
   });
 
@@ -4162,7 +4274,7 @@ function renderViewReceiptModal(container, payment, inv) {
 
 
 // ----------------------------------------------------
-// MODALS 2: PAYSLIPS (GENERATE, A4 DOCUMENT, APPROVE, DISBURSE, CANCEL), EXPENSES & DIRECT INCOME
+// MODALS 2: PAYSLIPS (PREPARE, ACKNOWLEDGE, QUERIES, APPROVE, DISBURSE, A4 PRINT), EXPENSES & DIRECT INCOME
 // ----------------------------------------------------
 function renderGeneratePayslipModal(container) {
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -4173,11 +4285,15 @@ function renderGeneratePayslipModal(container) {
     <div class="cp-modal-overlay">
       <div class="cp-modal large">
         <div class="cp-modal-header">
-          <div class="cp-modal-title">&#x1F4B3; Generate Staff / Facilitator Payslip</div>
+          <div class="cp-modal-title">&#x1F4B3; Prepare Staff / Facilitator Payslip (Pre-Payment Statement)</div>
           <button class="cp-modal-close" id="btnCloseGenPsl">&times;</button>
         </div>
 
         <div class="cp-modal-body">
+          <div style="background:var(--info-bg); border:1px solid var(--info); border-radius:var(--radius-sm); padding:10px 14px; font-size:12px; color:var(--info); margin-bottom:14px;">
+            &#x1F4CB; <strong>Pre-Payment Payroll Notice:</strong> Payslips are prepared and issued to personnel for review and acknowledgement <em>before</em> month-end disbursement. Cash expenses are created only upon actual payment.
+          </div>
+
           <div class="cp-row3">
             <div class="cp-field">
               <label>Personnel Type *</label>
@@ -4253,7 +4369,7 @@ function renderGeneratePayslipModal(container) {
 
           <div class="cp-field">
             <label>Payment Method &amp; Disbursement Notes</label>
-            <input id="pslNotes" placeholder="e.g. Bank Transfer via GTBank Corporate Payroll Portal" />
+            <input id="pslNotes" placeholder="e.g. Direct Bank Transfer via GTBank Corporate Payroll Portal" />
           </div>
 
           <div id="pslFormErr" style="color:var(--danger); font-size:12px; display:none;"></div>
@@ -4261,7 +4377,8 @@ function renderGeneratePayslipModal(container) {
 
         <div class="cp-modal-footer">
           <button class="cp-btn secondary" id="btnCancelGenPsl">Cancel</button>
-          <button class="cp-btn accent" id="btnSaveDraftPayslip">&#x2714; Generate Payslip</button>
+          <button class="cp-btn secondary" id="btnSaveDraftOnly">&#x1F4BE; Save as Draft</button>
+          <button class="cp-btn accent" id="btnSaveAndIssue">&#x2714; Save &amp; Issue for Review</button>
         </div>
       </div>
     </div>
@@ -4336,7 +4453,7 @@ function renderGeneratePayslipModal(container) {
   });
   dedCont.querySelectorAll('.btnRemDed').forEach(b => b.addEventListener('click', (e) => { e.target.closest('.deduction-row').remove(); recalcPayslipTotals(); }));
 
-  document.getElementById('btnSaveDraftPayslip').addEventListener('click', async () => {
+  async function handleSavePayslip(targetStatus) {
     const name = document.getElementById('pslName').value.trim();
     const type = document.getElementById('pslType').value;
     const dept = document.getElementById('pslDept').value;
@@ -4396,7 +4513,10 @@ function renderGeneratePayslipModal(container) {
       netPay: totals.netPay,
       paymentMethod: 'Bank Transfer',
       notes: document.getElementById('pslNotes').value.trim(),
-      status: 'draft',
+      status: targetStatus,
+      issuedAt: targetStatus === 'issued' ? new Date().toISOString() : null,
+      issuedBy: targetStatus === 'issued' ? (state.auth.user ? state.auth.user.name : 'Finance Operations') : null,
+      queries: [],
       createdAt: new Date().toISOString(),
       createdBy: state.auth.user ? state.auth.user.name : 'Finance Operations'
     };
@@ -4404,155 +4524,304 @@ function renderGeneratePayslipModal(container) {
     state.payslips.push(payslip);
     await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
     await safeSet(STORE_KEY_COUNTERS, state.counters);
-    await logAudit('GENERATE_PAYSLIP', 'payslip', payslip.id, `Generated Payslip #${payslip.payslipNo} for ${payslip.employeeName} (${payslip.payPeriod})`, null, payslip);
+    await logAudit(targetStatus === 'issued' ? 'ISSUE_PAYSLIP' : 'CREATE_PAYSLIP_DRAFT', 'payslip', payslip.id, `${targetStatus === 'issued' ? 'Issued' : 'Drafted'} Payslip #${payslip.payslipNo} for ${payslip.employeeName} (${payslip.payPeriod})`, null, payslip);
 
     openModal('viewPayslip', { payslip });
-  });
+  }
+
+  document.getElementById('btnSaveDraftOnly').addEventListener('click', () => handleSavePayslip('draft'));
+  document.getElementById('btnSaveAndIssue').addEventListener('click', () => handleSavePayslip('issued'));
 }
 
-function renderViewPayslipModal(container, payslip) {
-  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
-  const statusLabel = payslip.status.toUpperCase();
-  const statusClass = payslip.status === 'paid' ? 'paid' : (payslip.status === 'approved' ? 'approved' : (payslip.status === 'cancelled' ? 'cancelled' : 'draft'));
+// ----------------------------------------------------
+// EMPLOYEE / FACILITATOR ACKNOWLEDGEMENT MODAL
+// ----------------------------------------------------
+function renderAcknowledgePayslipModal(container, payslip) {
+  const actorName = state.auth.user ? state.auth.user.name : payslip.employeeName;
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
-      <div class="cp-modal doc-modal">
-        <div class="cp-modal-header no-print">
-          <div class="cp-modal-title">Confidential Corporate Payslip #${payslip.payslipNo}</div>
-          <button class="cp-modal-close" id="btnCloseViewPsl">&times;</button>
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x2714; Employee / Facilitator Acknowledgement</div>
+          <button class="cp-modal-close" id="btnCloseAckMod">&times;</button>
         </div>
-
-        <div class="cp-modal-body cp-printable-area">
-          <div class="cp-doc-paper">
-            <div class="cp-doc-header">
-              <div class="cp-doc-brand">
-                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
-                <div>
-                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
-                  <div class="cp-doc-company-meta">${escapeHtml(fsCfg.address)}<br/>Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}</div>
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div class="cp-doc-type-title" style="font-size:22px;">CONFIDENTIAL PAYSLIP</div>
-                <div class="cp-doc-no">#${payslip.payslip_display_no || formatDocNo('payslip', payslip.payslipNo, payslip.payDate)}</div>
-                <div style="margin-top:6px;"><span class="cp-pill ${statusClass}">${statusLabel}</span></div>
-              </div>
-            </div>
-
-            <!-- Personnel Metadata -->
-            <div class="cp-doc-meta-grid">
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">EMPLOYEE / BENEFICIARY:</div>
-                <div class="cp-doc-client-name">${escapeHtml(payslip.employeeName)}</div>
-                <div style="color:var(--text-secondary); margin-top:2px;">Designation: <strong>${escapeHtml(payslip.role)}</strong></div>
-                <div style="color:var(--text-secondary);">Department: <strong>${escapeHtml(payslip.department)}</strong></div>
-                <div style="color:var(--text-secondary);">Personnel Type: <strong>${escapeHtml(payslip.employeeType.toUpperCase())}</strong></div>
-              </div>
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">PAYROLL SCHEDULE:</div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Pay Period:</span><strong>${escapeHtml(payslip.payPeriod)}</strong></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Disbursement Date:</span><strong>${fmtDate(payslip.payDate)}</strong></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Payment Method:</span><strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong></div>
-                ${payslip.paymentReference ? `<div style="display:flex; justify-content:space-between;"><span>Payment Ref:</span><strong style="font-family:monospace;">${escapeHtml(payslip.paymentReference)}</strong></div>` : ''}
-              </div>
-            </div>
-
-            <!-- Earnings Breakdown -->
-            <div style="margin-bottom:14px;">
-              <div class="cp-doc-section-label" style="margin-bottom:4px;">1. EARNINGS &amp; ALLOWANCES</div>
-              <table class="cp-doc-table" style="margin-bottom:6px;">
-                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
-                <tbody>
-                  <tr><td>Basic Salary / Session Fee</td><td style="text-align:right; font-weight:600;">${fmtMoney(payslip.basicPay)}</td></tr>
-                  ${(payslip.allowances || []).map(a => `
-                    <tr><td>${escapeHtml(a.description)}</td><td style="text-align:right; font-weight:600;">${fmtMoney(a.amount)}</td></tr>
-                  `).join('')}
-                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--primary);">
-                    <td>GROSS PAY:</td><td style="text-align:right; color:var(--primary);">${fmtMoney(payslip.grossPay)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Deductions Breakdown -->
-            <div style="margin-bottom:18px;">
-              <div class="cp-doc-section-label" style="margin-bottom:4px; color:var(--danger);">2. STATUTORY &amp; VOLUNTARY DEDUCTIONS</div>
-              <table class="cp-doc-table" style="margin-bottom:6px;">
-                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
-                <tbody>
-                  ${(payslip.deductions && payslip.deductions.length ? payslip.deductions : [{ description: 'No Deductions Applied', amount: 0 }]).map(d => `
-                    <tr><td>${escapeHtml(d.description)}</td><td style="text-align:right; color:var(--danger);">${Number(d.amount) > 0 ? '-' + fmtMoney(d.amount) : '₦0.00'}</td></tr>
-                  `).join('')}
-                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--danger);">
-                    <td>TOTAL DEDUCTIONS:</td><td style="text-align:right; color:var(--danger);">${payslip.totalDeductions > 0 ? '-' + fmtMoney(payslip.totalDeductions) : '₦0.00'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Net Pay Highlight Block -->
-            <div style="background:#F0FDF4; border:2px solid var(--success); border-radius:var(--radius-sm); padding:16px 20px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-              <div>
-                <div style="font-size:11px; font-weight:800; color:var(--success); text-transform:uppercase; letter-spacing:0.5px;">NET COMPENSATION DISBURSED</div>
-                <div style="font-size:13px; font-weight:600; color:var(--primary); margin-top:2px;">Transferred to Employee Designated Bank Account</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">NET PAY</div>
-                <div style="font-size:26px; font-weight:900; color:var(--success);">${fmtMoney(payslip.netPay)}</div>
-              </div>
-            </div>
-
-            <!-- Notes -->
-            ${payslip.notes ? `
-              <div class="cp-doc-box">
-                <div class="cp-doc-section-label">PAYROLL NOTES</div>
-                <div>${escapeHtml(payslip.notes)}</div>
-              </div>
-            ` : ''}
-
-            <!-- Footer -->
-            <div class="cp-doc-footer">
-              <div>This is a system-generated official payroll record of Clasptek Coaching Limited. Confidential.</div>
-              <div>${escapeHtml(fsCfg.website)}</div>
-            </div>
+        <div class="cp-modal-body">
+          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px; font-size:12.5px;">
+            <div>Payslip Reference: <strong>#${payslip.payslipNo}</strong></div>
+            <div>Personnel: <strong>${escapeHtml(payslip.employeeName)}</strong> (${escapeHtml(payslip.role)})</div>
+            <div>Pay Period: <strong>${escapeHtml(payslip.payPeriod)}</strong></div>
+            <div style="margin-top:6px; font-size:14px; font-weight:800; color:var(--primary);">Net Expected Compensation: ${fmtMoney(payslip.netPay)}</div>
           </div>
-        </div>
 
-        <div class="cp-modal-footer no-print">
-          <button class="cp-btn secondary" id="btnCloseViewPsl2">Close</button>
-          <button class="cp-btn accent" id="btnPrintPayslip">&#x1F5A8;&#xFE0F; Print Official Payslip</button>
+          <div style="background:#F0FDF4; border:1.5px solid var(--success); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:14px; font-size:12.5px; color:#166534;">
+            <strong>Mandatory Acknowledgement Clause:</strong><br/>
+            <em>"I acknowledge that I have reviewed the earnings and deductions stated on this payslip."</em>
+          </div>
+
+          <div class="cp-field">
+            <label>Acknowledgement Confirmation Method *</label>
+            <select id="ackMethod">
+              <option value="Digital Portal Confirmation">Digital Portal Confirmation</option>
+              <option value="Signed Physical Copy on File">Signed Physical Copy on File</option>
+              <option value="WhatsApp Written Confirmation">WhatsApp / Email Written Confirmation</option>
+            </select>
+          </div>
+
+          <div class="cp-field">
+            <label>Reviewing / Signing Personnel Name *</label>
+            <input id="ackSigner" value="${escapeHtml(actorName)}" />
+          </div>
+
+          <div class="cp-field">
+            <label>Additional Acknowledgement Remarks (Optional)</label>
+            <input id="ackRemarks" placeholder="e.g. Confirmed session counts and rates." />
+          </div>
+
+          <div id="ackErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelAck">Cancel</button>
+          <button class="cp-btn success" id="btnConfirmAck">&#x2714; Confirm Acknowledgement</button>
         </div>
       </div>
     </div>
   `;
 
-  document.getElementById('btnCloseViewPsl').addEventListener('click', closeModal);
-  document.getElementById('btnCloseViewPsl2').addEventListener('click', closeModal);
-  document.getElementById('btnPrintPayslip').addEventListener('click', () => window.print());
+  document.getElementById('btnCloseAckMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelAck').addEventListener('click', closeModal);
+
+  document.getElementById('btnConfirmAck').addEventListener('click', async () => {
+    const signer = document.getElementById('ackSigner').value.trim();
+    const method = document.getElementById('ackMethod').value;
+    const remarks = document.getElementById('ackRemarks').value.trim();
+    const errEl = document.getElementById('ackErr');
+
+    if (!signer) {
+      errEl.textContent = 'Please provide signatory name.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    payslip.status = 'acknowledged';
+    payslip.acknowledgedAt = new Date().toISOString();
+    payslip.acknowledgedBy = signer;
+    payslip.acknowledgementMethod = method;
+    if (remarks) payslip.acknowledgementRemarks = remarks;
+
+    await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+    await logAudit('ACKNOWLEDGE_PAYSLIP', 'payslip', payslip.id, `Acknowledged Payslip #${payslip.payslipNo} by ${signer} (${method})`);
+
+    openModal('viewPayslip', { payslip });
+  });
 }
 
-function renderApprovePayslipModal(container, payslip) {
+// ----------------------------------------------------
+// PAYROLL DISCREPANCY QUERY MODALS
+// ----------------------------------------------------
+function renderRaisePayrollQueryModal(container, payslip) {
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal">
         <div class="cp-modal-header">
-          <div class="cp-modal-title">Approve Payslip #${payslip.payslipNo}</div>
+          <div class="cp-modal-title">&#x26A0;&#xFE0F; Raise Payroll Discrepancy Query &mdash; #${payslip.payslipNo}</div>
+          <button class="cp-modal-close" id="btnCloseQryMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="background:#FFFBEB; border:1px solid var(--warning); border-radius:var(--radius-sm); padding:10px 14px; font-size:12px; color:#92400E; margin-bottom:12px;">
+            Raising a query flags this payslip for finance review. The payslip cannot proceed to final Finance Approval until the discrepancy is formally resolved.
+          </div>
+
+          <div class="cp-field">
+            <label>Query Reason / Category *</label>
+            <select id="qryReason">
+              <option value="Missing Facilitator Session">Missing Facilitator Session / Course Count</option>
+              <option value="Incorrect Allowance / Bonus">Incorrect Allowance / Bonus Calculation</option>
+              <option value="Base Compensation Error">Base Compensation / Agreed Rate Error</option>
+              <option value="Statutory Deduction Discrepancy">Statutory Deduction (Tax/Pension) Discrepancy</option>
+              <option value="Unauthorized Deduction">Unauthorized Advance / Deduction</option>
+              <option value="Other Discrepancy">Other Discrepancy</option>
+            </select>
+          </div>
+
+          <div class="cp-field">
+            <label>Detailed Explanation / Discrepancy Note *</label>
+            <textarea id="qryComment" rows="3" placeholder="e.g. Conducted 4 weekend IELTS Masterclass sessions in August but only 3 were captured on this draft statement."></textarea>
+          </div>
+
+          <div id="qryErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelQry">Cancel</button>
+          <button class="cp-btn accent" id="btnSubmitQuery">&#x26A0;&#xFE0F; Submit Payroll Query</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseQryMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelQry').addEventListener('click', closeModal);
+
+  document.getElementById('btnSubmitQuery').addEventListener('click', async () => {
+    const reason = document.getElementById('qryReason').value;
+    const comment = document.getElementById('qryComment').value.trim();
+    const errEl = document.getElementById('qryErr');
+
+    if (!comment) {
+      errEl.textContent = 'Please enter a detailed explanation of the discrepancy.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    payslip.queries = payslip.queries || [];
+    const query = {
+      id: 'qry_' + Date.now(),
+      queryReason: reason,
+      queryComment: comment,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      createdBy: state.auth.user ? state.auth.user.name : payslip.employeeName
+    };
+    payslip.queries.push(query);
+
+    await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+    await logAudit('RAISE_PAYROLL_QUERY', 'payslip', payslip.id, `Raised query on #${payslip.payslipNo}: ${reason}`);
+
+    alert('Payroll query submitted. Finance team has been notified.');
+    openModal('viewPayslip', { payslip });
+  });
+}
+
+function renderResolvePayrollQueryModal(container, payslip) {
+  const queries = payslip.queries || [];
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal large">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">Review &amp; Resolve Payroll Queries &mdash; #${payslip.payslipNo}</div>
+          <button class="cp-modal-close" id="btnCloseResMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:14px;">
+            Personnel: <strong>${escapeHtml(payslip.employeeName)}</strong> &middot; Period: <strong>${escapeHtml(payslip.payPeriod)}</strong> &middot; Net Pay: <strong>${fmtMoney(payslip.netPay)}</strong>
+          </div>
+
+          ${queries.length === 0 ? '<div style="color:var(--text-muted);">No queries recorded on this payslip.</div>' : `
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              ${queries.map((q, idx) => `
+                <div style="background:#FAFBFD; border:1px solid var(--border); border-left:3.5px solid ${q.status === 'open' ? 'var(--warning)' : (q.status === 'resolved' ? 'var(--success)' : 'var(--danger)')}; border-radius:var(--radius-sm); padding:12px 14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <strong style="color:var(--primary); font-size:13px;">${escapeHtml(q.queryReason)}</strong>
+                    <span class="cp-pill ${q.status === 'open' ? 'unpaid' : (q.status === 'resolved' ? 'paid' : 'cancelled')}">${escapeHtml(q.status.toUpperCase())}</span>
+                  </div>
+                  <div style="font-size:12px; color:var(--text-secondary); margin-bottom:6px;">${escapeHtml(q.queryComment)}</div>
+                  <div style="font-size:10.5px; color:var(--text-muted);">Raised by ${escapeHtml(q.createdBy)} on ${new Date(q.createdAt).toLocaleString('en-GB')}</div>
+
+                  ${q.status === 'open' || q.status === 'under_review' ? `
+                    <div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
+                      <div class="cp-field" style="margin-bottom:6px;">
+                        <label style="font-size:11px;">Resolution Notes *</label>
+                        <input id="resNote_${idx}" placeholder="e.g. Verified with Academic registry; 4th session allowance added." />
+                      </div>
+                      <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button class="cp-btn sm danger btnRejectQry" data-idx="${idx}">Reject Query</button>
+                        <button class="cp-btn sm success btnResolveQry" data-idx="${idx}">Resolve Query</button>
+                      </div>
+                    </div>
+                  ` : `
+                    <div style="margin-top:6px; font-size:11.5px; color:var(--success); background:#F0FDF4; padding:6px 8px; border-radius:4px;">
+                      ✔ <strong>Resolved:</strong> ${escapeHtml(q.resolutionNote || 'Resolved')} &middot; By: ${escapeHtml(q.resolvedBy || 'Finance')} on ${new Date(q.resolvedAt).toLocaleDateString('en-GB')}
+                    </div>
+                  `}
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCloseResMod2">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseResMod').addEventListener('click', closeModal);
+  document.getElementById('btnCloseResMod2').addEventListener('click', closeModal);
+
+  container.querySelectorAll('.btnResolveQry').forEach(b => {
+    b.addEventListener('click', async () => {
+      const idx = Number(b.dataset.idx);
+      const note = (document.getElementById(`resNote_${idx}`).value || '').trim();
+      if (!note) { alert('Please provide resolution notes.'); return; }
+
+      payslip.queries[idx].status = 'resolved';
+      payslip.queries[idx].resolutionNote = note;
+      payslip.queries[idx].resolvedAt = new Date().toISOString();
+      payslip.queries[idx].resolvedBy = state.auth.user ? state.auth.user.name : 'Finance Operations';
+
+      await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+      await logAudit('RESOLVE_PAYROLL_QUERY', 'payslip', payslip.id, `Resolved query #${idx + 1} on #${payslip.payslipNo}: ${note}`);
+      renderResolvePayrollQueryModal(container, payslip);
+    });
+  });
+
+  container.querySelectorAll('.btnRejectQry').forEach(b => {
+    b.addEventListener('click', async () => {
+      const idx = Number(b.dataset.idx);
+      const note = (document.getElementById(`resNote_${idx}`).value || '').trim();
+      if (!note) { alert('Please provide reason for rejecting query.'); return; }
+
+      payslip.queries[idx].status = 'rejected';
+      payslip.queries[idx].resolutionNote = note;
+      payslip.queries[idx].resolvedAt = new Date().toISOString();
+      payslip.queries[idx].resolvedBy = state.auth.user ? state.auth.user.name : 'Finance Operations';
+
+      await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+      await logAudit('REJECT_PAYROLL_QUERY', 'payslip', payslip.id, `Rejected query #${idx + 1} on #${payslip.payslipNo}: ${note}`);
+      renderResolvePayrollQueryModal(container, payslip);
+    });
+  });
+}
+
+// ----------------------------------------------------
+// FINANCE APPROVAL MODAL (AWAITING PAYMENT)
+// ----------------------------------------------------
+function renderApprovePayslipModal(container, payslip) {
+  const hasOpenQuery = payslip.queries && payslip.queries.some(q => q.status === 'open' || q.status === 'under_review');
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">Authorize &amp; Approve Payroll &mdash; #${payslip.payslipNo}</div>
           <button class="cp-modal-close" id="btnCloseAppPsl">&times;</button>
         </div>
         <div class="cp-modal-body">
-          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
-            Are you sure you want to approve payroll compensation for <strong>${escapeHtml(payslip.employeeName)}</strong> for the period <strong>${escapeHtml(payslip.payPeriod)}</strong>?
-          </p>
-          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; font-size:13px;">
-            <div>Gross Pay: <strong>${fmtMoney(payslip.grossPay)}</strong></div>
-            <div>Deductions: <strong style="color:var(--danger);">${fmtMoney(payslip.totalDeductions)}</strong></div>
-            <div style="margin-top:4px; font-size:15px; font-weight:800; color:var(--success);">Net Pay: ${fmtMoney(payslip.netPay)}</div>
+          ${hasOpenQuery ? `
+            <div style="background:#FEE2E2; border:1.5px solid var(--danger); border-radius:var(--radius-sm); padding:12px 14px; font-size:12.5px; color:#991B1B; margin-bottom:14px;">
+              &#x26D4; <strong>Approval Blocked:</strong> This payslip has open discrepancy queries. All queries must be resolved before Finance Approval can be granted.
+            </div>
+          ` : `
+            <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
+              You are authorizing this reviewed payroll statement for <strong>${escapeHtml(payslip.employeeName)}</strong> (${escapeHtml(payslip.payPeriod)}). 
+              Upon approval, the status becomes <strong>APPROVED — AWAITING PAYMENT</strong> until month-end financial disbursement.
+            </p>
+          `}
+
+          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; font-size:13px; margin-bottom:12px;">
+            <div>Gross Earnings: <strong>${fmtMoney(payslip.grossPay)}</strong></div>
+            <div>Total Deductions: <strong style="color:var(--danger);">${payslip.totalDeductions > 0 ? '-' + fmtMoney(payslip.totalDeductions) : '₦0.00'}</strong></div>
+            <div style="margin-top:4px; font-size:15px; font-weight:800; color:var(--primary);">Net Approved Liability: ${fmtMoney(payslip.netPay)}</div>
+            <div style="margin-top:4px; font-size:11.5px; color:var(--text-muted);">
+              Acknowledgement Status: <span class="cp-pill ${payslip.status === 'acknowledged' ? 'paid' : 'draft'}">${escapeHtml(payslip.status.toUpperCase())}</span>
+              ${payslip.acknowledgedBy ? ` &middot; Confirmed by ${escapeHtml(payslip.acknowledgedBy)}` : ''}
+            </div>
           </div>
         </div>
         <div class="cp-modal-footer">
           <button class="cp-btn secondary" id="btnCancelAppPsl">Cancel</button>
-          <button class="cp-btn accent" id="btnConfirmApprovePsl">&#x2714; Authorize &amp; Approve</button>
+          <button class="cp-btn accent" id="btnConfirmApprovePsl" ${hasOpenQuery ? 'disabled' : ''}>&#x2714; Authorize &amp; Approve Payroll</button>
         </div>
       </div>
     </div>
@@ -4560,16 +4829,22 @@ function renderApprovePayslipModal(container, payslip) {
 
   document.getElementById('btnCloseAppPsl').addEventListener('click', closeModal);
   document.getElementById('btnCancelAppPsl').addEventListener('click', closeModal);
-  document.getElementById('btnConfirmApprovePsl').addEventListener('click', async () => {
-    payslip.status = 'approved';
-    payslip.approvedBy = state.auth.user ? state.auth.user.name : 'Finance Manager';
-    payslip.approvedAt = new Date().toISOString();
-    await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
-    await logAudit('APPROVE_PAYSLIP', 'payslip', payslip.id, `Approved Payslip #${payslip.payslipNo} for ${payslip.employeeName}`);
-    closeModal();
-  });
+  
+  if (!hasOpenQuery) {
+    document.getElementById('btnConfirmApprovePsl').addEventListener('click', async () => {
+      payslip.status = 'approved';
+      payslip.approvedBy = state.auth.user ? state.auth.user.name : 'Finance Manager';
+      payslip.approvedAt = new Date().toISOString();
+      await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+      await logAudit('APPROVE_PAYSLIP', 'payslip', payslip.id, `Approved Payslip #${payslip.payslipNo} for ${payslip.employeeName} (Awaiting Month-End Pay)`);
+      closeModal();
+    });
+  }
 }
 
+// ----------------------------------------------------
+// MONTH-END PAYMENT (DISBURSEMENT & EXPENSE INTEGRATION)
+// ----------------------------------------------------
 function renderPayPayslipModal(container, payslip) {
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -4577,28 +4852,32 @@ function renderPayPayslipModal(container, payslip) {
     <div class="cp-modal-overlay">
       <div class="cp-modal">
         <div class="cp-modal-header">
-          <div class="cp-modal-title">Disburse Payroll &mdash; Payslip #${payslip.payslipNo}</div>
+          <div class="cp-modal-title">Disburse Month-End Payment &mdash; Payslip #${payslip.payslipNo}</div>
           <button class="cp-modal-close" id="btnClosePayPsl">&times;</button>
         </div>
         <div class="cp-modal-body">
           <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; margin-bottom:14px; font-size:13px;">
             <div>Beneficiary: <strong>${escapeHtml(payslip.employeeName)}</strong> (${escapeHtml(payslip.role)})</div>
             <div>Period: <strong>${escapeHtml(payslip.payPeriod)}</strong></div>
-            <div style="margin-top:4px; font-size:16px; font-weight:800; color:var(--success);">Disbursement Amount: ${fmtMoney(payslip.netPay)}</div>
+            <div style="margin-top:4px; font-size:16px; font-weight:800; color:var(--success);">Approved Net Pay: ${fmtMoney(payslip.netPay)}</div>
           </div>
 
-          <div class="cp-field"><label>Disbursement Date *</label><input type="date" id="pslPayDate" value="${todayStr}" /></div>
-          <div class="cp-field"><label>Payment Method *</label><select id="pslPayMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
-          <div class="cp-field"><label>Banking Reference / Transaction Hash *</label><input id="pslPayRef" placeholder="e.g. GTB/NIBSS/SAL/20260826" /></div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Actual Payment Amount (₦) *</label><input type="number" id="pslPaidAmt" value="${payslip.netPay}" /></div>
+            <div class="cp-field"><label>Actual Payment Date *</label><input type="date" id="pslPayDate" value="${todayStr}" /></div>
+          </div>
+
+          <div class="cp-field"><label>Payment Method *</label><select id="pslPayMethod">${PAYMENT_METHODS.filter(m => m !== 'Cash').map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
+          <div class="cp-field"><label>Bank Transaction Reference / NIBSS Session ID *</label><input id="pslPayRef" placeholder="e.g. GTB/NIBSS/SAL/2026082701" /></div>
 
           <div style="background:var(--info-bg); border:1px solid var(--info); border-radius:var(--radius-sm); padding:10px 12px; font-size:12px; color:var(--info); margin-top:10px;">
-            &#x1F4CA; <strong>Idempotent Financial Expense Integration:</strong> Marking this payslip as paid will automatically register an operational expense in the general ledger under <strong>${payslip.employeeType === 'facilitator' ? 'Facilitator Fees' : 'Salaries'}</strong> with zero duplicate counting.
+            &#x1F4CA; <strong>Idempotent Expense Integration:</strong> Confirming this payment will create exactly one operational expense record in the general ledger under <strong>${payslip.employeeType === 'facilitator' ? 'Facilitator Fees' : 'Salaries'}</strong> with zero duplicate counting.
           </div>
           <div id="pslPayErr" style="color:var(--danger); font-size:12px; display:none; margin-top:8px;"></div>
         </div>
         <div class="cp-modal-footer">
           <button class="cp-btn secondary" id="btnCancelPayPsl">Cancel</button>
-          <button class="cp-btn success" id="btnConfirmPayPsl">&#x2714; Confirm Disbursement</button>
+          <button class="cp-btn success" id="btnConfirmPayPsl">&#x2714; Confirm Month-End Payment</button>
         </div>
       </div>
     </div>
@@ -4606,14 +4885,27 @@ function renderPayPayslipModal(container, payslip) {
 
   document.getElementById('btnClosePayPsl').addEventListener('click', closeModal);
   document.getElementById('btnCancelPayPsl').addEventListener('click', closeModal);
+
   document.getElementById('btnConfirmPayPsl').addEventListener('click', async () => {
+    const paidAmt = Number(document.getElementById('pslPaidAmt').value || 0);
     const dateStr = document.getElementById('pslPayDate').value;
     const method = document.getElementById('pslPayMethod').value;
     const ref = document.getElementById('pslPayRef').value.trim();
     const errEl = document.getElementById('pslPayErr');
 
+    // Strict Payment Validation
+    if (paidAmt <= 0) {
+      errEl.textContent = 'Payment amount must be greater than zero.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (safeRound(paidAmt) !== safeRound(payslip.netPay)) {
+      errEl.textContent = `Payment amount (₦${paidAmt}) must equal approved Net Pay (₦${payslip.netPay}).`;
+      errEl.style.display = 'block';
+      return;
+    }
     if (!ref) {
-      errEl.textContent = 'Please enter a transaction reference.';
+      errEl.textContent = 'Please enter a valid bank transaction reference.';
       errEl.style.display = 'block';
       return;
     }
@@ -4624,7 +4916,8 @@ function renderPayPayslipModal(container, payslip) {
     }
 
     payslip.status = 'paid';
-    payslip.payDate = dateStr;
+    payslip.paidAmount = paidAmt;
+    payslip.actualPaymentDate = dateStr;
     payslip.paymentMethod = method;
     payslip.paymentReference = ref;
     payslip.paidBy = state.auth.user ? state.auth.user.name : 'Finance Operations';
@@ -4634,7 +4927,7 @@ function renderPayPayslipModal(container, payslip) {
     await integratePayslipExpense(payslip);
 
     await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
-    await logAudit('DISBURSE_PAYSLIP', 'payslip', payslip.id, `Disbursed ₦${payslip.netPay} to ${payslip.employeeName} (Ref: ${ref})`, null, payslip);
+    await logAudit('DISBURSE_PAYSLIP', 'payslip', payslip.id, `Disbursed month-end pay of ₦${paidAmt} to ${payslip.employeeName} (Ref: ${ref})`, null, payslip);
 
     openModal('viewPayslip', { payslip });
   });
@@ -4652,7 +4945,7 @@ function renderCancelPayslipModal(container, payslip) {
           <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
             Are you sure you want to cancel payslip for <strong>${escapeHtml(payslip.employeeName)}</strong>? This will void this payroll entry.
           </p>
-          <div class="cp-field"><label>Reason for Cancellation *</label><textarea id="pslCanReason" rows="2" placeholder="e.g. Generated with incorrect session count."></textarea></div>
+          <div class="cp-field"><label>Reason for Cancellation *</label><textarea id="pslCanReason" rows="2" placeholder="e.g. Replaced by revised statement."></textarea></div>
           <div id="pslCanErr" style="color:var(--danger); font-size:12px; display:none;"></div>
         </div>
         <div class="cp-modal-footer">
@@ -4692,6 +4985,228 @@ function renderCancelPayslipModal(container, payslip) {
     await logAudit('CANCEL_PAYSLIP', 'payslip', payslip.id, `Cancelled Payslip #${payslip.payslipNo}: ${reason}`);
     closeModal();
   });
+}
+
+// ----------------------------------------------------
+// A4 OFFICIAL CORPORATE PAYSLIP DOCUMENT (PRE- & POST-PAYMENT)
+// ----------------------------------------------------
+function renderViewPayslipModal(container, payslip) {
+  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
+  const isPaid = payslip.status === 'paid';
+  const hasOpenQuery = payslip.queries && payslip.queries.some(q => q.status === 'open' || q.status === 'under_review');
+
+  let statusLabel = '1. DRAFT (IN PREPARATION)';
+  let statusClass = 'draft';
+  if (payslip.status === 'issued') { statusLabel = '2. ISSUED — PENDING REVIEW'; statusClass = 'new'; }
+  else if (payslip.status === 'acknowledged') { statusLabel = '3. ACKNOWLEDGED'; statusClass = 'active'; }
+  else if (payslip.status === 'approved') { statusLabel = '4. APPROVED — AWAITING PAYMENT'; statusClass = 'partial'; }
+  else if (payslip.status === 'paid') { statusLabel = 'PAID IN FULL'; statusClass = 'paid'; }
+  else if (payslip.status === 'cancelled') { statusLabel = 'CANCELLED'; statusClass = 'cancelled'; }
+
+  // Extract month and year from payPeriod (YYYY-MM)
+  let periodTitle = payslip.payPeriod;
+  try {
+    const parts = payslip.payPeriod.split('-');
+    if (parts.length === 2) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+      periodTitle = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase();
+    }
+  } catch (e) {}
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal doc-modal">
+        <div class="cp-modal-header no-print">
+          <div class="cp-modal-title">Corporate Payroll Statement #${payslip.payslipNo}</div>
+          <button class="cp-modal-close" id="btnCloseViewPsl">&times;</button>
+        </div>
+
+        <div class="cp-modal-body cp-printable-area">
+          <div class="cp-doc-paper">
+            <!-- Header -->
+            <div class="cp-doc-header">
+              <div class="cp-doc-brand">
+                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
+                <div>
+                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
+                  <div class="cp-doc-company-meta">
+                    ${escapeHtml(fsCfg.address)}<br/>
+                    Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}<br/>
+                    ${fsCfg.taxId ? `TIN: ${escapeHtml(fsCfg.taxId)} &middot; ` : ''}${fsCfg.registrationNumber ? `RC: ${escapeHtml(fsCfg.registrationNumber)} &middot; ` : ''}Web: ${escapeHtml(fsCfg.website)}
+                  </div>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="cp-doc-type-title" style="font-size:18px;">PAYSLIP FOR THE PERIOD OF</div>
+                <div style="font-size:16px; font-weight:800; color:var(--primary);">${escapeHtml(periodTitle)}</div>
+                <div class="cp-doc-no" style="margin-top:2px;">#${payslip.payslip_display_no || formatDocNo('payslip', payslip.payslipNo, payslip.payDate)}</div>
+                <div style="margin-top:4px;"><span class="cp-pill ${statusClass}">${statusLabel}</span></div>
+              </div>
+            </div>
+
+            <!-- Personnel Metadata -->
+            <div class="cp-doc-meta-grid">
+              <div class="cp-doc-meta-block">
+                <div class="cp-doc-section-label">EMPLOYEE / BENEFICIARY INFORMATION:</div>
+                <div class="cp-doc-client-name">${escapeHtml(payslip.employeeName)}</div>
+                <div style="color:var(--text-secondary); margin-top:2px;">Designation / Role: <strong>${escapeHtml(payslip.role)}</strong></div>
+                <div style="color:var(--text-secondary);">Department: <strong>${escapeHtml(payslip.department)}</strong></div>
+                <div style="color:var(--text-secondary);">Personnel Classification: <strong>${escapeHtml(payslip.employeeType.toUpperCase())}</strong></div>
+              </div>
+              <div class="cp-doc-meta-block">
+                <div class="cp-doc-section-label">PAYROLL SCHEDULE:</div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Pay Period:</span><strong>${escapeHtml(payslip.payPeriod)}</strong></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Target Pay Date:</span><strong>${fmtDate(payslip.payDate)}</strong></div>
+                <div style="display:flex; justify-content:space-between;"><span>Payment Mode:</span><strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong></div>
+              </div>
+            </div>
+
+            <!-- 1. Earnings Breakdown -->
+            <div style="margin-bottom:14px;">
+              <div class="cp-doc-section-label" style="margin-bottom:4px;">1. EARNINGS &amp; ALLOWANCES</div>
+              <table class="cp-doc-table" style="margin-bottom:6px;">
+                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
+                <tbody>
+                  <tr><td>Basic Compensation / Session Fee</td><td style="text-align:right; font-weight:600;">${fmtMoney(payslip.basicPay)}</td></tr>
+                  ${(payslip.allowances || []).map(a => `
+                    <tr><td>${escapeHtml(a.description)}</td><td style="text-align:right; font-weight:600;">${fmtMoney(a.amount)}</td></tr>
+                  `).join('')}
+                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--primary);">
+                    <td>TOTAL GROSS EARNINGS:</td><td style="text-align:right; color:var(--primary);">${fmtMoney(payslip.grossPay)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 2. Deductions Breakdown -->
+            <div style="margin-bottom:16px;">
+              <div class="cp-doc-section-label" style="margin-bottom:4px; color:var(--danger);">2. STATUTORY &amp; VOLUNTARY DEDUCTIONS</div>
+              <table class="cp-doc-table" style="margin-bottom:6px;">
+                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
+                <tbody>
+                  ${(payslip.deductions && payslip.deductions.length ? payslip.deductions : [{ description: 'No Deductions Applied', amount: 0 }]).map(d => `
+                    <tr><td>${escapeHtml(d.description)}</td><td style="text-align:right; color:var(--danger);">${Number(d.amount) > 0 ? '-' + fmtMoney(d.amount) : '₦0.00'}</td></tr>
+                  `).join('')}
+                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--danger);">
+                    <td>TOTAL DEDUCTIONS:</td><td style="text-align:right; color:var(--danger);">${payslip.totalDeductions > 0 ? '-' + fmtMoney(payslip.totalDeductions) : '₦0.00'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 3. Net Pay Highlight Block -->
+            <div style="background:#F0FDF4; border:2px solid var(--success); border-radius:var(--radius-sm); padding:14px 18px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+              <div>
+                <div style="font-size:11px; font-weight:800; color:var(--success); text-transform:uppercase; letter-spacing:0.5px;">NET COMPENSATION PAYABLE</div>
+                <div style="font-size:12.5px; font-weight:600; color:var(--primary); margin-top:2px;">Disbursement via Direct Corporate Bank Transfer</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">NET PAY</div>
+                <div style="font-size:24px; font-weight:900; color:var(--success);">${fmtMoney(payslip.netPay)}</div>
+              </div>
+            </div>
+
+            <!-- 4. Employee Acknowledgement & Signatures Section (Always Present) -->
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:16px;">
+              <div class="cp-doc-section-label" style="margin-bottom:6px;">EMPLOYEE / FACILITATOR ACKNOWLEDGEMENT</div>
+              <p style="font-size:12px; color:var(--text-secondary); font-style:italic; margin-bottom:12px;">
+                "I acknowledge that I have reviewed the earnings and deductions stated on this payslip."
+              </p>
+
+              ${payslip.acknowledgedAt ? `
+                <div style="background:#ECFDF5; border:1px solid #10B981; border-radius:var(--radius-sm); padding:8px 12px; font-size:11.5px; color:#065F46; margin-bottom:12px;">
+                  ✔ <strong>Digital Acknowledgement Captured:</strong> Confirmed by <strong>${escapeHtml(payslip.acknowledgedBy)}</strong> on ${new Date(payslip.acknowledgedAt).toLocaleString('en-GB')} via <em>${escapeHtml(payslip.acknowledgementMethod || 'Portal Confirmation')}</em>.
+                </div>
+              ` : `
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
+                  Status: <em>Pending Employee Review &amp; Acknowledgement</em>
+                </div>
+              `}
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+                <div>
+                  <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Employee / Facilitator Signature:</div>
+                  <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
+                  <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
+                </div>
+                <div>
+                  <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Authorized Finance Officer:</div>
+                  <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
+                  <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Actual Disbursement Details (Shown ONLY when status is PAID) -->
+            ${isPaid ? `
+              <div class="cp-doc-box" style="border-left-color:var(--success); background:#F0FDF4;">
+                <div class="cp-doc-section-label" style="color:var(--success); font-weight:800;">FINANCIAL DISBURSEMENT CONFIRMATION (PAID)</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+                  <div>
+                    <span style="color:var(--text-muted);">Payment Date:</span> <strong>${fmtDate(payslip.actualPaymentDate || payslip.payDate)}</strong><br/>
+                    <span style="color:var(--text-muted);">Payment Method:</span> <strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong>
+                  </div>
+                  <div>
+                    <span style="color:var(--text-muted);">Banking Reference:</span> <strong style="font-family:monospace; color:var(--primary);">${escapeHtml(payslip.paymentReference || 'N/A')}</strong><br/>
+                    <span style="color:var(--text-muted);">Disbursed By:</span> <strong>${escapeHtml(payslip.paidBy || 'Finance Operations')}</strong>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- 6. Active Query Alert on Document (if any) -->
+            ${hasOpenQuery ? `
+              <div style="background:#FFFBEB; border:1px solid var(--warning); border-radius:var(--radius-sm); padding:10px 14px; font-size:11.5px; color:#92400E; margin-bottom:14px;">
+                ⚠️ <strong>Under Query:</strong> A payroll discrepancy query was raised on this statement and is currently under review by Finance Operations.
+              </div>
+            ` : ''}
+
+            <!-- Footer -->
+            <div class="cp-doc-footer">
+              <div>Official Confidential Payroll Statement &middot; Clasptek Coaching Limited</div>
+              <div>${escapeHtml(fsCfg.website)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cp-modal-footer no-print">
+          <button class="cp-btn secondary" id="btnCloseViewPsl2">Close</button>
+          
+          ${payslip.status === 'issued' ? `
+            <button class="cp-btn success" id="btnAckFromDoc">&#x2714; Acknowledge Payslip</button>
+            <button class="cp-btn secondary" id="btnQueryFromDoc" style="color:#B45309;">Raise Query</button>
+          ` : ''}
+
+          ${payslip.status === 'acknowledged' ? `
+            ${canApprove() ? `<button class="cp-btn accent" id="btnApproveFromDoc" ${hasOpenQuery ? 'disabled' : ''}>Approve Payroll</button>` : ''}
+            <button class="cp-btn secondary" id="btnQueryFromDoc" style="color:#B45309;">Raise Query</button>
+          ` : ''}
+
+          ${payslip.status === 'approved' && canApprove() ? `
+            <button class="cp-btn success" id="btnPayFromDoc">Mark as Paid</button>
+          ` : ''}
+
+          <button class="cp-btn accent" id="btnPrintPayslip">&#x1F5A8;&#xFE0F; Print / Save as PDF</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseViewPsl').addEventListener('click', closeModal);
+  document.getElementById('btnCloseViewPsl2').addEventListener('click', closeModal);
+  document.getElementById('btnPrintPayslip').addEventListener('click', () => window.print());
+
+  const btnAck = document.getElementById('btnAckFromDoc');
+  if (btnAck) btnAck.addEventListener('click', () => openModal('acknowledgePayslip', { payslip }));
+
+  const btnQry = document.getElementById('btnQueryFromDoc');
+  if (btnQry) btnQry.addEventListener('click', () => openModal('raisePayrollQuery', { payslip }));
+
+  const btnApp = document.getElementById('btnApproveFromDoc');
+  if (btnApp) btnApp.addEventListener('click', () => openModal('approvePayslip', { payslip }));
+
+  const btnPay = document.getElementById('btnPayFromDoc');
+  if (btnPay) btnPay.addEventListener('click', () => openModal('payPayslip', { payslip }));
 }
 
 // ----------------------------------------------------
