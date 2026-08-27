@@ -348,6 +348,120 @@
     .cp-modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #FAFBFD; }
 
     /* Centered Document Preview Canvas */
+    
+    /* Clean, Professional Authentication UI */
+    .cp-auth-wrap {
+      min-height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0F172A 0%, #14213D 50%, #1E293B 100%);
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .cp-auth-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 20px 35px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 440px;
+      padding: 32px 28px;
+      box-sizing: border-box;
+      position: relative;
+    }
+    .cp-auth-header {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+    .cp-auth-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .cp-auth-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .cp-auth-alert {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      margin-bottom: 16px;
+      display: none;
+      line-height: 1.4;
+    }
+    .cp-auth-alert.error {
+      background: var(--danger-bg);
+      border: 1px solid #F87171;
+      color: #991B1B;
+      display: block;
+    }
+    .cp-auth-alert.success {
+      background: var(--success-bg);
+      border: 1px solid #86EFAC;
+      color: #166534;
+      display: block;
+    }
+    .cp-auth-alert.warning {
+      background: var(--warning-bg);
+      border: 1px solid #FCD34D;
+      color: #92400E;
+      display: block;
+    }
+    .cp-password-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .cp-password-wrap input {
+      width: 100%;
+      padding-right: 40px;
+      box-sizing: border-box;
+    }
+    .cp-password-toggle {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 4px;
+    }
+    .cp-auth-footer-links {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+      font-size: 12px;
+    }
+    .cp-auth-link {
+      color: var(--info);
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-family: inherit;
+    }
+    .cp-auth-link:hover {
+      text-decoration: underline;
+    }
+    .cp-auth-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
     .cp-doc-scroll-wrap {
       max-height: 80vh;
       overflow-y: auto;
@@ -936,12 +1050,87 @@ const STORE_KEY_SYSTEM_USERS = 'clasptek:system_users';
 const STORE_KEY_NOTIFICATIONS = 'clasptek:notifications';
 
 const SYSTEM_ACCOUNTS = [
-  { id: 'usr_sa_1', email: 'admin@clasptek.org', name: 'Ayodele Johnson', role: 'Super Admin', title: 'Managing Director & Lead Consultant', status: 'active', personnelId: 'emp_1', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fm_1', email: 'finance@clasptek.org', name: 'Bolanle Adeyemi', role: 'Finance Manager', title: 'Head of Financial Operations', status: 'active', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fs_1', email: 'finance.staff@clasptek.org', name: 'Chukwuma Eze', role: 'Finance Staff', title: 'Billing & Accounts Officer', status: 'active', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_emp_1', email: 'mary@clasptek.org', name: 'Mary Okonjo', role: 'Staff', title: 'Admissions & Student Success Officer', status: 'active', personnelId: 'emp_2', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fac_1', email: 'chinedu.eze@clasptek.org', name: 'Dr. Chinedu Eze', role: 'Facilitator', title: 'Lead IELTS Master Trainer', status: 'active', personnelId: 'emp_3', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fv_1', email: 'viewer@clasptek.org', name: 'Dr. Stella Briggs', role: 'Finance Viewer', title: 'Advisory Board Auditor', status: 'active', tenant_id: DEFAULT_TENANT_ID }
+  {
+    id: 'usr_sa_1',
+    email: 'admin@clasptek.org',
+    name: 'Ayodele Johnson',
+    role: 'Super Admin',
+    title: 'Managing Director & Lead Consultant',
+    status: 'active',
+    personnelId: 'emp_1',
+    passwordSalt: 'salt_admin_2026',
+    passwordHash: 'fbb1b66f32de54b146c43657125379a6984b71693c376e19837de7bdeaa51c48',
+    mustChangePassword: true,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  },
+  {
+    id: 'usr_fm_1',
+    email: 'finance@clasptek.org',
+    name: 'Bolanle Adeyemi',
+    role: 'Finance Manager',
+    title: 'Head of Financial Operations',
+    status: 'active',
+    passwordSalt: 'salt_fm_2026',
+    passwordHash: '2cfb697232c3a62e2c095331390ee15a78fbf85e9fa5475b95276cf2c28d90e9',
+    mustChangePassword: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  },
+  {
+    id: 'usr_fs_1',
+    email: 'finance.staff@clasptek.org',
+    name: 'Chukwuma Eze',
+    role: 'Finance Staff',
+    title: 'Billing & Accounts Officer',
+    status: 'active',
+    passwordSalt: 'salt_fs_2026',
+    passwordHash: '82b24f80863ba10aa67f181d8026a47deb78c1a3d63d9762a3a96a1cf7bffeae',
+    mustChangePassword: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  },
+  {
+    id: 'usr_emp_1',
+    email: 'mary@clasptek.org',
+    name: 'Mary Okonjo',
+    role: 'Staff',
+    title: 'Admissions & Student Success Officer',
+    status: 'active',
+    personnelId: 'emp_2',
+    passwordSalt: 'salt_staff_2026',
+    passwordHash: 'ed55cba81edf9248c739932cf872bab3c0121b9f2eae736a08ace113125c6653',
+    mustChangePassword: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  },
+  {
+    id: 'usr_fac_1',
+    email: 'chinedu.eze@clasptek.org',
+    name: 'Dr. Chinedu Eze',
+    role: 'Facilitator',
+    title: 'Lead IELTS Master Trainer',
+    status: 'active',
+    personnelId: 'emp_3',
+    passwordSalt: 'salt_fac_2026',
+    passwordHash: '39c10cfe99739b29dbd4093e4f29915cbebd30af7cd90b1e7d9c8a1dd8614273',
+    mustChangePassword: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  },
+  {
+    id: 'usr_fv_1',
+    email: 'viewer@clasptek.org',
+    name: 'Dr. Stella Briggs',
+    role: 'Finance Viewer',
+    title: 'Advisory Board Auditor',
+    status: 'active',
+    passwordSalt: 'salt_fv_2026',
+    passwordHash: 'fbb1b66f32de54b146c43657125379a6984b71693c376e19837de7bdeaa51c48',
+    mustChangePassword: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    tenant_id: DEFAULT_TENANT_ID
+  }
 ];
 
 const DEFAULT_INCOME_CATEGORIES = [
@@ -1126,6 +1315,60 @@ const DEFAULT_PERSONNEL_DIRECTORY = [
     status: 'active'
   }
 ];
+
+
+// ----------------------------------------------------
+// CRYPTOGRAPHIC AUTHENTICATION & PASSWORD UTILITIES
+// ----------------------------------------------------
+async function sha256Hex(str) {
+  if (typeof crypto !== 'undefined' && crypto.subtle && typeof TextEncoder !== 'undefined') {
+    const msgBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  if (typeof require !== 'undefined') {
+    try {
+      const nodeCrypto = require('crypto');
+      return nodeCrypto.createHash('sha256').update(str).digest('hex');
+    } catch (e) {}
+  }
+  // Deterministic fallback for non-crypto headless environments
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    h0 = ((h0 << 5) - h0) + code; h0 |= 0;
+    h1 = ((h1 << 5) - h1) + (code * 31); h1 |= 0;
+    h2 = ((h2 << 5) - h2) + (code * 17); h2 |= 0;
+    h3 = ((h3 << 5) - h3) + (code * 13); h3 |= 0;
+  }
+  return [h0, h1, h2, h3].map(n => Math.abs(n).toString(16).padStart(8, '0')).join('');
+}
+
+function generateRandomToken(prefix = 'tok_') {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    return prefix + Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  return prefix + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+}
+
+async function hashPasswordWithSalt(password, salt) {
+  return await sha256Hex('clasptek_salt_' + salt + '_pwd_' + password);
+}
+
+function validatePasswordStrength(pwd) {
+  if (!pwd || pwd.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long.' };
+  }
+  const hasLetter = /[a-zA-Z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  if (!hasLetter || !hasNumber) {
+    return { valid: false, message: 'Password must contain both letters and numbers.' };
+  }
+  return { valid: true };
+}
 
 // ----------------------------------------------------
 // SAFE FINANCIAL ARITHMETIC UTILITIES
@@ -1366,6 +1609,62 @@ function isReadOnly() {
   return getRole() === 'Finance Viewer';
 }
 
+
+function canAccessTab(user, tabName) {
+  if (!user || !user.role) return false;
+  const role = user.role;
+
+  if (role === 'Super Admin') {
+    return true;
+  }
+  if (role === 'Finance Manager') {
+    const prohibited = ['usersRoles', 'settings'];
+    return !prohibited.includes(tabName);
+  }
+  if (role === 'Finance Staff') {
+    const allowed = ['dashboard', 'studentAccounts', 'invoices', 'payments', 'payslips', 'expenses', 'programmes', 'receivables', 'reports'];
+    return allowed.includes(tabName);
+  }
+  if (role === 'Staff' || role === 'Facilitator') {
+    const allowed = ['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'];
+    return allowed.includes(tabName);
+  }
+  if (role === 'Finance Viewer') {
+    const allowed = ['dashboard', 'studentAccounts', 'invoices', 'payments', 'payslips', 'expenses', 'programmes', 'receivables', 'reports', 'financialControls', 'auditLog'];
+    return allowed.includes(tabName);
+  }
+  return false;
+}
+
+function getDefaultTabForRole(role) {
+  if (role === 'Super Admin' || role === 'Finance Manager' || role === 'Finance Viewer') {
+    return 'dashboard';
+  }
+  if (role === 'Finance Staff') {
+    return 'invoices';
+  }
+  if (role === 'Staff' || role === 'Facilitator') {
+    return 'staffDashboard';
+  }
+  return 'dashboard';
+}
+
+function setTab(tabName) {
+  if (!state.auth || !state.auth.isAuthenticated || !state.auth.user) {
+    state.tab = 'dashboard';
+    render();
+    return;
+  }
+  if (!canAccessTab(state.auth.user, tabName)) {
+    alert('Access Denied: You do not have authorization to access this workspace section.');
+    state.tab = getDefaultTabForRole(state.auth.user.role);
+    render();
+    return;
+  }
+  state.tab = tabName;
+  render();
+}
+
 function isPeriodLocked(dateStr) {
   if (!dateStr) return false;
   const periodKey = dateStr.slice(0, 7);
@@ -1528,11 +1827,20 @@ async function loadAll() {
   state.enrolments = Array.isArray(enrls) ? enrls : [];
   state.customers = Array.isArray(custs) ? custs : [];
 
-  if (authSession && authSession.user) {
-    state.auth = { isAuthenticated: true, user: authSession.user };
+    // Authoritative Session Verification (MANDATORY LOGIN)
+  if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
+    const foundUser = state.users.find(u => u.id === authSession.user.id || u.email.toLowerCase() === authSession.user.email.toLowerCase());
+    if (foundUser && foundUser.status === 'active' && !(foundUser.revokedSessionTokens || []).includes(authSession.token)) {
+      state.auth = { isAuthenticated: true, user: foundUser, token: authSession.token, expiresAt: authSession.expiresAt };
+    } else {
+      state.auth = { isAuthenticated: false, user: null };
+      await safeSet(STORE_KEY_AUTH_SESSION, null);
+    }
   } else {
-    state.auth = { isAuthenticated: true, user: SYSTEM_ACCOUNTS[0] };
-    await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+    state.auth = { isAuthenticated: false, user: null };
+    if (authSession) {
+      await safeSet(STORE_KEY_AUTH_SESSION, null);
+    }
   }
 
   state.collectionNotes = Array.isArray(cNotes) ? cNotes : [];
@@ -1979,90 +2287,540 @@ function printCanonicalDocument(docHtml) {
 // ----------------------------------------------------
 // AUTHENTICATION & LOGIN SCREEN (CLEAN CLASPTEK BRANDING)
 // ----------------------------------------------------
+
+// ----------------------------------------------------
+// AUTHENTICATION & LOGIN ENGINE (CLASPTEK BRANDING)
+// ----------------------------------------------------
+let authViewState = {
+  mode: 'login', // 'login' | 'forgot' | 'force_reset' | 'invitation'
+  email: '',
+  targetUser: null,
+  inviteToken: '',
+  resetToken: '',
+  alertMsg: '',
+  alertType: 'error'
+};
+
+function checkUrlAuthParams() {
+  if (typeof window !== 'undefined' && window.location && window.location.search) {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    const reset = params.get('reset');
+    if (invite) {
+      const u = state.users.find(user => user.invitationToken === invite);
+      if (u) {
+        if (u.status !== 'invited') {
+          authViewState.alertMsg = 'This invitation link has already been used. Please sign in.';
+          authViewState.alertType = 'warning';
+          authViewState.mode = 'login';
+        } else if (u.invitationExpiresAt && u.invitationExpiresAt < Date.now()) {
+          authViewState.alertMsg = 'This invitation link has expired. Please request a new invitation from your administrator.';
+          authViewState.alertType = 'error';
+          authViewState.mode = 'login';
+        } else {
+          authViewState.mode = 'invitation';
+          authViewState.inviteToken = invite;
+          authViewState.targetUser = u;
+        }
+      } else {
+        authViewState.alertMsg = 'Invalid invitation token.';
+        authViewState.alertType = 'error';
+      }
+    } else if (reset) {
+      const u = state.users.find(user => user.resetToken === reset);
+      if (u) {
+        if (u.resetExpiresAt && u.resetExpiresAt < Date.now()) {
+          authViewState.alertMsg = 'This password reset link has expired. Please request a new reset.';
+          authViewState.alertType = 'error';
+          authViewState.mode = 'login';
+        } else {
+          authViewState.mode = 'force_reset';
+          authViewState.resetToken = reset;
+          authViewState.targetUser = u;
+        }
+      } else {
+        authViewState.alertMsg = 'Invalid password reset token.';
+        authViewState.alertType = 'error';
+      }
+    }
+  }
+}
+
 function renderLoginScreen(root) {
-  root.innerHTML = `
-    <div class="cp-auth-wrap">
-      <div class="cp-auth-card">
-        <div class="cp-auth-header">
-          <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; margin-bottom:12px; object-fit:contain;" />
-          <div class="cp-auth-title" style="font-size:18px; font-weight:800; color:var(--primary);">Clasptek Portal</div>
-          <div class="cp-auth-sub" style="font-size:12px; color:var(--text-muted);">Unified Enterprise &amp; Employee Workspace</div>
-        </div>
-
-        <div class="cp-field" style="margin-top:16px;">
-          <label>Work Email Address</label>
-          <input type="email" id="authEmail" placeholder="e.g. admin@clasptek.org" value="admin@clasptek.org" />
-        </div>
-
-        <div class="cp-field">
-          <label>Password</label>
-          <input type="password" id="authPassword" placeholder="••••••••••••" value="password123" />
-        </div>
-
-        <button class="cp-btn accent" id="btnSignIn" style="width:100%; padding:10px; font-size:13.5px; margin-top:8px;">Sign In to Clasptek Portal</button>
-
-        <div class="cp-auth-demo-box" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
-          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:8px;">Select Test Persona &amp; Role:</div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Super Admin" style="font-size:11px;">&#x1F511; Super Admin</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Manager" style="font-size:11px;">&#x1F4BC; Finance Manager</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Staff" style="font-size:11px;">&#x1F4DD; Finance Staff</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Staff" style="font-size:11px; background:#EFF6FC; border-color:#93C5FD; color:#1D4ED8;">&#x1F464; Staff (Mary)</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Facilitator" style="font-size:11px; background:#F5F3FF; border-color:#C4B5FD; color:#6D28D9;">&#x1F393; Facilitator (Dr. Eze)</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Viewer" style="font-size:11px;">&#x1F441;&#xFE0F; Finance Viewer</button>
-          </div>
-        </div>
-      </div>
+  checkUrlAuthParams();
+  const brandLogoHtml = `
+    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:12px; gap:10px;">
+      <div style="width:42px; height:42px; border-radius:10px; background:linear-gradient(135deg, #14213D 0%, #C1272D 100%); display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:900; font-size:22px; box-shadow:0 4px 10px rgba(193,39,45,0.25);">C</div>
+      <span style="font-size:24px; font-weight:900; color:#14213D; letter-spacing:-0.5px;">Clasptek</span>
     </div>
   `;
 
-  document.getElementById('btnSignIn').addEventListener('click', async () => {
-    const email = document.getElementById('authEmail').value.trim().toLowerCase();
-    const existingUser = state.users.find(u => u.email.toLowerCase() === email) || SYSTEM_ACCOUNTS.find(a => a.email.toLowerCase() === email);
+  // VIEW 1: Standard Login Screen
+  if (authViewState.mode === 'login') {
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Welcome to Clasptek</div>
+            <div class="cp-auth-sub">Sign in to access your secure workspace</div>
+          </div>
 
-    if (existingUser && existingUser.status === 'deactivated') {
-      alert('This account has been deactivated. Please contact your Super Administrator.');
-      return;
+          ${authViewState.alertMsg ? `<div class="cp-auth-alert ${authViewState.alertType}">${escapeHtml(authViewState.alertMsg)}</div>` : ''}
+          <div id="loginAuthAlert" class="cp-auth-alert error"></div>
+
+          <form id="formSignIn" onsubmit="return false;">
+            <div class="cp-field">
+              <label for="authEmail">Work Email Address</label>
+              <input type="email" id="authEmail" placeholder="e.g. yourname@clasptek.org" value="${escapeHtml(authViewState.email)}" required autocomplete="username" />
+            </div>
+
+            <div class="cp-field">
+              <label for="authPassword">Password</label>
+              <div class="cp-password-wrap">
+                <input type="password" id="authPassword" placeholder="Enter your password" required autocomplete="current-password" />
+                <button type="button" class="cp-password-toggle" id="btnTogglePwd" title="Show/Hide Password">&#x1F441;</button>
+              </div>
+            </div>
+
+            <button type="submit" class="cp-btn accent" id="btnSignIn" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Sign In
+            </button>
+          </form>
+
+          <div class="cp-auth-footer-links">
+            <button type="button" class="cp-auth-link" id="lnkForgotPassword">Forgot Password?</button>
+            <span style="color:var(--text-muted); font-size:11.5px;">Authorized Personnel Only</span>
+          </div>
+
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
+          </div>
+        </div>
+      </div>
+    `;
+
+    const alertEl = document.getElementById('loginAuthAlert');
+    const pwdInput = document.getElementById('authPassword');
+    const toggleBtn = document.getElementById('btnTogglePwd');
+    if (toggleBtn && pwdInput) {
+      toggleBtn.addEventListener('click', () => {
+        pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+      });
     }
-    if (existingUser && existingUser.status === 'suspended') {
-      alert('This account is temporarily suspended. Please contact your Super Administrator.');
-      return;
+
+    const lnkForgot = document.getElementById('lnkForgotPassword');
+    if (lnkForgot) {
+      lnkForgot.addEventListener('click', () => {
+        authViewState.mode = 'forgot';
+        authViewState.alertMsg = '';
+        render();
+      });
     }
 
-    const acc = existingUser || {
-      id: 'usr_' + Date.now(), email, name: email.split('@')[0], role: 'Staff', title: 'Staff Member', status: 'active', tenant_id: DEFAULT_TENANT_ID
-    };
+    const form = document.getElementById('formSignIn');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        alertEl.style.display = 'none';
+        const email = (document.getElementById('authEmail').value || '').trim().toLowerCase();
+        const pwd = document.getElementById('authPassword').value;
 
-    state.auth = { isAuthenticated: true, user: acc };
-    if (isEmployeePortal()) {
-      state.tab = 'staffDashboard';
-    } else {
-      state.tab = 'dashboard';
+        if (!email || !pwd) {
+          alertEl.textContent = 'Please enter both your work email and password.';
+          alertEl.style.display = 'block';
+          return;
+        }
+
+        const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+        if (!user) {
+          alertEl.textContent = 'Invalid email address or password.';
+          alertEl.style.display = 'block';
+          await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for email: ${email}`);
+          return;
+        }
+
+        if (user.status === 'deactivated') {
+          alertEl.textContent = 'This account has been deactivated. Please contact your Super Administrator.';
+          alertEl.style.display = 'block';
+          await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Deactivated user ${user.email} attempted login`);
+          return;
+        }
+
+        if (user.status === 'suspended') {
+          alertEl.textContent = 'This account is currently suspended. Please contact your Super Administrator.';
+          alertEl.style.display = 'block';
+          await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Suspended user ${user.email} attempted login`);
+          return;
+        }
+
+        if (user.status === 'invited') {
+          alertEl.textContent = 'Your account invitation is pending setup. Please use the invitation link sent by your administrator.';
+          alertEl.style.display = 'block';
+          return;
+        }
+
+        // Verify password hash
+        const computedHash = await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default');
+        if (computedHash !== user.passwordHash) {
+          alertEl.textContent = 'Invalid email address or password.';
+          alertEl.style.display = 'block';
+          await logAudit('USER_LOGIN_FAILED', 'user', user.id, `Invalid password entered for ${user.email}`);
+          return;
+        }
+
+        // Check if forced password reset is required
+        if (user.mustChangePassword || user.forcePasswordReset) {
+          authViewState.mode = 'force_reset';
+          authViewState.targetUser = user;
+          authViewState.alertMsg = 'You are required to set a new private password before accessing your workspace.';
+          authViewState.alertType = 'warning';
+          render();
+          return;
+        }
+
+        // Successful authentication
+        const sessionToken = generateRandomToken('sess_');
+        const sessionExpiry = Date.now() + 24 * 3600 * 1000; // 24-hour session
+        user.lastLoginAt = new Date().toISOString();
+        await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+
+        state.auth = {
+          isAuthenticated: true,
+          user: user,
+          token: sessionToken,
+          expiresAt: sessionExpiry
+        };
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+
+        // Role-based workspace routing
+        state.tab = getDefaultTabForRole(user.role);
+
+        await logAudit('USER_LOGIN', 'user', user.id, `User logged in with role: ${user.role}`);
+        authViewState.alertMsg = '';
+        render();
+      });
+    }
+    return;
+  }
+
+  // VIEW 2: Force Password Reset (First Login / Admin Enforced)
+  if (authViewState.mode === 'force_reset') {
+    const user = authViewState.targetUser || state.users[0];
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Set Private Password</div>
+            <div class="cp-auth-sub">Create your confidential password to secure your account</div>
+          </div>
+
+          ${authViewState.alertMsg ? `<div class="cp-auth-alert ${authViewState.alertType}">${escapeHtml(authViewState.alertMsg)}</div>` : ''}
+          <div id="resetAuthAlert" class="cp-auth-alert error"></div>
+
+          <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:16px; font-size:12px;">
+            Account: <strong>${escapeHtml(user.name)}</strong> (${escapeHtml(user.email)}) &middot; Role: <span class="cp-pill ${user.role === 'Super Admin' ? 'category-pill' : 'paid'}">${escapeHtml(user.role)}</span>
+          </div>
+
+          <form id="formForceReset" onsubmit="return false;">
+            <div class="cp-field">
+              <label for="newPassword">New Password (min 8 chars, letters &amp; numbers) *</label>
+              <div class="cp-password-wrap">
+                <input type="password" id="newPassword" placeholder="Enter new password" required autocomplete="new-password" />
+                <button type="button" class="cp-password-toggle" id="btnToggleNewPwd">&#x1F441;</button>
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label for="confirmPassword">Confirm New Password *</label>
+              <input type="password" id="confirmPassword" placeholder="Re-enter new password" required autocomplete="new-password" />
+            </div>
+
+            <button type="submit" class="cp-btn accent" id="btnSaveNewPassword" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Update Password &amp; Enter Workspace
+            </button>
+          </form>
+
+          <div class="cp-auth-footer-links" style="justify-content:center;">
+            <button type="button" class="cp-auth-link" id="btnBackToLogin">&larr; Back to Sign In</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const alertEl = document.getElementById('resetAuthAlert');
+    const pwdInput = document.getElementById('newPassword');
+    const toggleBtn = document.getElementById('btnToggleNewPwd');
+    if (toggleBtn && pwdInput) {
+      toggleBtn.addEventListener('click', () => {
+        pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+      });
     }
 
-    await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-    await logAudit('USER_LOGIN', 'user', acc.id, `User logged in with role: ${acc.role}`);
-    render();
-  });
-
-  root.querySelectorAll('.btnQuickLogin').forEach(b => {
-    b.addEventListener('click', async () => {
-      const role = b.dataset.role;
-      const acc = state.users.find(a => a.role === role && a.status === 'active') || SYSTEM_ACCOUNTS.find(a => a.role === role) || SYSTEM_ACCOUNTS[0];
-      
-      state.auth = { isAuthenticated: true, user: acc };
-      if (['Staff', 'Facilitator'].includes(acc.role)) {
-        state.tab = 'staffDashboard';
-      } else {
-        state.tab = 'dashboard';
-      }
-
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      await logAudit('USER_LOGIN', 'user', acc.id, `Persona switched to ${acc.role} (${acc.name})`);
+    document.getElementById('btnBackToLogin').addEventListener('click', () => {
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
       render();
     });
-  });
+
+    document.getElementById('formForceReset').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertEl.style.display = 'none';
+      const newPwd = document.getElementById('newPassword').value;
+      const confPwd = document.getElementById('confirmPassword').value;
+
+      if (newPwd !== confPwd) {
+        alertEl.textContent = 'Passwords do not match. Please re-enter.';
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const strCheck = validatePasswordStrength(newPwd);
+      if (!strCheck.valid) {
+        alertEl.textContent = strCheck.message;
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const salt = generateRandomToken('salt_');
+      const hash = await hashPasswordWithSalt(newPwd, salt);
+
+      user.passwordSalt = salt;
+      user.passwordHash = hash;
+      user.mustChangePassword = false;
+      user.forcePasswordReset = false;
+      user.resetToken = null;
+      user.resetExpiresAt = null;
+      user.lastLoginAt = new Date().toISOString();
+
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+
+      const sessionToken = generateRandomToken('sess_');
+      const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+
+      state.auth = {
+        isAuthenticated: true,
+        user: user,
+        token: sessionToken,
+        expiresAt: sessionExpiry
+      };
+      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+
+      state.tab = getDefaultTabForRole(user.role);
+
+      await logAudit('PASSWORD_RESET_COMPLETED', 'user', user.id, `Private password successfully set for ${user.email}`);
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+    return;
+  }
+
+  // VIEW 3: Forgot Password Request
+  if (authViewState.mode === 'forgot') {
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Reset Password</div>
+            <div class="cp-auth-sub">Enter your registered work email to receive password reset instructions</div>
+          </div>
+
+          <div id="forgotAuthAlert" class="cp-auth-alert"></div>
+
+          <form id="formForgot" onsubmit="return false;">
+            <div class="cp-field">
+              <label for="forgotEmail">Work Email Address</label>
+              <input type="email" id="forgotEmail" placeholder="e.g. yourname@clasptek.org" required />
+            </div>
+
+            <button type="submit" class="cp-btn accent" id="btnSubmitForgot" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Request Password Reset
+            </button>
+          </form>
+
+          <div id="resetLinkContainer" style="display:none; margin-top:16px; background:#F0FDF4; border:1px solid #86EFAC; border-radius:var(--radius-sm); padding:12px; font-size:12px; color:#166534;">
+            <div style="font-weight:700; margin-bottom:4px;">&#x2705; Reset Instructions Generated:</div>
+            <div style="margin-bottom:8px;">Use the secure link below to reset your password:</div>
+            <div id="resetLinkBox" style="font-family:monospace; word-break:break-all; background:#FFFFFF; padding:8px; border:1px solid #CBD5E1; border-radius:4px; font-size:11px;"></div>
+            <button class="cp-btn sm accent" id="btnGoToResetLink" style="margin-top:8px; width:100%;">Proceed to Set New Password</button>
+          </div>
+
+          <div class="cp-auth-footer-links" style="justify-content:center; margin-top:18px;">
+            <button type="button" class="cp-auth-link" id="btnBackFromForgot">&larr; Back to Sign In</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const alertEl = document.getElementById('forgotAuthAlert');
+    document.getElementById('btnBackFromForgot').addEventListener('click', () => {
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+
+    document.getElementById('formForgot').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (document.getElementById('forgotEmail').value || '').trim().toLowerCase();
+      const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+
+      if (!user) {
+        alertEl.textContent = 'If an active account exists for this email, reset instructions have been generated.';
+        alertEl.className = 'cp-auth-alert success';
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      if (user.status === 'deactivated' || user.status === 'suspended') {
+        alertEl.textContent = 'This account cannot be reset online. Please contact your Super Administrator.';
+        alertEl.className = 'cp-auth-alert error';
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const resetTok = generateRandomToken('rst_');
+      user.resetToken = resetTok;
+      user.resetExpiresAt = Date.now() + 3600 * 1000; // 1 hour
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('PASSWORD_RESET_REQUESTED', 'user', user.id, `Password reset requested for ${user.email}`);
+
+      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
+      const resetUrl = `${currentUrl}?reset=${resetTok}`;
+
+      document.getElementById('resetLinkBox').textContent = resetUrl;
+      document.getElementById('resetLinkContainer').style.display = 'block';
+      document.getElementById('btnSubmitForgot').style.display = 'none';
+
+      document.getElementById('btnGoToResetLink').addEventListener('click', () => {
+        authViewState.mode = 'force_reset';
+        authViewState.targetUser = user;
+        authViewState.resetToken = resetTok;
+        authViewState.alertMsg = '';
+        render();
+      });
+    });
+    return;
+  }
+
+  // VIEW 4: Staff / Facilitator Invitation Setup Screen
+  if (authViewState.mode === 'invitation') {
+    const user = authViewState.targetUser;
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Complete Account Setup</div>
+            <div class="cp-auth-sub">Welcome to Clasptek. Create your secure password to activate your portal workspace.</div>
+          </div>
+
+          <div id="inviteAuthAlert" class="cp-auth-alert error"></div>
+
+          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; margin-bottom:16px; font-size:12px;">
+            <div>Full Name: <strong>${escapeHtml(user.name)}</strong></div>
+            <div>Official Email: <strong>${escapeHtml(user.email)}</strong></div>
+            <div>Assigned Workspace: <span class="cp-pill category-pill">${escapeHtml(user.role)}</span></div>
+          </div>
+
+          <form id="formInviteSetup" onsubmit="return false;">
+            <div class="cp-field">
+              <label for="invitePassword">Create Password (min 8 chars, letters &amp; numbers) *</label>
+              <div class="cp-password-wrap">
+                <input type="password" id="invitePassword" placeholder="Create your password" required autocomplete="new-password" />
+                <button type="button" class="cp-password-toggle" id="btnToggleInvitePwd">&#x1F441;</button>
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label for="inviteConfirmPassword">Confirm Password *</label>
+              <input type="password" id="inviteConfirmPassword" placeholder="Confirm your password" required autocomplete="new-password" />
+            </div>
+
+            <button type="submit" class="cp-btn accent" id="btnActivateAccount" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Activate Account &amp; Access Workspace
+            </button>
+          </form>
+
+          <div class="cp-auth-footer-links" style="justify-content:center; margin-top:18px;">
+            <button type="button" class="cp-auth-link" id="btnBackFromInvite">&larr; Back to Sign In</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const alertEl = document.getElementById('inviteAuthAlert');
+    const pwdInput = document.getElementById('invitePassword');
+    const toggleBtn = document.getElementById('btnToggleInvitePwd');
+    if (toggleBtn && pwdInput) {
+      toggleBtn.addEventListener('click', () => {
+        pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+      });
+    }
+
+    document.getElementById('btnBackFromInvite').addEventListener('click', () => {
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+
+    document.getElementById('formInviteSetup').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertEl.style.display = 'none';
+      const newPwd = document.getElementById('invitePassword').value;
+      const confPwd = document.getElementById('inviteConfirmPassword').value;
+
+      if (newPwd !== confPwd) {
+        alertEl.textContent = 'Passwords do not match. Please re-enter.';
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const strCheck = validatePasswordStrength(newPwd);
+      if (!strCheck.valid) {
+        alertEl.textContent = strCheck.message;
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      const salt = generateRandomToken('salt_');
+      const hash = await hashPasswordWithSalt(newPwd, salt);
+
+      user.passwordSalt = salt;
+      user.passwordHash = hash;
+      user.status = 'active';
+      user.mustChangePassword = false;
+      user.invitationToken = null;
+      user.invitationExpiresAt = null;
+      user.activatedAt = new Date().toISOString();
+      user.lastLoginAt = new Date().toISOString();
+
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+
+      const sessionToken = generateRandomToken('sess_');
+      const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+
+      state.auth = {
+        isAuthenticated: true,
+        user: user,
+        token: sessionToken,
+        expiresAt: sessionExpiry
+      };
+      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+
+      state.tab = getDefaultTabForRole(user.role);
+
+      await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted and account activated for ${user.email}`);
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+    return;
+  }
 }
+
 
 // ----------------------------------------------------
 // MAIN APPLICATION LAYOUT & NAVIGATION
@@ -2074,9 +2832,34 @@ function render() {
     return;
   }
 
+  // Authoritative Mandatory Login Gate
   if (!state.auth || !state.auth.isAuthenticated || !state.auth.user) {
     renderLoginScreen(root);
     return;
+  }
+
+  // Ensure active user is still active and not deactivated or suspended
+  const activeUser = state.users.find(u => u.id === state.auth.user.id);
+  if (!activeUser || activeUser.status !== 'active' || (activeUser.revokedSessionTokens || []).includes(state.auth.token)) {
+    state.auth = { isAuthenticated: false, user: null };
+    safeSet(STORE_KEY_AUTH_SESSION, null);
+    authViewState.alertMsg = activeUser && activeUser.status === 'deactivated' ? 'Your account has been deactivated.' : 'Your session has expired or was revoked. Please sign in again.';
+    authViewState.alertType = 'error';
+    renderLoginScreen(root);
+    return;
+  }
+
+  // Force Password Reset check
+  if (activeUser.mustChangePassword || activeUser.forcePasswordReset) {
+    authViewState.mode = 'force_reset';
+    authViewState.targetUser = activeUser;
+    renderLoginScreen(root);
+    return;
+  }
+
+  // Authoritative Tab Access Check
+  if (!canAccessTab(activeUser, state.tab)) {
+    state.tab = getDefaultTabForRole(activeUser.role);
   }
 
   const user = state.auth.user;
@@ -2523,6 +3306,7 @@ function renderModal(type, data) {
   else if (type === 'addFacilitatorModal') renderAddFacilitatorModal(container);
   else if (type === 'editPersonnelModal') renderEditPersonnelModal(container, data.personnel);
   else if (type === 'deactivatePersonnelModal') renderDeactivatePersonnelModal(container, data.personnel);
+  else if (type === 'deactivateUserModal') renderDeactivateUserModal(container, data.user);
   else if (type === 'resetPasswordModal') renderResetPasswordModal(container, data.user);
   else if (type === 'changeRoleModal') renderChangeRoleModal(container, data.user);
 }
@@ -4864,12 +5648,14 @@ function renderUsersRolesTab(container) {
           </div>
         ` : ''}
 
+        
         ${curSub === 'users' ? `
           <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
               <div style="font-size:12.5px; color:var(--text-secondary);">
-                Active credentials and role-based permissions governing portal workspaces. Passwords cannot be viewed by administrators.
+                Active credentials and role-based permissions governing portal workspaces. Plaintext passwords are never accessible to administrators.
               </div>
+              <button class="cp-btn sm secondary" id="btnExportUsers">📥 Export Users CSV</button>
             </div>
 
             <div class="cp-table-wrap">
@@ -4879,16 +5665,18 @@ function renderUsersRolesTab(container) {
                     <th>User Name</th>
                     <th>Official Work Email</th>
                     <th>Assigned Role</th>
-                    <th>Status</th>
+                    <th>Account Status</th>
+                    <th>Last Login</th>
                     <th>Personnel Link</th>
-                    ${canManageUsers() ? '<th style="text-align:center;">Actions</th>' : ''}
+                    ${canManageUsers() ? '<th style="text-align:center;">Governance Actions</th>' : ''}
                   </tr>
                 </thead>
                 <tbody>
                   ${state.users.map(u => {
-                    const linkedPers = state.personnel.find(p => p.id === u.personnelId || p.userId === u.id);
+                    const linkedPers = state.personnel.find(p => p.id === u.personnelId || p.userId === u.id || (p.email && p.email.toLowerCase() === u.email.toLowerCase()));
                     const isDeact = u.status === 'deactivated';
                     const isSusp = u.status === 'suspended';
+                    const isInv = u.status === 'invited';
                     return `
                       <tr style="${isDeact ? 'opacity:0.6; background:#F8FAFC;' : ''}">
                         <td style="font-weight:700; color:var(--primary);">${escapeHtml(u.name)}</td>
@@ -4899,23 +5687,31 @@ function renderUsersRolesTab(container) {
                           </span>
                         </td>
                         <td>
-                          <span class="cp-pill ${u.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : 'cancelled')}">
+                          <span class="cp-pill ${u.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : (isInv ? 'draft' : 'cancelled'))}">
                             ${escapeHtml((u.status || 'active').toUpperCase())}
                           </span>
+                        </td>
+                        <td style="font-size:11.5px; color:var(--text-secondary);">
+                          ${u.lastLoginAt ? fmtDate(u.lastLoginAt.slice(0, 10)) : '<span style="color:var(--text-muted);">Never</span>'}
                         </td>
                         <td>
                           ${linkedPers ? `<span style="font-size:11.5px; color:var(--text-secondary);">${escapeHtml(linkedPers.name)} (${escapeHtml(linkedPers.employeeId || 'EMP')})</span>` : '<span style="color:var(--text-muted); font-size:11px;">Standalone Admin</span>'}
                         </td>
                         ${canManageUsers() ? `
                           <td style="text-align:center;">
-                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px;">
-                              <button class="cp-btn sm secondary btnChangeUserRole" data-id="${u.id}">Change Role</button>
-                              <button class="cp-btn sm secondary btnResetUserPwd" data-id="${u.id}">Reset Password</button>
+                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
+                              <button class="cp-btn sm secondary btnChangeUserRole" data-id="${u.id}">Role</button>
+                              <button class="cp-btn sm secondary btnResetUserPwd" data-id="${u.id}">Reset</button>
+                              ${isInv && u.invitationToken ? `<button class="cp-btn sm secondary btnCopyInviteLink" data-id="${u.id}" title="Copy Invitation Link">📋 Invite</button>` : ''}
                               ${!isDeact ? `
                                 <button class="cp-btn sm ${isSusp ? 'success' : 'secondary'} btnToggleSuspendUser" data-id="${u.id}">
                                   ${isSusp ? 'Unsuspend' : 'Suspend'}
                                 </button>
-                              ` : ''}
+                                <button class="cp-btn sm secondary btnRevokeUserSess" data-id="${u.id}" title="Revoke all active sessions">🔒 Revoke</button>
+                                <button class="cp-btn sm danger btnDeactivateUserAccount" data-id="${u.id}" title="Deactivate user with reason">Deactivate</button>
+                              ` : `
+                                <button class="cp-btn sm success btnReactivateUserAccount" data-id="${u.id}">Reactivate</button>
+                              `}
                             </div>
                           </td>
                         ` : ''}
@@ -4970,13 +5766,18 @@ function renderUsersRolesTab(container) {
       if (!pers) return;
       const newUserId = 'usr_' + Date.now();
       const userRole = pers.type === 'facilitator' ? 'Facilitator' : 'Staff';
+      const invToken = generateRandomToken('inv_');
+      const invExpiry = Date.now() + 7 * 24 * 3600 * 1000; // 7 days
       const newUser = {
         id: newUserId,
         email: pers.email,
         name: pers.name,
         role: userRole,
         title: pers.role || pers.designation,
-        status: 'active',
+        status: 'invited',
+        mustChangePassword: true,
+        invitationToken: invToken,
+        invitationExpiresAt: invExpiry,
         personnelId: pers.id,
         tenant_id: DEFAULT_TENANT_ID,
         createdAt: new Date().toISOString()
@@ -4985,8 +5786,11 @@ function renderUsersRolesTab(container) {
       state.users.push(newUser);
       await safeSet(STORE_KEY_PERSONNEL, state.personnel);
       await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('CREATE_USER_ACCOUNT', 'user', newUserId, `Provisioned login for ${pers.name} (${userRole})`);
-      alert(`Login account created for ${pers.name} (${pers.email}) with role: ${userRole}.`);
+      await logAudit('USER_INVITED', 'user', newUserId, `Provisioned invitation login for ${pers.name} (${userRole})`);
+      
+      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
+      const invLink = `${currentUrl}?invite=${invToken}`;
+      alert(`Login invitation created for ${pers.name} (${pers.email}) with role: ${userRole}.\n\nInvitation Link (Valid for 7 days):\n${invLink}`);
       render();
     });
   });
@@ -5003,7 +5807,7 @@ function renderUsersRolesTab(container) {
       const pers = state.personnel.find(p => p.id === b.dataset.id);
       if (!pers) return;
       pers.status = 'active';
-      const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || u.email.toLowerCase() === pers.email.toLowerCase());
+      const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || (u.email && u.email.toLowerCase() === pers.email.toLowerCase()));
       if (usr) usr.status = 'active';
       await safeSet(STORE_KEY_PERSONNEL, state.personnel);
       await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
@@ -5013,7 +5817,7 @@ function renderUsersRolesTab(container) {
     });
   });
 
-  // User actions
+  // User Governance Actions
   container.querySelectorAll('.btnChangeUserRole').forEach(b => {
     b.addEventListener('click', () => {
       const u = state.users.find(usr => usr.id === b.dataset.id);
@@ -5025,6 +5829,61 @@ function renderUsersRolesTab(container) {
     b.addEventListener('click', () => {
       const u = state.users.find(usr => usr.id === b.dataset.id);
       if (u) openModal('resetPasswordModal', { user: u });
+    });
+  });
+
+  container.querySelectorAll('.btnCopyInviteLink').forEach(b => {
+    b.addEventListener('click', async () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (!u || !u.invitationToken) return;
+      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
+      const invLink = `${currentUrl}?invite=${u.invitationToken}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(invLink);
+          alert(`Invitation link copied to clipboard:\n${invLink}`);
+        } catch (err) {
+          prompt('Copy Invitation Link:', invLink);
+        }
+      } else {
+        prompt('Copy Invitation Link:', invLink);
+      }
+    });
+  });
+
+  container.querySelectorAll('.btnRevokeUserSess').forEach(b => {
+    b.addEventListener('click', async () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (!u) return;
+      if (!confirm(`Revoke all active portal sessions for ${u.name} (${u.email})? They will be prompted to re-authenticate immediately.`)) return;
+      u.revokedSessionTokens = u.revokedSessionTokens || [];
+      u.revokedSessionTokens.push('REVOKED_' + Date.now());
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('REVOKE_USER_SESSIONS', 'user', u.id, `Revoked active sessions for ${u.email}`);
+      alert(`All active sessions for ${u.name} have been revoked.`);
+      render();
+    });
+  });
+
+  container.querySelectorAll('.btnDeactivateUserAccount').forEach(b => {
+    b.addEventListener('click', () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (u) openModal('deactivateUserModal', { user: u });
+    });
+  });
+
+  container.querySelectorAll('.btnReactivateUserAccount').forEach(b => {
+    b.addEventListener('click', async () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (!u) return;
+      u.status = 'active';
+      delete u.deactivationReason;
+      delete u.deactivatedAt;
+      delete u.deactivatedBy;
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('REACTIVATE_USER', 'user', u.id, `Reactivated account for ${u.email}`);
+      alert(`User account for ${u.name} (${u.email}) has been reactivated.`);
+      render();
     });
   });
 
@@ -8047,6 +8906,8 @@ function renderAddStaffModal(container) {
     const nextEmpNo = state.personnel.filter(p => p.type === 'staff').length + 1;
     const empIdStr = 'EMP-' + String(nextEmpNo).padStart(4, '0');
     const persId = 'emp_' + Date.now();
+    const invToken = createLogin ? generateRandomToken('inv_') : null;
+    const invExpiry = createLogin ? Date.now() + 7 * 24 * 3600 * 1000 : null; // 7 days
     const userId = createLogin ? 'usr_' + Date.now() : null;
 
     const newPersonnel = {
@@ -8086,18 +8947,28 @@ function renderAddStaffModal(container) {
         name: fullName,
         role: userRole,
         title: role,
-        status: 'active',
+        status: 'invited',
+        mustChangePassword: true,
+        invitationToken: invToken,
+        invitationExpiresAt: invExpiry,
         personnelId: persId,
         tenant_id: DEFAULT_TENANT_ID,
         createdAt: new Date().toISOString()
       };
       state.users.push(newUser);
       await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('CREATE_USER_ACCOUNT', 'user', userId, `Created login for ${fullName} with role ${userRole}`);
+      await logAudit('USER_INVITED', 'user', userId, `Invited staff ${fullName} (${email}) with role ${userRole}`);
     }
 
     await logAudit('CREATE_STAFF_PERSONNEL', 'personnel', persId, `Created staff record ${fullName} (${empIdStr})`);
-    alert(`Staff member ${fullName} (${empIdStr}) created successfully.`);
+    
+    if (createLogin && invToken) {
+      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
+      const invLink = `${currentUrl}?invite=${invToken}`;
+      alert(`Staff member ${fullName} created.\n\nInvitation Link (Active for 7 days):\n${invLink}`);
+    } else {
+      alert(`Staff member ${fullName} (${empIdStr}) created successfully.`);
+    }
     closeModal();
   });
 }
@@ -8203,6 +9074,8 @@ function renderAddFacilitatorModal(container) {
     const nextFacNo = state.personnel.filter(p => p.type === 'facilitator').length + 1;
     const facIdStr = 'FAC-' + String(nextFacNo).padStart(4, '0');
     const persId = 'emp_' + Date.now();
+    const invToken = createLogin ? generateRandomToken('inv_') : null;
+    const invExpiry = createLogin ? Date.now() + 7 * 24 * 3600 * 1000 : null; // 7 days
     const userId = createLogin ? 'usr_' + Date.now() : null;
 
     const newPersonnel = {
@@ -8239,18 +9112,28 @@ function renderAddFacilitatorModal(container) {
         name,
         role: 'Facilitator',
         title: designation || 'Facilitator',
-        status: 'active',
+        status: 'invited',
+        mustChangePassword: true,
+        invitationToken: invToken,
+        invitationExpiresAt: invExpiry,
         personnelId: persId,
         tenant_id: DEFAULT_TENANT_ID,
         createdAt: new Date().toISOString()
       };
       state.users.push(newUser);
       await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('CREATE_USER_ACCOUNT', 'user', userId, `Created login for facilitator ${name}`);
+      await logAudit('USER_INVITED', 'user', userId, `Invited facilitator ${name} (${email})`);
     }
 
     await logAudit('CREATE_FACILITATOR_PERSONNEL', 'personnel', persId, `Created facilitator record ${name} (${facIdStr})`);
-    alert(`Facilitator ${name} (${facIdStr}) created successfully.`);
+    
+    if (createLogin && invToken) {
+      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
+      const invLink = `${currentUrl}?invite=${invToken}`;
+      alert(`Facilitator ${name} created.\n\nInvitation Link (Active for 7 days):\n${invLink}`);
+    } else {
+      alert(`Facilitator ${name} (${facIdStr}) created successfully.`);
+    }
     closeModal();
   });
 }
@@ -8369,6 +9252,64 @@ function renderDeactivatePersonnelModal(container, pers) {
 
     alert(`${pers.name} has been deactivated. Historical records have been preserved.`);
     closeModal();
+  });
+}
+
+
+function renderDeactivateUserModal(container, user) {
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title" style="color:var(--danger);">&#x26A0;&#xFE0F; Deactivate User Account</div>
+          <button class="cp-modal-close" id="btnCloseDeactUsrMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="background:#FEF2F2; border:1px solid #F87171; border-radius:var(--radius-sm); padding:12px 14px; font-size:12.5px; color:#991B1B; margin-bottom:14px;">
+            <strong>Data Integrity Preservation:</strong> Deactivating <strong>${escapeHtml(user.name)}</strong> (${escapeHtml(user.email)}) blocks portal authentication immediately while <strong>preserving all historical payslips, past payroll disbursements, ledger expenses, invoices, and audit trails intact</strong>.
+          </div>
+
+          <div class="cp-field">
+            <label>Reason for Deactivation *</label>
+            <textarea id="userDeactReason" rows="3" placeholder="e.g. Offboarded from organization / role ceased"></textarea>
+          </div>
+          <div id="userDeactErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelDeactUsr">Cancel</button>
+          <button class="cp-btn danger" id="btnConfirmDeactUsr">&#x1F512; Confirm Deactivation</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseDeactUsrMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelDeactUsr').addEventListener('click', closeModal);
+
+  document.getElementById('btnConfirmDeactUsr').addEventListener('click', async () => {
+    const reason = document.getElementById('userDeactReason').value.trim();
+    if (!reason) {
+      const err = document.getElementById('userDeactErr');
+      err.textContent = 'Please provide a deactivation reason for audit trail recording.';
+      err.style.display = 'block';
+      return;
+    }
+
+    user.status = 'deactivated';
+    user.deactivatedAt = new Date().toISOString();
+    user.deactivatedBy = state.auth.user ? state.auth.user.name : 'Super Admin';
+    user.deactivationReason = reason;
+
+    // Revoke any ongoing sessions
+    user.revokedSessionTokens = user.revokedSessionTokens || [];
+    user.revokedSessionTokens.push('DEACTIVATED_' + Date.now());
+
+    await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+    await logAudit('USER_DEACTIVATED', 'user', user.id, `Deactivated ${user.email}: ${reason}`);
+
+    alert(`User ${user.name} has been deactivated. Historical records remain fully preserved.`);
+    closeModal();
+    render();
   });
 }
 
