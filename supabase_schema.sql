@@ -1564,3 +1564,28 @@ CREATE INDEX IF NOT EXISTS idx_segments_tenant_cust ON public.customer_segments(
 CREATE INDEX IF NOT EXISTS idx_collection_tenant_priority ON public.collection_actions(tenant_id, priority, customer_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_tenant_priority ON public.management_recommendations(tenant_id, priority, status);
 CREATE INDEX IF NOT EXISTS idx_reports_tenant_period ON public.report_snapshots(tenant_id, report_type, financial_period);
+
+-- =============================================================================
+-- 14. SYSTEM DIAGNOSTICS & NON-DESTRUCTIVE PERSISTENCE PROBES
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.system_diagnostics (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    probe_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by TEXT NOT NULL,
+    payload JSONB DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 hour')
+);
+
+ALTER TABLE public.system_diagnostics ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "system_diagnostics_tenant_all" ON public.system_diagnostics
+    FOR ALL
+    TO authenticated, anon
+    USING (true)
+    WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_system_diagnostics_probe ON public.system_diagnostics (probe_id, created_at DESC);
+
