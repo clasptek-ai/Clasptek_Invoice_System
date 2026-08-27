@@ -1677,7 +1677,7 @@ function isPeriodLocked(dateStr) {
   if (!dateStr) return false;
   const periodKey = dateStr.slice(0, 7);
   const p = state.financePeriods.find(fp => fp.period === periodKey);
-  return p && p.status === 'locked';
+  return !!(p && (p.status === 'locked' || p.isLocked === true || p.status === 'finalized'));
 }
 
 function getRequiredApprovalRole(amount) {
@@ -9488,10 +9488,12 @@ function renderChangeRoleModal(container, user) {
       isStaff,
       isFacilitator,
       isEmployeePortal,
-      isFinanceTeam,
       canManageUsers,
       canApprove,
       canRecord,
+      canCancel,
+      isPeriodLocked,
+      logAudit,
       DEFAULT_FINANCE_SETTINGS,
       DEFAULT_PAYMENT_ACCOUNTS,
       DEFAULT_PERSONNEL_DIRECTORY,
