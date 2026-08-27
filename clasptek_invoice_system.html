@@ -739,12 +739,17 @@ const STORE_KEY_CUSTOMERS = 'clasptek:customers';
 const STORE_KEY_FINANCE_SETTINGS = 'clasptek:finance_settings';
 const STORE_KEY_PAYMENT_ACCOUNTS = 'clasptek:payment_accounts';
 const STORE_KEY_PAYSLIPS = 'clasptek:payslips';
+const STORE_KEY_PERSONNEL = 'clasptek:personnel';
+const STORE_KEY_SYSTEM_USERS = 'clasptek:system_users';
+const STORE_KEY_NOTIFICATIONS = 'clasptek:notifications';
 
 const SYSTEM_ACCOUNTS = [
-  { id: 'usr_sa_1', email: 'admin@clasptek.org', name: 'Ayodele Johnson', role: 'Super Admin', title: 'Managing Director & Lead Consultant', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fm_1', email: 'finance@clasptek.org', name: 'Bolanle Adeyemi', role: 'Finance Manager', title: 'Head of Financial Operations', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fs_1', email: 'staff@clasptek.org', name: 'Chukwuma Eze', role: 'Finance Staff', title: 'Billing & Accounts Officer', tenant_id: DEFAULT_TENANT_ID },
-  { id: 'usr_fv_1', email: 'viewer@clasptek.org', name: 'Dr. Stella Briggs', role: 'Finance Viewer', title: 'Advisory Board Auditor', tenant_id: DEFAULT_TENANT_ID }
+  { id: 'usr_sa_1', email: 'admin@clasptek.org', name: 'Ayodele Johnson', role: 'Super Admin', title: 'Managing Director & Lead Consultant', status: 'active', personnelId: 'emp_1', tenant_id: DEFAULT_TENANT_ID },
+  { id: 'usr_fm_1', email: 'finance@clasptek.org', name: 'Bolanle Adeyemi', role: 'Finance Manager', title: 'Head of Financial Operations', status: 'active', tenant_id: DEFAULT_TENANT_ID },
+  { id: 'usr_fs_1', email: 'finance.staff@clasptek.org', name: 'Chukwuma Eze', role: 'Finance Staff', title: 'Billing & Accounts Officer', status: 'active', tenant_id: DEFAULT_TENANT_ID },
+  { id: 'usr_emp_1', email: 'mary@clasptek.org', name: 'Mary Okonjo', role: 'Staff', title: 'Admissions & Student Success Officer', status: 'active', personnelId: 'emp_2', tenant_id: DEFAULT_TENANT_ID },
+  { id: 'usr_fac_1', email: 'chinedu.eze@clasptek.org', name: 'Dr. Chinedu Eze', role: 'Facilitator', title: 'Lead IELTS Master Trainer', status: 'active', personnelId: 'emp_3', tenant_id: DEFAULT_TENANT_ID },
+  { id: 'usr_fv_1', email: 'viewer@clasptek.org', name: 'Dr. Stella Briggs', role: 'Finance Viewer', title: 'Advisory Board Auditor', status: 'active', tenant_id: DEFAULT_TENANT_ID }
 ];
 
 const DEFAULT_INCOME_CATEGORIES = [
@@ -812,11 +817,122 @@ const DEFAULT_PAYMENT_ACCOUNTS = [
 ];
 
 const DEFAULT_PERSONNEL_DIRECTORY = [
-  { id: 'emp_1', name: 'Ayodele Johnson', type: 'staff', department: 'Academics', role: 'Head of Academics & Curriculum', email: 'ayodele@clasptek.org', phone: '08031112233', basicPay: 250000 },
-  { id: 'emp_2', name: 'Mary Okonjo', type: 'staff', department: 'Operations', role: 'Admissions & Student Success Officer', email: 'mary@clasptek.org', phone: '08032223344', basicPay: 180000 },
-  { id: 'emp_3', name: 'Dr. Chinedu Eze', type: 'facilitator', department: 'Academics', role: 'Lead IELTS Master Trainer', email: 'chinedu.eze@clasptek.org', phone: '08033334455', basicPay: 200000 },
-  { id: 'emp_4', name: 'Engr. Babatunde Lawal', type: 'facilitator', department: 'Technology', role: 'Senior Cybersecurity & Cloud Facilitator', email: 'babatunde@clasptek.org', phone: '08034445566', basicPay: 300000 },
-  { id: 'emp_5', name: 'Folasade Balogun', type: 'facilitator', department: 'Technology', role: 'Data Analytics & BI Facilitator', email: 'folasade@clasptek.org', phone: '08035556677', basicPay: 220000 }
+  {
+    id: 'emp_1',
+    employeeId: 'EMP-0001',
+    name: 'Ayodele Johnson',
+    type: 'staff',
+    department: 'Academics',
+    role: 'Head of Academics & Curriculum',
+    designation: 'Managing Director & Lead Consultant',
+    email: 'ayodele@clasptek.org',
+    phone: '+2348031112233',
+    address: 'Lagos, Nigeria',
+    dateOfJoining: '2022-01-15',
+    employmentStatus: 'Full-Time',
+    bankName: 'Guaranty Trust Bank (GTBank)',
+    accountName: 'Ayodele Johnson',
+    accountNumber: '0123456789',
+    taxNumber: 'TIN-EMP-001',
+    nin: '12345678901',
+    payrollEligibility: true,
+    basicPay: 250000,
+    status: 'active',
+    userId: 'usr_sa_1'
+  },
+  {
+    id: 'emp_2',
+    employeeId: 'EMP-0002',
+    name: 'Mary Okonjo',
+    type: 'staff',
+    department: 'Operations',
+    role: 'Admissions & Student Success Officer',
+    designation: 'Admissions Specialist',
+    email: 'mary@clasptek.org',
+    phone: '+2348032223344',
+    address: 'Ogun State, Nigeria',
+    dateOfJoining: '2023-03-01',
+    employmentStatus: 'Full-Time',
+    bankName: 'Zenith Bank Plc',
+    accountName: 'Mary Okonjo',
+    accountNumber: '2049281726',
+    taxNumber: 'TIN-EMP-002',
+    nin: '23456789012',
+    payrollEligibility: true,
+    basicPay: 180000,
+    status: 'active',
+    userId: 'usr_emp_1'
+  },
+  {
+    id: 'emp_3',
+    employeeId: 'FAC-0001',
+    name: 'Dr. Chinedu Eze',
+    type: 'facilitator',
+    department: 'Academics',
+    role: 'Lead IELTS Master Trainer',
+    designation: 'Senior IELTS Facilitator',
+    subject: 'IELTS Preparation & English Proficiency',
+    engagementType: 'Retainer / Session-Based',
+    email: 'chinedu.eze@clasptek.org',
+    phone: '+2348033334455',
+    address: 'Lagos, Nigeria',
+    dateEngaged: '2023-06-15',
+    bankName: 'Guaranty Trust Bank (GTBank)',
+    accountName: 'Dr. Chinedu Eze',
+    accountNumber: '0234567891',
+    taxNumber: 'TIN-FAC-001',
+    payrollEligibility: true,
+    basicPay: 200000,
+    feeStructure: '₦200,000 Base Retainer + ₦25,000 per Weekend Masterclass Session',
+    status: 'active',
+    userId: 'usr_fac_1'
+  },
+  {
+    id: 'emp_4',
+    employeeId: 'FAC-0002',
+    name: 'Engr. Babatunde Lawal',
+    type: 'facilitator',
+    department: 'Technology',
+    role: 'Senior Cybersecurity & Cloud Facilitator',
+    designation: 'Cybersecurity Instructor',
+    subject: 'Cybersecurity & Cloud Systems',
+    engagementType: 'Programme / Cohort-Based',
+    email: 'babatunde@clasptek.org',
+    phone: '+2348034445566',
+    address: 'Lagos, Nigeria',
+    dateEngaged: '2023-09-01',
+    bankName: 'First Bank of Nigeria',
+    accountName: 'Babatunde Lawal',
+    accountNumber: '3049582716',
+    taxNumber: 'TIN-FAC-002',
+    payrollEligibility: true,
+    basicPay: 300000,
+    feeStructure: '₦300,000 per Cohort Module',
+    status: 'active'
+  },
+  {
+    id: 'emp_5',
+    employeeId: 'FAC-0003',
+    name: 'Folasade Balogun',
+    type: 'facilitator',
+    department: 'Technology',
+    role: 'Data Analytics & BI Facilitator',
+    designation: 'Data Analytics Instructor',
+    subject: 'Data Analytics & Business Intelligence',
+    engagementType: 'Programme / Cohort-Based',
+    email: 'folasade@clasptek.org',
+    phone: '+2348035556677',
+    address: 'Ogun State, Nigeria',
+    dateEngaged: '2024-01-10',
+    bankName: 'Access Bank Plc',
+    accountName: 'Folasade Balogun',
+    accountNumber: '0492817263',
+    taxNumber: 'TIN-FAC-003',
+    payrollEligibility: true,
+    basicPay: 220000,
+    feeStructure: '₦220,000 per Cohort Module',
+    status: 'active'
+  }
 ];
 
 // ----------------------------------------------------
@@ -982,6 +1098,50 @@ function getRole() {
   return state.auth && state.auth.user ? state.auth.user.role : 'Finance Viewer';
 }
 
+function getCurrentUser() {
+  return state.auth && state.auth.user ? state.auth.user : SYSTEM_ACCOUNTS[0];
+}
+
+function getCurrentPersonnel() {
+  const u = getCurrentUser();
+  if (!u) return null;
+  return state.personnel.find(p => (u.personnelId && p.id === u.personnelId) || p.userId === u.id || (p.email && p.email.toLowerCase() === u.email.toLowerCase()) || p.name.toLowerCase() === u.name.toLowerCase()) || null;
+}
+
+function isSuperAdmin() {
+  return getRole() === 'Super Admin';
+}
+
+function isFinanceManager() {
+  return getRole() === 'Finance Manager';
+}
+
+function isFinanceStaff() {
+  return getRole() === 'Finance Staff';
+}
+
+function isStaff() {
+  return getRole() === 'Staff';
+}
+
+function isFacilitator() {
+  return getRole() === 'Facilitator';
+}
+
+function isEmployeePortal() {
+  const r = getRole();
+  return r === 'Staff' || r === 'Facilitator';
+}
+
+function isFinanceTeam() {
+  const r = getRole();
+  return ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'].includes(r);
+}
+
+function canViewFinance() {
+  return isFinanceTeam();
+}
+
 function canRecord() {
   const r = getRole();
   return ['Finance Staff', 'Finance Manager', 'Super Admin'].includes(r);
@@ -1002,8 +1162,12 @@ function canManageBudget() {
   return ['Finance Manager', 'Super Admin'].includes(r);
 }
 
+function canManageUsers() {
+  return isSuperAdmin();
+}
+
 function canLockPeriod() {
-  return getRole() === 'Super Admin';
+  return isSuperAdmin();
 }
 
 function isReadOnly() {
@@ -1022,6 +1186,28 @@ function getRequiredApprovalRole(amount) {
   if (v > state.approvalSettings.tier2Limit) return state.approvalSettings.tier3Role;
   if (v > state.approvalSettings.tier1Limit) return state.approvalSettings.tier2Role;
   return 'None';
+}
+
+// ----------------------------------------------------
+// STRICT DATA ISOLATION & EMPLOYEE PAYSLIPS ACCESS
+// ----------------------------------------------------
+function getAccessiblePayslips() {
+  if (isFinanceTeam()) {
+    return state.payslips;
+  }
+  const u = getCurrentUser();
+  const pers = getCurrentPersonnel();
+  const uName = (u.name || '').trim().toLowerCase();
+  const pId = pers ? pers.id : null;
+  const pEmpId = pers ? pers.employeeId : null;
+
+  return state.payslips.filter(ps => {
+    const psName = (ps.employeeName || '').trim().toLowerCase();
+    const matchesName = psName === uName;
+    const matchesId = pId && ps.employeeId === pId;
+    const matchesEmpId = pEmpId && ps.employeeId === pEmpId;
+    return matchesName || matchesId || matchesEmpId;
+  });
 }
 
 // ----------------------------------------------------
@@ -1065,7 +1251,7 @@ async function loadAll() {
   state.loading = true;
   render();
 
-  const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, authSession, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg, enqs, enrls, custs, fSet, pAccs, pSlips] = await Promise.all([
+  const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, authSession, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, sbCfg, enqs, enrls, custs, fSet, pAccs, pSlips, pers, sysUsers, notifs] = await Promise.all([
     safeGet(STORE_KEY_PROGRAMMES, []),
     safeGet(STORE_KEY_INVOICES, []),
     safeGet(STORE_KEY_PAYMENTS, []),
@@ -1091,13 +1277,19 @@ async function loadAll() {
     safeGet(STORE_KEY_CUSTOMERS, []),
     safeGet(STORE_KEY_FINANCE_SETTINGS, DEFAULT_FINANCE_SETTINGS),
     safeGet(STORE_KEY_PAYMENT_ACCOUNTS, DEFAULT_PAYMENT_ACCOUNTS),
-    safeGet(STORE_KEY_PAYSLIPS, [])
+    safeGet(STORE_KEY_PAYSLIPS, []),
+    safeGet(STORE_KEY_PERSONNEL, DEFAULT_PERSONNEL_DIRECTORY),
+    safeGet(STORE_KEY_SYSTEM_USERS, SYSTEM_ACCOUNTS),
+    safeGet(STORE_KEY_NOTIFICATIONS, [])
   ]);
 
   state.programmes = Array.isArray(progs) ? progs : [];
   state.financeSettings = fSet && fSet.companyName ? fSet : DEFAULT_FINANCE_SETTINGS;
   state.paymentAccounts = Array.isArray(pAccs) && pAccs.length ? pAccs : DEFAULT_PAYMENT_ACCOUNTS;
   state.payslips = Array.isArray(pSlips) ? pSlips : [];
+  state.personnel = Array.isArray(pers) && pers.length ? pers : DEFAULT_PERSONNEL_DIRECTORY;
+  state.users = Array.isArray(sysUsers) && sysUsers.length ? sysUsers : SYSTEM_ACCOUNTS;
+  state.notifications = Array.isArray(notifs) ? notifs : [];
 
   state.invoices = (Array.isArray(invs) ? invs : []).map(i => {
     const progName = i.programmeName || (i.items && i.items[0] && i.items[0].description) || 'Professional Training Program';
@@ -1593,19 +1785,19 @@ function printCanonicalDocument(docHtml) {
 
 
 // ----------------------------------------------------
-// AUTHENTICATION SCREEN
+// AUTHENTICATION & LOGIN SCREEN (5 ROLES SUPPORT)
 // ----------------------------------------------------
 function renderLoginScreen(root) {
   root.innerHTML = `
     <div class="cp-auth-wrap">
       <div class="cp-auth-card">
         <div class="cp-auth-header">
-          <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:48px; width:auto; margin-bottom:8px;" />
-          <div class="cp-auth-title" style="font-size:18px; font-weight:800; color:var(--primary);">Clasptek Finance Management System</div>
-          <div class="cp-auth-sub" style="font-size:12px; color:var(--text-muted);">Enterprise Financial Intelligence &amp; Customer Workflow</div>
+          <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; margin-bottom:12px; object-fit:contain;" />
+          <div class="cp-auth-title" style="font-size:18px; font-weight:800; color:var(--primary);">Clasptek Unified Portal</div>
+          <div class="cp-auth-sub" style="font-size:12px; color:var(--text-muted);">Finance Operations &amp; Staff/Facilitator Self-Service</div>
         </div>
 
-        <div class="cp-field" style="margin-top:14px;">
+        <div class="cp-field" style="margin-top:16px;">
           <label>Work Email Address</label>
           <input type="email" id="authEmail" placeholder="e.g. admin@clasptek.org" value="admin@clasptek.org" />
         </div>
@@ -1615,15 +1807,17 @@ function renderLoginScreen(root) {
           <input type="password" id="authPassword" placeholder="••••••••••••" value="password123" />
         </div>
 
-        <button class="cp-btn accent" id="btnSignIn" style="width:100%; padding:10px; font-size:13.5px; margin-top:8px;">Sign In to Enterprise Workspace</button>
+        <button class="cp-btn accent" id="btnSignIn" style="width:100%; padding:10px; font-size:13.5px; margin-top:8px;">Sign In to Clasptek Portal</button>
 
-        <div class="cp-auth-demo-box" style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
-          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:8px;">Switch Authenticated Account:</div>
+        <div class="cp-auth-demo-box" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:8px;">Select Test Persona &amp; Role:</div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Super Admin" style="font-size:11.5px;">&#x1F511; Super Admin</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Manager" style="font-size:11.5px;">&#x1F4BC; Finance Manager</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Staff" style="font-size:11.5px;">&#x1F4DD; Finance Staff</button>
-            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Viewer" style="font-size:11.5px;">&#x1F441;&#xFE0F; Finance Viewer</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Super Admin" style="font-size:11px;">&#x1F511; Super Admin</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Manager" style="font-size:11px;">&#x1F4BC; Finance Manager</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Staff" style="font-size:11px;">&#x1F4DD; Finance Staff</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Staff" style="font-size:11px; background:#EFF6FC; border-color:#93C5FD; color:#1D4ED8;">&#x1F464; Staff (Mary)</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Facilitator" style="font-size:11px; background:#F5F3FF; border-color:#C4B5FD; color:#6D28D9;">&#x1F393; Facilitator (Dr. Eze)</button>
+            <button class="cp-btn secondary sm btnQuickLogin" data-role="Finance Viewer" style="font-size:11px;">&#x1F441;&#xFE0F; Finance Viewer</button>
           </div>
         </div>
       </div>
@@ -1631,36 +1825,60 @@ function renderLoginScreen(root) {
   `;
 
   document.getElementById('btnSignIn').addEventListener('click', async () => {
-    const email = document.getElementById('authEmail').value.trim();
-    const acc = SYSTEM_ACCOUNTS.find(a => a.email.toLowerCase() === email.toLowerCase()) || {
-      id: 'usr_' + Date.now(), email, name: email.split('@')[0], role: 'Finance Staff', title: 'Finance Staff', tenant_id: DEFAULT_TENANT_ID
+    const email = document.getElementById('authEmail').value.trim().toLowerCase();
+    const existingUser = state.users.find(u => u.email.toLowerCase() === email) || SYSTEM_ACCOUNTS.find(a => a.email.toLowerCase() === email);
+
+    if (existingUser && existingUser.status === 'deactivated') {
+      alert('This account has been deactivated. Please contact your Super Administrator.');
+      return;
+    }
+    if (existingUser && existingUser.status === 'suspended') {
+      alert('This account is temporarily suspended. Please contact your Super Administrator.');
+      return;
+    }
+
+    const acc = existingUser || {
+      id: 'usr_' + Date.now(), email, name: email.split('@')[0], role: 'Staff', title: 'Staff Member', status: 'active', tenant_id: DEFAULT_TENANT_ID
     };
 
     state.auth = { isAuthenticated: true, user: acc };
+    if (isEmployeePortal()) {
+      state.tab = 'staffDashboard';
+    } else {
+      state.tab = 'dashboard';
+    }
+
     await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-    await logAudit('USER_LOGIN', 'user', acc.id, `Sign in as ${acc.role}`);
+    await logAudit('USER_LOGIN', 'user', acc.id, `User logged in with role: ${acc.role}`);
     render();
   });
 
   root.querySelectorAll('.btnQuickLogin').forEach(b => {
     b.addEventListener('click', async () => {
       const role = b.dataset.role;
-      const acc = SYSTEM_ACCOUNTS.find(a => a.role === role) || SYSTEM_ACCOUNTS[0];
+      const acc = state.users.find(a => a.role === role && a.status === 'active') || SYSTEM_ACCOUNTS.find(a => a.role === role) || SYSTEM_ACCOUNTS[0];
+      
       state.auth = { isAuthenticated: true, user: acc };
+      if (['Staff', 'Facilitator'].includes(acc.role)) {
+        state.tab = 'staffDashboard';
+      } else {
+        state.tab = 'dashboard';
+      }
+
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      await logAudit('USER_LOGIN', 'user', acc.id, `Switched login to ${acc.role}`);
+      await logAudit('USER_LOGIN', 'user', acc.id, `Persona switched to ${acc.role} (${acc.name})`);
       render();
     });
   });
 }
 
 // ----------------------------------------------------
-// MAIN APP RENDERER
+// MAIN APPLICATION LAYOUT & NAVIGATION
 // ----------------------------------------------------
 function render() {
   const root = document.getElementById('root');
   if (state.loading) {
-    root.innerHTML = '<div class="cp-empty-state" style="margin:40px auto; max-width:400px;"><div class="cp-empty-title">Loading Clasptek Finance Management System...</div></div>';
+    root.innerHTML = '<div class="cp-empty-state" style="margin:40px auto; max-width:400px;"><div class="cp-empty-title">Loading Clasptek Portal...</div></div>';
     return;
   }
 
@@ -1670,20 +1888,33 @@ function render() {
   }
 
   const user = state.auth.user;
-  const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = (user.name || 'User').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const isEmployee = isEmployeePortal();
 
-  const overdueCount = state.invoices.filter(i => {
+  // Role validation on tab routing
+  if (isEmployee && !['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
+    state.tab = 'staffDashboard';
+  } else if (!isEmployee && ['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
+    state.tab = 'dashboard';
+  }
+
+  const overdueCount = isEmployee ? 0 : state.invoices.filter(i => {
     const { balance } = invoiceBalance(i);
     if (balance <= 0) return false;
     const todayStr = new Date().toISOString().slice(0, 10);
     return (i.dueDate || i.date || todayStr) < todayStr;
   }).length;
 
-  const activeEnquiriesCount = state.enquiries.filter(e => e.status !== 'ENROLLED' && e.status !== 'LOST').length;
-  const pendingPayslipsCount = state.payslips.filter(p => p.status === 'draft').length;
+  const activeEnquiriesCount = isEmployee ? 0 : state.enquiries.filter(e => e.status !== 'ENROLLED' && e.status !== 'LOST').length;
+  const pendingPayslipsCount = isEmployee ? 0 : state.payslips.filter(p => p.status === 'draft').length;
+
+  // Employee-specific badge counts
+  const myPayslips = getAccessiblePayslips();
+  const myPendingAckCount = myPayslips.filter(p => p.status === 'issued').length;
+  const myOpenQueriesCount = myPayslips.filter(p => p.queries && p.queries.some(q => q.status === 'open' || q.status === 'under_review')).length;
 
   const tabLabels = {
-    dashboard: 'Dashboard',
+    dashboard: 'Finance Dashboard',
     enquiries: 'Enquiries & Admissions',
     studentAccounts: 'Students & Clients',
     invoices: 'Invoices',
@@ -1694,10 +1925,16 @@ function render() {
     receivables: 'Receivables & Collections',
     budgets: 'Budgets & Planning',
     reports: 'Management Reports',
-    usersRoles: 'Users & Roles',
+    usersRoles: 'People & Access / Staff Management',
     financialControls: 'Financial Controls',
     auditLog: 'Audit Log',
-    settings: 'Settings & Backups'
+    settings: 'Settings & Backups',
+    // Employee tabs
+    staffDashboard: 'My Workspace',
+    myPayslips: 'My Payslips',
+    myProfile: 'My Profile',
+    myQueries: 'My Payroll Queries',
+    mySecurity: 'Account & Security'
   };
 
   root.innerHTML = `
@@ -1709,79 +1946,101 @@ function render() {
             <a href="#" class="cp-sidebar-brand" id="brandLogoLink">
               <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-sidebar-logo" />
               <div class="cp-sidebar-brand-text">
-                <span class="cp-brand-name">Clasptek Finance</span>
-                <span class="cp-brand-sub">Management System</span>
+                <span class="cp-brand-name">${isEmployee ? 'Clasptek Portal' : 'Clasptek Finance'}</span>
+                <span class="cp-brand-sub">${isEmployee ? (user.role === 'Facilitator' ? 'Facilitator Workspace' : 'Employee Workspace') : 'Management System'}</span>
               </div>
             </a>
             <button class="cp-collapse-btn" id="btnToggleSidebar" title="Toggle Sidebar">&#x21C4;</button>
           </div>
 
-          <!-- Navigation Menu Organized in 3 Sections -->
+          <!-- Navigation Menu -->
           <nav class="cp-sidebar-nav">
-            <!-- WORKSPACE -->
-            <div class="cp-nav-section">
-              <div class="cp-nav-section-title">Workspace</div>
-              <div class="cp-nav-item ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">
-                <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">Dashboard</span>
+            ${isEmployee ? `
+              <!-- EMPLOYEE / FACILITATOR SELF-SERVICE MENU -->
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">My Workspace</div>
+                <div class="cp-nav-item ${state.tab === 'staffDashboard' ? 'active' : ''}" data-tab="staffDashboard">
+                  <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">My Dashboard</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'myPayslips' ? 'active' : ''}" data-tab="myPayslips">
+                  <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">My Payslips</span>
+                  ${myPendingAckCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning); color:#fff;">${myPendingAckCount}</span>` : `<span class="cp-nav-badge">${myPayslips.length}</span>`}
+                </div>
+                <div class="cp-nav-item ${state.tab === 'myProfile' ? 'active' : ''}" data-tab="myProfile">
+                  <span class="cp-nav-icon">&#x1F464;</span><span class="cp-nav-label">My Profile &amp; Bank</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'myQueries' ? 'active' : ''}" data-tab="myQueries">
+                  <span class="cp-nav-icon">&#x2753;</span><span class="cp-nav-label">My Payroll Queries</span>
+                  ${myOpenQueriesCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning-bg); color:var(--warning);">${myOpenQueriesCount}</span>` : ''}
+                </div>
+                <div class="cp-nav-item ${state.tab === 'mySecurity' ? 'active' : ''}" data-tab="mySecurity">
+                  <span class="cp-nav-icon">&#x1F512;</span><span class="cp-nav-label">Account Security</span>
+                </div>
               </div>
-              <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries">
-                <span class="cp-nav-icon">&#x1F4E5;</span><span class="cp-nav-label">Enquiries</span>
-                ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
+            ` : `
+              <!-- ADMINISTRATIVE FINANCE & PAYROLL MENU -->
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">Workspace</div>
+                <div class="cp-nav-item ${state.tab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">
+                  <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">Dashboard</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries">
+                  <span class="cp-nav-icon">&#x1F4E5;</span><span class="cp-nav-label">Enquiries</span>
+                  ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
+                </div>
+                <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts">
+                  <span class="cp-nav-icon">&#x1F465;</span><span class="cp-nav-label">Students &amp; Clients</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices">
+                  <span class="cp-nav-icon">&#x1F4C4;</span><span class="cp-nav-label">Invoices</span>
+                  <span class="cp-nav-badge">${state.invoices.length}</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'payments' ? 'active' : ''}" data-tab="payments">
+                  <span class="cp-nav-icon">&#x1F9FE;</span><span class="cp-nav-label">Payments</span>
+                  <span class="cp-nav-badge">${state.payments.length}</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'payslips' ? 'active' : ''}" data-tab="payslips">
+                  <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">Staff &amp; Facilitator Payroll</span>
+                  ${pendingPayslipsCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning-bg); color:var(--warning);">${pendingPayslipsCount}</span>` : ''}
+                </div>
+                <div class="cp-nav-item ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">
+                  <span class="cp-nav-icon">&#x1F4B8;</span><span class="cp-nav-label">Expenses</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">
+                  <span class="cp-nav-icon">&#x1F393;</span><span class="cp-nav-label">Programmes</span>
+                </div>
               </div>
-              <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts">
-                <span class="cp-nav-icon">&#x1F465;</span><span class="cp-nav-label">Students &amp; Clients</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices">
-                <span class="cp-nav-icon">&#x1F4C4;</span><span class="cp-nav-label">Invoices</span>
-                <span class="cp-nav-badge">${state.invoices.length}</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'payments' ? 'active' : ''}" data-tab="payments">
-                <span class="cp-nav-icon">&#x1F9FE;</span><span class="cp-nav-label">Payments</span>
-                <span class="cp-nav-badge">${state.payments.length}</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'payslips' ? 'active' : ''}" data-tab="payslips">
-                <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">Payslips</span>
-                ${pendingPayslipsCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning-bg); color:var(--warning);">${pendingPayslipsCount}</span>` : ''}
-              </div>
-              <div class="cp-nav-item ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">
-                <span class="cp-nav-icon">&#x1F4B8;</span><span class="cp-nav-label">Expenses</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'programmes' ? 'active' : ''}" data-tab="programmes">
-                <span class="cp-nav-icon">&#x1F393;</span><span class="cp-nav-label">Programmes</span>
-              </div>
-            </div>
 
-            <!-- MANAGEMENT -->
-            <div class="cp-nav-section">
-              <div class="cp-nav-section-title">Management</div>
-              <div class="cp-nav-item ${state.tab === 'receivables' ? 'active' : ''}" data-tab="receivables">
-                <span class="cp-nav-icon">&#x23F3;</span><span class="cp-nav-label">Receivables &amp; Collections</span>
-                ${overdueCount > 0 ? `<span class="cp-nav-badge" style="background:var(--danger); color:#fff;">${overdueCount}</span>` : ''}
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">Management</div>
+                <div class="cp-nav-item ${state.tab === 'receivables' ? 'active' : ''}" data-tab="receivables">
+                  <span class="cp-nav-icon">&#x23F3;</span><span class="cp-nav-label">Receivables &amp; Collections</span>
+                  ${overdueCount > 0 ? `<span class="cp-nav-badge" style="background:var(--danger); color:#fff;">${overdueCount}</span>` : ''}
+                </div>
+                <div class="cp-nav-item ${state.tab === 'budgets' ? 'active' : ''}" data-tab="budgets">
+                  <span class="cp-nav-icon">&#x2696;&#xFE0F;</span><span class="cp-nav-label">Budgets</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">
+                  <span class="cp-nav-icon">&#x1F4D1;</span><span class="cp-nav-label">Reports</span>
+                </div>
               </div>
-              <div class="cp-nav-item ${state.tab === 'budgets' ? 'active' : ''}" data-tab="budgets">
-                <span class="cp-nav-icon">&#x2696;&#xFE0F;</span><span class="cp-nav-label">Budgets</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">
-                <span class="cp-nav-icon">&#x1F4D1;</span><span class="cp-nav-label">Reports</span>
-              </div>
-            </div>
 
-            <!-- ADMINISTRATION -->
-            <div class="cp-nav-section">
-              <div class="cp-nav-section-title">Administration</div>
-              <div class="cp-nav-item ${state.tab === 'usersRoles' ? 'active' : ''}" data-tab="usersRoles">
-                <span class="cp-nav-icon">&#x1F6E1;&#xFE0F;</span><span class="cp-nav-label">Users &amp; Roles</span>
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">Administration</div>
+                <div class="cp-nav-item ${state.tab === 'usersRoles' ? 'active' : ''}" data-tab="usersRoles">
+                  <span class="cp-nav-icon">&#x1F6E1;&#xFE0F;</span><span class="cp-nav-label">People &amp; Access</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'financialControls' ? 'active' : ''}" data-tab="financialControls">
+                  <span class="cp-nav-icon">&#x1F512;</span><span class="cp-nav-label">Financial Controls</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'auditLog' ? 'active' : ''}" data-tab="auditLog">
+                  <span class="cp-nav-icon">&#x1F4DC;</span><span class="cp-nav-label">Audit Log</span>
+                </div>
+                <div class="cp-nav-item ${state.tab === 'settings' ? 'active' : ''}" data-tab="settings">
+                  <span class="cp-nav-icon">&#x2699;&#xFE0F;</span><span class="cp-nav-label">Settings</span>
+                </div>
               </div>
-              <div class="cp-nav-item ${state.tab === 'financialControls' ? 'active' : ''}" data-tab="financialControls">
-                <span class="cp-nav-icon">&#x1F512;</span><span class="cp-nav-label">Financial Controls</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'auditLog' ? 'active' : ''}" data-tab="auditLog">
-                <span class="cp-nav-icon">&#x1F4DC;</span><span class="cp-nav-label">Audit Log</span>
-              </div>
-              <div class="cp-nav-item ${state.tab === 'settings' ? 'active' : ''}" data-tab="settings">
-                <span class="cp-nav-icon">&#x2699;&#xFE0F;</span><span class="cp-nav-label">Settings</span>
-              </div>
-            </div>
+            `}
           </nav>
         </div>
 
@@ -1789,11 +2048,11 @@ function render() {
         <div class="cp-sidebar-footer">
           <div class="cp-conn-pill" id="sidebarSupabaseStatus" style="cursor:pointer;">
             <span class="cp-conn-dot ${state.supabase.status === 'connected' ? 'connected' : 'fallback'}"></span>
-            <span class="cp-conn-text">${state.supabase.status === 'connected' ? 'Supabase Connected' : 'Local Mode'}</span>
+            <span class="cp-conn-text">${state.supabase.status === 'connected' ? 'Supabase Connected' : 'Local Data Mode'}</span>
           </div>
           <div class="cp-user-card">
             <div class="cp-user-info">
-              <div class="cp-user-avatar">${escapeHtml(initials)}</div>
+              <div class="cp-user-avatar" style="${isEmployee ? (user.role === 'Facilitator' ? 'background:#6D28D9;' : 'background:#1D4ED8;') : ''}">${escapeHtml(initials)}</div>
               <div class="cp-user-info-text">
                 <span class="cp-user-name">${escapeHtml(user.name)}</span>
                 <span class="cp-user-role">${escapeHtml(user.role)}</span>
@@ -1809,41 +2068,38 @@ function render() {
         <header class="cp-topbar">
           <div class="cp-topbar-left">
             <div class="cp-breadcrumb">
-              <span>Workspace</span> / <strong>${tabLabels[state.tab] || 'Dashboard'}</strong>
+              <span>${isEmployee ? 'My Portal' : 'Workspace'}</span> / <strong>${tabLabels[state.tab] || 'Dashboard'}</strong>
             </div>
 
             <div class="cp-omni-search">
               <span class="cp-omni-icon">&#x1F50D;</span>
-              <input type="text" class="cp-omni-input" id="globalSearchInput" placeholder="Search enquiries, students, invoices, receipts, programmes..." autocomplete="off" />
+              <input type="text" class="cp-omni-input" id="globalSearchInput" placeholder="${isEmployee ? 'Search my payslips, pay periods, queries...' : 'Search enquiries, students, invoices, receipts, programmes...'}" autocomplete="off" />
               <div class="cp-search-dropdown" id="searchDropdown"></div>
             </div>
           </div>
 
           <div class="cp-topbar-right">
-            ${canRecord() ? `
-              <div class="cp-dropdown-wrap">
-                <button class="cp-btn accent sm" id="btnQuickActionToggle">+ New Transaction &#x25BE;</button>
-                <div class="cp-dropdown-menu" id="quickActionMenu">
-                  <div class="cp-dropdown-item" id="qaNewEnquiry">&#x1F4E5; New Enquiry</div>
-                  <div class="cp-dropdown-item" id="qaNewInvoice">&#x1F4C4; Create Invoice</div>
-                  <div class="cp-dropdown-item" id="qaRecordPayment">&#x1F9FE; Record Payment</div>
-                  <div class="cp-dropdown-item" id="qaNewPayslip">&#x1F4B3; Generate Payslip</div>
-                  <div class="cp-dropdown-item" id="qaRecordExpense">&#x1F4B8; Log Expense</div>
-                  <div class="cp-dropdown-item" id="qaDirectIncome">&#x1F4B0; Record Direct Income</div>
+            ${isEmployee ? `
+              <button class="cp-btn sm secondary" id="btnEmployeeRaiseQuery" style="color:#B45309; border-color:var(--warning);">&#x26A0;&#xFE0F; Raise Query</button>
+            ` : `
+              ${canRecord() ? `
+                <div class="cp-dropdown-wrap">
+                  <button class="cp-btn sm accent" id="btnQuickActionToggle">+ New Transaction &#x25BE;</button>
+                  <div class="cp-dropdown-menu" id="quickActionDropdown">
+                    <div class="cp-dropdown-item" id="qaNewEnquiry">&#x1F4E5; New Enquiry</div>
+                    <div class="cp-dropdown-item" id="qaNewInvoice">&#x1F4C4; Issue Invoice</div>
+                    <div class="cp-dropdown-item" id="qaRecordPayment">&#x1F9FE; Record Payment</div>
+                    <div class="cp-dropdown-item" id="qaGeneratePayslip">&#x1F4B3; Prepare Payslip</div>
+                    <div class="cp-dropdown-item" id="qaRecordExpense">&#x1F4B8; Log Expense</div>
+                    <div class="cp-dropdown-item" id="qaRecordDirectIncome">&#x1F4B0; Direct Income</div>
+                  </div>
                 </div>
-              </div>
-            ` : ''}
-
-            ${overdueCount > 0 ? `
-              <div class="cp-pill" style="background:var(--warning-bg); color:var(--warning); cursor:pointer; font-size:11.5px;" id="btnOverdueHeaderAlert">
-                &#x26A0;&#xFE0F; ${overdueCount} Overdue
-              </div>
-            ` : ''}
+              ` : ''}
+            `}
 
             <div class="cp-role-tag">
-              <span style="font-weight:700; color:var(--primary);">${escapeHtml(user.name)}</span>
-              <span style="color:var(--text-muted);">|</span>
-              <span style="color:var(--text-secondary); font-size:11.5px;">${escapeHtml(user.role)}</span>
+              <span class="cp-pill ${isEmployee ? (user.role === 'Facilitator' ? 'category-pill' : 'new') : 'paid'}" style="font-size:10.5px;">${escapeHtml(user.role.toUpperCase())}</span>
+              <span style="color:var(--text-secondary); font-size:11.5px;">${escapeHtml(user.name)}</span>
             </div>
           </div>
         </header>
@@ -1855,18 +2111,16 @@ function render() {
     <div id="modalRoot"></div>
   `;
 
-  // Event Listeners: Navigation
-  document.querySelectorAll('.cp-nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      state.tab = item.dataset.tab;
-      render();
-    });
-  });
-
+  // Attach Global Event Listeners
   document.getElementById('btnToggleSidebar').addEventListener('click', () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
-    const sb = document.getElementById('appSidebar');
-    if (sb) sb.classList.toggle('collapsed', state.sidebarCollapsed);
+    render();
+  });
+
+  document.getElementById('brandLogoLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    state.tab = isEmployee ? 'staffDashboard' : 'dashboard';
+    render();
   });
 
   document.getElementById('btnSidebarSignOut').addEventListener('click', async () => {
@@ -1875,52 +2129,65 @@ function render() {
     render();
   });
 
-  document.getElementById('sidebarSupabaseStatus').addEventListener('click', () => openModal('supabaseModal'));
+  document.getElementById('sidebarSupabaseStatus').addEventListener('click', () => {
+    if (!isEmployee) openModal('supabaseModal');
+  });
 
-  const qaToggle = document.getElementById('btnQuickActionToggle');
-  const qaMenu = document.getElementById('quickActionMenu');
-  if (qaToggle && qaMenu) {
-    qaToggle.addEventListener('click', (e) => {
+  document.querySelectorAll('.cp-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      state.tab = item.dataset.tab;
+      render();
+    });
+  });
+
+  const btnEmployeeQuery = document.getElementById('btnEmployeeRaiseQuery');
+  if (btnEmployeeQuery) {
+    btnEmployeeQuery.addEventListener('click', () => {
+      const psls = getAccessiblePayslips();
+      if (psls.length === 0) {
+        alert('No payslip records available yet to raise a query against.');
+        return;
+      }
+      openModal('raisePayrollQuery', { payslip: psls[0] });
+    });
+  }
+
+  // Quick Action dropdown for admins
+  const btnQA = document.getElementById('btnQuickActionToggle');
+  const qaMenu = document.getElementById('quickActionDropdown');
+  if (btnQA && qaMenu) {
+    btnQA.addEventListener('click', (e) => {
       e.stopPropagation();
       qaMenu.classList.toggle('active');
     });
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-      document.addEventListener('click', () => qaMenu.classList.remove('active'));
-    }
 
-    const qaEnq = document.getElementById('qaNewEnquiry');
-    if (qaEnq) qaEnq.addEventListener('click', () => openModal('newEnquiry'));
+    document.addEventListener('click', () => qaMenu.classList.remove('active'));
 
-    const qaInv = document.getElementById('qaNewInvoice');
-    if (qaInv) qaInv.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
-
-    const qaPay = document.getElementById('qaRecordPayment');
-    if (qaPay) qaPay.addEventListener('click', () => {
-      const unpaid = state.invoices.find(i => invoiceBalance(i).balance > 0) || state.invoices[0];
-      if (unpaid) openModal('recordPayment', { invoice: unpaid });
-      else alert('No invoices available for payment.');
+    const qaNewEnquiry = document.getElementById('qaNewEnquiry');
+    if (qaNewEnquiry) qaNewEnquiry.addEventListener('click', () => openModal('newEnquiry'));
+    const qaNewInvoice = document.getElementById('qaNewInvoice');
+    if (qaNewInvoice) qaNewInvoice.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+    const qaRecordPayment = document.getElementById('qaRecordPayment');
+    if (qaRecordPayment) qaRecordPayment.addEventListener('click', () => {
+      const unpaidInv = state.invoices.find(i => invoiceBalance(i).balance > 0);
+      if (unpaidInv) openModal('recordPayment', { invoice: unpaidInv });
+      else alert('No outstanding invoices found to apply payment against.');
     });
-
-    const qaPsl = document.getElementById('qaNewPayslip');
-    if (qaPsl) qaPsl.addEventListener('click', () => openModal('generatePayslip'));
-
-    const qaExp = document.getElementById('qaRecordExpense');
-    if (qaExp) qaExp.addEventListener('click', () => openModal('recordExpense'));
-
-    const qaInc = document.getElementById('qaDirectIncome');
-    if (qaInc) qaInc.addEventListener('click', () => openModal('recordDirectIncome'));
+    const qaGeneratePayslip = document.getElementById('qaGeneratePayslip');
+    if (qaGeneratePayslip) qaGeneratePayslip.addEventListener('click', () => openModal('generatePayslip'));
+    const qaRecordExpense = document.getElementById('qaRecordExpense');
+    if (qaRecordExpense) qaRecordExpense.addEventListener('click', () => openModal('recordExpense'));
+    const qaRecordDirectIncome = document.getElementById('qaRecordDirectIncome');
+    if (qaRecordDirectIncome) qaRecordDirectIncome.addEventListener('click', () => openModal('recordDirectIncome'));
   }
 
-  const btnAlert = document.getElementById('btnOverdueHeaderAlert');
-  if (btnAlert) btnAlert.addEventListener('click', () => { state.tab = 'receivables'; render(); });
-
-  // Omni-Search
+  // Omni-Search Listener
   const omniInput = document.getElementById('globalSearchInput');
   const searchDropdown = document.getElementById('searchDropdown');
   if (omniInput && searchDropdown) {
     omniInput.addEventListener('input', (e) => {
-      const val = e.target.value;
-      if (!val || val.trim().length < 2) {
+      const val = e.target.value.trim();
+      if (val.length < 2) {
         searchDropdown.classList.remove('active');
         searchDropdown.innerHTML = '';
         return;
@@ -1966,21 +2233,29 @@ function render() {
 
   // Render View Routing
   const contentView = document.getElementById('contentView');
-  if (state.tab === 'dashboard') renderDashboardTab(contentView);
-  else if (state.tab === 'enquiries') renderEnquiriesTab(contentView);
-  else if (state.tab === 'studentAccounts') renderStudentAccountsTab(contentView);
-  else if (state.tab === 'invoices') renderInvoicesTab(contentView);
-  else if (state.tab === 'payments') renderPaymentsTab(contentView);
-  else if (state.tab === 'payslips') renderPayslipsTab(contentView);
-  else if (state.tab === 'expenses') renderExpensesTab(contentView);
-  else if (state.tab === 'programmes') renderProgrammesTab(contentView);
-  else if (state.tab === 'receivables') renderReceivablesTab(contentView);
-  else if (state.tab === 'budgets') renderBudgetsTab(contentView);
-  else if (state.tab === 'reports') renderReportsTab(contentView);
-  else if (state.tab === 'usersRoles') renderUsersRolesTab(contentView);
-  else if (state.tab === 'financialControls') renderFinancialControlsTab(contentView);
-  else if (state.tab === 'auditLog') renderAuditLogTab(contentView);
-  else if (state.tab === 'settings') renderSettingsTab(contentView);
+  if (isEmployee) {
+    if (state.tab === 'staffDashboard') renderStaffDashboardTab(contentView);
+    else if (state.tab === 'myPayslips') renderMyPayslipsTab(contentView);
+    else if (state.tab === 'myProfile') renderMyProfileTab(contentView);
+    else if (state.tab === 'myQueries') renderMyQueriesTab(contentView);
+    else if (state.tab === 'mySecurity') renderMySecurityTab(contentView);
+  } else {
+    if (state.tab === 'dashboard') renderDashboardTab(contentView);
+    else if (state.tab === 'enquiries') renderEnquiriesTab(contentView);
+    else if (state.tab === 'studentAccounts') renderStudentAccountsTab(contentView);
+    else if (state.tab === 'invoices') renderInvoicesTab(contentView);
+    else if (state.tab === 'payments') renderPaymentsTab(contentView);
+    else if (state.tab === 'payslips') renderPayslipsTab(contentView);
+    else if (state.tab === 'expenses') renderExpensesTab(contentView);
+    else if (state.tab === 'programmes') renderProgrammesTab(contentView);
+    else if (state.tab === 'receivables') renderReceivablesTab(contentView);
+    else if (state.tab === 'budgets') renderBudgetsTab(contentView);
+    else if (state.tab === 'reports') renderReportsTab(contentView);
+    else if (state.tab === 'usersRoles') renderUsersRolesTab(contentView);
+    else if (state.tab === 'financialControls') renderFinancialControlsTab(contentView);
+    else if (state.tab === 'auditLog') renderAuditLogTab(contentView);
+    else if (state.tab === 'settings') renderSettingsTab(contentView);
+  }
 
   if (state.modal) {
     renderModal(state.modal.type, state.modal.data);
@@ -2028,14 +2303,21 @@ function renderModal(type, data) {
   else if (type === 'collectionNotes') renderCollectionNotesModal(container, data.invoice);
   else if (type === 'addPaymentAccount') renderAddPaymentAccountModal(container, data.account);
   else if (type === 'supabaseModal') renderSupabaseModal(container);
+  // User Management Modals
+  else if (type === 'addStaffModal') renderAddStaffModal(container);
+  else if (type === 'addFacilitatorModal') renderAddFacilitatorModal(container);
+  else if (type === 'editPersonnelModal') renderEditPersonnelModal(container, data.personnel);
+  else if (type === 'deactivatePersonnelModal') renderDeactivatePersonnelModal(container, data.personnel);
+  else if (type === 'resetPasswordModal') renderResetPasswordModal(container, data.user);
+  else if (type === 'changeRoleModal') renderChangeRoleModal(container, data.user);
 }
 
 // ----------------------------------------------------
-// TAB 1: DASHBOARD (DUAL ENGINE + PAYROLL KPI)
+// TAB 1: DASHBOARD (ADMINISTRATIVE FINANCE VIEW)
 // ----------------------------------------------------
 function renderDashboardTab(container) {
   const m = getFinancialMetrics();
-  const p = m.pipeline;
+  const pipe = m.pipeline;
 
   container.innerHTML = `
     <!-- Top KPI Grid -->
@@ -2062,71 +2344,521 @@ function renderDashboardTab(container) {
       </div>
     </div>
 
-    <!-- Business Admissions Pipeline & Funnel -->
+    <!-- Admissions & Customer Journey Pipeline Visualizer -->
     <div class="cp-card">
       <div class="cp-card-header">
         <div>
-          <div class="cp-section-title">&#x1F3AF; Business Pipeline &amp; Customer Journey</div>
-          <div class="cp-section-desc">Unified tracking from initial lead enquiry to tuition payment and official cohort enrolment.</div>
+          <div class="cp-section-title">&#x1F680; Business Pipeline &amp; Customer Journey</div>
+          <div class="cp-section-desc">Unified tracking from initial lead inquiry to tuition billing, settlement, and cohort enrolment.</div>
         </div>
-        ${canRecord() ? '<button class="cp-btn sm accent" id="btnDashNewEnq">+ New Enquiry</button>' : ''}
+        <button class="cp-btn sm secondary" id="btnViewAllEnquiries">View Admissions Desk &rarr;</button>
       </div>
 
-      <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap:10px; margin-bottom:18px;">
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">1. New Leads</div>
-          <div style="font-size:20px; font-weight:800; color:var(--info); margin-top:2px;">${p.newEnquiries}</div>
+      <div class="cp-journey-bar">
+        <div class="cp-journey-step done">
+          <div class="cp-journey-dot">&#x1F4E5;</div>
+          <div class="cp-journey-label">1. Enquiries (${pipe.totalEnquiries})</div>
         </div>
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">2. Invoices Issued</div>
-          <div style="font-size:20px; font-weight:800; color:var(--primary); margin-top:2px;">${p.invoicesIssued}</div>
+        <div class="cp-journey-step ${pipe.invoiceRequested > 0 || pipe.invoicesIssued > 0 ? 'done' : 'active'}">
+          <div class="cp-journey-dot">&#x1F4C4;</div>
+          <div class="cp-journey-label">2. Invoiced (${pipe.invoicesIssued})</div>
         </div>
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">3. Awaiting Pay</div>
-          <div style="font-size:20px; font-weight:800; color:var(--warning); margin-top:2px;">${p.awaitingPayment}</div>
+        <div class="cp-journey-step ${pipe.partiallyPaid > 0 || pipe.fullyPaid > 0 ? 'done' : 'active'}">
+          <div class="cp-journey-dot">&#x1F4B0;</div>
+          <div class="cp-journey-label">3. Paid (${pipe.partiallyPaid + pipe.fullyPaid})</div>
         </div>
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">4. Partial Paid</div>
-          <div style="font-size:20px; font-weight:800; color:#92400E; margin-top:2px;">${p.partiallyPaid}</div>
+        <div class="cp-journey-step ${pipe.enrolledStudents > 0 ? 'done' : 'active'}">
+          <div class="cp-journey-dot">&#x1F393;</div>
+          <div class="cp-journey-label">4. Enrolled (${pipe.enrolledStudents})</div>
         </div>
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">5. Fully Paid</div>
-          <div style="font-size:20px; font-weight:800; color:var(--success); margin-top:2px;">${p.fullyPaid}</div>
-        </div>
-        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">6. Enrolled</div>
-          <div style="font-size:20px; font-weight:800; color:var(--success); margin-top:2px;">${p.enrolledStudents}</div>
+        <div class="cp-journey-step ${pipe.fullyPaid > 0 ? 'done' : ''}">
+          <div class="cp-journey-dot">&#x2714;</div>
+          <div class="cp-journey-label">5. Cleared (${pipe.fullyPaid})</div>
         </div>
       </div>
 
-      <!-- Conversion Analytics -->
-      <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; font-size:12px;">
-        <div>
-          <span style="color:var(--text-muted);">Lead &rarr; Invoice:</span><br/>
-          <strong style="font-size:14px; color:var(--primary);">${p.convEnquiryToInvoice}%</strong>
+      <!-- Conversion Analytics KPI Cards -->
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:16px;">
+        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Enquiry &rarr; Invoiced</div>
+          <div style="font-size:18px; font-weight:800; color:var(--primary); margin-top:2px;">${pipe.convEnquiryToInvoice}%</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.invoicesIssued} of ${pipe.totalEnquiries} prospects</div>
         </div>
-        <div>
-          <span style="color:var(--text-muted);">Invoice &rarr; Payment:</span><br/>
-          <strong style="font-size:14px; color:var(--primary);">${p.convInvoiceToPayment}%</strong>
+        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Invoice &rarr; Payment</div>
+          <div style="font-size:18px; font-weight:800; color:var(--success); margin-top:2px;">${pipe.convInvoiceToPayment}%</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.partiallyPaid + pipe.fullyPaid} invoices with payments</div>
         </div>
-        <div>
-          <span style="color:var(--text-muted);">Full Payment Rate:</span><br/>
-          <strong style="font-size:14px; color:var(--success);">${p.convInvoiceToFull}%</strong>
+        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Payment &rarr; Enrolled</div>
+          <div style="font-size:18px; font-weight:800; color:var(--info); margin-top:2px;">${pipe.convPaymentToEnrol}%</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.enrolledStudents} students onboarded</div>
         </div>
-        <div>
-          <span style="color:var(--text-muted);">Payment &rarr; Enrolment:</span><br/>
-          <strong style="font-size:14px; color:var(--primary);">${p.convPaymentToEnrol}%</strong>
+        <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Overall Lead &rarr; Student</div>
+          <div style="font-size:18px; font-weight:800; color:var(--accent); margin-top:2px;">${pipe.convOverall}%</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">End-to-end conversion</div>
         </div>
-        <div>
-          <span style="color:var(--text-muted);">Overall Lead-to-Enrol:</span><br/>
-          <strong style="font-size:14px; color:var(--accent);">${p.convOverall}%</strong>
+      </div>
+    </div>
+
+    <!-- Quick Action / Recent Activity -->
+    <div class="cp-grid-2">
+      <div class="cp-card" style="margin-bottom:0;">
+        <div class="cp-card-header">
+          <div class="cp-section-title">&#x23F3; Overdue Receivables</div>
+          <button class="cp-btn sm secondary" id="btnViewReceivables">View All (${m.overdueReceivables > 0 ? fmtMoney(m.overdueReceivables) : '₦0'})</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-secondary);">
+          ${state.invoices.filter(i => {
+            const { balance } = invoiceBalance(i);
+            return balance > 0;
+          }).slice(0, 4).map(inv => `
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);">
+              <div>
+                <strong>${escapeHtml(inv.clientName)}</strong><br/>
+                <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(inv.programmeName)} &middot; Due ${fmtDate(inv.dueDate)}</span>
+              </div>
+              <div style="text-align:right;">
+                <strong style="color:var(--accent);">${fmtMoney(invoiceBalance(inv).balance)}</strong><br/>
+                <span class="cp-pill ${invoiceStatus(inv)}" style="font-size:9.5px;">${invoiceStatus(inv).toUpperCase()}</span>
+              </div>
+            </div>
+          `).join('') || '<div style="color:var(--text-muted); padding:10px 0;">All accounts currently up to date.</div>'}
+        </div>
+      </div>
+
+      <div class="cp-card" style="margin-bottom:0;">
+        <div class="cp-card-header">
+          <div class="cp-section-title">&#x1F4DC; Recent Audit &amp; Operational Events</div>
+          <button class="cp-btn sm secondary" id="btnViewAuditLog">View Log &rarr;</button>
+        </div>
+        <div style="font-size:12px;">
+          ${state.auditLog.slice(0, 4).map(a => `
+            <div style="padding:8px 0; border-bottom:1px solid var(--border);">
+              <div style="font-weight:600; color:var(--primary); font-size:12.5px;">${escapeHtml(a.action)} &mdash; <span style="font-weight:400; color:var(--text-secondary); font-size:11.5px;">${escapeHtml(a.reference)}</span></div>
+              <div style="font-size:10.5px; color:var(--text-muted);">${new Date(a.performedAt).toLocaleString('en-GB')} &middot; By ${escapeHtml(a.performedBy)}</div>
+            </div>
+          `).join('') || '<div style="color:var(--text-muted); padding:10px 0;">No audit events recorded yet.</div>'}
         </div>
       </div>
     </div>
   `;
 
-  const btnEnq = document.getElementById('btnDashNewEnq');
-  if (btnEnq) btnEnq.addEventListener('click', () => openModal('newEnquiry'));
+  document.getElementById('btnViewAllEnquiries').addEventListener('click', () => { state.tab = 'enquiries'; render(); });
+  document.getElementById('btnViewReceivables').addEventListener('click', () => { state.tab = 'receivables'; render(); });
+  document.getElementById('btnViewAuditLog').addEventListener('click', () => { state.tab = 'auditLog'; render(); });
+}
+
+// ----------------------------------------------------
+// EMPLOYEE & FACILITATOR PORTAL VIEWS (MY WORKSPACE)
+// ----------------------------------------------------
+function renderStaffDashboardTab(container) {
+  const user = getCurrentUser();
+  const pers = getCurrentPersonnel();
+  const myPayslips = getAccessiblePayslips();
+  const latestPayslip = myPayslips[myPayslips.length - 1] || null;
+  const pendingAck = myPayslips.filter(p => p.status === 'issued');
+  const myQueries = myPayslips.flatMap(p => (p.queries || []).map(q => ({ ...q, payslipNo: p.payslipNo, payslipId: p.id })));
+  const openQueries = myQueries.filter(q => q.status === 'open' || q.status === 'under_review');
+
+  const totalPaidEarnings = safeRound(myPayslips.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.paidAmount || p.netPay || 0), 0));
+  const latestNetPay = latestPayslip ? latestPayslip.netPay : (pers ? pers.basicPay : 0);
+
+  container.innerHTML = `
+    <!-- Welcome Header -->
+    <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:var(--radius-md); padding:20px 24px; margin-bottom:20px; box-shadow:var(--shadow-sm); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div style="font-size:18px; font-weight:800; color:var(--primary);">Welcome, ${escapeHtml(user.name)}</div>
+        <div style="font-size:12.5px; color:var(--text-secondary); margin-top:2px;">
+          ${escapeHtml(pers ? pers.role : user.title || user.role)} &middot; ${escapeHtml(pers ? pers.department : 'Clasptek Coaching Limited')}
+        </div>
+      </div>
+      <div>
+        <span class="cp-pill ${user.role === 'Facilitator' ? 'category-pill' : 'new'}" style="font-size:12px; padding:6px 14px;">
+          ${escapeHtml(user.role.toUpperCase())} PORTAL
+        </span>
+      </div>
+    </div>
+
+    <!-- Acknowledgement Urgent Action Alert -->
+    ${pendingAck.length > 0 ? `
+      <div style="background:#FEF3C7; border:1.5px solid var(--warning); border-radius:var(--radius-md); padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:14px; font-weight:800; color:#92400E; display:flex; align-items:center; gap:6px;">
+            &#x26A0;&#xFE0F; Action Required: Payslip Awaiting Your Acknowledgement
+          </div>
+          <div style="font-size:12px; color:#B45309; margin-top:3px;">
+            Your payslip for <strong>${escapeHtml(pendingAck[0].payPeriod)}</strong> has been prepared and issued for your review. Please review your earnings and confirm acknowledgement.
+          </div>
+        </div>
+        <button class="cp-btn accent" id="btnAckUrgent" data-id="${pendingAck[0].id}">Review &amp; Acknowledge &rarr;</button>
+      </div>
+    ` : ''}
+
+    <!-- Employee KPI Cards -->
+    <div class="cp-grid-4">
+      <div class="cp-kpi-card">
+        <div class="cp-kpi-label">Latest Expected Net Pay</div>
+        <div class="cp-kpi-val" style="color:var(--primary); font-size:20px;">${fmtMoney(latestNetPay)}</div>
+        <div class="cp-kpi-sub">${latestPayslip ? escapeHtml(latestPayslip.payPeriod) : 'Current Baseline'}</div>
+      </div>
+      <div class="cp-kpi-card">
+        <div class="cp-kpi-label">Latest Statement Status</div>
+        <div class="cp-kpi-val" style="font-size:18px;">
+          <span class="cp-pill ${latestPayslip ? (latestPayslip.status === 'paid' ? 'paid' : (latestPayslip.status === 'approved' ? 'partial' : 'new')) : 'draft'}">
+            ${latestPayslip ? escapeHtml(latestPayslip.status.toUpperCase()) : 'NO STATEMENTS'}
+          </span>
+        </div>
+        <div class="cp-kpi-sub">${latestPayslip ? `Payslip #${latestPayslip.payslipNo}` : 'Awaiting Period Run'}</div>
+      </div>
+      <div class="cp-kpi-card">
+        <div class="cp-kpi-label">Pending Acknowledgements</div>
+        <div class="cp-kpi-val" style="color:${pendingAck.length > 0 ? 'var(--warning)' : 'var(--success)'}; font-size:20px;">${pendingAck.length}</div>
+        <div class="cp-kpi-sub">${pendingAck.length > 0 ? 'Review Required' : 'All Clear'}</div>
+      </div>
+      <div class="cp-kpi-card">
+        <div class="cp-kpi-label">Total Compensation Disbursed</div>
+        <div class="cp-kpi-val" style="color:var(--success); font-size:20px;">${fmtMoney(totalPaidEarnings)}</div>
+        <div class="cp-kpi-sub">Lifetime Paid History</div>
+      </div>
+    </div>
+
+    <!-- Recent Payslips & Discrepancy Tracking Grid -->
+    <div class="cp-grid-2">
+      <div class="cp-card">
+        <div class="cp-card-header">
+          <div class="cp-section-title">&#x1F4B3; My Recent Payslips</div>
+          <button class="cp-btn sm secondary" id="btnViewAllMyPayslips">View All (${myPayslips.length}) &rarr;</button>
+        </div>
+        ${myPayslips.length === 0 ? `
+          <div class="cp-empty-state" style="padding:20px 0;">
+            <div class="cp-empty-desc">No payslips have been issued to your account yet.</div>
+          </div>
+        ` : `
+          <div style="font-size:12px;">
+            ${myPayslips.slice().reverse().slice(0, 4).map(ps => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+                <div>
+                  <strong style="color:var(--primary); font-size:13px;">${escapeHtml(ps.payPeriod)}</strong> &middot; <span style="font-family:monospace; color:var(--text-muted);">#${ps.payslipNo}</span><br/>
+                  <span style="font-size:11px; color:var(--text-secondary);">Target Pay: ${fmtDate(ps.payDate)}</span>
+                </div>
+                <div style="text-align:right;">
+                  <strong style="color:var(--success); font-size:13px;">${fmtMoney(ps.netPay)}</strong><br/>
+                  <span class="cp-pill ${ps.status === 'paid' ? 'paid' : (ps.status === 'approved' ? 'partial' : 'new')}" style="font-size:9.5px;">${escapeHtml(ps.status.toUpperCase())}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+
+      <div class="cp-card">
+        <div class="cp-card-header">
+          <div class="cp-section-title">&#x2753; My Payroll Discrepancy Queries</div>
+          <button class="cp-btn sm secondary" id="btnViewAllMyQueries">View Queries (${myQueries.length}) &rarr;</button>
+        </div>
+        ${myQueries.length === 0 ? `
+          <div class="cp-empty-state" style="padding:20px 0;">
+            <div class="cp-empty-desc">No queries raised. If you notice any discrepancy on a payslip, you can submit a query directly.</div>
+          </div>
+        ` : `
+          <div style="font-size:12px;">
+            ${myQueries.slice().reverse().slice(0, 3).map(q => `
+              <div style="padding:10px 0; border-bottom:1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                  <strong style="color:var(--primary); font-size:12.5px;">${escapeHtml(q.queryReason)}</strong>
+                  <span class="cp-pill ${q.status === 'open' ? 'unpaid' : (q.status === 'resolved' ? 'paid' : 'cancelled')}" style="font-size:9.5px;">${escapeHtml(q.status.toUpperCase())}</span>
+                </div>
+                <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:3px;">${escapeHtml(q.queryComment)}</div>
+                ${q.resolutionNote ? `<div style="font-size:11px; color:#166534; background:#F0FDF4; padding:4px 8px; border-radius:4px;">✔ <strong>Finance Note:</strong> ${escapeHtml(q.resolutionNote)}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  const btnAckUrg = document.getElementById('btnAckUrgent');
+  if (btnAckUrg) {
+    btnAckUrg.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === btnAckUrg.dataset.id);
+      if (ps) openModal('viewPayslip', { payslip: ps });
+    });
+  }
+
+  document.getElementById('btnViewAllMyPayslips').addEventListener('click', () => { state.tab = 'myPayslips'; render(); });
+  document.getElementById('btnViewAllMyQueries').addEventListener('click', () => { state.tab = 'myQueries'; render(); });
+}
+
+function renderMyPayslipsTab(container) {
+  const myPayslips = getAccessiblePayslips();
+
+  container.innerHTML = `
+    <div class="cp-card">
+      <div class="cp-card-header">
+        <div>
+          <div class="cp-section-title">&#x1F4B3; My Confidential Payslips</div>
+          <div class="cp-section-desc">Review your monthly compensation statements, verify earnings &amp; deductions, confirm acknowledgements, or print/export official copies.</div>
+        </div>
+      </div>
+
+      ${myPayslips.length === 0 ? `
+        <div class="cp-empty-state">
+          <div class="cp-empty-icon">&#x1F4B3;</div>
+          <div class="cp-empty-title">No payslips issued yet</div>
+          <div class="cp-empty-desc">When Finance issues your monthly payroll statement, it will appear here for your review and acknowledgement.</div>
+        </div>
+      ` : `
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th>Payslip #</th>
+                <th style="text-align:right;">Gross Pay</th>
+                <th style="text-align:right;">Deductions</th>
+                <th style="text-align:right;">Net Pay</th>
+                <th>Payroll Status</th>
+                <th>Acknowledgement</th>
+                <th style="text-align:center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${myPayslips.slice().reverse().map(ps => {
+                const hasOpenQry = ps.queries && ps.queries.some(q => q.status === 'open' || q.status === 'under_review');
+                let statusBadge = '';
+                if (ps.status === 'draft') statusBadge = '<span class="cp-pill draft">1. IN PREPARATION</span>';
+                else if (ps.status === 'issued') statusBadge = '<span class="cp-pill new">2. ISSUED (REVIEW)</span>';
+                else if (ps.status === 'acknowledged') statusBadge = '<span class="cp-pill active" style="background:#E0E7FF; color:#3730A3;">3. ACKNOWLEDGED</span>';
+                else if (ps.status === 'approved') statusBadge = '<span class="cp-pill partial" style="background:#FEF3C7; color:#92400E; font-weight:800;">4. APPROVED</span>';
+                else if (ps.status === 'paid') statusBadge = '<span class="cp-pill paid">5. PAID &amp; DISBURSED</span>';
+                else if (ps.status === 'cancelled') statusBadge = '<span class="cp-pill cancelled">CANCELLED</span>';
+
+                return `
+                  <tr>
+                    <td style="font-weight:700; color:var(--primary);">${escapeHtml(ps.payPeriod)}</td>
+                    <td style="font-family:monospace; font-weight:600;">#${ps.payslipNo}</td>
+                    <td style="text-align:right;">${fmtMoney(ps.grossPay)}</td>
+                    <td style="text-align:right; color:var(--danger);">${ps.totalDeductions > 0 ? '-' + fmtMoney(ps.totalDeductions) : '₦0.00'}</td>
+                    <td style="text-align:right; font-weight:800; color:var(--success); font-size:13px;">${fmtMoney(ps.netPay)}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                      ${ps.acknowledgedAt ? `
+                        <span class="cp-pill paid" style="font-size:10px;">✔ Acknowledged</span>
+                      ` : (ps.status === 'issued' ? `
+                        <span class="cp-pill prio-high" style="font-size:10px;">⚠️ Action Required</span>
+                      ` : `
+                        <span style="font-size:11px; color:var(--text-muted);">&mdash;</span>
+                      `)}
+                      ${hasOpenQry ? `<div style="margin-top:2px;"><span class="cp-pill prio-high" style="font-size:9.5px;">⚠️ Query Open</span></div>` : ''}
+                    </td>
+                    <td style="text-align:center;">
+                      <div class="cp-action-group" style="display:flex; justify-content:center; gap:6px;">
+                        <button class="cp-btn sm secondary btnMyViewPsl" data-id="${ps.id}" title="View official printable payslip">&#x1F4C4; View / Print</button>
+                        ${ps.status === 'issued' ? `
+                          <button class="cp-btn sm success btnMyAckPsl" data-id="${ps.id}">Acknowledge</button>
+                          <button class="cp-btn sm secondary btnMyQryPsl" data-id="${ps.id}" style="color:#B45309;">Raise Query</button>
+                        ` : ''}
+                        ${ps.status === 'acknowledged' ? `
+                          <button class="cp-btn sm secondary btnMyQryPsl" data-id="${ps.id}" style="color:#B45309;">Raise Query</button>
+                        ` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  `;
+
+  container.querySelectorAll('.btnMyViewPsl').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('viewPayslip', { payslip: ps });
+    });
+  });
+
+  container.querySelectorAll('.btnMyAckPsl').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('acknowledgePayslip', { payslip: ps });
+    });
+  });
+
+  container.querySelectorAll('.btnMyQryPsl').forEach(b => {
+    b.addEventListener('click', () => {
+      const ps = state.payslips.find(p => p.id === b.dataset.id);
+      if (ps) openModal('raisePayrollQuery', { payslip: ps });
+    });
+  });
+}
+
+function renderMyProfileTab(container) {
+  const user = getCurrentUser();
+  const pers = getCurrentPersonnel() || {
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    department: 'Academics',
+    bankName: 'Guaranty Trust Bank (GTBank)',
+    accountName: user.name,
+    accountNumber: '0849201938',
+    status: 'active'
+  };
+
+  container.innerHTML = `
+    <div class="cp-card">
+      <div class="cp-card-header">
+        <div>
+          <div class="cp-section-title">&#x1F464; My Personnel Profile &amp; Banking Details</div>
+          <div class="cp-section-desc">Review your official employment record and confidential disbursement banking details on file.</div>
+        </div>
+      </div>
+
+      <div class="cp-row2" style="margin-bottom:16px;">
+        <div class="cp-doc-box" style="margin:0;">
+          <div class="cp-doc-section-label">PERSONAL &amp; EMPLOYMENT INFORMATION</div>
+          <div class="cp-doc-meta-row"><span>Full Name:</span><strong>${escapeHtml(pers.name)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Personnel ID:</span><strong style="font-family:monospace;">${escapeHtml(pers.employeeId || 'EMP-XXXX')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Work Email:</span><strong>${escapeHtml(pers.email)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Phone Number:</span><strong>${escapeHtml(pers.phone || '—')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Department:</span><strong>${escapeHtml(pers.department || 'Academics')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Role / Designation:</span><strong>${escapeHtml(pers.role || user.role)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Personnel Type:</span><strong>${escapeHtml((pers.type || user.role).toUpperCase())}</strong></div>
+        </div>
+
+        <div class="cp-doc-box" style="margin:0; border-left-color:var(--success);">
+          <div class="cp-doc-section-label" style="color:var(--success);">PAYROLL &amp; BANKING DISBURSEMENT DETAILS</div>
+          <div class="cp-doc-meta-row"><span>Bank Name:</span><strong>${escapeHtml(pers.bankName || 'Guaranty Trust Bank')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Account Name:</span><strong>${escapeHtml(pers.accountName || pers.name)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Account Number:</span><strong class="cp-acc-num">${escapeHtml(pers.accountNumber || '—')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Tax Identification (TIN):</span><strong>${escapeHtml(pers.taxNumber || '—')}</strong></div>
+          ${pers.feeStructure ? `<div class="cp-doc-meta-row"><span>Fee Structure:</span><strong>${escapeHtml(pers.feeStructure)}</strong></div>` : ''}
+          <div class="cp-doc-meta-row" style="margin-top:6px; border-top:1px dashed var(--border); padding-top:6px;">
+            <span>Account Status:</span>
+            <span class="cp-pill ${pers.status === 'active' ? 'paid' : 'unpaid'}">${escapeHtml((pers.status || 'active').toUpperCase())}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; font-size:12px; color:var(--text-secondary);">
+        &#x1F4CA; <em>Note: If you need to update your registered banking account details or tax information, please contact the Finance Department or submit a profile update request.</em>
+      </div>
+    </div>
+  `;
+}
+
+function renderMyQueriesTab(container) {
+  const myPayslips = getAccessiblePayslips();
+  const allQueries = myPayslips.flatMap(p => (p.queries || []).map(q => ({ ...q, payslipNo: p.payslipNo, payslipId: p.id, payPeriod: p.payPeriod })));
+
+  container.innerHTML = `
+    <div class="cp-card">
+      <div class="cp-card-header">
+        <div>
+          <div class="cp-section-title">&#x2753; My Payroll Discrepancy Queries</div>
+          <div class="cp-section-desc">Track questions and discrepancy claims submitted on your payroll statements and view finance responses.</div>
+        </div>
+        ${myPayslips.length > 0 ? '<button class="cp-btn sm accent" id="btnNewQueryBtn">+ Raise New Query</button>' : ''}
+      </div>
+
+      ${allQueries.length === 0 ? `
+        <div class="cp-empty-state">
+          <div class="cp-empty-icon">&#x2753;</div>
+          <div class="cp-empty-title">No queries recorded</div>
+          <div class="cp-empty-desc">You have not raised any payroll queries. All compensation statements are in good standing.</div>
+        </div>
+      ` : `
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${allQueries.slice().reverse().map(q => `
+            <div style="background:#FAFBFD; border:1px solid var(--border); border-left:3.5px solid ${q.status === 'open' ? 'var(--warning)' : (q.status === 'resolved' ? 'var(--success)' : 'var(--danger)')}; border-radius:var(--radius-sm); padding:14px 16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <div style="font-weight:700; color:var(--primary); font-size:13.5px;">
+                  ${escapeHtml(q.queryReason)} &middot; <span style="font-size:11.5px; color:var(--text-muted);">Payslip #${q.payslipNo} (${escapeHtml(q.payPeriod)})</span>
+                </div>
+                <span class="cp-pill ${q.status === 'open' ? 'unpaid' : (q.status === 'resolved' ? 'paid' : 'cancelled')}">${escapeHtml(q.status.toUpperCase())}</span>
+              </div>
+              <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:6px;">${escapeHtml(q.queryComment)}</div>
+              <div style="font-size:11px; color:var(--text-muted);">Submitted on ${new Date(q.createdAt).toLocaleString('en-GB')}</div>
+
+              ${q.status === 'resolved' || q.status === 'rejected' ? `
+                <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); font-size:12px; color:${q.status === 'resolved' ? '#166534' : '#991B1B'};">
+                  <strong>${q.status === 'resolved' ? '✔ Resolved by Finance' : '✖ Rejected by Finance'}:</strong> ${escapeHtml(q.resolutionNote || 'Reviewed')}
+                  <span style="font-size:10.5px; color:var(--text-muted); margin-left:6px;">(${new Date(q.resolvedAt).toLocaleDateString('en-GB')})</span>
+                </div>
+              ` : `
+                <div style="margin-top:6px; font-size:11.5px; color:var(--warning); font-style:italic;">
+                  ⏳ Currently under review by Finance Operations. Approval is on hold pending resolution.
+                </div>
+              `}
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  `;
+
+  const btnNewQ = document.getElementById('btnNewQueryBtn');
+  if (btnNewQ) {
+    btnNewQ.addEventListener('click', () => {
+      if (myPayslips.length > 0) openModal('raisePayrollQuery', { payslip: myPayslips[0] });
+    });
+  }
+}
+
+function renderMySecurityTab(container) {
+  const user = getCurrentUser();
+
+  container.innerHTML = `
+    <div class="cp-card" style="max-width:600px;">
+      <div class="cp-card-header">
+        <div>
+          <div class="cp-section-title">&#x1F512; Account &amp; Login Security</div>
+          <div class="cp-section-desc">Manage your portal access credentials and security settings.</div>
+        </div>
+      </div>
+
+      <div class="cp-field"><label>Registered Login Email</label><input value="${escapeHtml(user.email)}" disabled style="background:#F8FAFC;" /></div>
+      <div class="cp-field"><label>Current Password</label><input type="password" id="curSecPwd" placeholder="••••••••••••" /></div>
+      <div class="cp-field"><label>New Secure Password</label><input type="password" id="newSecPwd" placeholder="Enter new password" /></div>
+      <div class="cp-field"><label>Confirm New Password</label><input type="password" id="confSecPwd" placeholder="Confirm new password" /></div>
+
+      <div id="secPwdMsg" style="margin-top:6px; font-size:12px; display:none;"></div>
+
+      <div style="margin-top:16px; display:flex; gap:10px;">
+        <button class="cp-btn accent" id="btnUpdateMyPassword">&#x1F512; Update Password</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnUpdateMyPassword').addEventListener('click', async () => {
+    const p1 = document.getElementById('newSecPwd').value;
+    const p2 = document.getElementById('confSecPwd').value;
+    const msg = document.getElementById('secPwdMsg');
+
+    if (!p1 || p1.length < 6) {
+      msg.textContent = 'New password must be at least 6 characters.';
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+      return;
+    }
+    if (p1 !== p2) {
+      msg.textContent = 'Passwords do not match.';
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+      return;
+    }
+
+    await logAudit('PASSWORD_CHANGE', 'user', user.id, `User ${user.email} updated personal password`);
+    msg.textContent = '✔ Password successfully updated.';
+    msg.style.color = 'var(--success)';
+    msg.style.display = 'block';
+  });
 }
 
 // ----------------------------------------------------
@@ -2384,10 +3116,9 @@ function renderStudentAccountsTab(container) {
   });
 
   document.getElementById('btnExportStudents').addEventListener('click', () => {
-    exportToCSV('Students_Directory', filtered.map(a => ({
-      Student: a.clientName, Programmes: a.programmesList, Phone: a.phone, Email: a.email,
-      Total_Invoiced: a.totalInvoiced, Total_Paid: a.totalPaid, Balance: a.balance,
-      Enrolled: a.isEnrolled ? 'Yes' : 'No', Status: a.status
+    exportToCSV('Student_Directory', filtered.map(a => ({
+      Name: a.clientName, Phone: a.phone, Email: a.email, Programmes: a.programmesList,
+      Invoiced: a.totalInvoiced, Paid: a.totalPaid, Balance: a.balance, Status: a.status
     })));
   });
 
@@ -2399,6 +3130,7 @@ function renderStudentAccountsTab(container) {
     });
   });
 }
+
 
 
 // ----------------------------------------------------
@@ -3699,40 +4431,309 @@ function renderReportsTab(container) {
 }
 
 // ----------------------------------------------------
-// TAB 12: USERS & ROLES (AUTHORITATIVE RBAC)
+// TAB 12: PEOPLE & ACCESS / STAFF MANAGEMENT (SUPER ADMIN RBAC)
 // ----------------------------------------------------
 function renderUsersRolesTab(container) {
+  const curSub = state.usersSubTab || 'personnel';
+  const staffCount = state.personnel.filter(p => p.type === 'staff' && p.status !== 'deactivated').length;
+  const facCount = state.personnel.filter(p => p.type === 'facilitator' && p.status !== 'deactivated').length;
+  const deactCount = state.personnel.filter(p => p.status === 'deactivated').length;
+  const activeUsersCount = state.users.filter(u => u.status === 'active').length;
+
   container.innerHTML = `
+    <!-- Top KPI Grid -->
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:18px;">
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Active Staff</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--primary);">${staffCount}</div>
+        <div class="cp-kpi-sub">Salaried Employees</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Active Facilitators</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--info);">${facCount}</div>
+        <div class="cp-kpi-sub">Master Instructors</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Portal Login Accounts</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--success);">${activeUsersCount}</div>
+        <div class="cp-kpi-sub">Active Credentials</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Deactivated Records</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--text-muted);">${deactCount}</div>
+        <div class="cp-kpi-sub">Preserved Historical Data</div>
+      </div>
+    </div>
+
     <div class="cp-card">
       <div class="cp-card-header">
         <div>
-          <div class="cp-section-title">&#x1F6E1;&#xFE0F; Authenticated Users &amp; Role-Based Governance</div>
-          <div class="cp-section-desc">Manage system personnel, administrative permissions, and audit user access.</div>
+          <div class="cp-section-title">&#x1F6E1;&#xFE0F; People &amp; Access / Staff Management</div>
+          <div class="cp-section-desc">Manage personnel directories, employee self-service portals, role governance, and non-destructive offboarding.</div>
         </div>
+        ${canManageUsers() ? `
+          <div style="display:flex; gap:8px;">
+            <button class="cp-btn sm primary" id="btnAddStaffBtn">+ Add Staff</button>
+            <button class="cp-btn sm accent" id="btnAddFacilitatorBtn">+ Add Facilitator</button>
+          </div>
+        ` : ''}
       </div>
 
-      <div class="cp-table-wrap">
-        <table class="cp-table">
-          <thead>
-            <tr>
-              <th>User Name</th><th>Official Work Email</th><th>Assigned Role</th><th>Title / Department</th><th>Tenant Scope</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${SYSTEM_ACCOUNTS.map(u => `
-              <tr>
-                <td style="font-weight:700; color:var(--primary);">${escapeHtml(u.name)}</td>
-                <td style="font-family:monospace;">${escapeHtml(u.email)}</td>
-                <td><span class="cp-pill ${u.role === 'Super Admin' ? 'category-pill' : (u.role === 'Finance Manager' ? 'paid' : (u.role === 'Finance Staff' ? 'new' : 'draft'))}">${escapeHtml(u.role)}</span></td>
-                <td>${escapeHtml(u.title)}</td>
-                <td><span class="cp-pill active">${escapeHtml(u.tenant_id)}</span></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <!-- Subtabs Navigation -->
+      <div class="cp-subtabs">
+        <button class="cp-subtab-btn ${curSub === 'personnel' ? 'active' : ''}" data-sub="personnel">&#x1F465; Personnel Directory (${state.personnel.length})</button>
+        <button class="cp-subtab-btn ${curSub === 'users' ? 'active' : ''}" data-sub="users">&#x1F511; System Login Accounts (${state.users.length})</button>
+      </div>
+
+      <div id="usersSubtabContent">
+        ${curSub === 'personnel' ? `
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+              <div style="font-size:12.5px; color:var(--text-secondary);">
+                Directory of all Clasptek staff members and facilitators. Deactivating an employee suspends login while preserving all past payslips and financial records.
+              </div>
+              <button class="cp-btn sm secondary" id="btnExportPersonnel">&#x1F4E5; Export Personnel CSV</button>
+            </div>
+
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead>
+                  <tr>
+                    <th>Personnel ID</th>
+                    <th>Full Name &amp; Contact</th>
+                    <th>Type</th>
+                    <th>Department / Subject</th>
+                    <th>Role / Designation</th>
+                    <th>Bank &amp; Account #</th>
+                    <th style="text-align:right;">Base / Fee Structure</th>
+                    <th>Status</th>
+                    ${canManageUsers() ? '<th style="text-align:center;">Actions</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${state.personnel.map(p => {
+                    const isDeact = p.status === 'deactivated';
+                    const isSusp = p.status === 'suspended';
+                    return `
+                      <tr style="${isDeact ? 'opacity:0.6; background:#F8FAFC;' : ''}">
+                        <td style="font-family:monospace; font-weight:700; color:var(--primary);">${escapeHtml(p.employeeId || 'EMP-XXXX')}</td>
+                        <td>
+                          <strong>${escapeHtml(p.name)}</strong>
+                          <div style="font-size:11px; color:var(--text-muted); font-family:monospace;">${escapeHtml(p.email)} &middot; ${escapeHtml(p.phone || 'No phone')}</div>
+                        </td>
+                        <td><span class="cp-pill ${p.type === 'facilitator' ? 'category-pill' : 'new'}">${escapeHtml((p.type || 'staff').toUpperCase())}</span></td>
+                        <td>${escapeHtml(p.subject || p.department || 'Academics')}</td>
+                        <td>${escapeHtml(p.role || p.designation || 'Staff')}</td>
+                        <td>
+                          <div style="font-size:11.5px; font-weight:600;">${escapeHtml(p.bankName || 'GTBank')}</div>
+                          <div class="cp-acc-num" style="font-size:11.5px;">${escapeHtml(p.accountNumber || '—')}</div>
+                        </td>
+                        <td style="text-align:right; font-weight:700; color:var(--primary); font-size:12px;">
+                          ${p.feeStructure ? `<span style="font-size:11px; font-weight:600; color:var(--text-secondary);">${escapeHtml(p.feeStructure)}</span>` : fmtMoney(p.basicPay || 0)}
+                        </td>
+                        <td>
+                          <span class="cp-pill ${p.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : 'cancelled')}">
+                            ${escapeHtml((p.status || 'active').toUpperCase())}
+                          </span>
+                        </td>
+                        ${canManageUsers() ? `
+                          <td style="text-align:center;">
+                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px;">
+                              <button class="cp-btn sm secondary btnEditPersonnel" data-id="${p.id}" title="Edit personal, employment, and bank info">Edit</button>
+                              ${!p.userId ? `
+                                <button class="cp-btn sm accent btnCreateLoginForPers" data-id="${p.id}" title="Provision login access">Create Login</button>
+                              ` : ''}
+                              ${!isDeact ? `
+                                <button class="cp-btn sm danger btnDeactivatePersonnel" data-id="${p.id}" title="Deactivate staff while preserving all past payroll records">Deactivate</button>
+                              ` : `
+                                <button class="cp-btn sm success btnReactivatePersonnel" data-id="${p.id}" title="Restore active staff status">Reactivate</button>
+                              `}
+                            </div>
+                          </td>
+                        ` : ''}
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
+
+        ${curSub === 'users' ? `
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+              <div style="font-size:12.5px; color:var(--text-secondary);">
+                Active credentials and role-based permissions governing portal workspaces. Passwords cannot be viewed by administrators.
+              </div>
+            </div>
+
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead>
+                  <tr>
+                    <th>User Name</th>
+                    <th>Official Work Email</th>
+                    <th>Assigned Role</th>
+                    <th>Status</th>
+                    <th>Personnel Link</th>
+                    ${canManageUsers() ? '<th style="text-align:center;">Actions</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${state.users.map(u => {
+                    const linkedPers = state.personnel.find(p => p.id === u.personnelId || p.userId === u.id);
+                    const isDeact = u.status === 'deactivated';
+                    const isSusp = u.status === 'suspended';
+                    return `
+                      <tr style="${isDeact ? 'opacity:0.6; background:#F8FAFC;' : ''}">
+                        <td style="font-weight:700; color:var(--primary);">${escapeHtml(u.name)}</td>
+                        <td style="font-family:monospace;">${escapeHtml(u.email)}</td>
+                        <td>
+                          <span class="cp-pill ${u.role === 'Super Admin' ? 'category-pill' : (u.role === 'Finance Manager' ? 'paid' : (u.role === 'Finance Staff' ? 'new' : (u.role === 'Facilitator' ? 'category-pill' : 'draft')))}">
+                            ${escapeHtml(u.role)}
+                          </span>
+                        </td>
+                        <td>
+                          <span class="cp-pill ${u.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : 'cancelled')}">
+                            ${escapeHtml((u.status || 'active').toUpperCase())}
+                          </span>
+                        </td>
+                        <td>
+                          ${linkedPers ? `<span style="font-size:11.5px; color:var(--text-secondary);">${escapeHtml(linkedPers.name)} (${escapeHtml(linkedPers.employeeId || 'EMP')})</span>` : '<span style="color:var(--text-muted); font-size:11px;">Standalone Admin</span>'}
+                        </td>
+                        ${canManageUsers() ? `
+                          <td style="text-align:center;">
+                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px;">
+                              <button class="cp-btn sm secondary btnChangeUserRole" data-id="${u.id}">Change Role</button>
+                              <button class="cp-btn sm secondary btnResetUserPwd" data-id="${u.id}">Reset Password</button>
+                              ${!isDeact ? `
+                                <button class="cp-btn sm ${isSusp ? 'success' : 'secondary'} btnToggleSuspendUser" data-id="${u.id}">
+                                  ${isSusp ? 'Unsuspend' : 'Suspend'}
+                                </button>
+                              ` : ''}
+                            </div>
+                          </td>
+                        ` : ''}
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
+
+  // Subtab switching
+  container.querySelectorAll('.cp-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.usersSubTab = btn.dataset.sub;
+      render();
+    });
+  });
+
+  // Action Buttons
+  const btnAddStaff = document.getElementById('btnAddStaffBtn');
+  if (btnAddStaff) btnAddStaff.addEventListener('click', () => openModal('addStaffModal'));
+
+  const btnAddFac = document.getElementById('btnAddFacilitatorBtn');
+  if (btnAddFac) btnAddFac.addEventListener('click', () => openModal('addFacilitatorModal'));
+
+  const btnExpPers = document.getElementById('btnExportPersonnel');
+  if (btnExpPers) {
+    btnExpPers.addEventListener('click', () => {
+      exportToCSV('Personnel_Directory', state.personnel.map(p => ({
+        ID: p.employeeId, Name: p.name, Type: p.type, Department: p.department, Role: p.role,
+        Email: p.email, Phone: p.phone, Bank: p.bankName, AccountNo: p.accountNumber, BasicPay: p.basicPay, Status: p.status
+      })));
+    });
+  }
+
+  // Personnel actions
+  container.querySelectorAll('.btnEditPersonnel').forEach(b => {
+    b.addEventListener('click', () => {
+      const pers = state.personnel.find(p => p.id === b.dataset.id);
+      if (pers) openModal('editPersonnelModal', { personnel: pers });
+    });
+  });
+
+  container.querySelectorAll('.btnCreateLoginForPers').forEach(b => {
+    b.addEventListener('click', async () => {
+      const pers = state.personnel.find(p => p.id === b.dataset.id);
+      if (!pers) return;
+      const newUserId = 'usr_' + Date.now();
+      const userRole = pers.type === 'facilitator' ? 'Facilitator' : 'Staff';
+      const newUser = {
+        id: newUserId,
+        email: pers.email,
+        name: pers.name,
+        role: userRole,
+        title: pers.role || pers.designation,
+        status: 'active',
+        personnelId: pers.id,
+        tenant_id: DEFAULT_TENANT_ID,
+        createdAt: new Date().toISOString()
+      };
+      pers.userId = newUserId;
+      state.users.push(newUser);
+      await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('CREATE_USER_ACCOUNT', 'user', newUserId, `Provisioned login for ${pers.name} (${userRole})`);
+      alert(`Login account created for ${pers.name} (${pers.email}) with role: ${userRole}.`);
+      render();
+    });
+  });
+
+  container.querySelectorAll('.btnDeactivatePersonnel').forEach(b => {
+    b.addEventListener('click', () => {
+      const pers = state.personnel.find(p => p.id === b.dataset.id);
+      if (pers) openModal('deactivatePersonnelModal', { personnel: pers });
+    });
+  });
+
+  container.querySelectorAll('.btnReactivatePersonnel').forEach(b => {
+    b.addEventListener('click', async () => {
+      const pers = state.personnel.find(p => p.id === b.dataset.id);
+      if (!pers) return;
+      pers.status = 'active';
+      const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || u.email.toLowerCase() === pers.email.toLowerCase());
+      if (usr) usr.status = 'active';
+      await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('REACTIVATE_PERSONNEL', 'personnel', pers.id, `Reactivated staff ${pers.name}`);
+      alert(`${pers.name} has been reactivated.`);
+      render();
+    });
+  });
+
+  // User actions
+  container.querySelectorAll('.btnChangeUserRole').forEach(b => {
+    b.addEventListener('click', () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (u) openModal('changeRoleModal', { user: u });
+    });
+  });
+
+  container.querySelectorAll('.btnResetUserPwd').forEach(b => {
+    b.addEventListener('click', () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (u) openModal('resetPasswordModal', { user: u });
+    });
+  });
+
+  container.querySelectorAll('.btnToggleSuspendUser').forEach(b => {
+    b.addEventListener('click', async () => {
+      const u = state.users.find(usr => usr.id === b.dataset.id);
+      if (!u) return;
+      u.status = u.status === 'suspended' ? 'active' : 'suspended';
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('TOGGLE_USER_STATUS', 'user', u.id, `Set status to ${u.status}`);
+      render();
+    });
+  });
 }
 
 // ----------------------------------------------------
@@ -6454,7 +7455,7 @@ function renderCollectionNotesModal(container, inv) {
           <div class="cp-field"><label>Add Follow-Up Note</label><textarea id="newCollNote" rows="2" placeholder="e.g. Called student, promised settlement next Tuesday."></textarea></div>
           <button class="cp-btn sm accent" id="btnAddCollNote" style="margin-bottom:14px;">+ Log Follow-Up Note</button>
 
-          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">FOLLOW-UP HISTORY</div>
+          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Admissions &amp; Follow-up History</div>
           ${notes.length === 0 ? '<div style="font-size:12px; color:var(--text-muted);">No collection notes logged yet.</div>' : `
             <div style="max-height:200px; overflow-y:auto;">
               ${notes.slice().reverse().map(n => `
@@ -6519,6 +7520,558 @@ function renderSupabaseModal(container) {
   });
 }
 
+// ----------------------------------------------------
+// USER & PERSONNEL MANAGEMENT MODALS (SUPER ADMIN RBAC)
+// ----------------------------------------------------
+function renderAddStaffModal(container) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal large">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F464; Add New Staff Member</div>
+          <button class="cp-modal-close" id="btnCloseAddStaffMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">1. PERSONAL INFORMATION</div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>First Name *</label><input id="staffFname" placeholder="e.g. Samuel" /></div>
+            <div class="cp-field"><label>Last Name *</label><input id="staffLname" placeholder="e.g. Adeyemi" /></div>
+            <div class="cp-field"><label>Other Name</label><input id="staffOname" placeholder="e.g. Olamide" /></div>
+          </div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Phone Number *</label><input id="staffPhone" placeholder="+2348012345678" /></div>
+            <div class="cp-field"><label>Personal / Work Email *</label><input id="staffEmail" type="email" placeholder="samuel@clasptek.org" /></div>
+            <div class="cp-field"><label>Date of Birth</label><input type="date" id="staffDob" /></div>
+          </div>
+          <div class="cp-field"><label>Residential Address</label><input id="staffAddress" placeholder="Lagos / Ogun State" /></div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">2. EMPLOYMENT INFORMATION</div>
+          <div class="cp-row3">
+            <div class="cp-field">
+              <label>Department *</label>
+              <select id="staffDept">
+                ${DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="cp-field"><label>Official Designation / Role *</label><input id="staffRole" placeholder="e.g. Admissions & Operations Officer" /></div>
+            <div class="cp-field"><label>Date of Joining</label><input type="date" id="staffJoinDate" value="${todayStr}" /></div>
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Employment Status</label>
+              <select id="staffEmpStatus">
+                <option value="Full-Time">Full-Time</option>
+                <option value="Part-Time">Part-Time</option>
+                <option value="Probation">Probation</option>
+                <option value="Contract">Contract</option>
+              </select>
+            </div>
+            <div class="cp-field"><label>Reporting Manager</label><input id="staffManager" value="Ayodele Johnson" /></div>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">3. PAYROLL &amp; BANKING DISBURSEMENT</div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Bank Name *</label><input id="staffBank" placeholder="e.g. Guaranty Trust Bank" value="Guaranty Trust Bank" /></div>
+            <div class="cp-field"><label>Account Name *</label><input id="staffAccName" placeholder="Account Name as registered" /></div>
+            <div class="cp-field"><label>Account Number (10 Digits) *</label><input id="staffAccNo" placeholder="0123456789" /></div>
+          </div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Monthly Base Salary (₦) *</label><input type="number" id="staffSalary" placeholder="200000" /></div>
+            <div class="cp-field"><label>Tax ID (TIN)</label><input id="staffTin" placeholder="TIN-EMP-XXXX" /></div>
+            <div class="cp-field"><label>National Identity Number (NIN)</label><input id="staffNin" placeholder="11-digit NIN" /></div>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">4. SYSTEM LOGIN ACCESS (PROVISIONING)</div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Assign Portal Role *</label>
+              <select id="staffUserRole">
+                <option value="Staff" selected>Staff (Restricted Employee Portal)</option>
+                <option value="Finance Staff">Finance Staff (Day-to-Day Operations)</option>
+                <option value="Finance Manager">Finance Manager (Approvals &amp; Disbursements)</option>
+              </select>
+            </div>
+            <div class="cp-field" style="display:flex; align-items:center; gap:8px; margin-top:20px;">
+              <input type="checkbox" id="staffCreateLogin" checked style="width:16px; height:16px;" />
+              <label for="staffCreateLogin" style="margin:0; font-size:12.5px; cursor:pointer;">Provision Login Account Immediately</label>
+            </div>
+          </div>
+
+          <div id="staffFormErr" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelAddStaff">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveStaff">&#x2714; Create Staff Profile</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseAddStaffMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelAddStaff').addEventListener('click', closeModal);
+
+  document.getElementById('staffFname').addEventListener('input', () => {
+    const fn = document.getElementById('staffFname').value.trim();
+    const ln = document.getElementById('staffLname').value.trim();
+    if (!document.getElementById('staffAccName').value) {
+      document.getElementById('staffAccName').value = `${fn} ${ln}`.trim();
+    }
+  });
+
+  document.getElementById('btnSaveStaff').addEventListener('click', async () => {
+    const fn = document.getElementById('staffFname').value.trim();
+    const ln = document.getElementById('staffLname').value.trim();
+    const on = document.getElementById('staffOname').value.trim();
+    const phone = document.getElementById('staffPhone').value.trim();
+    const email = document.getElementById('staffEmail').value.trim();
+    const dob = document.getElementById('staffDob').value;
+    const address = document.getElementById('staffAddress').value.trim();
+    const dept = document.getElementById('staffDept').value;
+    const role = document.getElementById('staffRole').value.trim();
+    const joinDate = document.getElementById('staffJoinDate').value;
+    const empStatus = document.getElementById('staffEmpStatus').value;
+    const manager = document.getElementById('staffManager').value.trim();
+    const bank = document.getElementById('staffBank').value.trim();
+    const accName = document.getElementById('staffAccName').value.trim();
+    const accNo = document.getElementById('staffAccNo').value.trim();
+    const salary = Number(document.getElementById('staffSalary').value) || 0;
+    const tin = document.getElementById('staffTin').value.trim();
+    const nin = document.getElementById('staffNin').value.trim();
+    const userRole = document.getElementById('staffUserRole').value;
+    const createLogin = document.getElementById('staffCreateLogin').checked;
+    const errEl = document.getElementById('staffFormErr');
+
+    if (!fn || !ln || !phone || !email || !role || !accNo) {
+      errEl.textContent = 'Please complete all required fields (Name, Phone, Email, Role, Account #).';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const fullName = `${fn} ${ln}${on ? ' ' + on : ''}`;
+    const nextEmpNo = state.personnel.filter(p => p.type === 'staff').length + 1;
+    const empIdStr = 'EMP-' + String(nextEmpNo).padStart(4, '0');
+    const persId = 'emp_' + Date.now();
+    const userId = createLogin ? 'usr_' + Date.now() : null;
+
+    const newPersonnel = {
+      id: persId,
+      employeeId: empIdStr,
+      name: fullName,
+      type: 'staff',
+      department: dept,
+      role,
+      designation: role,
+      email,
+      phone,
+      address,
+      dob,
+      dateOfJoining: joinDate,
+      employmentStatus: empStatus,
+      reportingManager: manager,
+      bankName: bank,
+      accountName: accName || fullName,
+      accountNumber: accNo,
+      taxNumber: tin,
+      nin,
+      payrollEligibility: true,
+      basicPay: salary,
+      status: 'active',
+      userId,
+      createdAt: new Date().toISOString()
+    };
+
+    state.personnel.push(newPersonnel);
+    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+
+    if (createLogin) {
+      const newUser = {
+        id: userId,
+        email,
+        name: fullName,
+        role: userRole,
+        title: role,
+        status: 'active',
+        personnelId: persId,
+        tenant_id: DEFAULT_TENANT_ID,
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(newUser);
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('CREATE_USER_ACCOUNT', 'user', userId, `Created login for ${fullName} with role ${userRole}`);
+    }
+
+    await logAudit('CREATE_STAFF_PERSONNEL', 'personnel', persId, `Created staff record ${fullName} (${empIdStr})`);
+    alert(`Staff member ${fullName} (${empIdStr}) created successfully.`);
+    closeModal();
+  });
+}
+
+function renderAddFacilitatorModal(container) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal large">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F393; Add New Facilitator</div>
+          <button class="cp-modal-close" id="btnCloseAddFacMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">1. FACILITATOR IDENTIFICATION</div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Full Name *</label><input id="facName" placeholder="e.g. Dr. Kemi Adebayo" /></div>
+            <div class="cp-field"><label>Official Title / Designation</label><input id="facDesignation" placeholder="e.g. Lead IELTS Master Trainer" /></div>
+          </div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Phone Number *</label><input id="facPhone" placeholder="+2348012345678" /></div>
+            <div class="cp-field"><label>Contact Email *</label><input id="facEmail" type="email" placeholder="kemi@clasptek.org" /></div>
+            <div class="cp-field"><label>Date Engaged</label><input type="date" id="facDateEngaged" value="${todayStr}" /></div>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">2. PROGRAMME &amp; ENGAGEMENT</div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Specialist Subject / Programme *</label>
+              <input id="facSubject" placeholder="e.g. IELTS Preparation &amp; Speaking Masterclass" />
+            </div>
+            <div class="cp-field">
+              <label>Engagement Type *</label>
+              <select id="facEngageType">
+                <option value="Retainer / Session-Based">Retainer + Session-Based</option>
+                <option value="Programme / Cohort-Based">Programme / Cohort-Based</option>
+                <option value="Per Session Fee Only">Per Session Fee Only</option>
+                <option value="Contract Master Facilitator">Contract Master Facilitator</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">3. COMPENSATION &amp; BANKING DETAILS</div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Base Compensation / Retainer (₦)</label><input type="number" id="facBasePay" placeholder="200000" /></div>
+            <div class="cp-field"><label>Fee Structure Note</label><input id="facFeeStructure" placeholder="e.g. ₦200,000 Base + ₦25,000 per Weekend Masterclass" /></div>
+          </div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Bank Name *</label><input id="facBank" placeholder="e.g. Zenith Bank Plc" value="Guaranty Trust Bank" /></div>
+            <div class="cp-field"><label>Account Name *</label><input id="facAccName" placeholder="Account Name" /></div>
+            <div class="cp-field"><label>Account Number (10 Digits) *</label><input id="facAccNo" placeholder="0123456789" /></div>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">4. SYSTEM LOGIN ACCESS</div>
+          <div class="cp-field" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="facCreateLogin" checked style="width:16px; height:16px;" />
+            <label for="facCreateLogin" style="margin:0; font-size:12.5px; cursor:pointer;">Provision Facilitator Self-Service Portal Access</label>
+          </div>
+
+          <div id="facFormErr" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelAddFac">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveFac">&#x2714; Create Facilitator Profile</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseAddFacMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelAddFac').addEventListener('click', closeModal);
+
+  document.getElementById('facName').addEventListener('input', () => {
+    const fn = document.getElementById('facName').value.trim();
+    if (!document.getElementById('facAccName').value) {
+      document.getElementById('facAccName').value = fn;
+    }
+  });
+
+  document.getElementById('btnSaveFac').addEventListener('click', async () => {
+    const name = document.getElementById('facName').value.trim();
+    const designation = document.getElementById('facDesignation').value.trim();
+    const phone = document.getElementById('facPhone').value.trim();
+    const email = document.getElementById('facEmail').value.trim();
+    const dateEngaged = document.getElementById('facDateEngaged').value;
+    const subject = document.getElementById('facSubject').value.trim();
+    const engageType = document.getElementById('facEngageType').value;
+    const basePay = Number(document.getElementById('facBasePay').value) || 0;
+    const feeStructure = document.getElementById('facFeeStructure').value.trim();
+    const bank = document.getElementById('facBank').value.trim();
+    const accName = document.getElementById('facAccName').value.trim();
+    const accNo = document.getElementById('facAccNo').value.trim();
+    const createLogin = document.getElementById('facCreateLogin').checked;
+    const errEl = document.getElementById('facFormErr');
+
+    if (!name || !phone || !email || !accNo) {
+      errEl.textContent = 'Please provide full name, phone, email, and bank account number.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const nextFacNo = state.personnel.filter(p => p.type === 'facilitator').length + 1;
+    const facIdStr = 'FAC-' + String(nextFacNo).padStart(4, '0');
+    const persId = 'emp_' + Date.now();
+    const userId = createLogin ? 'usr_' + Date.now() : null;
+
+    const newPersonnel = {
+      id: persId,
+      employeeId: facIdStr,
+      name,
+      type: 'facilitator',
+      department: 'Academics',
+      role: designation || 'Facilitator',
+      designation: designation || 'Facilitator',
+      subject: subject || 'Academic Training',
+      engagementType: engageType,
+      email,
+      phone,
+      dateEngaged,
+      bankName: bank,
+      accountName: accName || name,
+      accountNumber: accNo,
+      payrollEligibility: true,
+      basicPay: basePay,
+      feeStructure: feeStructure || (basePay > 0 ? `₦${basePay.toLocaleString()} Base Retainer` : 'Per-session based'),
+      status: 'active',
+      userId,
+      createdAt: new Date().toISOString()
+    };
+
+    state.personnel.push(newPersonnel);
+    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+
+    if (createLogin) {
+      const newUser = {
+        id: userId,
+        email,
+        name,
+        role: 'Facilitator',
+        title: designation || 'Facilitator',
+        status: 'active',
+        personnelId: persId,
+        tenant_id: DEFAULT_TENANT_ID,
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(newUser);
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      await logAudit('CREATE_USER_ACCOUNT', 'user', userId, `Created login for facilitator ${name}`);
+    }
+
+    await logAudit('CREATE_FACILITATOR_PERSONNEL', 'personnel', persId, `Created facilitator record ${name} (${facIdStr})`);
+    alert(`Facilitator ${name} (${facIdStr}) created successfully.`);
+    closeModal();
+  });
+}
+
+function renderEditPersonnelModal(container, pers) {
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F4DD; Edit Personnel &mdash; ${escapeHtml(pers.name)} (${escapeHtml(pers.employeeId || 'EMP')})</div>
+          <button class="cp-modal-close" id="btnCloseEditPers">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div class="cp-field"><label>Full Name *</label><input id="editPersName" value="${escapeHtml(pers.name)}" /></div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Phone *</label><input id="editPersPhone" value="${escapeHtml(pers.phone || '')}" /></div>
+            <div class="cp-field"><label>Email *</label><input id="editPersEmail" value="${escapeHtml(pers.email)}" /></div>
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Department</label><input id="editPersDept" value="${escapeHtml(pers.department || 'Academics')}" /></div>
+            <div class="cp-field"><label>Official Role / Designation</label><input id="editPersRole" value="${escapeHtml(pers.role || '')}" /></div>
+          </div>
+          <div class="cp-row3">
+            <div class="cp-field"><label>Bank Name</label><input id="editPersBank" value="${escapeHtml(pers.bankName || 'GTBank')}" /></div>
+            <div class="cp-field"><label>Account Name</label><input id="editPersAccName" value="${escapeHtml(pers.accountName || pers.name)}" /></div>
+            <div class="cp-field"><label>Account Number</label><input id="editPersAccNo" value="${escapeHtml(pers.accountNumber || '')}" /></div>
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Base Monthly Pay (₦)</label><input type="number" id="editPersPay" value="${pers.basicPay || 0}" /></div>
+            <div class="cp-field"><label>Fee Structure Note</label><input id="editPersFee" value="${escapeHtml(pers.feeStructure || '')}" /></div>
+          </div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelEditPers">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveEditPers">&#x2714; Save Changes</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseEditPers').addEventListener('click', closeModal);
+  document.getElementById('btnCancelEditPers').addEventListener('click', closeModal);
+
+  document.getElementById('btnSaveEditPers').addEventListener('click', async () => {
+    pers.name = document.getElementById('editPersName').value.trim();
+    pers.phone = document.getElementById('editPersPhone').value.trim();
+    pers.email = document.getElementById('editPersEmail').value.trim();
+    pers.department = document.getElementById('editPersDept').value.trim();
+    pers.role = document.getElementById('editPersRole').value.trim();
+    pers.bankName = document.getElementById('editPersBank').value.trim();
+    pers.accountName = document.getElementById('editPersAccName').value.trim();
+    pers.accountNumber = document.getElementById('editPersAccNo').value.trim();
+    pers.basicPay = Number(document.getElementById('editPersPay').value) || 0;
+    pers.feeStructure = document.getElementById('editPersFee').value.trim();
+
+    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+    await logAudit('UPDATE_PERSONNEL', 'personnel', pers.id, `Updated details for ${pers.name}`);
+    alert('Personnel record updated successfully.');
+    closeModal();
+  });
+}
+
+function renderDeactivatePersonnelModal(container, pers) {
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title" style="color:var(--danger);">&#x26A0;&#xFE0F; Deactivate Employee / Facilitator</div>
+          <button class="cp-modal-close" id="btnCloseDeactMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="background:#FEF2F2; border:1px solid #F87171; border-radius:var(--radius-sm); padding:12px 14px; font-size:12.5px; color:#991B1B; margin-bottom:14px;">
+            <strong>Important Safety Rule:</strong> Deactivating <strong>${escapeHtml(pers.name)}</strong> (${escapeHtml(pers.employeeId || 'EMP')}) will suspend portal login and prevent new payslips from being issued, while <strong>preserving all historical payslips, past payroll disbursements, ledger expenses, and audit trails intact</strong>.
+          </div>
+
+          <div class="cp-field">
+            <label>Reason for Deactivation / Offboarding *</label>
+            <textarea id="deactReason" rows="3" placeholder="e.g. End of contract term / resigned on mutual agreement"></textarea>
+          </div>
+          <div id="deactErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelDeact">Cancel</button>
+          <button class="cp-btn danger" id="btnConfirmDeact">&#x1F512; Confirm Deactivation</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseDeactMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelDeact').addEventListener('click', closeModal);
+
+  document.getElementById('btnConfirmDeact').addEventListener('click', async () => {
+    const reason = document.getElementById('deactReason').value.trim();
+    if (!reason) {
+      const err = document.getElementById('deactErr');
+      err.textContent = 'Please provide a deactivation reason for audit purposes.';
+      err.style.display = 'block';
+      return;
+    }
+
+    pers.status = 'deactivated';
+    pers.deactivatedAt = new Date().toISOString();
+    pers.deactivatedBy = state.auth.user ? state.auth.user.name : 'Super Admin';
+    pers.deactivationReason = reason;
+
+    // Suspend associated user login account
+    const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || u.email.toLowerCase() === pers.email.toLowerCase());
+    if (usr) {
+      usr.status = 'deactivated';
+    }
+
+    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+    await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+    await logAudit('DEACTIVATE_PERSONNEL', 'personnel', pers.id, `Deactivated ${pers.name}: ${reason}`);
+
+    alert(`${pers.name} has been deactivated. Historical records have been preserved.`);
+    closeModal();
+  });
+}
+
+function renderResetPasswordModal(container, user) {
+  const resetToken = 'rst_' + Math.random().toString(36).substring(2, 10);
+  const resetLink = `https://clasptek.org/auth/reset?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F511; Reset Password &mdash; ${escapeHtml(user.name)}</div>
+          <button class="cp-modal-close" id="btnCloseRstMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">
+            Target Account: <strong>${escapeHtml(user.email)}</strong> &middot; Role: <span class="cp-pill active">${escapeHtml(user.role)}</span>
+          </div>
+
+          <div class="cp-field">
+            <label>Secure Reset Link</label>
+            <input value="${resetLink}" readonly style="background:#F8FAFC; font-family:monospace; font-size:11.5px;" />
+          </div>
+
+          <div class="cp-field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+            <input type="checkbox" id="chkForceReset" checked style="width:16px; height:16px;" />
+            <label for="chkForceReset" style="margin:0; font-size:12.5px; cursor:pointer;">Force Password Reset at Next Login</label>
+          </div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelRst">Close</button>
+          <button class="cp-btn accent" id="btnConfirmRst">&#x2714; Issue Reset Directive</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseRstMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelRst').addEventListener('click', closeModal);
+
+  document.getElementById('btnConfirmRst').addEventListener('click', async () => {
+    user.forcePasswordReset = document.getElementById('chkForceReset').checked;
+    await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+    await logAudit('RESET_USER_PASSWORD', 'user', user.id, `Password reset directive issued for ${user.email}`);
+    alert(`Password reset directive issued for ${user.email}.`);
+    closeModal();
+  });
+}
+
+function renderChangeRoleModal(container, user) {
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F6E1;&#xFE0F; Change User Role &mdash; ${escapeHtml(user.name)}</div>
+          <button class="cp-modal-close" id="btnCloseRoleMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">
+            Account: <strong>${escapeHtml(user.email)}</strong>
+          </div>
+
+          <div class="cp-field">
+            <label>Assigned System Role *</label>
+            <select id="selNewRole">
+              <option value="Super Admin" ${user.role === 'Super Admin' ? 'selected' : ''}>Super Admin (Full Governance &amp; Administration)</option>
+              <option value="Finance Manager" ${user.role === 'Finance Manager' ? 'selected' : ''}>Finance Manager (Financial Approvals &amp; Payroll Disbursement)</option>
+              <option value="Finance Staff" ${user.role === 'Finance Staff' ? 'selected' : ''}>Finance Staff (Billing &amp; Payroll Preparation)</option>
+              <option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff (Employee Self-Service Portal)</option>
+              <option value="Facilitator" ${user.role === 'Facilitator' ? 'selected' : ''}>Facilitator (Facilitator Self-Service Portal)</option>
+              <option value="Finance Viewer" ${user.role === 'Finance Viewer' ? 'selected' : ''}>Finance Viewer (Read-Only Financial Auditing)</option>
+            </select>
+          </div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelRoleMod">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveRoleMod">&#x2714; Update Role</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseRoleMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelRoleMod').addEventListener('click', closeModal);
+
+  document.getElementById('btnSaveRoleMod').addEventListener('click', async () => {
+    const oldRole = user.role;
+    const newRole = document.getElementById('selNewRole').value;
+    user.role = newRole;
+    await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+    await logAudit('CHANGE_USER_ROLE', 'user', user.id, `Role changed from ${oldRole} to ${newRole}`);
+    alert(`Role for ${user.email} updated to ${newRole}.`);
+    closeModal();
+  });
+}
+
+
 
 
   // ----------------------------------------------------
@@ -6552,6 +8105,20 @@ function renderSupabaseModal(container) {
       renderCanonicalPayslipDocument,
       renderCanonicalReceiptDocument,
       printCanonicalDocument,
+      getAccessiblePayslips,
+      getCurrentPersonnel,
+      getCurrentUser,
+      getRole,
+      isSuperAdmin,
+      isFinanceManager,
+      isFinanceStaff,
+      isStaff,
+      isFacilitator,
+      isEmployeePortal,
+      isFinanceTeam,
+      canManageUsers,
+      canApprove,
+      canRecord,
       DEFAULT_FINANCE_SETTINGS,
       DEFAULT_PAYMENT_ACCOUNTS,
       DEFAULT_PERSONNEL_DIRECTORY
