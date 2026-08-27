@@ -1875,6 +1875,37 @@ async function safeSet(key, value) {
   }
 }
 
+function sanitizeAuditPayload(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    return val
+      .replace(/password\s*[:=]\s*["']?[^,"'}\s]+/gi, 'password: [REDACTED]')
+      .replace(/token\s*[:=]\s*["']?[^,"'}\s]+/gi, 'token: [REDACTED]')
+      .replace(/key\s*[:=]\s*["']?[^,"'}\s]+/gi, 'key: [REDACTED]');
+  }
+  if (typeof val === 'object') {
+    try {
+      const clone = JSON.parse(JSON.stringify(val));
+      const redactKeys = ['password', 'pwd', 'passwordhash', 'salt', 'apikey', 'anonkey', 'token', 'invitationtoken', 'resettoken', 'sessiontoken', 'secret'];
+      const traverse = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        Object.keys(obj).forEach(k => {
+          if (redactKeys.some(rk => k.toLowerCase().includes(rk))) {
+            obj[k] = '[REDACTED]';
+          } else if (typeof obj[k] === 'object') {
+            traverse(obj[k]);
+          }
+        });
+      };
+      traverse(clone);
+      return JSON.stringify(clone);
+    } catch (e) {
+      return '[COMPLEX_OBJECT]';
+    }
+  }
+  return String(val);
+}
+
 async function logAudit(action, entityType, entityId, reference, previousValue, newValue, reason = '') {
   const actorRole = state.auth && state.auth.user ? state.auth.user.role : 'System';
   const actorName = state.auth && state.auth.user ? `${state.auth.user.name} (${state.auth.user.email})` : 'System';
@@ -1886,8 +1917,8 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
     entityType,
     entityId,
     reference: reference || 'N/A',
-    previousValue: previousValue ? (typeof previousValue === 'string' ? previousValue : JSON.stringify(previousValue)) : null,
-    newValue: newValue ? (typeof newValue === 'string' ? newValue : JSON.stringify(newValue)) : null,
+    previousValue: sanitizeAuditPayload(previousValue),
+    newValue: sanitizeAuditPayload(newValue),
     reason: reason || 'Standard operation',
     performedBy: actorName,
     role: actorRole,
@@ -2169,7 +2200,8 @@ async function loadAll() {
         ]);
 
         // Check if query had critical errors
-        const hasDbErrors = [dbProgs, dbInvs, dbPays, dbExps, dbPSlips].some(r => r.error && r.status >= 500);
+        const queryResults = [dbProgs, dbInvs, dbPays, dbExps, dbPSlips, dbPers, dbFSet, dbPAccs, dbEnqs, dbEnrls, dbCusts];
+        const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || r.error.message));
 
         if (!hasDbErrors) {
           state.programmes = Array.isArray(dbProgs.data) ? dbProgs.data : [];
@@ -2198,6 +2230,9 @@ async function loadAll() {
           state.supabase.lastSuccessfulRead = new Date().toISOString();
           state.connectionError = null;
           isDbHydrated = true;
+        } else {
+          state.supabase.status = 'error';
+          state.connectionError = 'Unable to connect to the database. Please check your connection. No financial data has been changed.';
         }
       } else {
         state.supabase.status = 'error';
@@ -9337,8 +9372,27 @@ function renderSupabaseModal(container) {
 
           <div style="background:#F0FDF4; border:1px solid var(--success); border-radius:var(--radius-sm); padding:14px;">
             <div style="font-weight:700; color:var(--success); font-size:13px; margin-bottom:4px;">🚀 Safe Historical Data Migration to PostgreSQL</div>
-            <div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
-              Safely uploads historical local records (invoices, payments, expenses, payslips, personnel, settings) into PostgreSQL using conflict-safe upserts. Existing cloud records are NEVER overwritten destructively.
+            <div style="font-size:12.5px; color:#166534; font-weight:600; margin-bottom:8px;">
+              "Your existing browser data has been detected. Would you like to migrate it to Clasptek's secure cloud database?"
+            </div>
+            
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; background:#FFFFFF; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; font-size:11.5px; margin-bottom:10px;">
+              <div>Programmes: <strong>${state.programmes.length}</strong></div>
+              <div>Customers: <strong>${state.customers.length}</strong></div>
+              <div>Enquiries: <strong>${state.enquiries.length}</strong></div>
+              <div>Enrolments: <strong>${state.enrolments.length}</strong></div>
+              <div>Invoices: <strong>${state.invoices.length}</strong></div>
+              <div>Payments: <strong>${state.payments.length}</strong></div>
+              <div>Expenses: <strong>${state.expenses.length}</strong></div>
+              <div>Direct Income: <strong>${state.directIncome.length}</strong></div>
+              <div>Personnel: <strong>${state.personnel.length}</strong></div>
+              <div>Payslips: <strong>${state.payslips.length}</strong></div>
+              <div>Budgets: <strong>${state.budgets.length}</strong></div>
+              <div>Settings: <strong>${state.financeSettings && state.financeSettings.companyName ? 1 : 0}</strong></div>
+            </div>
+
+            <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:10px;">
+              Migration is ID-preserving, conflict-safe, and auditable. Source records are safely preserved without deletion.
             </div>
             <button class="cp-btn success sm" id="btnRunMigration">&#x1F4E4; Migrate Local Records to PostgreSQL</button>
             <div id="migrationResultBox" style="display:none; margin-top:8px; padding:8px 10px; font-size:11.5px; border-radius:4px;"></div>
@@ -9481,6 +9535,8 @@ function renderSupabaseModal(container) {
         const { error } = await supabaseClient.from('finance_settings').upsert({ id: 'fset_main', tenant_id: DEFAULT_TENANT_ID, ...state.financeSettings });
         if (!error) stats.inserted += 1;
       }
+
+      await logAudit('MIGRATE_LOCAL_DATA_TO_CLOUD', 'system_migration', 'mig_' + Date.now(), `Migrated ${stats.inserted} local records to PostgreSQL cloud database`, null, stats);
 
       migBox.style.background = '#F0FDF4';
       migBox.style.color = '#166534';
