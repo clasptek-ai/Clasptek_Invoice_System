@@ -969,7 +969,201 @@ CREATE POLICY "collection_notes_tenant_all" ON public.collection_notes FOR ALL T
 CREATE POLICY "reminders_tenant_all" ON public.payment_reminders FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
 
 -- =============================================================================
--- 8. PERFORMANCE INDEXES
+-- 9. PHASE 8 & 9: HR, PAYROLL, ADMISSIONS & CRM SCHEMAS
+-- =============================================================================
+
+-- Personnel Directory (Staff & Facilitators)
+CREATE TABLE IF NOT EXISTS public.personnel (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    user_id UUID REFERENCES auth.users(id),
+    employee_id TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    employee_type TEXT NOT NULL CHECK (employee_type IN ('staff', 'facilitator')),
+    department TEXT NOT NULL,
+    job_title TEXT NOT NULL,
+    employment_status TEXT NOT NULL DEFAULT 'active' CHECK (employment_status IN ('active', 'on_leave', 'suspended', 'deactivated', 'terminated')),
+    date_joined DATE,
+    bank_name TEXT,
+    account_name TEXT,
+    account_number TEXT,
+    compensation_type TEXT NOT NULL DEFAULT 'salaried' CHECK (compensation_type IN ('salaried', 'per_session', 'per_hour', 'per_class', 'per_programme', 'fixed_contract')),
+    basic_pay NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (basic_pay >= 0),
+    facilitator_rate NUMERIC(14,2) DEFAULT 0 CHECK (facilitator_rate >= 0),
+    rate_type TEXT DEFAULT 'session',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id, employee_id)
+);
+
+-- Payslips & Compensation Statements
+CREATE TABLE IF NOT EXISTS public.payslips (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    payslip_no INT NOT NULL,
+    payslip_display_no TEXT NOT NULL,
+    personnel_id TEXT NOT NULL REFERENCES public.personnel(id) ON DELETE RESTRICT,
+    employee_name TEXT NOT NULL,
+    employee_type TEXT NOT NULL,
+    department TEXT NOT NULL,
+    role TEXT NOT NULL,
+    pay_period TEXT NOT NULL CHECK (pay_period ~ '^\d{4}-\d{2}$'),
+    pay_date DATE NOT NULL,
+    basic_pay NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (basic_pay >= 0),
+    allowances JSONB DEFAULT '[]'::JSONB,
+    gross_pay NUMERIC(14,2) NOT NULL CHECK (gross_pay >= 0),
+    deductions JSONB DEFAULT '[]'::JSONB,
+    total_deductions NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total_deductions >= 0),
+    net_pay NUMERIC(14,2) NOT NULL CHECK (net_pay >= 0),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'issued', 'acknowledged', 'approved', 'paid', 'cancelled')),
+    statement_version INT NOT NULL DEFAULT 1,
+    payslip_hash TEXT,
+    acknowledged_at TIMESTAMPTZ,
+    acknowledged_by TEXT,
+    acknowledgement_method TEXT,
+    acknowledgement_remarks TEXT,
+    approved_at TIMESTAMPTZ,
+    approved_by TEXT,
+    paid_at TIMESTAMPTZ,
+    paid_by TEXT,
+    paid_amount NUMERIC(14,2),
+    actual_payment_date DATE,
+    payment_method TEXT,
+    payment_reference TEXT,
+    linked_expense_id TEXT,
+    cancel_reason TEXT,
+    cancelled_at TIMESTAMPTZ,
+    cancelled_by TEXT,
+    queries JSONB DEFAULT '[]'::JSONB,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id, payslip_no)
+);
+
+-- Company Legal & Finance Settings
+CREATE TABLE IF NOT EXISTS public.finance_settings (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    company_name TEXT NOT NULL DEFAULT 'Clasptek Coaching Limited',
+    trading_name TEXT DEFAULT 'Clasptek',
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    website TEXT,
+    tax_id TEXT,
+    registration_number TEXT,
+    invoice_footer TEXT,
+    default_terms TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id)
+);
+
+-- Corporate Settlement Bank Accounts
+CREATE TABLE IF NOT EXISTS public.payment_accounts (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    bank_name TEXT NOT NULL,
+    account_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    account_type TEXT DEFAULT 'Corporate Current',
+    currency TEXT NOT NULL DEFAULT 'NGN',
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    instructions TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id, account_number)
+);
+
+-- Admissions Enquiries (CRM Leads)
+CREATE TABLE IF NOT EXISTS public.enquiries (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    student_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    programme_id TEXT REFERENCES public.programmes(id),
+    source TEXT,
+    status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'INTERESTED', 'APPLIED', 'OFFERED', 'ENROLLED', 'LOST')),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Student Enrolments
+CREATE TABLE IF NOT EXISTS public.enrolments (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    enquiry_id TEXT REFERENCES public.enquiries(id),
+    student_name TEXT NOT NULL,
+    student_email TEXT,
+    student_phone TEXT,
+    programme_id TEXT NOT NULL REFERENCES public.programmes(id),
+    cohort TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN')),
+    enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Customer Registry (Derived/Cached Student Profiles)
+CREATE TABLE IF NOT EXISTS public.customers (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    address TEXT,
+    total_invoiced NUMERIC(14,2) DEFAULT 0,
+    total_paid NUMERIC(14,2) DEFAULT 0,
+    outstanding_balance NUMERIC(14,2) DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS for New Tables
+ALTER TABLE public.personnel ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payslips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.finance_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.enrolments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+
+-- Personnel RLS: Management vs Self
+CREATE POLICY "personnel_tenant_select" ON public.personnel FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "personnel_manager_all" ON public.personnel FOR ALL TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+
+-- Payslips RLS: Strict Role Isolation
+CREATE POLICY "payslips_manager_select" ON public.payslips FOR SELECT TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND (
+    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
+    OR personnel_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid())
+));
+
+CREATE POLICY "payslips_manager_mutate" ON public.payslips FOR ALL TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF'));
+
+-- Settings & Accounts RLS
+CREATE POLICY "settings_tenant_read" ON public.finance_settings FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "settings_admin_write" ON public.finance_settings FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() = 'SUPER_ADMIN');
+
+CREATE POLICY "accounts_tenant_read" ON public.payment_accounts FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "accounts_manager_write" ON public.payment_accounts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+
+-- Admissions & CRM RLS
+CREATE POLICY "enquiries_tenant_all" ON public.enquiries FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "enrolments_tenant_all" ON public.enrolments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "customers_tenant_all" ON public.customers FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+
+-- =============================================================================
+-- 10. PERFORMANCE INDEXES
 -- =============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant_date ON public.invoices(tenant_id, invoice_date);
@@ -981,3 +1175,7 @@ CREATE INDEX IF NOT EXISTS idx_expenses_status ON public.expenses(tenant_id, sta
 CREATE INDEX IF NOT EXISTS idx_direct_income_tenant_date ON public.direct_income(tenant_id, income_date);
 CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_date ON public.finance_audit_log(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_finance_periods_lookup ON public.finance_periods(tenant_id, period);
+CREATE INDEX IF NOT EXISTS idx_personnel_tenant_type ON public.personnel(tenant_id, employee_type);
+CREATE INDEX IF NOT EXISTS idx_payslips_tenant_period ON public.payslips(tenant_id, pay_period);
+CREATE INDEX IF NOT EXISTS idx_payslips_personnel ON public.payslips(personnel_id);
+
