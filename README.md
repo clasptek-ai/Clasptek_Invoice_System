@@ -1,6 +1,6 @@
-# Clasptek Finance Management System
+# Clasptek Portal & Enterprise Management System
 
-An enterprise-grade, financial intelligence, billing, and accounting management platform designed for training institutes, academies, and service organizations.
+An enterprise-grade financial intelligence, billing, admissions, payroll, and governance platform for Clasptek Coaching Limited.
 
 ---
 

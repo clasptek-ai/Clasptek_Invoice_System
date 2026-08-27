@@ -1059,7 +1059,7 @@ const SYSTEM_ACCOUNTS = [
     status: 'active',
     personnelId: 'emp_1',
     passwordSalt: 'salt_admin_2026',
-    passwordHash: 'fbb1b66f32de54b146c43657125379a6984b71693c376e19837de7bdeaa51c48',
+    passwordHash: 'cac4d68496f733b4a60919916976d3ced892622c63b46339c885f4fec9c5926a',
     mustChangePassword: true,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1072,7 +1072,7 @@ const SYSTEM_ACCOUNTS = [
     title: 'Head of Financial Operations',
     status: 'active',
     passwordSalt: 'salt_fm_2026',
-    passwordHash: '2cfb697232c3a62e2c095331390ee15a78fbf85e9fa5475b95276cf2c28d90e9',
+    passwordHash: '268e06c78151649491107ba500aad7f4cd4d00c68cf9422802ebb51ca5cc0817',
     mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1085,7 +1085,7 @@ const SYSTEM_ACCOUNTS = [
     title: 'Billing & Accounts Officer',
     status: 'active',
     passwordSalt: 'salt_fs_2026',
-    passwordHash: '82b24f80863ba10aa67f181d8026a47deb78c1a3d63d9762a3a96a1cf7bffeae',
+    passwordHash: 'df2697b8b5f1472f466265146b489dbe8b593c08793462dda8ab6b36056932d7',
     mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1099,7 +1099,7 @@ const SYSTEM_ACCOUNTS = [
     status: 'active',
     personnelId: 'emp_2',
     passwordSalt: 'salt_staff_2026',
-    passwordHash: 'ed55cba81edf9248c739932cf872bab3c0121b9f2eae736a08ace113125c6653',
+    passwordHash: '6d92ec1bb6c12d4d989f506ee089b0d1e34e5a953e5e49b81b29a1b1a7f6f578',
     mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1113,7 +1113,7 @@ const SYSTEM_ACCOUNTS = [
     status: 'active',
     personnelId: 'emp_3',
     passwordSalt: 'salt_fac_2026',
-    passwordHash: '39c10cfe99739b29dbd4093e4f29915cbebd30af7cd90b1e7d9c8a1dd8614273',
+    passwordHash: 'a80e65105eefc0ac5b5e2a2dd0762bfeb2e322a8acdc92b87110c638c7edba97',
     mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1126,7 +1126,7 @@ const SYSTEM_ACCOUNTS = [
     title: 'Advisory Board Auditor',
     status: 'active',
     passwordSalt: 'salt_fv_2026',
-    passwordHash: 'fbb1b66f32de54b146c43657125379a6984b71693c376e19837de7bdeaa51c48',
+    passwordHash: 'cac4d68496f733b4a60919916976d3ced892622c63b46339c885f4fec9c5926a',
     mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
@@ -1610,7 +1610,15 @@ function isReadOnly() {
 }
 
 
-function canAccessTab(user, tabName) {
+function canAccessTab(userOrTab, maybeTab) {
+  let user, tabName;
+  if (typeof userOrTab === 'string') {
+    tabName = userOrTab;
+    user = state.auth && state.auth.isAuthenticated ? state.auth.user : null;
+  } else {
+    user = userOrTab;
+    tabName = maybeTab;
+  }
   if (!user || !user.role) return false;
   const role = user.role;
 
@@ -1687,17 +1695,16 @@ function getAccessiblePayslips() {
     return state.payslips;
   }
   const u = getCurrentUser();
+  if (!u) return [];
   const pers = getCurrentPersonnel();
-  const uName = (u.name || '').trim().toLowerCase();
-  const pId = pers ? pers.id : null;
-  const pEmpId = pers ? pers.employeeId : null;
+  if (!pers) return [];
+  const pId = pers.id;
+  const pEmpId = pers.employeeId;
 
   return state.payslips.filter(ps => {
-    const psName = (ps.employeeName || '').trim().toLowerCase();
-    const matchesName = psName === uName;
-    const matchesId = pId && ps.employeeId === pId;
-    const matchesEmpId = pEmpId && ps.employeeId === pEmpId;
-    return matchesName || matchesId || matchesEmpId;
+    const matchPersonnelId = ps.personnelId && ps.personnelId === pId;
+    const matchEmpId = ps.employeeId && (ps.employeeId === pId || ps.employeeId === pEmpId);
+    return matchPersonnelId || matchEmpId;
   });
 }
 
@@ -2904,10 +2911,10 @@ function render() {
     financialControls: 'Financial Controls',
     auditLog: 'Audit Log',
     settings: 'Settings & Backups',
-    // Employee tabs
-    staffDashboard: 'My Workspace',
+    // Employee / Facilitator tabs
+    staffDashboard: isEmployee ? (user.role === 'Facilitator' ? 'Facilitator Workspace' : 'My Workspace') : 'Dashboard',
     myPayslips: 'My Payslips',
-    myProfile: 'My Profile',
+    myProfile: user.role === 'Facilitator' ? 'My Profile & Engagements' : 'My Profile & Bank',
     myQueries: 'My Payroll Queries',
     mySecurity: 'Account & Security'
   };
@@ -2936,16 +2943,16 @@ function render() {
             ${isEmployee ? `
               <!-- EMPLOYEE / FACILITATOR SELF-SERVICE MENU -->
               <div class="cp-nav-section">
-                <div class="cp-nav-section-title">My Workspace</div>
+                <div class="cp-nav-section-title">${user.role === 'Facilitator' ? 'Facilitator Workspace' : 'My Workspace'}</div>
                 <div class="cp-nav-item ${state.tab === 'staffDashboard' ? 'active' : ''}" data-tab="staffDashboard">
-                  <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">My Dashboard</span>
+                  <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">${user.role === 'Facilitator' ? 'Facilitator Dashboard' : 'My Dashboard'}</span>
                 </div>
                 <div class="cp-nav-item ${state.tab === 'myPayslips' ? 'active' : ''}" data-tab="myPayslips">
                   <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">My Payslips</span>
                   ${myPendingAckCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning); color:#fff;">${myPendingAckCount}</span>` : `<span class="cp-nav-badge">${myPayslips.length}</span>`}
                 </div>
                 <div class="cp-nav-item ${state.tab === 'myProfile' ? 'active' : ''}" data-tab="myProfile">
-                  <span class="cp-nav-icon">&#x1F464;</span><span class="cp-nav-label">My Profile &amp; Bank</span>
+                  <span class="cp-nav-icon">&#x1F464;</span><span class="cp-nav-label">${user.role === 'Facilitator' ? 'Profile &amp; Engagements' : 'My Profile &amp; Bank'}</span>
                 </div>
                 <div class="cp-nav-item ${state.tab === 'myQueries' ? 'active' : ''}" data-tab="myQueries">
                   <span class="cp-nav-icon">&#x2753;</span><span class="cp-nav-label">My Payroll Queries</span>
@@ -5569,11 +5576,87 @@ function renderUsersRolesTab(container) {
 
       <!-- Subtabs Navigation -->
       <div class="cp-subtabs">
-        <button class="cp-subtab-btn ${curSub === 'personnel' ? 'active' : ''}" data-sub="personnel">&#x1F465; Personnel Directory (${state.personnel.length})</button>
-        <button class="cp-subtab-btn ${curSub === 'users' ? 'active' : ''}" data-sub="users">&#x1F511; System Login Accounts (${state.users.length})</button>
+        <button class="cp-subtab-btn ${curSub === 'users' ? 'active' : ''}" data-sub="users">&#x1F511; Users (${state.users.length})</button>
+        <button class="cp-subtab-btn ${curSub === 'personnel' ? 'active' : ''}" data-sub="personnel">&#x1F465; Personnel (${state.personnel.length})</button>
+        <button class="cp-subtab-btn ${curSub === 'security' ? 'active' : ''}" data-sub="security">&#x1F6E1;&#xFE0F; Access &amp; Security</button>
       </div>
 
       <div id="usersSubtabContent">
+        ${curSub === 'users' ? `
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+              <div style="font-size:12.5px; color:var(--text-secondary);">
+                Active credentials and role-based permissions governing portal workspaces. Plaintext passwords are never accessible to administrators.
+              </div>
+              <button class="cp-btn sm secondary" id="btnExportUsers">📥 Export Users CSV</button>
+            </div>
+
+            <div class="cp-table-wrap">
+              <table class="cp-table">
+                <thead>
+                  <tr>
+                    <th>User Name</th>
+                    <th>Official Work Email</th>
+                    <th>Assigned Role</th>
+                    <th>Account Status</th>
+                    <th>Last Login</th>
+                    <th>Personnel Link</th>
+                    ${canManageUsers() ? '<th style="text-align:center;">Governance Actions</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${state.users.map(u => {
+                    const linkedPers = state.personnel.find(p => p.id === u.personnelId || p.userId === u.id || (p.email && p.email.toLowerCase() === u.email.toLowerCase()));
+                    const isDeact = u.status === 'deactivated';
+                    const isSusp = u.status === 'suspended';
+                    const isInv = u.status === 'invited';
+                    return `
+                      <tr style="${isDeact ? 'opacity:0.6; background:#F8FAFC;' : ''}">
+                        <td style="font-weight:700; color:var(--primary);">${escapeHtml(u.name)}</td>
+                        <td style="font-family:monospace;">${escapeHtml(u.email)}</td>
+                        <td>
+                          <span class="cp-pill ${u.role === 'Super Admin' ? 'category-pill' : (u.role === 'Finance Manager' ? 'paid' : (u.role === 'Finance Staff' ? 'new' : (u.role === 'Facilitator' ? 'category-pill' : 'draft')))}">
+                            ${escapeHtml(u.role)}
+                          </span>
+                        </td>
+                        <td>
+                          <span class="cp-pill ${u.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : (isInv ? 'draft' : 'cancelled'))}">
+                            ${escapeHtml((u.status || 'active').toUpperCase())}
+                          </span>
+                        </td>
+                        <td style="font-size:11.5px; color:var(--text-secondary);">
+                          ${u.lastLoginAt ? fmtDate(u.lastLoginAt.slice(0, 10)) : '<span style="color:var(--text-muted);">Never</span>'}
+                        </td>
+                        <td>
+                          ${linkedPers ? `<span style="font-size:11.5px; color:var(--text-secondary);">${escapeHtml(linkedPers.name)} (${escapeHtml(linkedPers.employeeId || 'EMP')})</span>` : '<span style="color:var(--text-muted); font-size:11px;">Standalone Admin</span>'}
+                        </td>
+                        ${canManageUsers() ? `
+                          <td style="text-align:center;">
+                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
+                              <button class="cp-btn sm secondary btnChangeUserRole" data-id="${u.id}">Role</button>
+                              <button class="cp-btn sm secondary btnResetUserPwd" data-id="${u.id}">Reset</button>
+                              ${isInv && u.invitationToken ? `<button class="cp-btn sm secondary btnCopyInviteLink" data-id="${u.id}" title="Copy Invitation Link">📋 Invite</button>` : ''}
+                              ${!isDeact ? `
+                                <button class="cp-btn sm ${isSusp ? 'success' : 'secondary'} btnToggleSuspendUser" data-id="${u.id}">
+                                  ${isSusp ? 'Unsuspend' : 'Suspend'}
+                                </button>
+                                <button class="cp-btn sm secondary btnRevokeUserSess" data-id="${u.id}" title="Revoke all active sessions">🔒 Revoke</button>
+                                <button class="cp-btn sm danger btnDeactivateUserAccount" data-id="${u.id}" title="Deactivate user with reason">Deactivate</button>
+                              ` : `
+                                <button class="cp-btn sm success btnReactivateUserAccount" data-id="${u.id}">Reactivate</button>
+                              `}
+                            </div>
+                          </td>
+                        ` : ''}
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : ''}
+
         ${curSub === 'personnel' ? `
           <div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
@@ -5648,78 +5731,29 @@ function renderUsersRolesTab(container) {
           </div>
         ` : ''}
 
-        
-        ${curSub === 'users' ? `
+        ${curSub === 'security' ? `
           <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
-              <div style="font-size:12.5px; color:var(--text-secondary);">
-                Active credentials and role-based permissions governing portal workspaces. Plaintext passwords are never accessible to administrators.
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
+                <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:8px;">Authoritative 5-Tier Role-Based Permissions Matrix</div>
+                <div style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+                  &bull; <strong>Super Admin:</strong> Full Governance, User/Role Management, Settings, Period Locking, All Audits.<br/>
+                  &bull; <strong>Finance Manager:</strong> Financial Approvals, Payroll Disbursement, Budgets, Invoices, Reconciliation.<br/>
+                  &bull; <strong>Finance Staff:</strong> Invoicing, Payment Collection, Operational Expenses, Payroll Preparation.<br/>
+                  &bull; <strong>Staff:</strong> My Workspace, Self Profile, Own Payslips &amp; Queries (Strict Data Isolation).<br/>
+                  &bull; <strong>Facilitator:</strong> Facilitator Workspace, Self Profile, Own Payslips (Strict Data Isolation).
+                </div>
               </div>
-              <button class="cp-btn sm secondary" id="btnExportUsers">📥 Export Users CSV</button>
-            </div>
 
-            <div class="cp-table-wrap">
-              <table class="cp-table">
-                <thead>
-                  <tr>
-                    <th>User Name</th>
-                    <th>Official Work Email</th>
-                    <th>Assigned Role</th>
-                    <th>Account Status</th>
-                    <th>Last Login</th>
-                    <th>Personnel Link</th>
-                    ${canManageUsers() ? '<th style="text-align:center;">Governance Actions</th>' : ''}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${state.users.map(u => {
-                    const linkedPers = state.personnel.find(p => p.id === u.personnelId || p.userId === u.id || (p.email && p.email.toLowerCase() === u.email.toLowerCase()));
-                    const isDeact = u.status === 'deactivated';
-                    const isSusp = u.status === 'suspended';
-                    const isInv = u.status === 'invited';
-                    return `
-                      <tr style="${isDeact ? 'opacity:0.6; background:#F8FAFC;' : ''}">
-                        <td style="font-weight:700; color:var(--primary);">${escapeHtml(u.name)}</td>
-                        <td style="font-family:monospace;">${escapeHtml(u.email)}</td>
-                        <td>
-                          <span class="cp-pill ${u.role === 'Super Admin' ? 'category-pill' : (u.role === 'Finance Manager' ? 'paid' : (u.role === 'Finance Staff' ? 'new' : (u.role === 'Facilitator' ? 'category-pill' : 'draft')))}">
-                            ${escapeHtml(u.role)}
-                          </span>
-                        </td>
-                        <td>
-                          <span class="cp-pill ${u.status === 'active' ? 'paid' : (isSusp ? 'unpaid' : (isInv ? 'draft' : 'cancelled'))}">
-                            ${escapeHtml((u.status || 'active').toUpperCase())}
-                          </span>
-                        </td>
-                        <td style="font-size:11.5px; color:var(--text-secondary);">
-                          ${u.lastLoginAt ? fmtDate(u.lastLoginAt.slice(0, 10)) : '<span style="color:var(--text-muted);">Never</span>'}
-                        </td>
-                        <td>
-                          ${linkedPers ? `<span style="font-size:11.5px; color:var(--text-secondary);">${escapeHtml(linkedPers.name)} (${escapeHtml(linkedPers.employeeId || 'EMP')})</span>` : '<span style="color:var(--text-muted); font-size:11px;">Standalone Admin</span>'}
-                        </td>
-                        ${canManageUsers() ? `
-                          <td style="text-align:center;">
-                            <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
-                              <button class="cp-btn sm secondary btnChangeUserRole" data-id="${u.id}">Role</button>
-                              <button class="cp-btn sm secondary btnResetUserPwd" data-id="${u.id}">Reset</button>
-                              ${isInv && u.invitationToken ? `<button class="cp-btn sm secondary btnCopyInviteLink" data-id="${u.id}" title="Copy Invitation Link">📋 Invite</button>` : ''}
-                              ${!isDeact ? `
-                                <button class="cp-btn sm ${isSusp ? 'success' : 'secondary'} btnToggleSuspendUser" data-id="${u.id}">
-                                  ${isSusp ? 'Unsuspend' : 'Suspend'}
-                                </button>
-                                <button class="cp-btn sm secondary btnRevokeUserSess" data-id="${u.id}" title="Revoke all active sessions">🔒 Revoke</button>
-                                <button class="cp-btn sm danger btnDeactivateUserAccount" data-id="${u.id}" title="Deactivate user with reason">Deactivate</button>
-                              ` : `
-                                <button class="cp-btn sm success btnReactivateUserAccount" data-id="${u.id}">Reactivate</button>
-                              `}
-                            </div>
-                          </td>
-                        ` : ''}
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
+              <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px;">
+                <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:8px;">Active Session &amp; Credential Governance</div>
+                <div style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+                  &bull; <strong>Mandatory Authentication:</strong> Unauthenticated users are strictly barred from all internal routes.<br/>
+                  &bull; <strong>Session Revocation:</strong> Administrators can immediately invalidate any user session across devices.<br/>
+                  &bull; <strong>Zero Plaintext Storage:</strong> Passwords and hashes are never displayed, retrieved, or logged.<br/>
+                  &bull; <strong>Forced Password Resets:</strong> First-time logins and administrative resets require immediate confidential password updates.
+                </div>
+              </div>
             </div>
           </div>
         ` : ''}
@@ -7008,6 +7042,7 @@ function renderGeneratePayslipModal(container) {
     });
 
     const totals = calculatePayslipTotals(basic, allowances, deductions);
+    const pers = state.personnel.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
 
     state.counters.payslip += 1;
     const pslNo = formatDocNo('payslip', state.counters.payslip, dateStr);
@@ -7017,6 +7052,8 @@ function renderGeneratePayslipModal(container) {
       tenant_id: DEFAULT_TENANT_ID,
       payslipNo: state.counters.payslip,
       payslip_display_no: pslNo,
+      personnelId: pers ? pers.id : null,
+      employeeId: pers ? (pers.employeeId || pers.id) : 'EMP-XXXX',
       employeeName: name,
       employeeType: type,
       department: dept,
@@ -7033,6 +7070,7 @@ function renderGeneratePayslipModal(container) {
       paymentMethod: 'Bank Transfer',
       notes: document.getElementById('pslNotes').value.trim(),
       status: targetStatus,
+      statementVersion: 1,
       issuedAt: targetStatus === 'issued' ? new Date().toISOString() : null,
       issuedBy: targetStatus === 'issued' ? (state.auth.user ? state.auth.user.name : 'Finance Operations') : null,
       queries: [],
@@ -9456,7 +9494,12 @@ function renderChangeRoleModal(container, user) {
       canRecord,
       DEFAULT_FINANCE_SETTINGS,
       DEFAULT_PAYMENT_ACCOUNTS,
-      DEFAULT_PERSONNEL_DIRECTORY
+      DEFAULT_PERSONNEL_DIRECTORY,
+      SYSTEM_ACCOUNTS,
+      hashPasswordWithSalt,
+      generateRandomToken,
+      validatePasswordStrength,
+      canAccessTab
     };
   }
 })();

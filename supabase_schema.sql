@@ -1,6 +1,6 @@
 -- =============================================================================
--- CLASPTEK FINANCE MANAGEMENT SYSTEM — PRODUCTION SUPABASE POSTGRESQL SCHEMA
--- Phase 5: Production Backend, RLS, Period Locking, Role Matrix & Audit Assurance
+-- CLASPTEK PORTAL & ENTERPRISE MANAGEMENT SYSTEM — PRODUCTION SUPABASE SCHEMA
+-- Phase 8: Production Backend, RLS, Period Locking, Role Matrix & Audit Assurance
 -- =============================================================================
 
 -- Enable required PostgreSQL extensions
