@@ -71,6 +71,116 @@ AS $$
     LIMIT 1;
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() = 'SUPER_ADMIN');
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_finance_manager()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_finance_staff()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_staff()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() IS NOT NULL);
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_facilitator()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.personnel
+        WHERE user_id = auth.uid()
+          AND employee_type = 'facilitator'
+          AND employment_status = 'active'
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_manage_finance()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_manage_people()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_view_own_personnel_record(p_personnel_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (
+        public.can_manage_people()
+        OR EXISTS (
+            SELECT 1 FROM public.personnel 
+            WHERE id = p_personnel_id 
+              AND user_id = auth.uid()
+        )
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_view_own_payslip(p_payslip_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT (
+        public.can_manage_finance()
+        OR EXISTS (
+            SELECT 1 FROM public.payslips p
+            JOIN public.personnel per ON p.personnel_id = per.id
+            WHERE p.id = p_payslip_id 
+              AND per.user_id = auth.uid()
+        )
+    );
+$$;
+
 -- =============================================================================
 -- 2. CONFIGURATION & MASTER DATA TABLES
 -- =============================================================================
@@ -398,6 +508,12 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'payments' THEN v_tx_date := OLD.payment_date;
         ELSIF TG_TABLE_NAME = 'expenses' THEN v_tx_date := OLD.expense_date;
         ELSIF TG_TABLE_NAME = 'direct_income' THEN v_tx_date := OLD.income_date;
+        ELSIF TG_TABLE_NAME = 'payslips' THEN v_period := OLD.pay_period;
+        ELSIF TG_TABLE_NAME = 'facilitator_sessions' THEN 
+            v_period := COALESCE(OLD.payroll_period, TO_CHAR(OLD.session_date, 'YYYY-MM'));
+        ELSIF TG_TABLE_NAME = 'financial_adjustments' THEN v_period := OLD.financial_period;
+        ELSIF TG_TABLE_NAME = 'reconciliations' THEN v_period := OLD.period;
+        ELSIF TG_TABLE_NAME = 'bank_reconciliations' THEN v_period := OLD.reconciliation_period;
         ELSE v_tx_date := CURRENT_DATE;
         END IF;
     ELSE
@@ -406,18 +522,28 @@ BEGIN
         ELSIF TG_TABLE_NAME = 'payments' THEN v_tx_date := NEW.payment_date;
         ELSIF TG_TABLE_NAME = 'expenses' THEN v_tx_date := NEW.expense_date;
         ELSIF TG_TABLE_NAME = 'direct_income' THEN v_tx_date := NEW.income_date;
+        ELSIF TG_TABLE_NAME = 'payslips' THEN v_period := NEW.pay_period;
+        ELSIF TG_TABLE_NAME = 'facilitator_sessions' THEN 
+            v_period := COALESCE(NEW.payroll_period, TO_CHAR(NEW.session_date, 'YYYY-MM'));
+        ELSIF TG_TABLE_NAME = 'financial_adjustments' THEN v_period := NEW.financial_period;
+        ELSIF TG_TABLE_NAME = 'reconciliations' THEN v_period := NEW.period;
+        ELSIF TG_TABLE_NAME = 'bank_reconciliations' THEN v_period := NEW.reconciliation_period;
         ELSE v_tx_date := CURRENT_DATE;
         END IF;
     END IF;
 
-    v_period := TO_CHAR(v_tx_date, 'YYYY-MM');
+    IF v_period IS NULL AND v_tx_date IS NOT NULL THEN
+        v_period := TO_CHAR(v_tx_date, 'YYYY-MM');
+    END IF;
 
-    SELECT status INTO v_period_status
-    FROM public.finance_periods
-    WHERE tenant_id = v_tenant_id AND period = v_period;
+    IF v_period IS NOT NULL THEN
+        SELECT status INTO v_period_status
+        FROM public.finance_periods
+        WHERE tenant_id = v_tenant_id AND period = v_period;
 
-    IF v_period_status = 'locked' THEN
-        RAISE EXCEPTION 'PERIOD LOCK VIOLATION: Financial period % is LOCKED. No mutations are permitted.', v_period;
+        IF v_period_status = 'locked' THEN
+            RAISE EXCEPTION 'PERIOD LOCK VIOLATION: Financial period % is LOCKED. Direct mutations on % are prohibited.', v_period, TG_TABLE_NAME;
+        END IF;
     END IF;
 
     IF TG_OP = 'DELETE' THEN
@@ -428,7 +554,7 @@ BEGIN
 END;
 $$;
 
--- Apply Period Lock Triggers to Financial Mutation Tables
+-- Apply Period Lock Triggers to All Financial Mutation Tables
 DROP TRIGGER IF EXISTS trg_period_lock_invoices ON public.invoices;
 CREATE TRIGGER trg_period_lock_invoices
 BEFORE INSERT OR UPDATE OR DELETE ON public.invoices
@@ -553,14 +679,15 @@ BEGIN
 END;
 $$;
 
--- 2. Record Payment RPC
-CREATE OR REPLACE FUNCTION public.record_payment(
+-- 2. Fully Atomic Payment Transaction RPC
+CREATE OR REPLACE FUNCTION public.execute_payment_transaction(
     p_invoice_id TEXT,
     p_amount NUMERIC,
     p_method TEXT,
     p_reference TEXT,
     p_payment_date DATE,
-    p_notes TEXT DEFAULT NULL
+    p_notes TEXT DEFAULT NULL,
+    p_idempotency_key TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -570,6 +697,7 @@ AS $$
 DECLARE
     v_tenant_id UUID;
     v_user_id UUID;
+    v_role TEXT;
     v_invoice RECORD;
     v_total_paid NUMERIC;
     v_balance NUMERIC;
@@ -577,20 +705,55 @@ DECLARE
     v_receipt_id TEXT;
     v_display_no TEXT;
     v_new_status TEXT;
+    v_cust_id TEXT;
+    v_existing_key RECORD;
 BEGIN
     v_tenant_id := public.get_auth_tenant_id();
     v_user_id := auth.uid();
+    v_role := public.get_auth_user_role();
 
-    SELECT * INTO v_invoice FROM public.invoices WHERE id = p_invoice_id AND tenant_id = v_tenant_id;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'INVOICE NOT FOUND: Invoice ID % does not exist.', p_invoice_id;
+    IF v_tenant_id IS NULL THEN
+        RAISE EXCEPTION 'UNAUTHORIZED: User does not belong to an active tenant.';
     END IF;
 
-    SELECT COALESCE(SUM(amount), 0) INTO v_total_paid FROM public.payments WHERE invoice_id = p_invoice_id AND tenant_id = v_tenant_id;
+    -- Idempotency check
+    IF p_idempotency_key IS NOT NULL AND TRIM(p_idempotency_key) != '' THEN
+        SELECT * INTO v_existing_key 
+        FROM public.idempotency_keys 
+        WHERE tenant_id = v_tenant_id AND idempotency_key = p_idempotency_key;
+
+        IF FOUND THEN
+            RETURN jsonb_build_object(
+                'success', true,
+                'idempotent_replay', true,
+                'resource_id', v_existing_key.resource_id,
+                'message', 'Transaction already executed (Idempotent response).'
+            );
+        END IF;
+    END IF;
+
+    -- Validate invoice
+    SELECT * INTO v_invoice 
+    FROM public.invoices 
+    WHERE id = p_invoice_id AND tenant_id = v_tenant_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'INVOICE NOT FOUND: Invoice ID % does not exist in this tenant.', p_invoice_id;
+    END IF;
+
+    IF v_invoice.status = 'voided' OR v_invoice.status = 'cancelled' THEN
+        RAISE EXCEPTION 'INVALID INVOICE STATE: Cannot record payment against a % invoice.', v_invoice.status;
+    END IF;
+
+    -- Validate amount
+    SELECT COALESCE(SUM(amount), 0) INTO v_total_paid 
+    FROM public.payments 
+    WHERE invoice_id = p_invoice_id AND tenant_id = v_tenant_id;
+    
     v_balance := v_invoice.total_amount - v_total_paid;
 
     IF p_amount <= 0 THEN
-        RAISE EXCEPTION 'INVALID AMOUNT: Payment amount must be positive.';
+        RAISE EXCEPTION 'INVALID AMOUNT: Payment amount must be strictly positive.';
     END IF;
     IF p_amount > v_balance THEN
         RAISE EXCEPTION 'OVERPAYMENT REJECTED: Amount % exceeds remaining invoice balance of %.', p_amount, v_balance;
@@ -606,6 +769,7 @@ BEGIN
     v_receipt_id := 'pay_' || EXTRACT(EPOCH FROM NOW())::BIGINT;
     v_display_no := 'REC-' || v_receipt_seq;
 
+    -- Insert Payment
     INSERT INTO public.payments (
         id, tenant_id, receipt_no, receipt_display_no, invoice_id, amount,
         payment_method, reference, payment_date, notes, created_by
@@ -620,19 +784,82 @@ BEGIN
         v_new_status := 'partial';
     END IF;
 
-    UPDATE public.invoices SET status = v_new_status, updated_at = NOW() WHERE id = p_invoice_id;
+    -- Update Invoice
+    UPDATE public.invoices 
+    SET status = v_new_status, updated_at = NOW() 
+    WHERE id = p_invoice_id AND tenant_id = v_tenant_id;
 
-    -- Audit
+    -- Sync to Customer Master if customer exists
+    SELECT id INTO v_cust_id FROM public.customers 
+    WHERE tenant_id = v_tenant_id 
+      AND (email = v_invoice.student_email OR name = v_invoice.student_name)
+    LIMIT 1;
+
+    IF v_cust_id IS NOT NULL THEN
+        UPDATE public.customers
+        SET total_paid = total_paid + p_amount,
+            outstanding_balance = GREATEST(0, outstanding_balance - p_amount),
+            updated_at = NOW()
+        WHERE id = v_cust_id AND tenant_id = v_tenant_id;
+
+        -- Insert Activity Timeline
+        INSERT INTO public.customer_timeline (
+            id, tenant_id, customer_id, event_type, title, description,
+            contact_method, reference_id, actor_name
+        ) VALUES (
+            'tl_' || gen_random_uuid(), v_tenant_id, v_cust_id, 'PAYMENT_RECEIVED',
+            'Payment Received: ' || v_display_no,
+            'Received ₦' || TO_CHAR(p_amount, 'FM999,999,999.00') || ' via ' || p_method || ' for ' || v_invoice.invoice_display_no,
+            p_method, v_receipt_id, COALESCE(v_role, 'System')
+        );
+    END IF;
+
+    -- Record Idempotency Key
+    IF p_idempotency_key IS NOT NULL AND TRIM(p_idempotency_key) != '' THEN
+        INSERT INTO public.idempotency_keys (
+            id, tenant_id, idempotency_key, resource_type, resource_id
+        ) VALUES (
+            'idemp_' || gen_random_uuid(), v_tenant_id, p_idempotency_key, 'payment', v_receipt_id
+        );
+    END IF;
+
+    -- Audit Log (Immutable)
     INSERT INTO public.finance_audit_log (
         id, tenant_id, action, entity_type, entity_id, entity_name, new_state, actor_id, actor_role
     ) VALUES (
         'aud_' || gen_random_uuid(), v_tenant_id, 'RECORD_PAYMENT', 'payment',
         v_receipt_id, v_display_no || ' for ' || v_invoice.invoice_display_no,
-        jsonb_build_object('amount', p_amount, 'method', p_method, 'reference', p_reference),
-        v_user_id, public.get_auth_user_role()
+        jsonb_build_object('amount', p_amount, 'method', p_method, 'reference', p_reference, 'invoice_status', v_new_status),
+        v_user_id, COALESCE(v_role, 'SYSTEM')
     );
 
-    RETURN jsonb_build_object('success', true, 'receipt_id', v_receipt_id, 'receipt_display_no', v_display_no, 'invoice_status', v_new_status);
+    RETURN jsonb_build_object(
+        'success', true,
+        'receipt_id', v_receipt_id,
+        'receipt_display_no', v_display_no,
+        'invoice_status', v_new_status,
+        'amount', p_amount,
+        'new_balance', GREATEST(0, v_balance - p_amount)
+    );
+END;
+$$;
+
+-- Legacy alias for compatibility
+CREATE OR REPLACE FUNCTION public.record_payment(
+    p_invoice_id TEXT,
+    p_amount NUMERIC,
+    p_method TEXT,
+    p_reference TEXT,
+    p_payment_date DATE,
+    p_notes TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    RETURN public.execute_payment_transaction(p_invoice_id, p_amount, p_method, p_reference, p_payment_date, p_notes, NULL);
 END;
 $$;
 
@@ -934,39 +1161,65 @@ CREATE POLICY "profiles_own_update" ON public.profiles FOR UPDATE TO authenticat
 CREATE POLICY "memberships_tenant_read" ON public.tenant_memberships FOR SELECT TO authenticated
 USING (tenant_id = public.get_auth_tenant_id());
 
--- Standard Tenant Isolation Policy Macro for Financial Master & Transaction Tables
+-- Standard Tenant Isolation & RBAC Policy Matrix for Financial Master & Transaction Tables
 -- 1. Programmes
 CREATE POLICY "programmes_tenant_select" ON public.programmes FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "programmes_tenant_insert" ON public.programmes FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "programmes_tenant_update" ON public.programmes FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "programmes_admin_insert" ON public.programmes FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "programmes_admin_update" ON public.programmes FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "programmes_admin_delete" ON public.programmes FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
 -- 2. Invoices & Items
-CREATE POLICY "invoices_tenant_select" ON public.invoices FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "invoice_items_tenant_select" ON public.invoice_items FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "invoices_tenant_select" ON public.invoices FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "invoices_staff_insert" ON public.invoices FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "invoices_manager_update" ON public.invoices FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "invoices_admin_delete" ON public.invoices FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+CREATE POLICY "invoice_items_tenant_select" ON public.invoice_items FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "invoice_items_staff_insert" ON public.invoice_items FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
 
 -- 3. Payments
-CREATE POLICY "payments_tenant_select" ON public.payments FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "payments_tenant_select" ON public.payments FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "payments_staff_insert" ON public.payments FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "payments_manager_update" ON public.payments FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- 4. Expenses & Direct Income
-CREATE POLICY "expenses_tenant_select" ON public.expenses FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "direct_income_tenant_select" ON public.direct_income FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "expenses_tenant_select" ON public.expenses FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_finance_staff() OR created_by = auth.uid()));
+CREATE POLICY "expenses_staff_insert" ON public.expenses FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "expenses_manager_update" ON public.expenses FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_finance() OR (created_by = auth.uid() AND status = 'recorded')));
+
+CREATE POLICY "direct_income_tenant_select" ON public.direct_income FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "direct_income_staff_insert" ON public.direct_income FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "direct_income_manager_update" ON public.direct_income FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- 5. Categories & Budgets
 CREATE POLICY "income_cats_tenant_select" ON public.income_categories FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "expense_cats_tenant_select" ON public.expense_categories FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "budgets_tenant_select" ON public.budgets FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "income_cats_admin_write" ON public.income_categories FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
--- 6. Audit Log (Strictly Read-Only for Authenticated Users)
-CREATE POLICY "audit_log_tenant_select" ON public.finance_audit_log FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "expense_cats_tenant_select" ON public.expense_categories FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "expense_cats_admin_write" ON public.expense_categories FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+CREATE POLICY "budgets_tenant_select" ON public.budgets FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "budgets_manager_write" ON public.budgets FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- 6. Audit Log (Strictly Read-Only for Authorized Management Roles)
+CREATE POLICY "audit_log_manager_select" ON public.finance_audit_log FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- 7. Periods & Settings
 CREATE POLICY "periods_tenant_select" ON public.finance_periods FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "periods_admin_write" ON public.finance_periods FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
 CREATE POLICY "settings_tenant_select" ON public.finance_approval_settings FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "settings_admin_write" ON public.finance_approval_settings FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
 -- 8. Reconciliations & Notes
-CREATE POLICY "reconciliations_tenant_select" ON public.reconciliations FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "collection_notes_tenant_all" ON public.collection_notes FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "reminders_tenant_all" ON public.payment_reminders FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "reconciliations_manager_select" ON public.reconciliations FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "reconciliations_manager_write" ON public.reconciliations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+CREATE POLICY "collection_notes_staff_select" ON public.collection_notes FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "collection_notes_staff_insert" ON public.collection_notes FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+
+CREATE POLICY "reminders_staff_select" ON public.payment_reminders FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "reminders_staff_insert" ON public.payment_reminders FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
 
 -- =============================================================================
 -- 9. PHASE 8 & 9: HR, PAYROLL, ADMISSIONS & CRM SCHEMAS
@@ -1136,31 +1389,41 @@ ALTER TABLE public.enrolments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
 -- Personnel RLS: Management vs Self
-CREATE POLICY "personnel_tenant_select" ON public.personnel FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "personnel_manager_all" ON public.personnel FOR ALL TO authenticated 
-USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+CREATE POLICY "personnel_tenant_select" ON public.personnel FOR SELECT TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_people() OR user_id = auth.uid()));
 
--- Payslips RLS: Strict Role Isolation
+CREATE POLICY "personnel_manager_write" ON public.personnel FOR ALL TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_people());
+
+-- Payslips RLS: Strict Role & Ownership Isolation
 CREATE POLICY "payslips_manager_select" ON public.payslips FOR SELECT TO authenticated 
-USING (tenant_id = public.get_auth_tenant_id() AND (
-    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
-    OR personnel_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid())
-));
+USING (tenant_id = public.get_auth_tenant_id() AND public.can_view_own_payslip(id));
 
 CREATE POLICY "payslips_manager_mutate" ON public.payslips FOR ALL TO authenticated 
-USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF'));
+USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- Settings & Accounts RLS
 CREATE POLICY "settings_tenant_read" ON public.finance_settings FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "settings_admin_write" ON public.finance_settings FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() = 'SUPER_ADMIN');
+CREATE POLICY "settings_admin_write" ON public.finance_settings FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
 CREATE POLICY "accounts_tenant_read" ON public.payment_accounts FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "accounts_manager_write" ON public.payment_accounts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER'));
+CREATE POLICY "accounts_manager_write" ON public.payment_accounts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- Admissions & CRM RLS
-CREATE POLICY "enquiries_tenant_all" ON public.enquiries FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "enrolments_tenant_all" ON public.enrolments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "customers_tenant_all" ON public.customers FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "enquiries_tenant_select" ON public.enquiries FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enquiries_tenant_insert" ON public.enquiries FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enquiries_tenant_update" ON public.enquiries FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enquiries_admin_delete" ON public.enquiries FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+CREATE POLICY "enrolments_tenant_select" ON public.enrolments FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enrolments_tenant_insert" ON public.enrolments FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enrolments_tenant_update" ON public.enrolments FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enrolments_admin_delete" ON public.enrolments FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+CREATE POLICY "customers_tenant_select" ON public.customers FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "customers_tenant_insert" ON public.customers FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "customers_tenant_update" ON public.customers FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "customers_admin_delete" ON public.customers FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
 -- =============================================================================
 -- 10. PERFORMANCE INDEXES
@@ -1233,18 +1496,19 @@ ALTER TABLE public.customer_timeline ENABLE ROW LEVEL SECURITY;
 -- Facilitator Sessions RLS: Management vs Self
 CREATE POLICY "sessions_tenant_select" ON public.facilitator_sessions FOR SELECT TO authenticated 
 USING (tenant_id = public.get_auth_tenant_id() AND (
-    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
+    public.can_manage_finance()
     OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid())
 ));
 
 CREATE POLICY "sessions_manager_mutate" ON public.facilitator_sessions FOR ALL TO authenticated 
 USING (tenant_id = public.get_auth_tenant_id() AND (
-    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
+    public.can_manage_finance()
     OR (facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid()) AND status = 'pending_approval')
 ));
 
 -- Customer Timeline RLS
-CREATE POLICY "timeline_tenant_all" ON public.customer_timeline FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "timeline_tenant_select" ON public.customer_timeline FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "timeline_tenant_insert" ON public.customer_timeline FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 
 -- Indexes for Phase 9 tables
 CREATE INDEX IF NOT EXISTS idx_sessions_tenant_facilitator ON public.facilitator_sessions(tenant_id, facilitator_id);
@@ -1265,7 +1529,7 @@ CREATE TABLE IF NOT EXISTS public.schema_versions (
 );
 
 INSERT INTO public.schema_versions (version, description, compatible)
-VALUES ('10.0.0', 'Phase 10 Operational Intelligence, Management Controls & Reconciliation', TRUE)
+VALUES ('13.0.0', 'Phase 13 Production Security, Database Integrity, Transaction Safety & Certification', TRUE)
 ON CONFLICT (version) DO NOTHING;
 
 -- Database-Level Idempotency Keys Table
@@ -1379,21 +1643,21 @@ ALTER TABLE public.financial_adjustments ENABLE ROW LEVEL SECURITY;
 
 -- Phase 10 RLS Policies
 CREATE POLICY "schema_versions_select" ON public.schema_versions FOR SELECT TO authenticated USING (TRUE);
-CREATE POLICY "idempotency_tenant_all" ON public.idempotency_keys FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "alerts_tenant_all" ON public.management_alerts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "crm_history_tenant_all" ON public.crm_stage_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "reconciliations_tenant_all" ON public.bank_reconciliations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "reconciliation_items_tenant_all" ON public.bank_reconciliation_items FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "expense_history_tenant_all" ON public.expense_status_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "adjustments_tenant_all" ON public.financial_adjustments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "idempotency_tenant_all" ON public.idempotency_keys FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "alerts_tenant_all" ON public.management_alerts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_finance() OR assigned_role = public.get_auth_user_role()));
+CREATE POLICY "crm_history_tenant_all" ON public.crm_stage_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "reconciliations_manager_all" ON public.bank_reconciliations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "reconciliation_items_manager_all" ON public.bank_reconciliation_items FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "expense_history_tenant_all" ON public.expense_status_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "adjustments_manager_all" ON public.financial_adjustments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- Performance Composite Indexes
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant_status ON public.invoices(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant_duedate ON public.invoices(tenant_id, due_date);
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant_cust ON public.invoices(tenant_id, customer_id);
 CREATE INDEX IF NOT EXISTS idx_enquiries_tenant_stage ON public.enquiries(tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_payslips_tenant_period ON public.payslips(tenant_id, payroll_period);
-CREATE INDEX IF NOT EXISTS idx_expenses_tenant_period ON public.expenses(tenant_id, financial_period);
+CREATE INDEX IF NOT EXISTS idx_payslips_tenant_period ON public.payslips(tenant_id, pay_period);
+CREATE INDEX IF NOT EXISTS idx_expenses_tenant_period ON public.expenses(tenant_id, expense_date);
 CREATE INDEX IF NOT EXISTS idx_alerts_tenant_severity ON public.management_alerts(tenant_id, severity, status);
 CREATE INDEX IF NOT EXISTS idx_crm_history_tenant_enquiry ON public.crm_stage_history(tenant_id, enquiry_id);
 CREATE INDEX IF NOT EXISTS idx_reconciliations_tenant_period ON public.bank_reconciliations(tenant_id, reconciliation_period);
@@ -1545,16 +1809,16 @@ ALTER TABLE public.approval_thresholds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.management_recommendations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.report_snapshots ENABLE ROW LEVEL SECURITY;
 
--- Section 13 Tenant RLS Policies
-CREATE POLICY "budgets_tenant_all" ON public.financial_budgets FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "budget_lines_tenant_all" ON public.budget_lines FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "management_metrics_tenant_all" ON public.management_metrics FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "cash_flow_tenant_all" ON public.cash_flow_forecasts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "customer_segments_tenant_all" ON public.customer_segments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "collection_actions_tenant_all" ON public.collection_actions FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "approval_thresholds_tenant_all" ON public.approval_thresholds FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "recommendations_tenant_all" ON public.management_recommendations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
-CREATE POLICY "report_snapshots_tenant_all" ON public.report_snapshots FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+-- Section 13 Tenant RLS Policies: Management vs Operational
+CREATE POLICY "budgets_manager_all" ON public.financial_budgets FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "budget_lines_manager_all" ON public.budget_lines FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "management_metrics_manager_all" ON public.management_metrics FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "cash_flow_manager_all" ON public.cash_flow_forecasts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "customer_segments_staff_all" ON public.customer_segments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "collection_actions_staff_all" ON public.collection_actions FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff());
+CREATE POLICY "approval_thresholds_admin_all" ON public.approval_thresholds FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+CREATE POLICY "recommendations_manager_all" ON public.management_recommendations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "report_snapshots_manager_all" ON public.report_snapshots FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 -- Section 13 Performance Composite Indexes
 CREATE INDEX IF NOT EXISTS idx_budgets_tenant_period ON public.financial_budgets(tenant_id, financial_year, period_key);
@@ -1581,11 +1845,22 @@ CREATE TABLE IF NOT EXISTS public.system_diagnostics (
 
 ALTER TABLE public.system_diagnostics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "system_diagnostics_tenant_all" ON public.system_diagnostics
-    FOR ALL
-    TO authenticated, anon
-    USING (true)
-    WITH CHECK (true);
+-- Hardened Diagnostic RLS: Authenticated Management Only
+CREATE POLICY "system_diagnostics_admin_select" ON public.system_diagnostics
+    FOR SELECT
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+CREATE POLICY "system_diagnostics_admin_insert" ON public.system_diagnostics
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+CREATE POLICY "system_diagnostics_admin_delete" ON public.system_diagnostics
+    FOR DELETE
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 CREATE INDEX IF NOT EXISTS idx_system_diagnostics_probe ON public.system_diagnostics (probe_id, created_at DESC);
+
 

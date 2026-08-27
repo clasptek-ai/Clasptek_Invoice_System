@@ -14332,7 +14332,9 @@ function renderChangeRoleModal(container, user) {
       DIAGNOSTIC_POSTGRES_STATE,
       validateSupabaseConfiguration,
       runSupabaseHealthCheck,
-      runPersistenceProbe
+      runPersistenceProbe,
+      // Phase 13 Production Security & Transaction Safety Exports
+      executeTransactionalPaymentCascade
     };
   }
 })();
