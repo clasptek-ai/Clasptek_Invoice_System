@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Clasptek Finance Management System</title>
+  <title>Clasptek Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1785,7 +1785,7 @@ function printCanonicalDocument(docHtml) {
 
 
 // ----------------------------------------------------
-// AUTHENTICATION & LOGIN SCREEN (5 ROLES SUPPORT)
+// AUTHENTICATION & LOGIN SCREEN (CLEAN CLASPTEK BRANDING)
 // ----------------------------------------------------
 function renderLoginScreen(root) {
   root.innerHTML = `
@@ -1793,8 +1793,8 @@ function renderLoginScreen(root) {
       <div class="cp-auth-card">
         <div class="cp-auth-header">
           <img src="assets/clasptek_logo.png" alt="Clasptek Logo" style="height:52px; width:auto; margin-bottom:12px; object-fit:contain;" />
-          <div class="cp-auth-title" style="font-size:18px; font-weight:800; color:var(--primary);">Clasptek Unified Portal</div>
-          <div class="cp-auth-sub" style="font-size:12px; color:var(--text-muted);">Finance Operations &amp; Staff/Facilitator Self-Service</div>
+          <div class="cp-auth-title" style="font-size:18px; font-weight:800; color:var(--primary);">Clasptek Portal</div>
+          <div class="cp-auth-sub" style="font-size:12px; color:var(--text-muted);">Unified Enterprise &amp; Employee Workspace</div>
         </div>
 
         <div class="cp-field" style="margin-top:16px;">
@@ -1914,18 +1914,18 @@ function render() {
   const myOpenQueriesCount = myPayslips.filter(p => p.queries && p.queries.some(q => q.status === 'open' || q.status === 'under_review')).length;
 
   const tabLabels = {
-    dashboard: 'Finance Dashboard',
-    enquiries: 'Enquiries & Admissions',
+    dashboard: 'Dashboard',
+    enquiries: 'Admissions & Enquiries',
     studentAccounts: 'Students & Clients',
     invoices: 'Invoices',
     payments: 'Payments & Receipts',
-    payslips: 'Staff & Facilitator Payslips',
+    payslips: 'Payroll & Payslips',
     expenses: 'Expenses',
     programmes: 'Programmes',
     receivables: 'Receivables & Collections',
     budgets: 'Budgets & Planning',
     reports: 'Management Reports',
-    usersRoles: 'People & Access / Staff Management',
+    usersRoles: 'People & Access',
     financialControls: 'Financial Controls',
     auditLog: 'Audit Log',
     settings: 'Settings & Backups',
@@ -1946,8 +1946,8 @@ function render() {
             <a href="#" class="cp-sidebar-brand" id="brandLogoLink">
               <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-sidebar-logo" />
               <div class="cp-sidebar-brand-text">
-                <span class="cp-brand-name">${isEmployee ? 'Clasptek Portal' : 'Clasptek Finance'}</span>
-                <span class="cp-brand-sub">${isEmployee ? (user.role === 'Facilitator' ? 'Facilitator Workspace' : 'Employee Workspace') : 'Management System'}</span>
+                <span class="cp-brand-name">Clasptek</span>
+                <span class="cp-brand-sub">${isEmployee ? (user.role === 'Facilitator' ? 'Facilitator' : 'Staff') : 'Workspace'}</span>
               </div>
             </a>
             <button class="cp-collapse-btn" id="btnToggleSidebar" title="Toggle Sidebar">&#x21C4;</button>
@@ -1985,7 +1985,7 @@ function render() {
                   <span class="cp-nav-icon">&#x1F4CA;</span><span class="cp-nav-label">Dashboard</span>
                 </div>
                 <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries">
-                  <span class="cp-nav-icon">&#x1F4E5;</span><span class="cp-nav-label">Enquiries</span>
+                  <span class="cp-nav-icon">&#x1F4E5;</span><span class="cp-nav-label">Admissions &amp; Enquiries</span>
                   ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
                 </div>
                 <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts">
@@ -2000,7 +2000,7 @@ function render() {
                   <span class="cp-nav-badge">${state.payments.length}</span>
                 </div>
                 <div class="cp-nav-item ${state.tab === 'payslips' ? 'active' : ''}" data-tab="payslips">
-                  <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">Staff &amp; Facilitator Payroll</span>
+                  <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">Payroll</span>
                   ${pendingPayslipsCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning-bg); color:var(--warning);">${pendingPayslipsCount}</span>` : ''}
                 </div>
                 <div class="cp-nav-item ${state.tab === 'expenses' ? 'active' : ''}" data-tab="expenses">
@@ -2313,14 +2313,23 @@ function renderModal(type, data) {
 }
 
 // ----------------------------------------------------
-// TAB 1: DASHBOARD (ADMINISTRATIVE FINANCE VIEW)
+// TAB 1: DASHBOARD (ADMINISTRATIVE MANAGEMENT VIEW)
 // ----------------------------------------------------
 function renderDashboardTab(container) {
   const m = getFinancialMetrics();
   const pipe = m.pipeline;
 
+  // Detailed Journey Counts
+  const countLeads = state.enquiries.filter(e => e.status === 'NEW').length;
+  const countScreening = state.enquiries.filter(e => e.status === 'CONTACTED').length;
+  const countQualified = state.enquiries.filter(e => e.status === 'INTERESTED' || e.status === 'INVOICE_REQUESTED').length;
+  const countInvoiced = state.invoices.length;
+  const countPaid = state.payments.length;
+  const countEnrolled = state.enrolments.length;
+  const countActiveStudents = state.enrolments.filter(e => e.status !== 'graduated' && e.status !== 'withdrawn').length || countEnrolled;
+
   container.innerHTML = `
-    <!-- Top KPI Grid -->
+    <!-- Top KPI Financial Grid -->
     <div class="cp-grid-4">
       <div class="cp-kpi-card">
         <div class="cp-kpi-label">Revenue Collected</div>
@@ -2338,71 +2347,130 @@ function renderDashboardTab(container) {
         <div class="cp-kpi-sub">Operating Margin: ${m.totalIncomeReceived > 0 ? safeRound((m.netFinancialPosition / m.totalIncomeReceived) * 100) : 0}%</div>
       </div>
       <div class="cp-kpi-card">
-        <div class="cp-kpi-label">Payroll Awaiting Month-End Pay</div>
+        <div class="cp-kpi-label">Payroll Liabilities</div>
         <div class="cp-kpi-val" style="color:var(--warning);">${fmtMoney(m.payroll.awaitingPayment)}</div>
-        <div class="cp-kpi-sub">Approved Liabilities &middot; Disbursed: <strong>${fmtMoney(m.payroll.totalDisbursed)}</strong></div>
+        <div class="cp-kpi-sub">Approved Awaiting Pay &middot; Disbursed: <strong>${fmtMoney(m.payroll.totalDisbursed)}</strong></div>
       </div>
     </div>
 
-    <!-- Admissions & Customer Journey Pipeline Visualizer -->
-    <div class="cp-card">
-      <div class="cp-card-header">
+    <!-- Prominent Connected Business Pipeline & Customer Journey -->
+    <div class="cp-card" style="border-top: 3px solid var(--info);">
+      <div class="cp-card-header" style="margin-bottom:12px;">
         <div>
-          <div class="cp-section-title">&#x1F680; Business Pipeline &amp; Customer Journey</div>
-          <div class="cp-section-desc">Unified tracking from initial lead inquiry to tuition billing, settlement, and cohort enrolment.</div>
+          <div class="cp-section-title" style="font-size:17px;">&#x1F680; Business Pipeline &amp; Customer Journey</div>
+          <div class="cp-section-desc">Interactive management flow from initial prospect lead to active student learning. Click any stage to view candidate records.</div>
         </div>
         <button class="cp-btn sm secondary" id="btnViewAllEnquiries">View Admissions Desk &rarr;</button>
       </div>
 
-      <div class="cp-journey-bar">
-        <div class="cp-journey-step done">
-          <div class="cp-journey-dot">&#x1F4E5;</div>
-          <div class="cp-journey-label">1. Enquiries (${pipe.totalEnquiries})</div>
+      <!-- Connected Flow Grid -->
+      <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; margin: 16px 0;">
+        
+        <!-- Stage 1: Lead / Enquiry -->
+        <div class="cp-card cp-pipe-card" id="pipeStageLead" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F4E5;</span>
+            <span class="cp-pill new" style="font-size:9.5px;">LEAD</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">1. Enquiry</div>
+          <div style="font-size:22px; font-weight:900; color:var(--primary); margin:2px 0;">${countLeads}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">${state.enquiries.length} Total Leads</div>
         </div>
-        <div class="cp-journey-step ${pipe.invoiceRequested > 0 || pipe.invoicesIssued > 0 ? 'done' : 'active'}">
-          <div class="cp-journey-dot">&#x1F4C4;</div>
-          <div class="cp-journey-label">2. Invoiced (${pipe.invoicesIssued})</div>
+
+        <!-- Stage 2: Pre-Assessment -->
+        <div class="cp-card cp-pipe-card" id="pipeStageAssess" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F4CB;</span>
+            <span class="cp-pill active" style="font-size:9.5px; background:#EFF6FC; color:#1D4ED8;">SCREENING</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">2. Pre-Assess</div>
+          <div style="font-size:22px; font-weight:900; color:var(--info); margin:2px 0;">${countScreening}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">Contacted &amp; Vetted</div>
         </div>
-        <div class="cp-journey-step ${pipe.partiallyPaid > 0 || pipe.fullyPaid > 0 ? 'done' : 'active'}">
-          <div class="cp-journey-dot">&#x1F4B0;</div>
-          <div class="cp-journey-label">3. Paid (${pipe.partiallyPaid + pipe.fullyPaid})</div>
+
+        <!-- Stage 3: Programme Interest -->
+        <div class="cp-card cp-pipe-card" id="pipeStageInterest" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F3AF;</span>
+            <span class="cp-pill partial" style="font-size:9.5px;">QUALIFIED</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">3. Interest</div>
+          <div style="font-size:22px; font-weight:900; color:#92400E; margin:2px 0;">${countQualified}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">Course Selected</div>
         </div>
-        <div class="cp-journey-step ${pipe.enrolledStudents > 0 ? 'done' : 'active'}">
-          <div class="cp-journey-dot">&#x1F393;</div>
-          <div class="cp-journey-label">4. Enrolled (${pipe.enrolledStudents})</div>
+
+        <!-- Stage 4: Invoice -->
+        <div class="cp-card cp-pipe-card" id="pipeStageInvoice" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F4C4;</span>
+            <span class="cp-pill category-pill" style="font-size:9.5px;">BILLED</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">4. Invoice</div>
+          <div style="font-size:22px; font-weight:900; color:var(--primary); margin:2px 0;">${countInvoiced}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary); font-weight:600;">${fmtMoney(m.totalInvoiced)}</div>
         </div>
-        <div class="cp-journey-step ${pipe.fullyPaid > 0 ? 'done' : ''}">
-          <div class="cp-journey-dot">&#x2714;</div>
-          <div class="cp-journey-label">5. Cleared (${pipe.fullyPaid})</div>
+
+        <!-- Stage 5: Payment -->
+        <div class="cp-card cp-pipe-card" id="pipeStagePayment" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F4B0;</span>
+            <span class="cp-pill paid" style="font-size:9.5px;">SETTLED</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">5. Payment</div>
+          <div style="font-size:22px; font-weight:900; color:var(--success); margin:2px 0;">${countPaid}</div>
+          <div style="font-size:10.5px; color:var(--success); font-weight:700;">${fmtMoney(m.totalPaymentsReceived)}</div>
         </div>
+
+        <!-- Stage 6: Enrolment -->
+        <div class="cp-card cp-pipe-card" id="pipeStageEnrol" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x1F393;</span>
+            <span class="cp-pill active" style="font-size:9.5px;">ADMITTED</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">6. Enrolled</div>
+          <div style="font-size:22px; font-weight:900; color:var(--info); margin:2px 0;">${countEnrolled}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">Cohort Onboarded</div>
+        </div>
+
+        <!-- Stage 7: Active Student -->
+        <div class="cp-card cp-pipe-card" id="pipeStageActive" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:16px;">&#x2705;</span>
+            <span class="cp-pill paid" style="font-size:9.5px;">ACTIVE</span>
+          </div>
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">7. Active Student</div>
+          <div style="font-size:22px; font-weight:900; color:var(--success); margin:2px 0;">${countActiveStudents}</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">In Training</div>
+        </div>
+
       </div>
 
-      <!-- Conversion Analytics KPI Cards -->
-      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:16px;">
+      <!-- Conversion Analytics KPI Sub-Row -->
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Enquiry &rarr; Invoiced</div>
-          <div style="font-size:18px; font-weight:800; color:var(--primary); margin-top:2px;">${pipe.convEnquiryToInvoice}%</div>
+          <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Enquiry &rarr; Invoiced</div>
+          <div style="font-size:17px; font-weight:800; color:var(--primary); margin-top:2px;">${pipe.convEnquiryToInvoice}%</div>
           <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.invoicesIssued} of ${pipe.totalEnquiries} prospects</div>
         </div>
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Invoice &rarr; Payment</div>
-          <div style="font-size:18px; font-weight:800; color:var(--success); margin-top:2px;">${pipe.convInvoiceToPayment}%</div>
+          <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Invoice &rarr; Payment</div>
+          <div style="font-size:17px; font-weight:800; color:var(--success); margin-top:2px;">${pipe.convInvoiceToPayment}%</div>
           <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.partiallyPaid + pipe.fullyPaid} invoices with payments</div>
         </div>
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Payment &rarr; Enrolled</div>
-          <div style="font-size:18px; font-weight:800; color:var(--info); margin-top:2px;">${pipe.convPaymentToEnrol}%</div>
+          <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Payment &rarr; Enrolled</div>
+          <div style="font-size:17px; font-weight:800; color:var(--info); margin-top:2px;">${pipe.convPaymentToEnrol}%</div>
           <div style="font-size:10.5px; color:var(--text-secondary);">${pipe.enrolledStudents} students onboarded</div>
         </div>
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Overall Lead &rarr; Student</div>
-          <div style="font-size:18px; font-weight:800; color:var(--accent); margin-top:2px;">${pipe.convOverall}%</div>
-          <div style="font-size:10.5px; color:var(--text-secondary);">End-to-end conversion</div>
+          <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Overall Lead &rarr; Student</div>
+          <div style="font-size:17px; font-weight:800; color:var(--accent); margin-top:2px;">${pipe.convOverall}%</div>
+          <div style="font-size:10.5px; color:var(--text-secondary);">End-to-end conversion rate</div>
         </div>
       </div>
     </div>
 
-    <!-- Quick Action / Recent Activity -->
+    <!-- Quick Action / Operational Summary -->
     <div class="cp-grid-2">
       <div class="cp-card" style="margin-bottom:0;">
         <div class="cp-card-header">
@@ -2448,6 +2516,28 @@ function renderDashboardTab(container) {
   document.getElementById('btnViewAllEnquiries').addEventListener('click', () => { state.tab = 'enquiries'; render(); });
   document.getElementById('btnViewReceivables').addEventListener('click', () => { state.tab = 'receivables'; render(); });
   document.getElementById('btnViewAuditLog').addEventListener('click', () => { state.tab = 'auditLog'; render(); });
+
+  // Interactive Stage Click-Through Listeners
+  const pipeLead = document.getElementById('pipeStageLead');
+  if (pipeLead) pipeLead.addEventListener('click', () => { state.tab = 'enquiries'; state.filters.enquiryStatus = 'NEW'; render(); });
+
+  const pipeAssess = document.getElementById('pipeStageAssess');
+  if (pipeAssess) pipeAssess.addEventListener('click', () => { state.tab = 'enquiries'; state.filters.enquiryStatus = 'CONTACTED'; render(); });
+
+  const pipeInterest = document.getElementById('pipeStageInterest');
+  if (pipeInterest) pipeInterest.addEventListener('click', () => { state.tab = 'enquiries'; state.filters.enquiryStatus = 'INTERESTED'; render(); });
+
+  const pipeInvoice = document.getElementById('pipeStageInvoice');
+  if (pipeInvoice) pipeInvoice.addEventListener('click', () => { state.tab = 'invoices'; render(); });
+
+  const pipePayment = document.getElementById('pipeStagePayment');
+  if (pipePayment) pipePayment.addEventListener('click', () => { state.tab = 'payments'; render(); });
+
+  const pipeEnrol = document.getElementById('pipeStageEnrol');
+  if (pipeEnrol) pipeEnrol.addEventListener('click', () => { state.tab = 'studentAccounts'; render(); });
+
+  const pipeActive = document.getElementById('pipeStageActive');
+  if (pipeActive) pipeActive.addEventListener('click', () => { state.tab = 'studentAccounts'; render(); });
 }
 
 // ----------------------------------------------------
@@ -2471,7 +2561,7 @@ function renderStaffDashboardTab(container) {
       <div>
         <div style="font-size:18px; font-weight:800; color:var(--primary);">Welcome, ${escapeHtml(user.name)}</div>
         <div style="font-size:12.5px; color:var(--text-secondary); margin-top:2px;">
-          ${escapeHtml(pers ? pers.role : user.title || user.role)} &middot; ${escapeHtml(pers ? pers.department : 'Clasptek Coaching Limited')}
+          ${escapeHtml(pers ? pers.role : user.title || user.role)} &middot; ${escapeHtml(pers ? pers.department : 'Clasptek')}
         </div>
       </div>
       <div>
@@ -3130,7 +3220,6 @@ function renderStudentAccountsTab(container) {
     });
   });
 }
-
 
 
 // ----------------------------------------------------
@@ -7172,9 +7261,10 @@ function renderStudentProfileModal(container, account) {
               </table>
             </div>
 
-            <div class="cp-doc-footer">
-              <div>Clasptek Finance Management System &middot; Statement of Account</div>
-              <div>${escapeHtml(fsCfg.website)}</div>
+            <div class="cp-doc-company-block" style="text-align:right;">
+              <div class="cp-doc-company-title">${escapeHtml(state.financeSettings.companyName)}</div>
+              <div>Statement of Account</div>
+              <div class="cp-doc-company-meta">${escapeHtml(state.financeSettings.address)}</div>
             </div>
           </div>
         </div>
