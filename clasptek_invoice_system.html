@@ -349,25 +349,25 @@
 
     /* Centered Document Preview Canvas */
     
-    /* Clean, Professional Authentication UI */
+    /* Clean, Professional Corporate Authentication UI */
     .cp-auth-wrap {
       min-height: 100vh;
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #0F172A 0%, #14213D 50%, #1E293B 100%);
-      padding: 20px;
+      background: radial-gradient(circle at 50% 20%, #1E293B 0%, #0F172A 70%, #090D16 100%);
+      padding: 24px 16px;
       box-sizing: border-box;
     }
     .cp-auth-card {
       background: #FFFFFF;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 20px 35px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.1);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.4), 0 10px 20px -5px rgba(0, 0, 0, 0.2);
       width: 100%;
       max-width: 440px;
-      padding: 32px 28px;
+      padding: 36px 32px 28px;
       box-sizing: border-box;
       position: relative;
     }
@@ -375,17 +375,31 @@
       text-align: center;
       margin-bottom: 22px;
     }
+    .cp-auth-logo-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .cp-auth-logo {
+      max-width: 250px;
+      width: 100%;
+      height: auto;
+      max-height: 80px;
+      object-fit: contain;
+      display: block;
+    }
     .cp-auth-title {
       font-size: 22px;
       font-weight: 800;
       color: var(--primary);
       letter-spacing: -0.3px;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .cp-auth-sub {
       font-size: 13px;
       color: var(--text-secondary);
-      line-height: 1.4;
+      line-height: 1.45;
     }
     .cp-auth-alert {
       padding: 10px 12px;
@@ -420,7 +434,7 @@
     }
     .cp-password-wrap input {
       width: 100%;
-      padding-right: 40px;
+      padding-right: 42px;
       box-sizing: border-box;
     }
     .cp-password-toggle {
@@ -430,14 +444,21 @@
       border: none;
       cursor: pointer;
       color: var(--text-muted);
-      font-size: 14px;
-      padding: 4px;
+      font-size: 15px;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+    .cp-password-toggle:hover {
+      color: var(--primary);
     }
     .cp-auth-footer-links {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 14px;
+      margin-top: 16px;
       font-size: 12px;
     }
     .cp-auth-link {
@@ -460,6 +481,17 @@
       text-align: center;
       font-size: 11px;
       color: var(--text-muted);
+    }
+    @media (max-width: 480px) {
+      .cp-auth-card {
+        padding: 28px 20px 22px;
+      }
+      .cp-auth-logo {
+        max-width: 210px;
+      }
+      .cp-auth-title {
+        font-size: 20px;
+      }
     }
 
     .cp-doc-scroll-wrap {
@@ -2356,9 +2388,8 @@ function checkUrlAuthParams() {
 function renderLoginScreen(root) {
   checkUrlAuthParams();
   const brandLogoHtml = `
-    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:12px; gap:10px;">
-      <div style="width:42px; height:42px; border-radius:10px; background:linear-gradient(135deg, #14213D 0%, #C1272D 100%); display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:900; font-size:22px; box-shadow:0 4px 10px rgba(193,39,45,0.25);">C</div>
-      <span style="font-size:24px; font-weight:900; color:#14213D; letter-spacing:-0.5px;">Clasptek</span>
+    <div class="cp-auth-logo-wrap">
+      <img src="assets/clasptek_logo.png" alt="Clasptek" class="cp-auth-logo" />
     </div>
   `;
 
@@ -2369,8 +2400,8 @@ function renderLoginScreen(root) {
         <div class="cp-auth-card">
           <div class="cp-auth-header">
             ${brandLogoHtml}
-            <div class="cp-auth-title">Welcome to Clasptek</div>
-            <div class="cp-auth-sub">Sign in to access your secure workspace</div>
+            <div class="cp-auth-title">Welcome</div>
+            <div class="cp-auth-sub">Sign in to access your secure workspace.</div>
           </div>
 
           ${authViewState.alertMsg ? `<div class="cp-auth-alert ${authViewState.alertType}">${escapeHtml(authViewState.alertMsg)}</div>` : ''}
@@ -2379,14 +2410,14 @@ function renderLoginScreen(root) {
           <form id="formSignIn" onsubmit="return false;">
             <div class="cp-field">
               <label for="authEmail">Work Email Address</label>
-              <input type="email" id="authEmail" placeholder="e.g. yourname@clasptek.org" value="${escapeHtml(authViewState.email)}" required autocomplete="username" />
+              <input type="email" id="authEmail" placeholder="name@clasptek.org" value="${escapeHtml(authViewState.email)}" required autocomplete="username" />
             </div>
 
             <div class="cp-field">
               <label for="authPassword">Password</label>
               <div class="cp-password-wrap">
                 <input type="password" id="authPassword" placeholder="Enter your password" required autocomplete="current-password" />
-                <button type="button" class="cp-password-toggle" id="btnTogglePwd" title="Show/Hide Password">&#x1F441;</button>
+                <button type="button" class="cp-password-toggle" id="btnTogglePwd" title="Show/Hide Password" aria-label="Toggle password visibility">&#x1F441;</button>
               </div>
             </div>
 
