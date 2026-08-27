@@ -1,102 +1,97 @@
 # Clasptek Portal & Enterprise Management System
 
-An enterprise-grade financial intelligence, billing, admissions, payroll, and governance platform for Clasptek Coaching Limited.
+An enterprise-grade financial intelligence, decision-grade management operating system, billing, admissions, payroll, and governance platform for Clasptek Coaching Limited.
 
 ---
 
 ## 🌟 Overview
 
-**Clasptek Finance** is an all-in-one financial management solution covering the complete lifecycle of financial operations:
+**Clasptek Enterprise Management Operating System (v11.0.0)** is a complete decision-grade executive platform:
+- **Phase 11 Decision Intelligence**: Executive KPI comparisons (MoM/QoQ/YoY), Budget vs. Actual category variance analysis with direct drilldown, Enhanced Programme Unit Economics & Profitability Ranking, Customer Lifetime Value & Automated Segmentation, Multi-Horizon Cash Flow Projections (7/30/60/90 days), and Executive Decision Support Engine.
+- **Spend Governance & Anomaly Detection**: Category spikes, duplicate payment prevention, high-value transaction detection, and configurable multi-tier approval thresholds (Tier 1: ₦0–₦49,999, Tier 2: ₦50,000–₦199,999, Tier 3: ₦200,000+).
+- **Accounts Receivable Intelligence**: Priority collection scoring (0–100), automated workflow triggers, and chronological customer timeline logs.
 - **Income & Billing Management**: Multi-item invoicing, one-off and installment payment plans, direct income logging, and dynamic status tracking.
-- **Expense Tracking & Controls**: Hierarchical expense categories, threshold-based multi-tier approval workflows, and audit-safe non-destructive cancellations.
-- **Receipts & Payment Ledger**: Detailed payment recording across modern non-cash channels (Bank Transfer, POS, Card, Online Gateway), unique receipt numbering, and printable receipts.
-- **Receivables & Ageing Analysis**: 6-tier aging engine (*Current, 1–30d, 31–60d, 61–90d, 90+d*), debtor prioritisation, and automated payment reminder templates (Email, WhatsApp, SMS).
-- **Student / Customer Account Statements**: Itemized debit/credit running ledger and printable statements.
-- **Financial Intelligence & Management Reports**: Real-time Executive KPIs, Profit & Loss (P&L), Cash Flow statements, 30/60/90-day cash flow projections, and Budget Intelligence with utilization alerts.
-- **Audit Assurance & Period Controls**: Immutable audit logging, 12-step month-end closing checklist, and bank account reconciliation engine.
-- **Supabase Backend Architecture (Phase 5)**: Enterprise PostgreSQL schema (`supabase_schema.sql`), Row Level Security (RLS) with zero anonymous access, database-level period locking triggers, immutable audit triggers, secure RPC functions, and non-destructive Migration Preview Mode.
+- **Multi-Stage Payroll & Facilitator Compensation**: Digital acknowledgements, payroll discrepancy queries, session-based earnings, and idempotent General Ledger expense integration.
+- **CRM 360° & Lifecycle Directory**: Prospect conversion, commercial snapshotting, student journey tracking, and Customer 360° profile view.
+- **Authoritative Supabase PostgreSQL Persistence**: All operational and financial records backed by Supabase PostgreSQL with tenant-isolated Row Level Security (RLS), immutable audit triggers, and database-level period locking.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Modules & Capabilities
 
-### 1. Executive Dashboard
-- **Key Performance Indicators (KPIs)**: Total Income Received, Total Expenses, Net Financial Position, Outstanding Receivables, Collection Rate, and MTD/YTD figures.
-- **Interactive Visualizations**: 6-month visual trends for Income vs. Operating Expenses.
-- **Programme Financial Performance**: Revenue, collections, outstanding balances, and collection health breakdown by programme.
+### 1. Executive Financial Intelligence (`financialIntelligence` tab)
+- **Multi-Period Comparisons**: Real-time revenue, expense, and net margin deltas with directional trend indicators (`UP`, `DOWN`, `FLAT`).
+- **12 Comprehensive KPI Cards**: Total Revenue, Revenue Collected, Outstanding Receivables, Total Expenses, Operating Margin %, Cash Position, Collection Rate %, Payroll-to-Revenue %, Average Customer Value, Active Students, and Open Anomalies.
+- **Customer Segmentation Matrix**: Segment-by-segment distribution (`VIP`, `High Value`, `Regular`, `At Risk`, `Delinquent`, `Fully Paid`, `New`).
+- **Executive Recommendations Panel**: Synthesizes cross-cutting findings, quantitative evidence, financial impact, and concrete remediation actions.
 
-### 2. Income & Invoicing
-- **Multi-Plan Support**: Full upfront payment or 60/40 installment schedules.
-- **Direct Income Logging**: Miscellaneous income, registration fees, corporate consulting, and grants.
-- **Categorization**: Configurable revenue categories.
+### 2. Multi-Horizon Cash Flow Forecasting (`cashFlow` tab)
+- **Liquidity Runway Indicators**: Clear operational status (`🟢 HEALTHY`, `🟡 TIGHT`, `🔴 CRITICAL`).
+- **Configurable Horizons**: Projections for 7-day, 30-day, 60-day, and 90-day cash horizons.
+- **Inflow & Outflow Breakdown**: Scheduled invoice collections, recurring invoices, approved expenses, pending payroll liabilities, and scheduled facilitator sessions.
 
-### 3. Expense Management & Approval Matrix
-- **Category Hierarchy**: Staff & People, Marketing & Growth, Technology & Software, Operations & Utilities, Academic & Training, Administration.
-- **Multi-Tier Approvals**: Configurable threshold (e.g. ₦500,000) routing high-value expenses to Finance Managers or Super Admins before affecting P&L.
-- **Void / Reversal Audit Safety**: Historical transactions are never silently deleted.
+### 3. Budget vs. Actual & Expense Control Matrix (`budgets` tab)
+- **Variance Invariant**: `Variance = Budget − Actual`. Positive variance = under budget; negative variance = over budget.
+- **Category Status Badging**: `ON_TRACK`, `NEAR_LIMIT` (80–100%), and `OVER_BUDGET` (> 100%).
+- **Interactive Drilldown**: Direct modal inspection of GL expense transactions supporting each budget line.
 
-### 4. Payments & Receipts
-- **Non-Cash Financial Channels**: Bank Transfer, POS, Card, Payment Gateway, and custom methods.
-- **Instant Printable Receipts**: Standardized modal views with official Clasptek branding and verification details.
+### 4. Programme Unit Economics & Profitability Ranking
+- **Contribution Margin Calculation**: Direct revenue collected minus facilitator session costs.
+- **Net Margin Calculation**: Revenue minus direct facilitator costs and standard marketing/operational allocations (10% + 10%).
+- **Deterministic Profitability Ranking**: Automatically ranks educational offerings from highest to lowest operational contribution.
 
-### 5. Receivables Collection Workspace
-- **Collection Prioritisation**: Priority tagging (*Low*, *Medium*, *High*, *Critical*).
-- **Follow-up Logging**: Chronological collection notes.
-- **Reminder Generator**: Template generator with token interpolation (`{{studentName}}`, `{{amountDue}}`, `{{dueDate}}`).
+### 5. Receivables Collection Priority Scoring (`receivables` tab)
+- **Deterministic Priority Algorithm**: Calculates scores based on outstanding balance, days overdue, and customer risk segment.
+- **Priority Bands & Action Workflows**:
+  - `CRITICAL` (Score 70+): Immediate Escalation & In-Person Follow-up
+  - `HIGH` (Score 45–69): Direct Phone Call & Payment Plan Negotiation
+  - `MEDIUM` (Score 25–44): WhatsApp Reminder with Outstanding Statement
+  - `LOW` (Score < 25): Automated Email Reminder
+- **Integrated Action Modal**: Logs follow-up notes, promised payment dates, and actor stamps directly to `collection_actions` and `customer_timeline`.
 
-### 6. Account Reconciliation & Period Locking
-- **Bank Account Reconciliation**: Opening balance, expected transactions, bank balance verification, and variance matching.
-- **Strict Financial Periods**: Lock past accounting periods to prevent retroactive mutations.
-
-### 7. Supabase PostgreSQL Backend & Migration Preview
-- **PostgreSQL DDL**: Fully normalized tables in `supabase_schema.sql` (`tenants`, `profiles`, `tenant_memberships`, `invoices`, `invoice_items`, `payments`, `expenses`, `direct_income`, `budgets`, `finance_audit_log`, `finance_periods`, `reconciliations`, etc.).
-- **Row Level Security (RLS)**: Authenticated-only access deriving tenant isolation from `auth.uid()`. Zero anonymous access to financial records.
-- **Secure RPC Functions**: `create_invoice_with_items`, `record_payment`, `record_expense`, `approve_expense`, `void_financial_record`, `reopen_financial_period`.
-- **Migration Safety Lock**: Pre-flight forensic scan comparing LocalStorage vs Supabase counts and calculating financial balances with zero variance before any live data transfer.
-
----
-
-## 🛠️ Tech Stack & Architecture
-
-- **Frontend**: Pure HTML5, Modern CSS3 with Design Tokens, Vanilla JavaScript (ES6+).
-- **Database**: PostgreSQL on Supabase (`https://logaawoigfxnisimfatf.supabase.co/rest/v1/`).
-- **Precision**: Integer-cent rounding (`Math.round(n * 100) / 100`) eliminating floating-point drift.
-- **Compatibility**: 100% backward compatible with legacy billing data schemas.
+### 6. Management Performance Report Generator (`reports` tab)
+- **Executive Report Structure**: Financial Summary, Budget Performance, Programme Profitability, Customer Segmentation, Cash Flow Forecast, Payroll Cost Intelligence, and Executive Recommendations.
+- **Multi-Format Export**: Structured JSON API payload, formatted CSV downloads, and single-page A4 printable preview modal.
 
 ---
 
-## 📂 Project Structure
+## 🛠️ Tech Stack & Authoritative Architecture
 
-```
-Clasptek_Invoice/
-├── clasptek_invoice_system.html   # Main self-contained application with Migration Preview
-├── supabase_schema.sql            # Production PostgreSQL schema, RLS, triggers & RPCs
-├── README.md                      # Documentation
-└── .gitignore                     # Git ignore rules
-```
+- **Frontend**: Pure HTML5, Modern Vanilla CSS with CSS Custom Properties, Vanilla JavaScript (ES6+).
+- **Backend / Database**: Supabase PostgreSQL (`https://logaawoigfxnisimfatf.supabase.co/rest/v1/`).
+- **Precision**: Integer-cent arithmetic (`Math.round(n * 100) / 100`) preventing decimal rounding drift.
+- **Security**: PostgreSQL RLS policies enforcing tenant boundary (`tenant_id = public.get_auth_tenant_id()`), RBAC gates for `Super Admin`, `Finance Manager`, `Finance Staff`, and `Facilitator`.
+- **Zero Data Loss**: Database-first hydration with graceful offline secondary cache fallback.
 
 ---
 
-## 💻 Getting Started
+## 🧪 Automated Test Verification
 
-1. **Open the application locally**:
-   ```bash
+The repository contains 7 pure Node.js automated test suites with 249+ assertions verifying 100% functionality and 0 regressions:
+1. `node test_phase11_financial_intelligence.js` — Phase 11 Decision Engines & Financial Intelligence (30 tests)
+2. `node test_phase10_operational_intelligence.js` — Phase 10 Management Controls & Attention Centre (35 tests)
+3. `node test_phase9_operational_integration.js` — Phase 9 CRM, Enrolments & Payroll Integration (66 tests)
+4. `node test_production_persistence_verification.js` — 30-Point Database Verification Suite (30 tests)
+5. `node test_supabase_persistence.js` — 20-Point Supabase Persistence & State Hydration (20 tests)
+6. `node test_auth_suite.js` — 25-Point RBAC & Security Suite (28 tests)
+7. `node test_phase3_payroll_hr.js` — 40-Point Payroll, Facilitators & Document Standards (40 tests)
+
+---
+
+## 💻 Running the Application
+
+1. **Launch in Browser**:
+   ```powershell
    Start-Process "clasptek_invoice_system.html"
+   # or
+   Start-Process "index.html"
    ```
-2. **Execute the PostgreSQL Schema**:
-   Copy the contents of `supabase_schema.sql` and run it in the Supabase SQL Editor (`https://supabase.com/dashboard/project/logaawoigfxnisimfatf/sql`).
-3. **Inspect Migration Diagnostic**:
-   Click **⚡ Supabase & Migration Preview** in the top navigation bar to test the connection and review the pre-flight financial diagnostic.
-
----
-
-## 🔒 Security & Data Integrity
-
-- **Role-Based Access Control (RBAC)**: Super Admin, Finance Manager, and Staff roles enforced in PostgreSQL.
-- **Multi-Tenant Derivation**: Tenant access resolved strictly via `get_auth_tenant_id()` from `auth.uid()`.
-- **Immutable Audit Trail**: Append-only trigger prohibits any `UPDATE` or `DELETE` operations on `finance_audit_log`.
-
----
+2. **Execute Database Schema**:
+   Copy the contents of `supabase_schema.sql` (Sections 1 through 13) into the Supabase SQL Editor.
+3. **Run All Automated Tests**:
+   ```powershell
+   node test_phase11_financial_intelligence.js
+   ```
 
 ## 📄 License
 Proprietary — Clasptek All Rights Reserved.

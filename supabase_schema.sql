@@ -1399,5 +1399,168 @@ CREATE INDEX IF NOT EXISTS idx_crm_history_tenant_enquiry ON public.crm_stage_hi
 CREATE INDEX IF NOT EXISTS idx_reconciliations_tenant_period ON public.bank_reconciliations(tenant_id, reconciliation_period);
 CREATE INDEX IF NOT EXISTS idx_idempotency_tenant_key ON public.idempotency_keys(tenant_id, idempotency_key);
 
+-- ====================================================================
+-- SECTION 13: PHASE 11 FINANCIAL GOVERNANCE, BUSINESS INTELLIGENCE & EXECUTIVE DECISION SUPPORT
+-- ====================================================================
 
+-- 1. Financial Budgets (Annual/Quarterly Envelopes by Department)
+CREATE TABLE IF NOT EXISTS public.financial_budgets (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    financial_year TEXT NOT NULL,
+    period_type TEXT NOT NULL CHECK (period_type IN ('annual', 'quarterly', 'monthly')),
+    period_key TEXT NOT NULL,
+    department TEXT NOT NULL,
+    total_budget_amount NUMERIC NOT NULL DEFAULT 0,
+    allocated_by TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'active', 'archived')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
+-- 2. Budget Lines (Line-item allocations by category and sub-category)
+CREATE TABLE IF NOT EXISTS public.budget_lines (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    budget_id TEXT NOT NULL REFERENCES public.financial_budgets(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    sub_category TEXT,
+    month_key TEXT NOT NULL CHECK (month_key ~ '^\d{4}-\d{2}$'),
+    budget_amount NUMERIC NOT NULL DEFAULT 0,
+    actual_amount NUMERIC NOT NULL DEFAULT 0,
+    variance NUMERIC NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. Management Metrics (Historical Snapshot Cache of Periodic Executive KPIs)
+CREATE TABLE IF NOT EXISTS public.management_metrics (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    metric_period TEXT NOT NULL,
+    period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'quarterly', 'annual', 'custom')),
+    total_revenue NUMERIC NOT NULL DEFAULT 0,
+    revenue_collected NUMERIC NOT NULL DEFAULT 0,
+    operating_expenses NUMERIC NOT NULL DEFAULT 0,
+    payroll_costs NUMERIC NOT NULL DEFAULT 0,
+    net_position NUMERIC NOT NULL DEFAULT 0,
+    collection_rate_pct NUMERIC NOT NULL DEFAULT 0,
+    operating_margin_pct NUMERIC NOT NULL DEFAULT 0,
+    payroll_ratio_pct NUMERIC NOT NULL DEFAULT 0,
+    snapshot_data JSONB,
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 4. Cash Flow Forecasts (7, 30, 60, 90-day Cash Runway Projections)
+CREATE TABLE IF NOT EXISTS public.cash_flow_forecasts (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    forecast_date DATE NOT NULL,
+    horizon_days INTEGER NOT NULL CHECK (horizon_days IN (7, 30, 60, 90)),
+    opening_cash NUMERIC NOT NULL DEFAULT 0,
+    expected_inflows NUMERIC NOT NULL DEFAULT 0,
+    expected_outflows NUMERIC NOT NULL DEFAULT 0,
+    forecast_closing_cash NUMERIC NOT NULL DEFAULT 0,
+    runway_status TEXT NOT NULL DEFAULT 'HEALTHY' CHECK (runway_status IN ('HEALTHY', 'TIGHT', 'CRITICAL')),
+    forecast_breakdown JSONB,
+    generated_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 5. Customer Revenue Segments
+CREATE TABLE IF NOT EXISTS public.customer_segments (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+    segment TEXT NOT NULL CHECK (segment IN ('VIP', 'High Value', 'Regular', 'New', 'At Risk', 'Delinquent', 'Fully Paid')),
+    lifetime_value NUMERIC NOT NULL DEFAULT 0,
+    outstanding_balance NUMERIC NOT NULL DEFAULT 0,
+    payment_reliability_score INTEGER NOT NULL DEFAULT 100,
+    days_overdue INTEGER NOT NULL DEFAULT 0,
+    last_evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6. Collection Follow-up Actions Log
+CREATE TABLE IF NOT EXISTS public.collection_actions (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+    invoice_id TEXT REFERENCES public.invoices(id) ON DELETE SET NULL,
+    priority TEXT NOT NULL CHECK (priority IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
+    action_type TEXT NOT NULL CHECK (action_type IN ('WhatsApp', 'Email', 'Phone Call', 'Escalation', 'Payment Plan Discussion', 'In-Person')),
+    action_notes TEXT NOT NULL,
+    promised_payment_date DATE,
+    actor_name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. Configurable Financial Approval Thresholds
+CREATE TABLE IF NOT EXISTS public.approval_thresholds (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    tier_level INTEGER NOT NULL CHECK (tier_level IN (1, 2, 3)),
+    min_amount NUMERIC NOT NULL DEFAULT 0,
+    max_amount NUMERIC,
+    authorized_role TEXT NOT NULL,
+    requires_dual_approval BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_by TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8. Executive Management Recommendations
+CREATE TABLE IF NOT EXISTS public.management_recommendations (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    domain TEXT NOT NULL CHECK (domain IN ('receivables', 'programmes', 'budget', 'cashflow', 'payroll', 'crm', 'operations')),
+    priority TEXT NOT NULL CHECK (priority IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
+    finding TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    financial_impact NUMERIC NOT NULL DEFAULT 0,
+    recommended_action TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISMISSED', 'IMPLEMENTED')),
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. Management Report Snapshots (Immutable Download Archive)
+CREATE TABLE IF NOT EXISTS public.report_snapshots (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    report_type TEXT NOT NULL,
+    report_title TEXT NOT NULL,
+    financial_period TEXT NOT NULL,
+    generated_by TEXT NOT NULL,
+    summary_data JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS on Section 13 Tables
+ALTER TABLE public.financial_budgets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.budget_lines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.management_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cash_flow_forecasts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_segments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collection_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.approval_thresholds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.management_recommendations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.report_snapshots ENABLE ROW LEVEL SECURITY;
+
+-- Section 13 Tenant RLS Policies
+CREATE POLICY "budgets_tenant_all" ON public.financial_budgets FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "budget_lines_tenant_all" ON public.budget_lines FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "management_metrics_tenant_all" ON public.management_metrics FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "cash_flow_tenant_all" ON public.cash_flow_forecasts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "customer_segments_tenant_all" ON public.customer_segments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "collection_actions_tenant_all" ON public.collection_actions FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "approval_thresholds_tenant_all" ON public.approval_thresholds FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "recommendations_tenant_all" ON public.management_recommendations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "report_snapshots_tenant_all" ON public.report_snapshots FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+
+-- Section 13 Performance Composite Indexes
+CREATE INDEX IF NOT EXISTS idx_budgets_tenant_period ON public.financial_budgets(tenant_id, financial_year, period_key);
+CREATE INDEX IF NOT EXISTS idx_budget_lines_tenant_month ON public.budget_lines(tenant_id, month_key, category);
+CREATE INDEX IF NOT EXISTS idx_forecasts_tenant_date ON public.cash_flow_forecasts(tenant_id, forecast_date, horizon_days);
+CREATE INDEX IF NOT EXISTS idx_segments_tenant_cust ON public.customer_segments(tenant_id, customer_id, segment);
+CREATE INDEX IF NOT EXISTS idx_collection_tenant_priority ON public.collection_actions(tenant_id, priority, customer_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_tenant_priority ON public.management_recommendations(tenant_id, priority, status);
+CREATE INDEX IF NOT EXISTS idx_reports_tenant_period ON public.report_snapshots(tenant_id, report_type, financial_period);
