@@ -298,7 +298,7 @@
       max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); overflow: hidden;
     }
     .cp-modal.large { max-width: 850px; }
-    .cp-modal.doc-modal { max-width: 880px; }
+    .cp-modal.doc-modal { max-width: 900px; }
     .cp-modal.drawer { max-width: 540px; height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0; }
     .cp-modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #FAFBFD; }
     .cp-modal-title { font-size: 15px; font-weight: 700; color: var(--primary); }
@@ -307,78 +307,399 @@
     .cp-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
     .cp-modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #FAFBFD; }
 
-    /* Document Styling (A4 Print-Perfect) */
+    /* Centered Preview Canvas */
+    .cp-doc-scroll-wrap {
+      background: #F1F5F9;
+      padding: 30px 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      overflow-y: auto;
+    }
+
+    /* Document Paper (A4 Canonical Width & Proportions) */
     .cp-doc-paper {
-      background: #FFFFFF; border: 1px solid var(--border); padding: 36px 40px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: var(--radius-sm); font-size: 12.5px;
-      color: #0F172A; max-width: 790px; margin: 0 auto; line-height: 1.45;
+      background: #FFFFFF;
+      border: 1px solid var(--border-strong);
+      padding: 44px 48px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      border-radius: 4px;
+      font-size: 12.5px;
+      color: #0F172A;
+      width: 100%;
+      max-width: 790px;
+      margin: 0 auto;
+      line-height: 1.5;
+      box-sizing: border-box;
     }
-    .cp-doc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--primary); padding-bottom: 18px; margin-bottom: 22px; gap: 16px; }
-    .cp-doc-brand { display: flex; align-items: center; gap: 14px; }
-    .cp-doc-logo { height: 50px; width: auto; object-fit: contain; }
-    .cp-doc-company-title { font-size: 16px; font-weight: 800; color: var(--primary); letter-spacing: -0.2px; }
-    .cp-doc-company-meta { font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 2px; }
-    .cp-doc-type-title { font-size: 26px; font-weight: 900; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
-    .cp-doc-no { font-size: 13.5px; font-weight: 700; color: var(--accent); font-family: monospace; margin-top: 4px; }
 
-    .cp-doc-meta-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-bottom: 22px; }
-    .cp-doc-meta-block { background: #F8FAFC; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12px; }
-    .cp-doc-section-label { font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
-    .cp-doc-client-name { font-size: 14px; font-weight: 800; color: var(--primary); }
-
-    .cp-doc-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-    .cp-doc-table th { background: var(--primary); color: #FFFFFF; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 8px 12px; letter-spacing: 0.4px; }
-    .cp-doc-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
-    .cp-doc-table tr:nth-child(even) td { background: #FAFAFC; }
-
-    .cp-doc-totals { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-    .cp-doc-totals-box { width: 290px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; background: #F8FAFC; }
-    .cp-doc-total-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
-    .cp-doc-total-row.grand { border-top: 1.5px solid var(--primary); border-bottom: 1.5px solid var(--primary); padding: 6px 0; margin: 4px 0; font-weight: 800; font-size: 13.5px; color: var(--primary); }
-
-    .cp-doc-box { border: 1px solid var(--border); border-left: 3.5px solid var(--info); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; background: #F8FAFC; font-size: 11.5px; }
-    .cp-doc-footer { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 24px; display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-muted); }
-
-    /* Journey Timeline */
-    .cp-journey-bar { display: flex; align-items: center; justify-content: space-between; position: relative; margin: 16px 0 24px; }
-    .cp-journey-bar::before { content: ''; position: absolute; top: 14px; left: 20px; right: 20px; height: 2px; background: var(--border); z-index: 1; }
-    .cp-journey-step { display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; z-index: 2; }
-    .cp-journey-dot { width: 28px; height: 28px; border-radius: 50%; background: #FFFFFF; border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text-muted); }
-    .cp-journey-step.done .cp-journey-dot { background: var(--success); border-color: var(--success); color: #FFFFFF; }
-    .cp-journey-step.active .cp-journey-dot { background: var(--info); border-color: var(--info); color: #FFFFFF; }
-    .cp-journey-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
-    .cp-journey-step.done .cp-journey-label, .cp-journey-step.active .cp-journey-label { color: var(--primary); font-weight: 700; }
-
-    /* Empty States */
-    .cp-empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
-    .cp-empty-icon { font-size: 36px; margin-bottom: 8px; }
-    .cp-empty-title { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
-    .cp-empty-desc { font-size: 12.5px; color: var(--text-secondary); max-width: 360px; margin: 0 auto 14px; }
-
-    /* Sub-tabs */
-    .cp-subtabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-    .cp-subtab-btn {
-      padding: 8px 14px; background: transparent; border: none; border-bottom: 2px solid transparent;
-      font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease;
+    .cp-doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 20px;
+      margin-bottom: 22px;
+      gap: 24px;
     }
-    .cp-subtab-btn:hover { color: var(--primary); }
-    .cp-subtab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .cp-doc-brand {
+      display: flex;
+      align-items: center;
+    }
+    .cp-doc-logo {
+      height: 52px;
+      width: auto;
+      max-width: 220px;
+      object-fit: contain;
+    }
+    .cp-doc-company-block {
+      text-align: right;
+      max-width: 380px;
+    }
+    .cp-doc-company-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.2px;
+      line-height: 1.3;
+    }
+    .cp-doc-company-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      margin-top: 4px;
+    }
 
-    /* Print Styles */
+    .cp-doc-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cp-doc-main-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--primary);
+      letter-spacing: 0.5px;
+      line-height: 1;
+    }
+    .cp-doc-no {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: monospace;
+      margin-top: 4px;
+    }
+    .cp-doc-badge-col {
+      text-align: right;
+    }
+
+    .cp-doc-meta-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    .cp-doc-meta-block {
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 12px;
+    }
+    .cp-doc-section-label {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+    .cp-doc-client-name {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .cp-doc-meta-line {
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+    .cp-doc-meta-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    /* Document Line Items Table */
+    .cp-doc-table-wrap {
+      width: 100%;
+      margin-bottom: 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .cp-doc-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .cp-doc-table th {
+      background: var(--primary);
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 9px 12px;
+      letter-spacing: 0.4px;
+    }
+    .cp-doc-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      vertical-align: top;
+    }
+    .cp-doc-table tr:nth-child(even) td {
+      background: #FAFAFC;
+    }
+    .cp-doc-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Payment Plan Schedule Box */
+    .cp-doc-plan-box {
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      margin-bottom: 18px;
+    }
+    .cp-doc-mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .cp-doc-mini-table th {
+      background: var(--surface-2);
+      color: var(--text-secondary);
+      font-weight: 700;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 10.5px;
+      text-transform: uppercase;
+    }
+    .cp-doc-mini-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cp-doc-mini-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Totals Block */
+    .cp-doc-totals {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 22px;
+    }
+    .cp-doc-totals-box {
+      width: 310px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      background: #FAFBFD;
+    }
+    .cp-doc-total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 3.5px 0;
+      color: var(--text-secondary);
+    }
+    .cp-doc-total-row strong, .cp-doc-total-row span:last-child {
+      color: var(--text-primary);
+    }
+    .cp-doc-total-row.grand {
+      border-top: 1.5px solid var(--primary);
+      border-bottom: 1.5px solid var(--primary);
+      padding: 7px 0;
+      margin: 5px 0;
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--primary);
+    }
+    .cp-doc-total-row.balance-row {
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--accent);
+      border-top: 1px dashed var(--border);
+      padding-top: 6px;
+      margin-top: 4px;
+    }
+
+    /* Callout & Metadata Boxes */
+    .cp-doc-box {
+      border: 1px solid var(--border);
+      border-left: 3.5px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      background: #FAFBFD;
+      font-size: 12px;
+    }
+    .cp-doc-box.payment-info-box {
+      border-left-color: var(--primary);
+      background: #F8FAFC;
+    }
+    .cp-doc-bank-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .cp-meta-label {
+      color: var(--text-muted);
+      font-size: 11.5px;
+    }
+    .cp-acc-num {
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--primary);
+      letter-spacing: 0.5px;
+    }
+    .cp-ref-num {
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--accent);
+    }
+    .cp-doc-instructions {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+    .cp-doc-box.notes-box {
+      border-left-color: var(--info);
+      background: #EFF6FC;
+    }
+    .cp-doc-box.comment-box {
+      border-left-color: #7C3AED;
+      background: #F5F3FF;
+    }
+    .cp-doc-box.terms-box {
+      border-left-color: var(--text-muted);
+      background: #F8FAFC;
+    }
+    .cp-doc-box-content {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .cp-doc-box-content.terms-text {
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .cp-receipt-amount-box {
+      background: #F0FDF4;
+      border: 2px solid var(--success);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .cp-receipt-amount {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--success);
+    }
+
+    /* Official Footer */
+    .cp-doc-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+      margin-top: 26px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .cp-doc-footer-main {
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .cp-doc-footer-sub {
+      font-size: 10.5px;
+    }
+
+    /* Print Architecture: Decoupled Full-Page Canonical Printing */
+    #print-root {
+      display: none;
+    }
+
     @media print {
-      body { background: #FFFFFF !important; color: #000000 !important; font-size: 11pt; }
-      .cp-sidebar, .cp-topbar, .cp-modal-footer, .cp-modal-header, .no-print, button { display: none !important; }
-      .cp-main-area, .cp-content-view, .cp-layout { margin: 0 !important; padding: 0 !important; width: 100% !important; }
-      .cp-modal-overlay { position: static !important; background: transparent !important; padding: 0 !important; }
-      .cp-modal { box-shadow: none !important; border: none !important; max-width: 100% !important; width: 100% !important; max-height: none !important; }
-      .cp-doc-paper { box-shadow: none !important; border: none !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
-      .cp-printable-area { page-break-after: avoid; page-break-inside: avoid; }
-      @page { size: A4; margin: 15mm 15mm 15mm 15mm; }
+      html, body {
+        background: #FFFFFF !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        font-size: 10.5pt;
+      }
+      #root, .cp-sidebar, .cp-topbar, .cp-modal-header, .cp-modal-footer, .no-print, button {
+        display: none !important;
+      }
+      #print-root {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+      }
+      .cp-doc-paper {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .cp-doc-table th {
+        background: #14213D !important;
+        color: #FFFFFF !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .cp-pill {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      @page {
+        size: A4 portrait;
+        margin: 12mm 15mm 12mm 15mm;
+      }
     }
   </style>
 </head>
 <body>
   <div id="root"></div>
+  <div id="print-root"></div>
 
   <script>
     (function() {
@@ -1257,6 +1578,17 @@ function searchGlobalEntities(query) {
   });
 
   return results;
+}
+
+function printCanonicalDocument(docHtml) {
+  let printRoot = document.getElementById('print-root');
+  if (!printRoot) {
+    printRoot = document.createElement('div');
+    printRoot.id = 'print-root';
+    document.body.appendChild(printRoot);
+  }
+  printRoot.innerHTML = docHtml;
+  window.print();
 }
 
 
@@ -3765,9 +4097,10 @@ function renderSettingsTab(container) {
 
 
 // ----------------------------------------------------
-// MODALS 1: INVOICE (A4 CORPORATE DOCUMENT), PREVIEW, PAYMENTS, RECEIPTS
+// CANONICAL DOCUMENT RENDERERS (SCREEN & PRINT 100% IDENTICAL)
 // ----------------------------------------------------
-function renderViewInvoiceModal(container, inv) {
+
+function renderCanonicalInvoiceDocument(inv) {
   const { paid, balance, total } = invoiceBalance(inv);
   const st = invoiceStatus(inv);
   const payAcc = getInvoicePaymentAccount(inv);
@@ -3776,221 +4109,234 @@ function renderViewInvoiceModal(container, inv) {
   const statusLabel = st === 'paid' ? 'PAID IN FULL' : (st === 'partial' ? 'PARTIALLY PAID' : (st === 'overdue' ? 'OVERDUE' : 'UNPAID'));
   const statusPillClass = st === 'paid' ? 'paid' : (st === 'partial' ? 'partial' : (st === 'overdue' ? 'overdue' : 'unpaid'));
 
-  // Installment plan breakdown calculation
   const isInstallment = inv.plan === 'installment';
   const firstInstAmt = isInstallment ? safeRound(total * 0.6) : total;
   const secondInstAmt = isInstallment ? safeRound(total * 0.4) : 0;
   const firstDueDate = inv.date;
   const secondDueDate = inv.dueDate;
 
+  const items = (inv.items && inv.items.length) ? inv.items : [{
+    description: inv.programmeName || 'Professional Training Programme',
+    quantity: 1,
+    price: total,
+    discount: 0,
+    amount: total
+  }];
+
+  return `
+    <div class="cp-doc-paper" id="canonical-invoice-${inv.id}">
+      <!-- Header: Clasptek Logo on Left, Company Contact on Right -->
+      <div class="cp-doc-header">
+        <div class="cp-doc-brand">
+          <img src="assets/clasptek_logo.png" alt="Clasptek" class="cp-doc-logo" />
+        </div>
+        <div class="cp-doc-company-block">
+          <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
+          <div class="cp-doc-company-meta">
+            ${escapeHtml(fsCfg.address)}<br/>
+            Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}<br/>
+            ${fsCfg.taxId ? `TIN: ${escapeHtml(fsCfg.taxId)} &middot; ` : ''}${fsCfg.registrationNumber ? `RC: ${escapeHtml(fsCfg.registrationNumber)} &middot; ` : ''}Web: ${escapeHtml(fsCfg.website)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoice Title & Meta Row -->
+      <div class="cp-doc-title-row">
+        <div>
+          <h1 class="cp-doc-main-title">INVOICE</h1>
+          <div class="cp-doc-no">Invoice No: #${inv.invoice_display_no || formatDocNo('invoice', inv.invoiceNo, inv.date)}</div>
+        </div>
+        <div class="cp-doc-badge-col">
+          <span class="cp-pill ${statusPillClass}" style="font-size:12px; padding:4px 12px;">${statusLabel}</span>
+        </div>
+      </div>
+
+      <!-- Bill To & Invoice Info Grid -->
+      <div class="cp-doc-meta-grid">
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">BILL TO</div>
+          <div class="cp-doc-client-name">${escapeHtml(inv.clientName)}</div>
+          ${inv.parentName ? `<div class="cp-doc-meta-line">Parent / Guardian: <strong>${escapeHtml(inv.parentName)}</strong></div>` : ''}
+          ${inv.phone ? `<div class="cp-doc-meta-line">Phone: <strong>${escapeHtml(inv.phone)}</strong></div>` : ''}
+          ${inv.email ? `<div class="cp-doc-meta-line">Email: <strong>${escapeHtml(inv.email)}</strong></div>` : ''}
+          ${inv.address ? `<div class="cp-doc-meta-line">Address: ${escapeHtml(inv.address)}</div>` : ''}
+        </div>
+
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">INVOICE SPECIFICATION</div>
+          <div class="cp-doc-meta-row"><span>Issue Date:</span><strong>${fmtDate(inv.date)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Payment Due Date:</span><strong style="color:${st === 'overdue' ? 'var(--danger)' : 'inherit'};">${fmtDate(inv.dueDate)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Payment Structure:</span><strong>${isInstallment ? '60 / 40 Installment Plan' : 'Full Upfront Payment'}</strong></div>
+          <div class="cp-doc-meta-row"><span>Delivery Mode:</span><strong>${escapeHtml(inv.trainingMode || 'Live Interactive Class')}</strong></div>
+        </div>
+      </div>
+
+      <!-- Programme / Service Line Items Table -->
+      <div class="cp-doc-table-wrap">
+        <table class="cp-doc-table">
+          <thead>
+            <tr>
+              <th style="width:35px; text-align:center;">#</th>
+              <th>Programme / Service Description</th>
+              <th style="width:90px; text-align:center;">Duration</th>
+              <th style="width:85px; text-align:center;">Schedule</th>
+              <th style="width:50px; text-align:center;">Qty</th>
+              <th style="width:110px; text-align:right;">Unit Price</th>
+              <th style="width:90px; text-align:right;">Discount</th>
+              <th style="width:125px; text-align:right;">Amount (₦)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((it, idx) => `
+              <tr>
+                <td style="text-align:center; color:var(--text-muted);">${idx + 1}</td>
+                <td>
+                  <strong style="color:var(--primary); font-size:13px;">${escapeHtml(it.description || inv.programmeName)}</strong>
+                  ${(it.notes || (inv.programmeName && it.description !== inv.programmeName)) ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(it.notes || inv.programmeName)}</div>` : ''}
+                </td>
+                <td style="text-align:center; font-size:11.5px;">${escapeHtml(inv.duration || 'Standard')}</td>
+                <td style="text-align:center; font-size:11.5px;">${escapeHtml(inv.schedule || 'Flexible')}</td>
+                <td style="text-align:center;">${it.quantity || 1}</td>
+                <td style="text-align:right;">${fmtMoney(it.price || 0)}</td>
+                <td style="text-align:right; color:var(--text-muted);">${Number(it.discount) > 0 ? '-' + fmtMoney(it.discount) : '—'}</td>
+                <td style="text-align:right; font-weight:700; color:var(--primary);">${fmtMoney(it.amount || 0)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Payment Plan Section (if installment) -->
+      ${isInstallment ? `
+        <div class="cp-doc-plan-box">
+          <div class="cp-doc-section-label">PAYMENT PLAN SCHEDULE</div>
+          <table class="cp-doc-mini-table">
+            <thead>
+              <tr>
+                <th>Installment Stage</th>
+                <th>Percentage</th>
+                <th>Due Date</th>
+                <th style="text-align:right;">Amount (₦)</th>
+                <th style="text-align:center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1st Installment (Enrolment Deposit)</strong></td>
+                <td>60%</td>
+                <td>${fmtDate(firstDueDate)}</td>
+                <td style="text-align:right; font-weight:700;">${fmtMoney(firstInstAmt)}</td>
+                <td style="text-align:center;"><span class="cp-pill ${paid >= firstInstAmt ? 'paid' : 'unpaid'}" style="font-size:10px;">${paid >= firstInstAmt ? 'PAID' : 'PENDING'}</span></td>
+              </tr>
+              <tr>
+                <td><strong>2nd Installment (Balance)</strong></td>
+                <td>40%</td>
+                <td>${fmtDate(secondDueDate)}</td>
+                <td style="text-align:right; font-weight:700;">${fmtMoney(secondInstAmt)}</td>
+                <td style="text-align:center;"><span class="cp-pill ${paid >= total ? 'paid' : 'unpaid'}" style="font-size:10px;">${paid >= total ? 'PAID' : 'PENDING'}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+
+      <!-- Totals Section -->
+      <div class="cp-doc-totals">
+        <div class="cp-doc-totals-box">
+          <div class="cp-doc-total-row">
+            <span>Subtotal</span>
+            <span>${fmtMoney(inv.subtotal || total)}</span>
+          </div>
+          ${Number(inv.discount || 0) > 0 ? `
+            <div class="cp-doc-total-row">
+              <span>Discount</span>
+              <span style="color:var(--danger);">- ${fmtMoney(inv.discount)}</span>
+            </div>
+          ` : ''}
+          <div class="cp-doc-total-row grand">
+            <span>TOTAL</span>
+            <span>${fmtMoney(total)}</span>
+          </div>
+          <div class="cp-doc-total-row">
+            <span>Amount Paid</span>
+            <span style="color:var(--success); font-weight:700;">${fmtMoney(paid)}</span>
+          </div>
+          <div class="cp-doc-total-row balance-row">
+            <span>Outstanding Balance</span>
+            <span>${fmtMoney(balance)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment Information Block -->
+      <div class="cp-doc-box payment-info-box">
+        <div class="cp-doc-section-label" style="color:var(--primary);">PAYMENT INFORMATION</div>
+        <div class="cp-doc-bank-grid">
+          <div>
+            <span class="cp-meta-label">Bank:</span> <strong>${escapeHtml(payAcc.bankName)}</strong><br/>
+            <span class="cp-meta-label">Account Name:</span> <strong>${escapeHtml(payAcc.accountName)}</strong>
+          </div>
+          <div>
+            <span class="cp-meta-label">Account Number:</span> <strong class="cp-acc-num">${escapeHtml(payAcc.accountNumber)}</strong><br/>
+            <span class="cp-meta-label">Payment Reference:</span> <strong class="cp-ref-num">INV-${inv.invoiceNo}</strong>
+          </div>
+        </div>
+        ${payAcc.instructions ? `
+          <div class="cp-doc-instructions">
+            <strong>Payment Instructions:</strong> ${escapeHtml(payAcc.instructions)}
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Notes (Customer-facing) -->
+      ${inv.notes ? `
+        <div class="cp-doc-box notes-box">
+          <div class="cp-doc-section-label" style="color:var(--info);">NOTES</div>
+          <div class="cp-doc-box-content">${escapeHtml(inv.notes)}</div>
+        </div>
+      ` : ''}
+
+      <!-- Comment (Internal/Contextual) -->
+      ${inv.comments ? `
+        <div class="cp-doc-box comment-box">
+          <div class="cp-doc-section-label" style="color:#7C3AED;">COMMENT</div>
+          <div class="cp-doc-box-content">${escapeHtml(inv.comments)}</div>
+        </div>
+      ` : ''}
+
+      <!-- Terms & Conditions -->
+      ${inv.termsAndConditions ? `
+        <div class="cp-doc-box terms-box">
+          <div class="cp-doc-section-label">TERMS &amp; CONDITIONS</div>
+          <div class="cp-doc-box-content terms-text">${escapeHtml(inv.termsAndConditions)}</div>
+        </div>
+      ` : ''}
+
+      <!-- Footer -->
+      <div class="cp-doc-footer">
+        <div class="cp-doc-footer-main">Thank you for choosing Clasptek.</div>
+        <div class="cp-doc-footer-sub">${escapeHtml(fsCfg.website)} &middot; ${escapeHtml(fsCfg.email)} &middot; ${escapeHtml(fsCfg.phone)}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ----------------------------------------------------
+// INVOICE MODALS (ON-SCREEN PREVIEW & DRAFT PREVIEW)
+// ----------------------------------------------------
+function renderViewInvoiceModal(container, inv) {
+  const docHtml = renderCanonicalInvoiceDocument(inv);
+
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal doc-modal">
         <div class="cp-modal-header no-print">
-          <div class="cp-modal-title">Official Corporate Invoice #${inv.invoiceNo}</div>
+          <div class="cp-modal-title">Invoice Preview #${inv.invoiceNo}</div>
           <button class="cp-modal-close" id="btnCloseViewInv">&times;</button>
         </div>
 
-        <div class="cp-modal-body cp-printable-area">
-          <div class="cp-doc-paper">
-            <!-- Header -->
-            <div class="cp-doc-header">
-              <div class="cp-doc-brand">
-                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
-                <div>
-                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
-                  <div class="cp-doc-company-meta">
-                    ${escapeHtml(fsCfg.address)}<br/>
-                    Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}<br/>
-                    ${fsCfg.taxId ? `TIN: ${escapeHtml(fsCfg.taxId)} &middot; ` : ''}${fsCfg.registrationNumber ? `RC: ${escapeHtml(fsCfg.registrationNumber)} &middot; ` : ''}Web: ${escapeHtml(fsCfg.website)}
-                  </div>
-                </div>
-              </div>
-
-              <div style="text-align:right;">
-                <div class="cp-doc-type-title">INVOICE</div>
-                <div class="cp-doc-no">#${inv.invoice_display_no || formatDocNo('invoice', inv.invoiceNo, inv.date)}</div>
-                <div style="margin-top:6px;"><span class="cp-pill ${statusPillClass}">${statusLabel}</span></div>
-              </div>
-            </div>
-
-            <!-- Meta Grid: Bill To & Invoice Info -->
-            <div class="cp-doc-meta-grid">
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">BILL TO:</div>
-                <div class="cp-doc-client-name">${escapeHtml(inv.clientName)}</div>
-                ${inv.parentName ? `<div style="color:var(--text-secondary); margin-top:2px;">Parent/Guardian: <strong>${escapeHtml(inv.parentName)}</strong></div>` : ''}
-                ${inv.phone ? `<div style="color:var(--text-secondary); margin-top:2px;">Phone: ${escapeHtml(inv.phone)}</div>` : ''}
-                ${inv.email ? `<div style="color:var(--text-secondary); margin-top:2px;">Email: ${escapeHtml(inv.email)}</div>` : ''}
-                ${inv.address ? `<div style="color:var(--text-secondary); margin-top:2px;">Address: ${escapeHtml(inv.address)}</div>` : ''}
-              </div>
-
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">INVOICE DETAILS:</div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
-                  <span style="color:var(--text-muted);">Issue Date:</span>
-                  <strong>${fmtDate(inv.date)}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
-                  <span style="color:var(--text-muted);">Due Date:</span>
-                  <strong style="color:${st === 'overdue' ? 'var(--danger)' : 'inherit'};">${fmtDate(inv.dueDate)}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
-                  <span style="color:var(--text-muted);">Payment Plan:</span>
-                  <strong>${isInstallment ? '60 / 40 Installment Schedule' : 'Full Upfront Payment'}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between;">
-                  <span style="color:var(--text-muted);">Training Mode:</span>
-                  <strong>${escapeHtml(inv.trainingMode || 'Live Interactive Class')}</strong>
-                </div>
-              </div>
-            </div>
-
-            <!-- Line Items Table -->
-            <table class="cp-doc-table">
-              <thead>
-                <tr>
-                  <th style="width:45px; text-align:center;">#</th>
-                  <th>Programme / Service Description</th>
-                  <th style="width:60px; text-align:center;">Qty</th>
-                  <th style="width:110px; text-align:right;">Unit Price</th>
-                  <th style="width:90px; text-align:right;">Discount</th>
-                  <th style="width:120px; text-align:right;">Amount (₦)</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${(inv.items && inv.items.length ? inv.items : [{
-                  description: inv.programmeName || 'Professional Training Programme',
-                  quantity: 1,
-                  price: total,
-                  discount: 0,
-                  amount: total
-                }]).map((it, idx) => `
-                  <tr>
-                    <td style="text-align:center; color:var(--text-muted);">${idx + 1}</td>
-                    <td>
-                      <strong style="color:var(--primary);">${escapeHtml(it.description || inv.programmeName)}</strong>
-                      ${inv.duration || inv.schedule ? `<div style="font-size:11px; color:var(--text-muted);">${inv.duration ? `Duration: ${escapeHtml(inv.duration)} &middot; ` : ''}${inv.schedule ? `Schedule: ${escapeHtml(inv.schedule)}` : ''}</div>` : ''}
-                    </td>
-                    <td style="text-align:center;">${it.quantity || 1}</td>
-                    <td style="text-align:right;">${fmtMoney(it.price || 0)}</td>
-                    <td style="text-align:right; color:var(--text-muted);">${Number(it.discount) > 0 ? '-' + fmtMoney(it.discount) : '—'}</td>
-                    <td style="text-align:right; font-weight:700;">${fmtMoney(it.amount || 0)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-
-            <!-- Installment Breakdown Table (Rendered only if installment plan) -->
-            ${isInstallment ? `
-              <div style="margin-bottom:18px; background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px;">
-                <div class="cp-doc-section-label" style="margin-bottom:8px;">PAYMENT PLAN INSTALLMENT BREAKDOWN</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11.5px;">
-                  <thead>
-                    <tr style="border-bottom:1px solid var(--border); color:var(--text-muted); text-transform:uppercase;">
-                      <th style="text-align:left; padding:4px 0;">Installment</th>
-                      <th style="text-align:left; padding:4px 0;">Percentage</th>
-                      <th style="text-align:left; padding:4px 0;">Due Date</th>
-                      <th style="text-align:right; padding:4px 0;">Amount (₦)</th>
-                      <th style="text-align:center; padding:4px 0;">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-bottom:1px solid #E2E8F0;">
-                      <td style="padding:6px 0; font-weight:600;">1st Installment (Enrollment Deposit)</td>
-                      <td style="padding:6px 0;">60%</td>
-                      <td style="padding:6px 0;">${fmtDate(firstDueDate)}</td>
-                      <td style="padding:6px 0; text-align:right; font-weight:700;">${fmtMoney(firstInstAmt)}</td>
-                      <td style="padding:6px 0; text-align:center;"><span class="cp-pill ${paid >= firstInstAmt ? 'paid' : 'unpaid'}" style="font-size:10px;">${paid >= firstInstAmt ? 'PAID' : 'PENDING'}</span></td>
-                    </tr>
-                    <tr>
-                      <td style="padding:6px 0; font-weight:600;">2nd Installment (Final Balance)</td>
-                      <td style="padding:6px 0;">40%</td>
-                      <td style="padding:6px 0;">${fmtDate(secondDueDate)}</td>
-                      <td style="padding:6px 0; text-align:right; font-weight:700;">${fmtMoney(secondInstAmt)}</td>
-                      <td style="padding:6px 0; text-align:center;"><span class="cp-pill ${paid >= total ? 'paid' : 'unpaid'}" style="font-size:10px;">${paid >= total ? 'PAID' : 'PENDING'}</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ` : ''}
-
-            <!-- Totals Block -->
-            <div class="cp-doc-totals">
-              <div class="cp-doc-totals-box">
-                <div class="cp-doc-total-row">
-                  <span style="color:var(--text-muted);">Subtotal:</span>
-                  <span>${fmtMoney(inv.subtotal || total)}</span>
-                </div>
-                ${Number(inv.discount || 0) > 0 ? `
-                  <div class="cp-doc-total-row">
-                    <span style="color:var(--text-muted);">Discount Applied:</span>
-                    <span style="color:var(--danger);">- ${fmtMoney(inv.discount)}</span>
-                  </div>
-                ` : ''}
-                <div class="cp-doc-total-row grand">
-                  <span>TOTAL INVOICED:</span>
-                  <span>${fmtMoney(total)}</span>
-                </div>
-                <div class="cp-doc-total-row">
-                  <span style="color:var(--text-muted);">Amount Paid to Date:</span>
-                  <span style="color:var(--success); font-weight:700;">${fmtMoney(paid)}</span>
-                </div>
-                <div class="cp-doc-total-row" style="border-top:1px dashed var(--border); padding-top:5px; margin-top:3px; font-weight:800; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'}; font-size:13px;">
-                  <span>OUTSTANDING BALANCE:</span>
-                  <span>${fmtMoney(balance)}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Payment Information Box (Resolved from Snapshots/Config) -->
-            <div class="cp-doc-box" style="border-left-color:var(--primary);">
-              <div class="cp-doc-section-label" style="color:var(--primary);">PAYMENT INFORMATION</div>
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
-                <div>
-                  <span style="color:var(--text-muted);">Bank Name:</span> <strong>${escapeHtml(payAcc.bankName)}</strong><br/>
-                  <span style="color:var(--text-muted);">Account Name:</span> <strong>${escapeHtml(payAcc.accountName)}</strong>
-                </div>
-                <div>
-                  <span style="color:var(--text-muted);">Account Number:</span> <strong style="font-family:monospace; font-size:13.5px; color:var(--primary);">${escapeHtml(payAcc.accountNumber)}</strong><br/>
-                  <span style="color:var(--text-muted);">Payment Reference:</span> <strong style="font-family:monospace; color:var(--accent);">INV-${inv.invoiceNo}</strong>
-                </div>
-              </div>
-              <div style="margin-top:6px; font-size:11.5px; color:var(--text-secondary); border-top:1px solid #E2E8F0; padding-top:4px;">
-                <strong>Instructions:</strong> ${escapeHtml(payAcc.instructions || 'Please use invoice number as your payment reference.')}
-              </div>
-            </div>
-
-            <!-- Customer Notes Box (Rendered only if present) -->
-            ${inv.notes ? `
-              <div class="cp-doc-box" style="border-left-color:var(--info);">
-                <div class="cp-doc-section-label" style="color:var(--info);">NOTES</div>
-                <div style="font-size:11.5px; color:var(--text-primary);">${escapeHtml(inv.notes)}</div>
-              </div>
-            ` : ''}
-
-            <!-- Contextual Comments Box (Rendered only if present) -->
-            ${inv.comments ? `
-              <div class="cp-doc-box" style="border-left-color:#8B5CF6;">
-                <div class="cp-doc-section-label" style="color:#8B5CF6;">COMMENT</div>
-                <div style="font-size:11.5px; color:var(--text-primary);">${escapeHtml(inv.comments)}</div>
-              </div>
-            ` : ''}
-
-            <!-- Terms & Conditions Box (Rendered only if present) -->
-            ${inv.termsAndConditions ? `
-              <div class="cp-doc-box" style="border-left-color:var(--text-muted); background:#FAFBFD;">
-                <div class="cp-doc-section-label">TERMS &amp; CONDITIONS</div>
-                <div style="font-size:11px; color:var(--text-secondary);">${escapeHtml(inv.termsAndConditions)}</div>
-              </div>
-            ` : ''}
-
-            <!-- Footer -->
-            <div class="cp-doc-footer">
-              <div>${escapeHtml(fsCfg.invoiceFooter || 'Thank you for choosing Clasptek Coaching Limited!')}</div>
-              <div>${escapeHtml(fsCfg.website)} &middot; ${escapeHtml(fsCfg.phone)}</div>
-            </div>
-          </div>
+        <div class="cp-modal-body cp-doc-scroll-wrap">
+          ${docHtml}
         </div>
 
         <div class="cp-modal-footer no-print">
@@ -4003,91 +4349,29 @@ function renderViewInvoiceModal(container, inv) {
 
   document.getElementById('btnCloseViewInv').addEventListener('click', closeModal);
   document.getElementById('btnCloseViewInv2').addEventListener('click', closeModal);
-  document.getElementById('btnPrintInvoice').addEventListener('click', () => window.print());
+  document.getElementById('btnPrintInvoice').addEventListener('click', () => {
+    printCanonicalDocument(docHtml);
+  });
 }
 
 function renderPreviewInvoiceModal(container, inv) {
-  const { paid, balance, total } = invoiceBalance(inv);
-  const payAcc = getInvoicePaymentAccount(inv);
-  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
-  const isInstallment = inv.plan === 'installment';
+  const docHtml = renderCanonicalInvoiceDocument(inv);
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal doc-modal">
         <div class="cp-modal-header no-print">
-          <div class="cp-modal-title">&#x1F441;&#xFE0F; Invoice Document Preview (Draft #${inv.invoiceNo})</div>
+          <div class="cp-modal-title">&#x1F441;&#xFE0F; Draft Invoice Preview (Invoice #${inv.invoiceNo})</div>
           <button class="cp-modal-close" id="btnClosePrevInv">&times;</button>
         </div>
 
-        <div class="cp-modal-body cp-printable-area">
-          <div class="cp-doc-paper">
-            <div class="cp-doc-header">
-              <div class="cp-doc-brand">
-                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
-                <div>
-                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
-                  <div class="cp-doc-company-meta">${escapeHtml(fsCfg.address)}<br/>Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}</div>
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div class="cp-doc-type-title">INVOICE</div>
-                <div class="cp-doc-no">#${inv.invoice_display_no}</div>
-                <div style="margin-top:6px;"><span class="cp-pill draft">DRAFT PREVIEW</span></div>
-              </div>
-            </div>
-
-            <div class="cp-doc-meta-grid">
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">BILL TO:</div>
-                <div class="cp-doc-client-name">${escapeHtml(inv.clientName)}</div>
-                ${inv.parentName ? `<div style="color:var(--text-secondary);">Parent: ${escapeHtml(inv.parentName)}</div>` : ''}
-                <div style="color:var(--text-secondary);">Phone: ${escapeHtml(inv.phone || 'N/A')}</div>
-                <div style="color:var(--text-secondary);">Email: ${escapeHtml(inv.email || 'N/A')}</div>
-              </div>
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">INVOICE DETAILS:</div>
-                <div style="display:flex; justify-content:space-between;"><span>Issue Date:</span><strong>${fmtDate(inv.date)}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>Due Date:</span><strong>${fmtDate(inv.dueDate)}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>Payment Plan:</span><strong>${isInstallment ? '60/40 Installments' : 'Full Upfront'}</strong></div>
-              </div>
-            </div>
-
-            <table class="cp-doc-table">
-              <thead><tr><th>#</th><th>Programme / Description</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Discount</th><th style="text-align:right;">Amount</th></tr></thead>
-              <tbody>
-                ${inv.items.map((it, idx) => `
-                  <tr>
-                    <td style="text-align:center;">${idx + 1}</td>
-                    <td><strong>${escapeHtml(it.description)}</strong></td>
-                    <td style="text-align:center;">${it.quantity}</td>
-                    <td style="text-align:right;">${fmtMoney(it.price)}</td>
-                    <td style="text-align:right;">${it.discount > 0 ? '-' + fmtMoney(it.discount) : '—'}</td>
-                    <td style="text-align:right; font-weight:700;">${fmtMoney(it.amount)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-
-            <div class="cp-doc-totals">
-              <div class="cp-doc-totals-box">
-                <div class="cp-doc-total-row grand"><span>TOTAL INVOICED:</span><span>${fmtMoney(total)}</span></div>
-              </div>
-            </div>
-
-            <div class="cp-doc-box">
-              <div class="cp-doc-section-label">PAYMENT INFORMATION</div>
-              <div>Bank: <strong>${escapeHtml(payAcc.bankName)}</strong> &middot; Account: <strong>${escapeHtml(payAcc.accountNumber)}</strong> (${escapeHtml(payAcc.accountName)})</div>
-              <div>Instructions: ${escapeHtml(payAcc.instructions)}</div>
-            </div>
-
-            ${inv.notes ? `<div class="cp-doc-box"><div class="cp-doc-section-label">NOTES</div><div>${escapeHtml(inv.notes)}</div></div>` : ''}
-            ${inv.comments ? `<div class="cp-doc-box"><div class="cp-doc-section-label">COMMENT</div><div>${escapeHtml(inv.comments)}</div></div>` : ''}
-          </div>
+        <div class="cp-modal-body cp-doc-scroll-wrap">
+          ${docHtml}
         </div>
 
         <div class="cp-modal-footer no-print">
           <button class="cp-btn secondary" id="btnClosePrevInv2">Back to Edit</button>
+          <button class="cp-btn accent" id="btnPrintPrevInvoice">&#x1F5A8;&#xFE0F; Print Preview</button>
         </div>
       </div>
     </div>
@@ -4095,11 +4379,87 @@ function renderPreviewInvoiceModal(container, inv) {
 
   document.getElementById('btnClosePrevInv').addEventListener('click', closeModal);
   document.getElementById('btnClosePrevInv2').addEventListener('click', closeModal);
+  document.getElementById('btnPrintPrevInvoice').addEventListener('click', () => {
+    printCanonicalDocument(docHtml);
+  });
 }
 
 // ----------------------------------------------------
 // PAYMENT RECORDING & OFFICIAL RECEIPT MODAL
 // ----------------------------------------------------
+function renderCanonicalReceiptDocument(payment, inv) {
+  const invoice = inv || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student' };
+  const { paid, balance, total } = invoiceBalance(invoice);
+  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
+
+  return `
+    <div class="cp-doc-paper" id="canonical-receipt-${payment.id}">
+      <div class="cp-doc-header">
+        <div class="cp-doc-brand">
+          <img src="assets/clasptek_logo.png" alt="Clasptek" class="cp-doc-logo" />
+        </div>
+        <div class="cp-doc-company-block">
+          <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
+          <div class="cp-doc-company-meta">
+            ${escapeHtml(fsCfg.address)}<br/>
+            Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}
+          </div>
+        </div>
+      </div>
+
+      <div class="cp-doc-title-row">
+        <div>
+          <h1 class="cp-doc-main-title">OFFICIAL RECEIPT</h1>
+          <div class="cp-doc-no">Receipt No: #${payment.receipt_display_no || formatDocNo('receipt', payment.receiptNo, payment.date)}</div>
+        </div>
+        <div class="cp-doc-badge-col">
+          <span class="cp-pill paid" style="font-size:12px; padding:4px 12px;">PAYMENT CONFIRMED</span>
+        </div>
+      </div>
+
+      <div class="cp-doc-meta-grid">
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">RECEIVED FROM</div>
+          <div class="cp-doc-client-name">${escapeHtml(invoice.clientName)}</div>
+          ${invoice.phone ? `<div class="cp-doc-meta-line">Phone: <strong>${escapeHtml(invoice.phone)}</strong></div>` : ''}
+          ${invoice.email ? `<div class="cp-doc-meta-line">Email: <strong>${escapeHtml(invoice.email)}</strong></div>` : ''}
+        </div>
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">PAYMENT DETAILS</div>
+          <div class="cp-doc-meta-row"><span>Payment Date:</span><strong>${fmtDate(payment.date)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Payment Method:</span><strong>${escapeHtml(payment.paymentMethod)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Transaction Reference:</span><strong style="font-family:monospace;">${escapeHtml(payment.reference || 'N/A')}</strong></div>
+          <div class="cp-doc-meta-row"><span>Target Invoice:</span><strong>#${invoice.invoiceNo}</strong></div>
+        </div>
+      </div>
+
+      <div class="cp-receipt-amount-box">
+        <div>
+          <div class="cp-doc-section-label" style="color:#15803D;">AMOUNT RECEIVED</div>
+          <div style="font-size:13px; font-weight:600; color:var(--primary); margin-top:2px;">Tuition &amp; Educational Service Settlement</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="cp-receipt-amount">${fmtMoney(payment.amount)}</div>
+        </div>
+      </div>
+
+      <div class="cp-doc-box">
+        <div class="cp-doc-section-label">ACCOUNT POSITION AFTER PAYMENT</div>
+        <div class="cp-doc-meta-row"><span>Total Invoiced:</span><strong>${fmtMoney(total)}</strong></div>
+        <div class="cp-doc-meta-row"><span>Total Paid to Date:</span><strong style="color:var(--success);">${fmtMoney(paid)}</strong></div>
+        <div class="cp-doc-meta-row balance-row" style="border-top:1px dashed var(--border); padding-top:6px; margin-top:4px;">
+          <span>Remaining Balance:</span><strong>${fmtMoney(balance)}</strong>
+        </div>
+      </div>
+
+      <div class="cp-doc-footer">
+        <div class="cp-doc-footer-main">Thank you for choosing Clasptek.</div>
+        <div class="cp-doc-footer-sub">${escapeHtml(fsCfg.website)} &middot; ${escapeHtml(fsCfg.email)} &middot; ${escapeHtml(fsCfg.phone)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderRecordPaymentModal(container, inv) {
   const { balance } = invoiceBalance(inv);
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -4121,7 +4481,7 @@ function renderRecordPaymentModal(container, inv) {
 
           <div class="cp-field"><label>Payment Amount (₦) *</label><input type="number" id="payAmount" value="${balance}" max="${balance}" /></div>
           <div class="cp-field"><label>Payment Date *</label><input type="date" id="payDate" value="${todayStr}" /></div>
-          <div class="cp-field"><label>Payment Method *</label><select id="payMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
+          <div class="cp-field"><label>Payment Method *</label><select id="payMethod">${PAYMENT_METHODS.filter(m => m !== 'Cash').map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
           <div class="cp-field"><label>Bank Transaction Reference / Deposit Slip No *</label><input id="payRef" placeholder="e.g. GTB/NIBSS/2026082601" /></div>
           <div class="cp-field"><label>Internal Notes / Confirmation Remarks</label><textarea id="payNotes" rows="2" placeholder="Confirmed via GTBank Corporate Statement."></textarea></div>
 
@@ -4187,76 +4547,18 @@ function renderRecordPaymentModal(container, inv) {
 }
 
 function renderViewReceiptModal(container, payment, inv) {
-  const invoice = inv || state.invoices.find(i => i.id === payment.invoiceId) || { invoiceNo: 'N/A', clientName: 'Student' };
-  const { paid, balance, total } = invoiceBalance(invoice);
-  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
+  const docHtml = renderCanonicalReceiptDocument(payment, inv);
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal doc-modal">
         <div class="cp-modal-header no-print">
-          <div class="cp-modal-title">Official Tuition Receipt #${payment.receiptNo}</div>
+          <div class="cp-modal-title">Receipt Preview #${payment.receiptNo}</div>
           <button class="cp-modal-close" id="btnCloseRecMod">&times;</button>
         </div>
 
-        <div class="cp-modal-body cp-printable-area">
-          <div class="cp-doc-paper">
-            <div class="cp-doc-header">
-              <div class="cp-doc-brand">
-                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
-                <div>
-                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
-                  <div class="cp-doc-company-meta">${escapeHtml(fsCfg.address)}<br/>Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}</div>
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div class="cp-doc-type-title">OFFICIAL RECEIPT</div>
-                <div class="cp-doc-no">#${payment.receipt_display_no || formatDocNo('receipt', payment.receiptNo, payment.date)}</div>
-                <div style="margin-top:6px;"><span class="cp-pill paid">PAYMENT CONFIRMED</span></div>
-              </div>
-            </div>
-
-            <div class="cp-doc-meta-grid">
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">RECEIVED FROM:</div>
-                <div class="cp-doc-client-name">${escapeHtml(invoice.clientName)}</div>
-                ${invoice.phone ? `<div>Phone: ${escapeHtml(invoice.phone)}</div>` : ''}
-                ${invoice.email ? `<div>Email: ${escapeHtml(invoice.email)}</div>` : ''}
-              </div>
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">PAYMENT METADATA:</div>
-                <div style="display:flex; justify-content:space-between;"><span>Payment Date:</span><strong>${fmtDate(payment.date)}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>Payment Method:</span><strong>${escapeHtml(payment.paymentMethod)}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>Transaction Ref:</span><strong style="font-family:monospace;">${escapeHtml(payment.reference || 'N/A')}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>For Invoice:</span><strong>#${invoice.invoiceNo}</strong></div>
-              </div>
-            </div>
-
-            <div style="background:#FAFBFD; border:1.5px solid var(--success); border-radius:var(--radius-sm); padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">AMOUNT RECEIVED IN FULL WORDS</div>
-                <div style="font-size:13px; font-weight:600; color:var(--primary); margin-top:2px;">Programme Tuition &amp; Administrative Fees</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">AMOUNT PAID</div>
-                <div style="font-size:24px; font-weight:900; color:var(--success);">${fmtMoney(payment.amount)}</div>
-              </div>
-            </div>
-
-            <div class="cp-doc-box">
-              <div class="cp-doc-section-label">ACCOUNT POSITION AFTER THIS PAYMENT</div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Total Invoiced Tuition:</span><strong>${fmtMoney(total)}</strong></div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Total Payments Received:</span><strong style="color:var(--success);">${fmtMoney(paid)}</strong></div>
-              <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border); padding-top:4px; font-weight:800; color:${balance > 0 ? 'var(--warning)' : 'var(--success)'};">
-                <span>Remaining Tuition Balance:</span><span>${fmtMoney(balance)}</span>
-              </div>
-            </div>
-
-            <div class="cp-doc-footer">
-              <div>Issued by Clasptek Financial Operations &middot; All rights reserved.</div>
-              <div>${escapeHtml(fsCfg.website)}</div>
-            </div>
-          </div>
+        <div class="cp-modal-body cp-doc-scroll-wrap">
+          ${docHtml}
         </div>
 
         <div class="cp-modal-footer no-print">
@@ -4269,7 +4571,9 @@ function renderViewReceiptModal(container, payment, inv) {
 
   document.getElementById('btnCloseRecMod').addEventListener('click', closeModal);
   document.getElementById('btnCloseRecMod2').addEventListener('click', closeModal);
-  document.getElementById('btnPrintReceipt').addEventListener('click', () => window.print());
+  document.getElementById('btnPrintReceipt').addEventListener('click', () => {
+    printCanonicalDocument(docHtml);
+  });
 }
 
 
@@ -4988,9 +5292,9 @@ function renderCancelPayslipModal(container, payslip) {
 }
 
 // ----------------------------------------------------
-// A4 OFFICIAL CORPORATE PAYSLIP DOCUMENT (PRE- & POST-PAYMENT)
+// A4 OFFICIAL CORPORATE PAYSLIP DOCUMENT (CANONICAL RENDERER)
 // ----------------------------------------------------
-function renderViewPayslipModal(container, payslip) {
+function renderCanonicalPayslipDocument(payslip) {
   const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
   const isPaid = payslip.status === 'paid';
   const hasOpenQuery = payslip.queries && payslip.queries.some(q => q.status === 'open' || q.status === 'under_review');
@@ -5013,6 +5317,165 @@ function renderViewPayslipModal(container, payslip) {
     }
   } catch (e) {}
 
+  return `
+    <div class="cp-doc-paper" id="canonical-payslip-${payslip.id}">
+      <!-- Header: Logo on Left, Company Info on Right -->
+      <div class="cp-doc-header">
+        <div class="cp-doc-brand">
+          <img src="assets/clasptek_logo.png" alt="Clasptek" class="cp-doc-logo" />
+        </div>
+        <div class="cp-doc-company-block">
+          <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
+          <div class="cp-doc-company-meta">
+            ${escapeHtml(fsCfg.address)}<br/>
+            Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}<br/>
+            ${fsCfg.taxId ? `TIN: ${escapeHtml(fsCfg.taxId)} &middot; ` : ''}${fsCfg.registrationNumber ? `RC: ${escapeHtml(fsCfg.registrationNumber)} &middot; ` : ''}Web: ${escapeHtml(fsCfg.website)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Payslip Title & Meta Row -->
+      <div class="cp-doc-title-row">
+        <div>
+          <h1 class="cp-doc-main-title">PAYSLIP</h1>
+          <div style="font-size:14px; font-weight:700; color:var(--primary); margin-top:2px;">FOR THE PERIOD OF ${escapeHtml(periodTitle)}</div>
+          <div class="cp-doc-no" style="margin-top:2px;">Payslip No: #${payslip.payslip_display_no || formatDocNo('payslip', payslip.payslipNo, payslip.payDate)}</div>
+        </div>
+        <div class="cp-doc-badge-col">
+          <span class="cp-pill ${statusClass}" style="font-size:12px; padding:4px 12px;">${statusLabel}</span>
+        </div>
+      </div>
+
+      <!-- Personnel Metadata Grid -->
+      <div class="cp-doc-meta-grid">
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">EMPLOYEE / BENEFICIARY INFORMATION</div>
+          <div class="cp-doc-client-name">${escapeHtml(payslip.employeeName)}</div>
+          <div class="cp-doc-meta-line">Designation / Role: <strong>${escapeHtml(payslip.role)}</strong></div>
+          <div class="cp-doc-meta-line">Department: <strong>${escapeHtml(payslip.department)}</strong></div>
+          <div class="cp-doc-meta-line">Personnel Classification: <strong>${escapeHtml(payslip.employeeType.toUpperCase())}</strong></div>
+        </div>
+        <div class="cp-doc-meta-block">
+          <div class="cp-doc-section-label">PAYROLL SCHEDULE</div>
+          <div class="cp-doc-meta-row"><span>Pay Period:</span><strong>${escapeHtml(payslip.payPeriod)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Target Pay Date:</span><strong>${fmtDate(payslip.payDate)}</strong></div>
+          <div class="cp-doc-meta-row"><span>Payment Mode:</span><strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong></div>
+        </div>
+      </div>
+
+      <!-- 1. Earnings Breakdown -->
+      <div style="margin-bottom:14px;">
+        <div class="cp-doc-section-label" style="margin-bottom:4px;">1. EARNINGS &amp; ALLOWANCES</div>
+        <table class="cp-doc-table" style="margin-bottom:6px;">
+          <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
+          <tbody>
+            <tr><td>Basic Compensation / Session Fee</td><td style="text-align:right; font-weight:600;">${fmtMoney(payslip.basicPay)}</td></tr>
+            ${(payslip.allowances || []).map(a => `
+              <tr><td>${escapeHtml(a.description)}</td><td style="text-align:right; font-weight:600;">${fmtMoney(a.amount)}</td></tr>
+            `).join('')}
+            <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--primary);">
+              <td>TOTAL GROSS EARNINGS:</td><td style="text-align:right; color:var(--primary);">${fmtMoney(payslip.grossPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2. Deductions Breakdown -->
+      <div style="margin-bottom:16px;">
+        <div class="cp-doc-section-label" style="margin-bottom:4px; color:var(--danger);">2. STATUTORY &amp; VOLUNTARY DEDUCTIONS</div>
+        <table class="cp-doc-table" style="margin-bottom:6px;">
+          <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
+          <tbody>
+            ${(payslip.deductions && payslip.deductions.length ? payslip.deductions : [{ description: 'No Deductions Applied', amount: 0 }]).map(d => `
+              <tr><td>${escapeHtml(d.description)}</td><td style="text-align:right; color:var(--danger);">${Number(d.amount) > 0 ? '-' + fmtMoney(d.amount) : '₦0.00'}</td></tr>
+            `).join('')}
+            <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--danger);">
+              <td>TOTAL DEDUCTIONS:</td><td style="text-align:right; color:var(--danger);">${payslip.totalDeductions > 0 ? '-' + fmtMoney(payslip.totalDeductions) : '₦0.00'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 3. Net Pay Highlight Block -->
+      <div style="background:#F0FDF4; border:2px solid var(--success); border-radius:var(--radius-sm); padding:14px 18px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <div>
+          <div style="font-size:11px; font-weight:800; color:var(--success); text-transform:uppercase; letter-spacing:0.5px;">NET COMPENSATION PAYABLE</div>
+          <div style="font-size:12.5px; font-weight:600; color:var(--primary); margin-top:2px;">Disbursement via Direct Corporate Bank Transfer</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">NET PAY</div>
+          <div style="font-size:24px; font-weight:900; color:var(--success);">${fmtMoney(payslip.netPay)}</div>
+        </div>
+      </div>
+
+      <!-- 4. Employee Acknowledgement & Signatures Section (Always Present) -->
+      <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:16px;">
+        <div class="cp-doc-section-label" style="margin-bottom:6px;">EMPLOYEE / FACILITATOR ACKNOWLEDGEMENT</div>
+        <p style="font-size:12px; color:var(--text-secondary); font-style:italic; margin-bottom:12px;">
+          "I acknowledge that I have reviewed the earnings and deductions stated on this payslip."
+        </p>
+
+        ${payslip.acknowledgedAt ? `
+          <div style="background:#ECFDF5; border:1px solid #10B981; border-radius:var(--radius-sm); padding:8px 12px; font-size:11.5px; color:#065F46; margin-bottom:12px;">
+            ✔ <strong>Digital Acknowledgement Captured:</strong> Confirmed by <strong>${escapeHtml(payslip.acknowledgedBy)}</strong> on ${new Date(payslip.acknowledgedAt).toLocaleString('en-GB')} via <em>${escapeHtml(payslip.acknowledgementMethod || 'Portal Confirmation')}</em>.
+          </div>
+        ` : `
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
+            Status: <em>Pending Employee Review &amp; Acknowledgement</em>
+          </div>
+        `}
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+          <div>
+            <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Employee / Facilitator Signature:</div>
+            <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Authorized Finance Officer:</div>
+            <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Actual Disbursement Details (Shown ONLY when status is PAID) -->
+      ${isPaid ? `
+        <div class="cp-doc-box" style="border-left-color:var(--success); background:#F0FDF4;">
+          <div class="cp-doc-section-label" style="color:var(--success); font-weight:800;">FINANCIAL DISBURSEMENT CONFIRMATION (PAID)</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+            <div>
+              <span style="color:var(--text-muted);">Payment Date:</span> <strong>${fmtDate(payslip.actualPaymentDate || payslip.payDate)}</strong><br/>
+              <span style="color:var(--text-muted);">Payment Method:</span> <strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong>
+            </div>
+            <div>
+              <span style="color:var(--text-muted);">Banking Reference:</span> <strong style="font-family:monospace; color:var(--primary);">${escapeHtml(payslip.paymentReference || 'N/A')}</strong><br/>
+              <span style="color:var(--text-muted);">Disbursed By:</span> <strong>${escapeHtml(payslip.paidBy || 'Finance Operations')}</strong>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- 6. Active Query Alert on Document (if any) -->
+      ${hasOpenQuery ? `
+        <div style="background:#FFFBEB; border:1px solid var(--warning); border-radius:var(--radius-sm); padding:10px 14px; font-size:11.5px; color:#92400E; margin-bottom:14px;">
+          ⚠️ <strong>Under Query:</strong> A payroll discrepancy query was raised on this statement and is currently under review by Finance Operations.
+        </div>
+      ` : ''}
+
+      <!-- Footer -->
+      <div class="cp-doc-footer">
+        <div class="cp-doc-footer-main">Official Confidential Payroll Statement &middot; Clasptek Coaching Limited</div>
+        <div class="cp-doc-footer-sub">${escapeHtml(fsCfg.website)} &middot; ${escapeHtml(fsCfg.email)} &middot; ${escapeHtml(fsCfg.phone)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderViewPayslipModal(container, payslip) {
+  const docHtml = renderCanonicalPayslipDocument(payslip);
+  const hasOpenQuery = payslip.queries && payslip.queries.some(q => q.status === 'open' || q.status === 'under_review');
+
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal doc-modal">
@@ -5021,152 +5484,8 @@ function renderViewPayslipModal(container, payslip) {
           <button class="cp-modal-close" id="btnCloseViewPsl">&times;</button>
         </div>
 
-        <div class="cp-modal-body cp-printable-area">
-          <div class="cp-doc-paper">
-            <!-- Header -->
-            <div class="cp-doc-header">
-              <div class="cp-doc-brand">
-                <img src="assets/clasptek_logo.png" alt="Clasptek Logo" class="cp-doc-logo" />
-                <div>
-                  <div class="cp-doc-company-title">${escapeHtml(fsCfg.companyName)}</div>
-                  <div class="cp-doc-company-meta">
-                    ${escapeHtml(fsCfg.address)}<br/>
-                    Phone: ${escapeHtml(fsCfg.phone)} &middot; Email: ${escapeHtml(fsCfg.email)}<br/>
-                    ${fsCfg.taxId ? `TIN: ${escapeHtml(fsCfg.taxId)} &middot; ` : ''}${fsCfg.registrationNumber ? `RC: ${escapeHtml(fsCfg.registrationNumber)} &middot; ` : ''}Web: ${escapeHtml(fsCfg.website)}
-                  </div>
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div class="cp-doc-type-title" style="font-size:18px;">PAYSLIP FOR THE PERIOD OF</div>
-                <div style="font-size:16px; font-weight:800; color:var(--primary);">${escapeHtml(periodTitle)}</div>
-                <div class="cp-doc-no" style="margin-top:2px;">#${payslip.payslip_display_no || formatDocNo('payslip', payslip.payslipNo, payslip.payDate)}</div>
-                <div style="margin-top:4px;"><span class="cp-pill ${statusClass}">${statusLabel}</span></div>
-              </div>
-            </div>
-
-            <!-- Personnel Metadata -->
-            <div class="cp-doc-meta-grid">
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">EMPLOYEE / BENEFICIARY INFORMATION:</div>
-                <div class="cp-doc-client-name">${escapeHtml(payslip.employeeName)}</div>
-                <div style="color:var(--text-secondary); margin-top:2px;">Designation / Role: <strong>${escapeHtml(payslip.role)}</strong></div>
-                <div style="color:var(--text-secondary);">Department: <strong>${escapeHtml(payslip.department)}</strong></div>
-                <div style="color:var(--text-secondary);">Personnel Classification: <strong>${escapeHtml(payslip.employeeType.toUpperCase())}</strong></div>
-              </div>
-              <div class="cp-doc-meta-block">
-                <div class="cp-doc-section-label">PAYROLL SCHEDULE:</div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Pay Period:</span><strong>${escapeHtml(payslip.payPeriod)}</strong></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Target Pay Date:</span><strong>${fmtDate(payslip.payDate)}</strong></div>
-                <div style="display:flex; justify-content:space-between;"><span>Payment Mode:</span><strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong></div>
-              </div>
-            </div>
-
-            <!-- 1. Earnings Breakdown -->
-            <div style="margin-bottom:14px;">
-              <div class="cp-doc-section-label" style="margin-bottom:4px;">1. EARNINGS &amp; ALLOWANCES</div>
-              <table class="cp-doc-table" style="margin-bottom:6px;">
-                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
-                <tbody>
-                  <tr><td>Basic Compensation / Session Fee</td><td style="text-align:right; font-weight:600;">${fmtMoney(payslip.basicPay)}</td></tr>
-                  ${(payslip.allowances || []).map(a => `
-                    <tr><td>${escapeHtml(a.description)}</td><td style="text-align:right; font-weight:600;">${fmtMoney(a.amount)}</td></tr>
-                  `).join('')}
-                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--primary);">
-                    <td>TOTAL GROSS EARNINGS:</td><td style="text-align:right; color:var(--primary);">${fmtMoney(payslip.grossPay)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- 2. Deductions Breakdown -->
-            <div style="margin-bottom:16px;">
-              <div class="cp-doc-section-label" style="margin-bottom:4px; color:var(--danger);">2. STATUTORY &amp; VOLUNTARY DEDUCTIONS</div>
-              <table class="cp-doc-table" style="margin-bottom:6px;">
-                <thead><tr><th>Description</th><th style="text-align:right; width:140px;">Amount (₦)</th></tr></thead>
-                <tbody>
-                  ${(payslip.deductions && payslip.deductions.length ? payslip.deductions : [{ description: 'No Deductions Applied', amount: 0 }]).map(d => `
-                    <tr><td>${escapeHtml(d.description)}</td><td style="text-align:right; color:var(--danger);">${Number(d.amount) > 0 ? '-' + fmtMoney(d.amount) : '₦0.00'}</td></tr>
-                  `).join('')}
-                  <tr style="background:#FAFBFD; font-weight:800; border-top:1.5px solid var(--danger);">
-                    <td>TOTAL DEDUCTIONS:</td><td style="text-align:right; color:var(--danger);">${payslip.totalDeductions > 0 ? '-' + fmtMoney(payslip.totalDeductions) : '₦0.00'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- 3. Net Pay Highlight Block -->
-            <div style="background:#F0FDF4; border:2px solid var(--success); border-radius:var(--radius-sm); padding:14px 18px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-              <div>
-                <div style="font-size:11px; font-weight:800; color:var(--success); text-transform:uppercase; letter-spacing:0.5px;">NET COMPENSATION PAYABLE</div>
-                <div style="font-size:12.5px; font-weight:600; color:var(--primary); margin-top:2px;">Disbursement via Direct Corporate Bank Transfer</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">NET PAY</div>
-                <div style="font-size:24px; font-weight:900; color:var(--success);">${fmtMoney(payslip.netPay)}</div>
-              </div>
-            </div>
-
-            <!-- 4. Employee Acknowledgement & Signatures Section (Always Present) -->
-            <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:16px;">
-              <div class="cp-doc-section-label" style="margin-bottom:6px;">EMPLOYEE / FACILITATOR ACKNOWLEDGEMENT</div>
-              <p style="font-size:12px; color:var(--text-secondary); font-style:italic; margin-bottom:12px;">
-                "I acknowledge that I have reviewed the earnings and deductions stated on this payslip."
-              </p>
-
-              ${payslip.acknowledgedAt ? `
-                <div style="background:#ECFDF5; border:1px solid #10B981; border-radius:var(--radius-sm); padding:8px 12px; font-size:11.5px; color:#065F46; margin-bottom:12px;">
-                  ✔ <strong>Digital Acknowledgement Captured:</strong> Confirmed by <strong>${escapeHtml(payslip.acknowledgedBy)}</strong> on ${new Date(payslip.acknowledgedAt).toLocaleString('en-GB')} via <em>${escapeHtml(payslip.acknowledgementMethod || 'Portal Confirmation')}</em>.
-                </div>
-              ` : `
-                <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
-                  Status: <em>Pending Employee Review &amp; Acknowledgement</em>
-                </div>
-              `}
-
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
-                <div>
-                  <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Employee / Facilitator Signature:</div>
-                  <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
-                  <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
-                </div>
-                <div>
-                  <div style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; margin-bottom:18px;">Authorized Finance Officer:</div>
-                  <div style="border-bottom:1px solid var(--text-primary); width:85%; height:1px;"></div>
-                  <div style="font-size:10.5px; color:var(--text-muted); margin-top:4px;">Date: ________________________</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 5. Actual Disbursement Details (Shown ONLY when status is PAID) -->
-            ${isPaid ? `
-              <div class="cp-doc-box" style="border-left-color:var(--success); background:#F0FDF4;">
-                <div class="cp-doc-section-label" style="color:var(--success); font-weight:800;">FINANCIAL DISBURSEMENT CONFIRMATION (PAID)</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
-                  <div>
-                    <span style="color:var(--text-muted);">Payment Date:</span> <strong>${fmtDate(payslip.actualPaymentDate || payslip.payDate)}</strong><br/>
-                    <span style="color:var(--text-muted);">Payment Method:</span> <strong>${escapeHtml(payslip.paymentMethod || 'Bank Transfer')}</strong>
-                  </div>
-                  <div>
-                    <span style="color:var(--text-muted);">Banking Reference:</span> <strong style="font-family:monospace; color:var(--primary);">${escapeHtml(payslip.paymentReference || 'N/A')}</strong><br/>
-                    <span style="color:var(--text-muted);">Disbursed By:</span> <strong>${escapeHtml(payslip.paidBy || 'Finance Operations')}</strong>
-                  </div>
-                </div>
-              </div>
-            ` : ''}
-
-            <!-- 6. Active Query Alert on Document (if any) -->
-            ${hasOpenQuery ? `
-              <div style="background:#FFFBEB; border:1px solid var(--warning); border-radius:var(--radius-sm); padding:10px 14px; font-size:11.5px; color:#92400E; margin-bottom:14px;">
-                ⚠️ <strong>Under Query:</strong> A payroll discrepancy query was raised on this statement and is currently under review by Finance Operations.
-              </div>
-            ` : ''}
-
-            <!-- Footer -->
-            <div class="cp-doc-footer">
-              <div>Official Confidential Payroll Statement &middot; Clasptek Coaching Limited</div>
-              <div>${escapeHtml(fsCfg.website)}</div>
-            </div>
-          </div>
+        <div class="cp-modal-body cp-doc-scroll-wrap">
+          ${docHtml}
         </div>
 
         <div class="cp-modal-footer no-print">
@@ -5194,7 +5513,9 @@ function renderViewPayslipModal(container, payslip) {
 
   document.getElementById('btnCloseViewPsl').addEventListener('click', closeModal);
   document.getElementById('btnCloseViewPsl2').addEventListener('click', closeModal);
-  document.getElementById('btnPrintPayslip').addEventListener('click', () => window.print());
+  document.getElementById('btnPrintPayslip').addEventListener('click', () => {
+    printCanonicalDocument(docHtml);
+  });
 
   const btnAck = document.getElementById('btnAckFromDoc');
   if (btnAck) btnAck.addEventListener('click', () => openModal('acknowledgePayslip', { payslip }));
@@ -6227,6 +6548,10 @@ function renderSupabaseModal(container) {
       getFinancialMetrics,
       getStudentAccountSummaries,
       searchGlobalEntities,
+      renderCanonicalInvoiceDocument,
+      renderCanonicalPayslipDocument,
+      renderCanonicalReceiptDocument,
+      printCanonicalDocument,
       DEFAULT_FINANCE_SETTINGS,
       DEFAULT_PAYMENT_ACCOUNTS,
       DEFAULT_PERSONNEL_DIRECTORY
