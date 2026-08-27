@@ -1252,4 +1252,152 @@ CREATE INDEX IF NOT EXISTS idx_sessions_tenant_period ON public.facilitator_sess
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON public.facilitator_sessions(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_timeline_customer ON public.customer_timeline(tenant_id, customer_id, created_at DESC);
 
+-- =============================================================================
+-- SECTION 12: PHASE 10 OPERATIONAL INTELLIGENCE, MANAGEMENT CONTROLS & RECONCILIATION
+-- =============================================================================
+
+-- Schema Version Tracking
+CREATE TABLE IF NOT EXISTS public.schema_versions (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    description TEXT NOT NULL,
+    compatible BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+INSERT INTO public.schema_versions (version, description, compatible)
+VALUES ('10.0.0', 'Phase 10 Operational Intelligence, Management Controls & Reconciliation', TRUE)
+ON CONFLICT (version) DO NOTHING;
+
+-- Database-Level Idempotency Keys Table
+CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Management Attention & Alert Dispatcher Table
+CREATE TABLE IF NOT EXISTS public.management_alerts (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    domain TEXT NOT NULL CHECK (domain IN ('finance', 'crm', 'hr', 'security', 'operations')),
+    severity TEXT NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'informational')),
+    title TEXT NOT NULL,
+    description TEXT,
+    record_type TEXT NOT NULL,
+    record_id TEXT,
+    status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')),
+    assigned_role TEXT NOT NULL DEFAULT 'Super Admin',
+    action_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    acknowledged_at TIMESTAMPTZ,
+    acknowledged_by TEXT,
+    resolved_at TIMESTAMPTZ,
+    resolved_by TEXT
+);
+
+-- CRM Pipeline Stage Transition History
+CREATE TABLE IF NOT EXISTS public.crm_stage_history (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    enquiry_id TEXT NOT NULL REFERENCES public.enquiries(id) ON DELETE CASCADE,
+    customer_id TEXT REFERENCES public.customers(id) ON DELETE SET NULL,
+    from_stage TEXT NOT NULL,
+    to_stage TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Bank Reconciliation Control Table
+CREATE TABLE IF NOT EXISTS public.bank_reconciliations (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    payment_account_id TEXT NOT NULL REFERENCES public.payment_accounts(id) ON DELETE RESTRICT,
+    reconciliation_period TEXT NOT NULL CHECK (reconciliation_period ~ '^\d{4}-\d{2}$'),
+    book_balance NUMERIC NOT NULL DEFAULT 0,
+    statement_balance NUMERIC NOT NULL DEFAULT 0,
+    uncleared_inflows NUMERIC NOT NULL DEFAULT 0,
+    uncleared_outflows NUMERIC NOT NULL DEFAULT 0,
+    difference NUMERIC NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'UNRECONCILED' CHECK (status IN ('UNRECONCILED', 'RECONCILED', 'EXCEPTION')),
+    reconciled_by TEXT,
+    reconciled_at TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Bank Reconciliation Line Items
+CREATE TABLE IF NOT EXISTS public.bank_reconciliation_items (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    reconciliation_id TEXT NOT NULL REFERENCES public.bank_reconciliations(id) ON DELETE CASCADE,
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('payment_inflow', 'expense_outflow', 'adjustment')),
+    transaction_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    cleared BOOLEAN NOT NULL DEFAULT FALSE,
+    cleared_at TIMESTAMPTZ
+);
+
+-- Expense Lifecycle Status Transition History
+CREATE TABLE IF NOT EXISTS public.expense_status_history (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    expense_id TEXT NOT NULL REFERENCES public.expenses(id) ON DELETE CASCADE,
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Financial Reversals and Adjustments Table (Closed Period Controls)
+CREATE TABLE IF NOT EXISTS public.financial_adjustments (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    original_table TEXT NOT NULL,
+    original_record_id TEXT NOT NULL,
+    adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('REVERSAL', 'CREDIT_NOTE', 'DEBIT_NOTE', 'REALLOCATION', 'WRITE_OFF')),
+    amount NUMERIC NOT NULL,
+    reason TEXT NOT NULL,
+    financial_period TEXT NOT NULL CHECK (financial_period ~ '^\d{4}-\d{2}$'),
+    authorized_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS on Phase 10 Tables
+ALTER TABLE public.schema_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.management_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_stage_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_reconciliations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bank_reconciliation_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expense_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.financial_adjustments ENABLE ROW LEVEL SECURITY;
+
+-- Phase 10 RLS Policies
+CREATE POLICY "schema_versions_select" ON public.schema_versions FOR SELECT TO authenticated USING (TRUE);
+CREATE POLICY "idempotency_tenant_all" ON public.idempotency_keys FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "alerts_tenant_all" ON public.management_alerts FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "crm_history_tenant_all" ON public.crm_stage_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "reconciliations_tenant_all" ON public.bank_reconciliations FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "reconciliation_items_tenant_all" ON public.bank_reconciliation_items FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "expense_history_tenant_all" ON public.expense_status_history FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "adjustments_tenant_all" ON public.financial_adjustments FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+
+-- Performance Composite Indexes
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant_status ON public.invoices(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant_duedate ON public.invoices(tenant_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant_cust ON public.invoices(tenant_id, customer_id);
+CREATE INDEX IF NOT EXISTS idx_enquiries_tenant_stage ON public.enquiries(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_payslips_tenant_period ON public.payslips(tenant_id, payroll_period);
+CREATE INDEX IF NOT EXISTS idx_expenses_tenant_period ON public.expenses(tenant_id, financial_period);
+CREATE INDEX IF NOT EXISTS idx_alerts_tenant_severity ON public.management_alerts(tenant_id, severity, status);
+CREATE INDEX IF NOT EXISTS idx_crm_history_tenant_enquiry ON public.crm_stage_history(tenant_id, enquiry_id);
+CREATE INDEX IF NOT EXISTS idx_reconciliations_tenant_period ON public.bank_reconciliations(tenant_id, reconciliation_period);
+CREATE INDEX IF NOT EXISTS idx_idempotency_tenant_key ON public.idempotency_keys(tenant_id, idempotency_key);
+
+
 
