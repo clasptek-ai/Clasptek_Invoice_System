@@ -1179,3 +1179,77 @@ CREATE INDEX IF NOT EXISTS idx_personnel_tenant_type ON public.personnel(tenant_
 CREATE INDEX IF NOT EXISTS idx_payslips_tenant_period ON public.payslips(tenant_id, pay_period);
 CREATE INDEX IF NOT EXISTS idx_payslips_personnel ON public.payslips(personnel_id);
 
+-- =============================================================================
+-- 11. PHASE 9: OPERATIONAL INTEGRATION — SESSIONS & TIMELINE
+-- =============================================================================
+
+-- Facilitator Operational Sessions Table
+CREATE TABLE IF NOT EXISTS public.facilitator_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    facilitator_id TEXT NOT NULL REFERENCES public.personnel(id) ON DELETE RESTRICT,
+    facilitator_name TEXT NOT NULL,
+    programme_id TEXT REFERENCES public.programmes(id) ON DELETE RESTRICT,
+    programme_name TEXT NOT NULL,
+    session_date DATE NOT NULL,
+    session_type TEXT NOT NULL DEFAULT 'Classroom Lecture',
+    sessions_count NUMERIC(6,2) NOT NULL DEFAULT 1 CHECK (sessions_count > 0),
+    rate_per_session NUMERIC(14,2) NOT NULL CHECK (rate_per_session >= 0),
+    total_amount NUMERIC(14,2) NOT NULL CHECK (total_amount >= 0),
+    topic TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_approval' CHECK (status IN ('pending_approval', 'approved', 'rejected', 'included_in_payslip')),
+    payroll_period TEXT CHECK (payroll_period ~ '^\d{4}-\d{2}$'),
+    payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid')),
+    approved_by UUID REFERENCES auth.users(id),
+    approved_at TIMESTAMPTZ,
+    payslip_id TEXT REFERENCES public.payslips(id),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Customer Dynamic Activity Timeline Table
+CREATE TABLE IF NOT EXISTS public.customer_timeline (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+    enquiry_id TEXT REFERENCES public.enquiries(id) ON DELETE SET NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    contact_method TEXT,
+    outcome TEXT,
+    next_action TEXT,
+    next_follow_up_date DATE,
+    reference_id TEXT,
+    actor_name TEXT NOT NULL DEFAULT 'System',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.facilitator_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_timeline ENABLE ROW LEVEL SECURITY;
+
+-- Facilitator Sessions RLS: Management vs Self
+CREATE POLICY "sessions_tenant_select" ON public.facilitator_sessions FOR SELECT TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND (
+    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
+    OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid())
+));
+
+CREATE POLICY "sessions_manager_mutate" ON public.facilitator_sessions FOR ALL TO authenticated 
+USING (tenant_id = public.get_auth_tenant_id() AND (
+    public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF')
+    OR (facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid()) AND status = 'pending_approval')
+));
+
+-- Customer Timeline RLS
+CREATE POLICY "timeline_tenant_all" ON public.customer_timeline FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+
+-- Indexes for Phase 9 tables
+CREATE INDEX IF NOT EXISTS idx_sessions_tenant_facilitator ON public.facilitator_sessions(tenant_id, facilitator_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_tenant_period ON public.facilitator_sessions(tenant_id, payroll_period);
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON public.facilitator_sessions(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_timeline_customer ON public.customer_timeline(tenant_id, customer_id, created_at DESC);
+
+

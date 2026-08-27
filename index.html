@@ -1152,6 +1152,41 @@ const STORE_KEY_PERSONNEL = 'clasptek:personnel';
 const STORE_KEY_SYSTEM_USERS = 'clasptek:system_users';
 const STORE_KEY_NOTIFICATIONS = 'clasptek:notifications';
 
+// Phase 9 Operational Integration Store Keys & Constants
+const STORE_KEY_FACILITATOR_SESSIONS = 'clasptek:facilitator_sessions';
+const STORE_KEY_CUSTOMER_TIMELINE = 'clasptek:customer_timeline';
+
+const CRM_PIPELINE_STAGES = [
+  'NEW',
+  'CONTACTED',
+  'QUALIFIED',
+  'CONSULTATION',
+  'PROPOSAL / PROGRAMME SELECTED',
+  'INVOICE GENERATED',
+  'PAYMENT PENDING',
+  'PARTIALLY PAID',
+  'PAID',
+  'ENROLLED',
+  'ACTIVE CUSTOMER',
+  'LOST',
+  'ON HOLD',
+  'NOT INTERESTED'
+];
+
+const CRM_LEAD_SOURCES = [
+  'Walk-in',
+  'Phone',
+  'WhatsApp',
+  'Website',
+  'Instagram',
+  'Facebook',
+  'LinkedIn',
+  'Referral',
+  'Advertisement',
+  'Existing Customer',
+  'Other'
+];
+
 const SYSTEM_ACCOUNTS = [
   {
     id: 'usr_sa_1',
@@ -1566,6 +1601,11 @@ let state = {
   payslips: [],
   personnel: DEFAULT_PERSONNEL_DIRECTORY,
 
+  // Phase 9 State Additions
+  sessions: [],
+  customerTimeline: [],
+  counters: { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001, session: 5001, customer: 1001, enrolment: 1001 },
+
   loading: true,
   modal: null,
   pendingEnquiryForInvoice: null,
@@ -1778,7 +1818,9 @@ const DB_TABLE_MAPPING = {
   [STORE_KEY_PAYMENT_REMINDERS]: 'payment_reminders',
   [STORE_KEY_RECURRING_EXPENSES]: 'recurring_expenses',
   [STORE_KEY_RECURRING_INVOICES]: 'recurring_invoices',
-  [STORE_KEY_RECONCILIATIONS]: 'reconciliations'
+  [STORE_KEY_RECONCILIATIONS]: 'reconciliations',
+  [STORE_KEY_FACILITATOR_SESSIONS]: 'facilitator_sessions',
+  [STORE_KEY_CUSTOMER_TIMELINE]: 'customer_timeline'
 };
 
 const dbRepo = {
@@ -2013,17 +2055,22 @@ function isReadOnly() {
 }
 
 
-function canAccessTab(userOrTab, maybeTab) {
-  let user, tabName;
-  if (typeof userOrTab === 'string') {
-    tabName = userOrTab;
-    user = state.auth && state.auth.isAuthenticated ? state.auth.user : null;
-  } else {
-    user = userOrTab;
+function canAccessTab(userOrRoleOrTab, maybeTab) {
+  let role, tabName;
+  if (maybeTab) {
     tabName = maybeTab;
+    if (typeof userOrRoleOrTab === 'string') {
+      role = userOrRoleOrTab;
+    } else if (userOrRoleOrTab && userOrRoleOrTab.role) {
+      role = userOrRoleOrTab.role;
+    }
+  } else {
+    tabName = userOrRoleOrTab;
+    const user = state.auth && state.auth.user ? state.auth.user : null;
+    role = user ? user.role : null;
   }
-  if (!user || !user.role) return false;
-  const role = user.role;
+
+  if (!role) return false;
 
   if (role === 'Super Admin') {
     return true;
@@ -2037,7 +2084,7 @@ function canAccessTab(userOrTab, maybeTab) {
     return allowed.includes(tabName);
   }
   if (role === 'Staff' || role === 'Facilitator') {
-    const allowed = ['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'];
+    const allowed = ['staffDashboard', 'myPayslips', 'mySessions', 'myProfile', 'myQueries', 'mySecurity'];
     return allowed.includes(tabName);
   }
   if (role === 'Finance Viewer') {
@@ -2172,7 +2219,7 @@ async function loadAll() {
           dbIncCats, dbExpCats, dbBdgs, dbAudits, dbFPeriods,
           dbFSet, dbPAccs, dbPSlips, dbPers, dbSysUsers,
           dbEnqs, dbEnrls, dbCusts, dbCNotes, dbPRems,
-          dbRExps, dbRInvs, dbRecons
+          dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline
         ] = await Promise.all([
           supabaseClient.from('programmes').select('*'),
           supabaseClient.from('invoices').select('*'),
@@ -2196,7 +2243,9 @@ async function loadAll() {
           supabaseClient.from('payment_reminders').select('*'),
           supabaseClient.from('recurring_expenses').select('*'),
           supabaseClient.from('recurring_invoices').select('*'),
-          supabaseClient.from('reconciliations').select('*')
+          supabaseClient.from('reconciliations').select('*'),
+          supabaseClient.from('facilitator_sessions').select('*'),
+          supabaseClient.from('customer_timeline').select('*')
         ]);
 
         // Check if query had critical errors
@@ -2225,6 +2274,8 @@ async function loadAll() {
           state.recurringExpenses = Array.isArray(dbRExps.data) ? dbRExps.data : [];
           state.recurringInvoices = Array.isArray(dbRInvs.data) ? dbRInvs.data : [];
           state.reconciliations = Array.isArray(dbRecons.data) ? dbRecons.data : [];
+          state.sessions = (dbSessions && Array.isArray(dbSessions.data)) ? dbSessions.data : [];
+          state.customerTimeline = (dbCTimeline && Array.isArray(dbCTimeline.data)) ? dbCTimeline.data : [];
 
           state.supabase.status = 'connected';
           state.supabase.lastSuccessfulRead = new Date().toISOString();
@@ -2249,11 +2300,11 @@ async function loadAll() {
 
   // 3. Fallback to Secondary Local Storage (Offline inspection or local sandbox)
   if (!isDbHydrated) {
-    const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, enqs, enrls, custs, fSet, pAccs, pSlips, pers, sysUsers, notifs] = await Promise.all([
+    const [progs, invs, pays, cnts, exps, dirInc, incCats, expCats, bdgs, audits, cNotes, pRems, rExps, rInvs, fPeriods, appSet, recons, anomRev, enqs, enrls, custs, fSet, pAccs, pSlips, pers, sysUsers, notifs, sess, ctl] = await Promise.all([
       safeGet(STORE_KEY_PROGRAMMES, []),
       safeGet(STORE_KEY_INVOICES, []),
       safeGet(STORE_KEY_PAYMENTS, []),
-      safeGet(STORE_KEY_COUNTERS, { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001 }),
+      safeGet(STORE_KEY_COUNTERS, { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001, session: 5001, customer: 1001, enrolment: 1001 }),
       safeGet(STORE_KEY_EXPENSES, []),
       safeGet(STORE_KEY_DIRECT_INCOME, []),
       safeGet(STORE_KEY_INCOME_CATEGORIES, DEFAULT_INCOME_CATEGORIES),
@@ -2276,7 +2327,9 @@ async function loadAll() {
       safeGet(STORE_KEY_PAYSLIPS, []),
       safeGet(STORE_KEY_PERSONNEL, DEFAULT_PERSONNEL_DIRECTORY),
       safeGet(STORE_KEY_SYSTEM_USERS, SYSTEM_ACCOUNTS),
-      safeGet(STORE_KEY_NOTIFICATIONS, [])
+      safeGet(STORE_KEY_NOTIFICATIONS, []),
+      safeGet(STORE_KEY_FACILITATOR_SESSIONS, []),
+      safeGet(STORE_KEY_CUSTOMER_TIMELINE, [])
     ]);
 
     state.programmes = Array.isArray(progs) ? progs : [];
@@ -2286,6 +2339,8 @@ async function loadAll() {
     state.personnel = Array.isArray(pers) && pers.length ? pers : DEFAULT_PERSONNEL_DIRECTORY;
     state.users = Array.isArray(sysUsers) && sysUsers.length ? sysUsers : SYSTEM_ACCOUNTS;
     state.notifications = Array.isArray(notifs) ? notifs : [];
+    state.sessions = Array.isArray(sess) ? sess : [];
+    state.customerTimeline = Array.isArray(ctl) ? ctl : [];
     state.invoices = Array.isArray(invs) ? invs : [];
     state.payments = Array.isArray(pays) ? pays : [];
     state.expenses = Array.isArray(exps) ? exps : [];
@@ -2305,7 +2360,7 @@ async function loadAll() {
     state.anomaliesReviewed = Array.isArray(anomRev) ? anomRev : [];
     state.incomeCategories = incCats && incCats.length ? incCats : DEFAULT_INCOME_CATEGORIES;
     state.expenseCategories = expCats && Object.keys(expCats).length ? expCats : DEFAULT_EXPENSE_CATEGORIES;
-    state.counters = cnts && cnts.invoice ? { payslip: 30001, ...cnts } : { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001 };
+    state.counters = cnts && cnts.invoice ? { payslip: 30001, session: 5001, customer: 1001, enrolment: 1001, ...cnts } : { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001, session: 5001, customer: 1001, enrolment: 1001 };
   }
 
   // Ensure Normalized Invoice Structure
@@ -2442,14 +2497,39 @@ function getReceivableAgeing(inv) {
 // ----------------------------------------------------
 function calculatePayslipTotals(basicPay, allowances = [], deductions = []) {
   const basic = Number(basicPay) || 0;
-  const totalAllowances = safeRound(allowances.reduce((s, a) => s + Number(a.amount || 0), 0));
+  let totalAllowances = 0;
+  if (Array.isArray(allowances)) {
+    totalAllowances = safeRound(allowances.reduce((s, a) => s + Number(typeof a === 'object' ? (a.amount || 0) : a), 0));
+  } else if (typeof allowances === 'number') {
+    totalAllowances = Number(allowances) || 0;
+  }
+
+  // Handle session earnings if passed as 3rd param when allowances was number
+  let sessionEarn = 0;
+  if (typeof deductions === 'number' && typeof arguments[3] === 'number') {
+    sessionEarn = Number(deductions) || 0;
+    totalAllowances = safeRound(totalAllowances + sessionEarn);
+  }
+
   const grossPay = safeRound(basic + totalAllowances);
-  const totalDeductions = safeRound(deductions.reduce((s, d) => s + Number(d.amount || 0), 0));
+
+  let totalDeductions = 0;
+  if (Array.isArray(deductions)) {
+    totalDeductions = safeRound(deductions.reduce((s, d) => s + Number(typeof d === 'object' ? (d.amount || 0) : d), 0));
+  } else if (typeof deductions === 'number') {
+    if (typeof arguments[3] === 'number') {
+      totalDeductions = Number(arguments[3]) || 0;
+      if (typeof arguments[4] === 'number') totalDeductions += Number(arguments[4]);
+    } else {
+      totalDeductions = Number(deductions) || 0;
+    }
+  }
+
   const netPay = Math.max(0, safeRound(grossPay - totalDeductions));
   return { basic, totalAllowances, grossPay, totalDeductions, netPay };
 }
 
-async function integratePayslipExpense(payslip) {
+async function integratePayslipExpense(payslip, accountId = null) {
   // CRITICAL: Only create expense when payslip is actually PAID
   if (payslip.status !== 'paid') {
     console.warn('Attempted to integrate expense for unpaid payslip', payslip.payslipNo);
@@ -2468,9 +2548,9 @@ async function integratePayslipExpense(payslip) {
     return existing;
   }
 
-  const expenseCat = payslip.employeeType === 'facilitator' ? 'Facilitator Fees' : 'Salaries';
+  const expenseCat = payslip.type === 'facilitator' || payslip.employeeType === 'facilitator' ? 'Facilitator Fees' : 'Salaries';
   const newExpense = {
-    id: 'exp_psl_' + Date.now(),
+    id: 'exp_psl_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
     tenant_id: DEFAULT_TENANT_ID,
     sourceType: 'payslip',
     sourceId: payslip.id,
@@ -2478,27 +2558,344 @@ async function integratePayslipExpense(payslip) {
     reference: payslipRef,
     date: payslip.actualPaymentDate || payslip.payDate || new Date().toISOString().slice(0, 10),
     categoryGroup: 'Staff & People',
-    category: expenseCat,
-    description: `Payroll Disbursement: ${payslip.employeeName} (${payslip.payPeriod}) - ${payslip.role}`,
-    vendor: payslip.employeeName,
-    department: payslip.department || 'Academics',
-    amount: payslip.paidAmount || payslip.netPay,
+    category: 'Staff & People',
+    subCategory: expenseCat,
+    description: `Net payroll disbursement for ${payslip.employeeName} (${payslip.payPeriod})`,
+    amount: payslip.netPay,
+    department: payslip.department || 'Academic & Operations',
     paymentMethod: payslip.paymentMethod || 'Bank Transfer',
-    status: 'approved',
-    approvedBy: payslip.approvedBy || (state.auth.user ? state.auth.user.name : 'Finance Operations'),
-    approvedAt: payslip.approvedAt || new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    createdBy: state.auth.user ? state.auth.user.name : 'Finance Operations'
+    paymentAccountId: accountId || payslip.paymentAccountId || null,
+    status: 'recorded',
+    recordedBy: payslip.disbursedBy || (state.auth && state.auth.user ? state.auth.user.name : 'Super Admin'),
+    createdAt: new Date().toISOString()
   };
 
   state.expenses.push(newExpense);
   payslip.linkedExpenseId = newExpense.id;
-
   await safeSet(STORE_KEY_EXPENSES, state.expenses);
-  await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
-  await logAudit('PAYSLIP_EXPENSE_INTEGRATION', 'expense', newExpense.id, `Linked ${payslipRef} as ${expenseCat} expense (₦${newExpense.amount})`, null, newExpense);
+  await logAudit('INTEGRATE_PAYSLIP_EXPENSE', 'expense', newExpense.id, `Created GL expense ${payslipRef} (₦${payslip.netPay})`);
 
   return newExpense;
+}
+
+// ----------------------------------------------------
+// PHASE 9: CRM, CUSTOMER 360, SESSIONS & CONTRIBUTION ENGINE
+// ----------------------------------------------------
+function findCustomerDuplicate(email, phone, name) {
+  const normEmail = (email || '').trim().toLowerCase();
+  const normPhone = (phone || '').replace(/[^0-9]/g, '');
+  const normName = (name || '').trim().toLowerCase();
+
+  if (normEmail && normEmail.length > 3) {
+    const byEmail = state.customers.find(c => (c.email || '').trim().toLowerCase() === normEmail);
+    if (byEmail) return { matchType: 'email', customer: byEmail };
+  }
+  if (normPhone && normPhone.length >= 7) {
+    const last10 = normPhone.slice(-10);
+    const byPhone = state.customers.find(c => {
+      const custDigits = (c.phone || '').replace(/[^0-9]/g, '');
+      return custDigits.length >= 7 && (custDigits.slice(-10) === last10 || custDigits.includes(normPhone) || normPhone.includes(custDigits));
+    });
+    if (byPhone) return { matchType: 'phone', customer: byPhone };
+  }
+  if (normName && normName.length >= 4) {
+    const byName = state.customers.find(c => (c.name || c.fullName || '').trim().toLowerCase() === normName);
+    if (byName) return { matchType: 'name', customer: byName };
+  }
+  return null;
+}
+
+async function logCustomerActivity(customerId, eventType, title, description = '', details = {}) {
+  if (!customerId) return null;
+  const actor = state.auth && state.auth.user ? state.auth.user.name : 'System';
+  const entry = {
+    id: 'ctl_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tenant_id: DEFAULT_TENANT_ID,
+    customerId,
+    enquiryId: details.enquiryId || null,
+    eventType,
+    title,
+    description: description || title,
+    contactMethod: details.contactMethod || null,
+    outcome: details.outcome || null,
+    nextAction: details.nextAction || null,
+    nextFollowUpDate: details.nextFollowUpDate || null,
+    referenceId: details.referenceId || null,
+    actorName: actor,
+    createdAt: new Date().toISOString()
+  };
+
+  state.customerTimeline.unshift(entry);
+  await dbRepo.saveRecord(STORE_KEY_CUSTOMER_TIMELINE, entry);
+  await safeSet(STORE_KEY_CUSTOMER_TIMELINE, state.customerTimeline);
+  return entry;
+}
+
+async function convertEnquiryToCustomer(enquiryId, customData = {}) {
+  const enquiry = state.enquiries.find(e => e.id === enquiryId);
+  if (!enquiry) throw new Error('Enquiry not found');
+
+  let customer = null;
+  const dup = findCustomerDuplicate(enquiry.email, enquiry.phone, enquiry.name);
+
+  if (dup && customData.useExisting !== false) {
+    customer = dup.customer;
+  } else {
+    state.counters.customer = (state.counters.customer || 0) + 1;
+    const custNo = `CUST-2026-${String(state.counters.customer).padStart(4, '0')}`;
+    customer = {
+      id: 'cust_' + Date.now(),
+      tenant_id: DEFAULT_TENANT_ID,
+      customerNumber: custNo,
+      name: customData.name || customData.fullName || enquiry.name,
+      fullName: customData.fullName || customData.name || enquiry.name,
+      phone: customData.phone || enquiry.phone,
+      email: customData.email || enquiry.email || '',
+      address: customData.address || enquiry.address || '',
+      customerType: customData.customerType || 'Individual',
+      source: customData.source || enquiry.source || 'Direct',
+      status: 'Active',
+      intendedProgramme: enquiry.programmeName || '',
+      notes: enquiry.notes || '',
+      totalInvoiced: 0,
+      totalPaid: 0,
+      outstandingBalance: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    state.customers.push(customer);
+    await dbRepo.saveRecord(STORE_KEY_CUSTOMERS, customer);
+    await safeSet(STORE_KEY_CUSTOMERS, state.customers);
+    await safeSet(STORE_KEY_COUNTERS, state.counters);
+    await logAudit('CUSTOMER_CREATED', 'customer', customer.id, `Created ${customer.name} (${customer.customerNumber})`);
+  }
+
+  enquiry.customerId = customer.id;
+  enquiry.convertedCustomerId = customer.id;
+  enquiry.conversionDate = new Date().toISOString();
+  enquiry.convertedBy = state.auth && state.auth.user ? state.auth.user.name : 'Admissions';
+  enquiry.status = 'CONVERTED';
+
+  await dbRepo.saveRecord(STORE_KEY_ENQUIRIES, enquiry);
+  await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+
+  await logCustomerActivity(customer.id, 'ENQUIRY_CONVERTED', `Prospect enquiry converted for ${enquiry.programmeName || 'Programme'}`, `Enquiry converted by ${enquiry.convertedBy}`, { enquiryId: enquiry.id });
+  await logAudit('ENQUIRY_CONVERTED', 'enquiry', enquiry.id, `Converted to customer ${customer.customerNumber}`);
+
+  return customer;
+}
+
+async function createEnrolmentFromInvoice(invoiceId, options = {}) {
+  const inv = state.invoices.find(i => i.id === invoiceId);
+  if (!inv) throw new Error('Invoice not found');
+
+  const { paid, balance } = invoiceBalance(inv);
+  const prog = state.programmes.find(p => p.id === inv.programmeId) || { name: inv.programmeName || 'General Tech Programme' };
+
+  state.counters.enrolment = (state.counters.enrolment || 0) + 1;
+  const enrNo = `ENR-2026-${String(state.counters.enrolment).padStart(4, '0')}`;
+
+  const enrolment = {
+    id: 'enr_' + Date.now(),
+    tenant_id: DEFAULT_TENANT_ID,
+    enrolmentNo: enrNo,
+    enrolmentNumber: enrNo,
+    customerId: inv.customerId || null,
+    studentName: inv.clientName,
+    studentEmail: inv.email || inv.clientEmail || '',
+    studentPhone: inv.phone || inv.clientPhone || '',
+    programmeId: inv.programmeId || null,
+    programmeName: inv.programmeName || prog.name,
+    programmeNameSnapshot: inv.programmeName || prog.name,
+    agreedFee: Number(inv.total) || 0,
+    fee: Number(inv.total) || 0,
+    discount: inv.discount || 0,
+    netAmount: inv.total,
+    paymentTerms: inv.plan || options.paymentPlan || 'Full Payment',
+    paymentPlan: inv.plan || options.paymentPlan || 'Full Payment',
+    deliveryMode: options.deliveryMode || inv.trainingMode || 'Physical Weekend',
+    cohort: options.cohort || options.cohortCode || `Cohort ${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
+    cohortCode: options.cohortCode || options.cohort || `Cohort ${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
+    startDate: options.startDate || new Date().toISOString().slice(0, 10),
+    expectedEndDate: options.expectedEndDate || '',
+    invoiceId: inv.id,
+    amountPaid: paid,
+    balance: balance,
+    balanceDue: balance,
+    financialStatus: balance <= 0 ? 'paid' : (paid > 0 ? 'partial' : 'unpaid'),
+    paymentStatus: balance <= 0 ? 'paid' : (paid > 0 ? 'partial' : 'unpaid'),
+    enrolmentStatus: 'Active',
+    assignedCoordinator: options.assignedCoordinator || 'Admissions',
+    enrolmentDate: new Date().toISOString().slice(0, 10),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  state.enrolments.push(enrolment);
+  inv.enrolmentId = enrolment.id;
+
+  await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, enrolment);
+  await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
+  await safeSet(STORE_KEY_ENROLMENTS, state.enrolments);
+  await safeSet(STORE_KEY_INVOICES, state.invoices);
+  await safeSet(STORE_KEY_COUNTERS, state.counters);
+
+  if (enrolment.customerId) {
+    await logCustomerActivity(enrolment.customerId, 'ENROLMENT_ACTIVATED', `Enrolled in ${enrolment.programmeNameSnapshot} (${enrolment.cohort})`, `Enrolment number ${enrNo}`, { referenceId: enrolment.id });
+  }
+
+  await logAudit('ENROLMENT_CREATED', 'enrolment', enrolment.id, `Enrolled ${enrolment.studentName} in ${enrolment.programmeNameSnapshot}`);
+  return enrolment;
+}
+
+function calculateFacilitatorSessionEarnings(sessionsCount, sessionRate) {
+  const count = Number(sessionsCount) || 0;
+  const rate = Number(sessionRate) || 0;
+  return safeRound(count * rate);
+}
+
+async function syncPaymentToEnrolmentAndCustomer(payment, invoice) {
+  if (!invoice) return;
+  const { paid, balance } = invoiceBalance(invoice);
+
+  // 1. Sync linked enrolment
+  const linkedEnrolment = state.enrolments.find(e => e.invoiceId === invoice.id || e.id === invoice.enrolmentId || (e.studentName && e.studentName === invoice.clientName));
+  if (linkedEnrolment) {
+    linkedEnrolment.amountPaid = paid;
+    linkedEnrolment.balance = balance;
+    linkedEnrolment.balanceDue = balance;
+    linkedEnrolment.financialStatus = balance <= 0 ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
+    linkedEnrolment.paymentStatus = linkedEnrolment.financialStatus;
+    linkedEnrolment.updatedAt = new Date().toISOString();
+    await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, linkedEnrolment);
+    await safeSet(STORE_KEY_ENROLMENTS, state.enrolments);
+  }
+
+  // 2. Sync linked customer master record
+  const customerId = invoice.customerId || (linkedEnrolment ? linkedEnrolment.customerId : null);
+  if (customerId) {
+    const cust = state.customers.find(c => c.id === customerId);
+    if (cust) {
+      const custInvoices = state.invoices.filter(i => i.customerId === customerId);
+      const totalInv = custInvoices.reduce((s, i) => s + (Number(i.total) || invoiceBalance(i).total), 0);
+      const totalPd = custInvoices.reduce((s, i) => s + invoiceBalance(i).paid, 0);
+      cust.totalInvoiced = safeRound(totalInv);
+      cust.totalPaid = safeRound(totalPd);
+      cust.balance = Math.max(0, safeRound(totalInv - totalPd));
+      cust.outstandingBalance = cust.balance;
+      cust.lastPaymentDate = payment.paymentDate || payment.date || new Date().toISOString().slice(0, 10);
+      cust.currentPaymentStatus = cust.balance <= 0 ? 'Paid in Full' : (cust.totalPaid > 0 ? 'Partial' : 'Unpaid');
+      cust.updatedAt = new Date().toISOString();
+
+      await dbRepo.saveRecord(STORE_KEY_CUSTOMERS, cust);
+      await safeSet(STORE_KEY_CUSTOMERS, state.customers);
+
+      await logCustomerActivity(cust.id, 'PAYMENT_RECEIVED', `Payment of ${fmtMoney(payment.amount)} Confirmed`, `Receipt #${payment.receiptNo} against Invoice #${invoice.invoiceNo}`, { referenceId: payment.id });
+    }
+  }
+}
+
+function getCustomer360Data(customerId) {
+  const customer = state.customers.find(c => c.id === customerId);
+  if (!customer) return null;
+
+  const enquiries = state.enquiries.filter(e => e.customerId === customer.id || e.convertedCustomerId === customer.id || (e.email && e.email.toLowerCase() === (customer.email || '').toLowerCase()));
+  const enrolments = state.enrolments.filter(e => e.customerId === customer.id || (e.studentName && e.studentName === customer.name) || (e.studentEmail && e.studentEmail.toLowerCase() === (customer.email || '').toLowerCase()));
+  const invoices = state.invoices.filter(i => i.customerId === customer.id || enrolments.some(en => en.invoiceId === i.id) || (i.clientName && i.clientName.trim().toLowerCase() === (customer.name || '').trim().toLowerCase()));
+  const invoiceIds = invoices.map(i => i.id);
+  const payments = state.payments.filter(p => invoiceIds.includes(p.invoiceId) || (p.clientName && p.clientName === customer.name));
+  const timeline = state.customerTimeline.filter(t => t.customerId === customer.id);
+
+  const totalInvoiced = invoices.reduce((s, i) => s + (Number(i.total) || invoiceBalance(i).total || 0), 0);
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const outstandingBalance = Math.max(0, safeRound(totalInvoiced - totalPaid));
+
+  const summaryObj = {
+    totalInvoiced: safeRound(totalInvoiced),
+    totalPaid: safeRound(totalPaid),
+    balance: safeRound(outstandingBalance),
+    outstandingBalance: safeRound(outstandingBalance),
+    invoicesCount: invoices.length,
+    paymentsCount: payments.length,
+    lastPaymentDate: payments.length ? (payments[payments.length - 1].paymentDate || payments[payments.length - 1].date) : null
+  };
+
+  return {
+    customer,
+    enquiries,
+    enrolments,
+    invoices,
+    payments,
+    timeline,
+    summary: summaryObj,
+    financialSummary: summaryObj
+  };
+}
+
+function calculateProgrammeContribution(progId) {
+  const prog = state.programmes.find(p => p.id === progId);
+  if (!prog) return {
+    enquiriesCount: 0,
+    enrolmentsCount: 0,
+    conversionRate: 0,
+    totalRevenueBilled: 0,
+    totalRevenueCollected: 0,
+    facilitatorDirectCosts: 0,
+    operationalContribution: 0
+  };
+
+  const enquiries = state.enquiries.filter(e => e.programmeId === prog.id || (e.programmeName && e.programmeName.toLowerCase() === prog.name.toLowerCase()));
+  const enrolments = state.enrolments.filter(e => e.programmeId === prog.id || (e.programmeName && e.programmeName.toLowerCase() === prog.name.toLowerCase()) || (e.programmeNameSnapshot && e.programmeNameSnapshot.toLowerCase() === prog.name.toLowerCase()));
+  const invoices = state.invoices.filter(i => i.programmeId === prog.id || (i.programmeName && i.programmeName.toLowerCase() === prog.name.toLowerCase()));
+  const invoiceIds = invoices.map(i => i.id);
+  const payments = state.payments.filter(p => invoiceIds.includes(p.invoiceId));
+
+  const directSessions = state.sessions.filter(s => (s.programme_id === prog.id || s.programmeId === prog.id || (s.programme_name && s.programme_name.toLowerCase() === prog.name.toLowerCase())) && (s.status === 'approved' || s.status === 'included_in_payslip'));
+  const facilitatorDirectCosts = directSessions.reduce((s, sess) => s + Number(sess.total_amount || sess.totalAmount || sess.amountEarned || 0), 0);
+
+  const totalRevenueBilled = invoices.reduce((s, i) => s + (Number(i.total) || invoiceBalance(i).total || 0), 0);
+  const totalRevenueCollected = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const operationalContribution = safeRound(totalRevenueCollected - facilitatorDirectCosts);
+
+  const enrolCount = Math.max(enrolments.length, state.enquiries.filter(e => (e.programmeId === prog.id || e.programmeName === prog.name) && e.status === 'ENROLLED').length);
+
+  return {
+    programme: prog,
+    enquiriesCount: enquiries.length,
+    enrolmentsCount: enrolCount,
+    conversionRate: enquiries.length ? Math.round((enrolCount / enquiries.length) * 100) : 0,
+    totalRevenueBilled: safeRound(totalRevenueBilled),
+    totalRevenueCollected: safeRound(totalRevenueCollected),
+    facilitatorDirectCosts: safeRound(facilitatorDirectCosts),
+    operationalContribution: safeRound(operationalContribution)
+  };
+}
+
+async function batchDisbursePayroll(payPeriod, accountId = null) {
+  const targetPayslips = state.payslips.filter(p => p.payPeriod === payPeriod && (p.status === 'approved' || p.status === 'acknowledged'));
+  const results = [];
+
+  for (const ps of targetPayslips) {
+    ps.status = 'paid';
+    ps.paymentAccountId = accountId || ps.paymentAccountId || null;
+    ps.actualPaymentDate = new Date().toISOString().slice(0, 10);
+    ps.paidAmount = ps.netPay;
+    ps.paymentMethod = 'Bank Transfer';
+    ps.disbursedBy = state.auth && state.auth.user ? state.auth.user.name : 'Finance Operations';
+    ps.disbursedAt = new Date().toISOString();
+
+    await dbRepo.saveRecord(STORE_KEY_PAYSLIPS, ps);
+    const exp = await integratePayslipExpense(ps, accountId);
+    if (exp) {
+      await dbRepo.saveRecord(STORE_KEY_EXPENSES, exp);
+    }
+    results.push(ps);
+  }
+
+  await safeSet(STORE_KEY_PAYSLIPS, state.payslips);
+  await safeSet(STORE_KEY_EXPENSES, state.expenses);
+  await logAudit('BATCH_PAYROLL_DISBURSEMENT', 'payroll', payPeriod, `Disbursed ${results.length} payslips for period ${payPeriod}`);
+  return results;
 }
 
 function getFinancialMetrics() {
@@ -3365,9 +3762,9 @@ function render() {
   const isEmployee = isEmployeePortal();
 
   // Role validation on tab routing
-  if (isEmployee && !['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
+  if (isEmployee && !['staffDashboard', 'myPayslips', 'mySessions', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
     state.tab = 'staffDashboard';
-  } else if (!isEmployee && ['staffDashboard', 'myPayslips', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
+  } else if (!isEmployee && ['staffDashboard', 'myPayslips', 'mySessions', 'myProfile', 'myQueries', 'mySecurity'].includes(state.tab)) {
     state.tab = 'dashboard';
   }
 
@@ -3405,6 +3802,7 @@ function render() {
     // Employee / Facilitator tabs
     staffDashboard: isEmployee ? (user.role === 'Facilitator' ? 'Facilitator Workspace' : 'My Workspace') : 'Dashboard',
     myPayslips: 'My Payslips',
+    mySessions: 'My Sessions & Engagements',
     myProfile: user.role === 'Facilitator' ? 'My Profile & Engagements' : 'My Profile & Bank',
     myQueries: 'My Payroll Queries',
     mySecurity: 'Account & Security'
@@ -3442,6 +3840,11 @@ function render() {
                   <span class="cp-nav-icon">&#x1F4B3;</span><span class="cp-nav-label">My Payslips</span>
                   ${myPendingAckCount > 0 ? `<span class="cp-nav-badge" style="background:var(--warning); color:#fff;">${myPendingAckCount}</span>` : `<span class="cp-nav-badge">${myPayslips.length}</span>`}
                 </div>
+                ${user.role === 'Facilitator' ? `
+                  <div class="cp-nav-item ${state.tab === 'mySessions' ? 'active' : ''}" data-tab="mySessions">
+                    <span class="cp-nav-icon">&#x1F393;</span><span class="cp-nav-label">My Sessions</span>
+                  </div>
+                ` : ''}
                 <div class="cp-nav-item ${state.tab === 'myProfile' ? 'active' : ''}" data-tab="myProfile">
                   <span class="cp-nav-icon">&#x1F464;</span><span class="cp-nav-label">${user.role === 'Facilitator' ? 'Profile &amp; Engagements' : 'My Profile &amp; Bank'}</span>
                 </div>
@@ -3747,6 +4150,7 @@ function render() {
   if (isEmployee) {
     if (state.tab === 'staffDashboard') renderStaffDashboardTab(contentView);
     else if (state.tab === 'myPayslips') renderMyPayslipsTab(contentView);
+    else if (state.tab === 'mySessions') renderMySessionsTab(contentView);
     else if (state.tab === 'myProfile') renderMyProfileTab(contentView);
     else if (state.tab === 'myQueries') renderMyQueriesTab(contentView);
     else if (state.tab === 'mySecurity') renderMySecurityTab(contentView);
@@ -3822,6 +4226,12 @@ function renderModal(type, data) {
   else if (type === 'deactivateUserModal') renderDeactivateUserModal(container, data.user);
   else if (type === 'resetPasswordModal') renderResetPasswordModal(container, data.user);
   else if (type === 'changeRoleModal') renderChangeRoleModal(container, data.user);
+  // Phase 9 Operational Integration Modals
+  else if (type === 'customer360') renderCustomer360Modal(container, data.customerId || (data.customer && data.customer.id));
+  else if (type === 'convertEnquiry') renderConvertEnquiryModal(container, data.enquiry);
+  else if (type === 'logFollowUp') renderLogFollowUpModal(container, data);
+  else if (type === 'logSession') renderLogSessionModal(container, data);
+  else if (type === 'monthEndPayroll') renderMonthEndPayrollModal(container, data);
 }
 
 // ----------------------------------------------------
@@ -4300,6 +4710,96 @@ function renderMyPayslipsTab(container) {
   });
 }
 
+function renderMySessionsTab(container) {
+  const user = getCurrentUser();
+  const pers = getCurrentPersonnel();
+  const mySessions = state.sessions.filter(s => s.facilitator_id === (pers ? pers.id : (user ? user.id : '')) || (pers && s.facilitator_name && s.facilitator_name.toLowerCase() === pers.name.toLowerCase()));
+  const approvedSessions = mySessions.filter(s => s.status === 'approved');
+  const totalEarnings = approvedSessions.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+  const pendingCount = mySessions.filter(s => s.status === 'pending').length;
+
+  container.innerHTML = `
+    <!-- Top Summary KPI Grid -->
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:18px;">
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Total Sessions Logged</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--primary);">${mySessions.length}</div>
+        <div class="cp-kpi-sub">Conduct &amp; Delivery</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Approved Sessions</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--success);">${approvedSessions.length}</div>
+        <div class="cp-kpi-sub">Verified by Academics</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Approved Session Pay</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:var(--success);">${fmtMoney(totalEarnings)}</div>
+        <div class="cp-kpi-sub">Payable via Payroll</div>
+      </div>
+      <div class="cp-kpi-card" style="padding:12px 14px;">
+        <div class="cp-kpi-label">Pending Verification</div>
+        <div class="cp-kpi-val" style="font-size:20px; color:${pendingCount > 0 ? 'var(--warning)' : 'var(--text-muted)'};">${pendingCount}</div>
+        <div class="cp-kpi-sub">${pendingCount > 0 ? 'Awaiting Review' : 'Up to Date'}</div>
+      </div>
+    </div>
+
+    <div class="cp-card">
+      <div class="cp-card-header">
+        <div>
+          <div class="cp-section-title">&#x1F393; Facilitator Training &amp; Session Logs</div>
+          <div class="cp-section-desc">Record conducted masterclasses, lectures, and workshops to integrate session-based earnings into your month-end payroll statement.</div>
+        </div>
+        <button class="cp-btn sm accent" id="btnLogNewSessionBtn">+ Log Training Session</button>
+      </div>
+
+      ${mySessions.length === 0 ? `
+        <div class="cp-empty-state">
+          <div class="cp-empty-icon">&#x1F4DA;</div>
+          <div class="cp-empty-title">No sessions logged yet</div>
+          <div class="cp-empty-desc">Log your conducted cohort lectures and masterclasses to track earnings for payroll.</div>
+          <button class="cp-btn sm accent" id="btnEmptyLogSess" style="margin-top:10px;">+ Log Your First Session</button>
+        </div>
+      ` : `
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Programme</th>
+                <th>Topic / Module</th>
+                <th>Session Type</th>
+                <th style="text-align:center;">Count</th>
+                <th style="text-align:right;">Rate / Session</th>
+                <th style="text-align:right;">Total Amount</th>
+                <th>Approval</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${mySessions.slice().reverse().map(s => `
+                <tr>
+                  <td>${fmtDate(s.session_date)}</td>
+                  <td style="font-weight:600; color:var(--primary);">${escapeHtml(s.programme_name || 'Academic Course')}</td>
+                  <td>${escapeHtml(s.topic || 'General Lecture')}</td>
+                  <td><span class="cp-pill category-pill">${escapeHtml(s.session_type || 'Lecture')}</span></td>
+                  <td style="text-align:center; font-weight:700;">${s.sessions_count || 1}</td>
+                  <td style="text-align:right;">${fmtMoney(s.rate_per_session || 0)}</td>
+                  <td style="text-align:right; font-weight:800; color:var(--success);">${fmtMoney(s.total_amount || 0)}</td>
+                  <td><span class="cp-pill ${s.status === 'approved' ? 'paid' : (s.status === 'rejected' ? 'cancelled' : 'draft')}">${escapeHtml((s.status || 'pending').toUpperCase())}</span></td>
+                  <td><span class="cp-pill ${s.payment_status === 'paid' ? 'paid' : 'unpaid'}">${escapeHtml((s.payment_status || 'pending').toUpperCase())}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  `;
+
+  const btnLog = document.getElementById('btnLogNewSessionBtn') || document.getElementById('btnEmptyLogSess');
+  if (btnLog) btnLog.addEventListener('click', () => openModal('logSession'));
+}
+
 function renderMyProfileTab(container) {
   const user = getCurrentUser();
   const pers = getCurrentPersonnel() || {
@@ -4701,7 +5201,10 @@ function renderStudentAccountsTab(container) {
                   <td>${acc.isEnrolled ? '<span class="cp-pill active">ENROLLED</span>' : '<span class="cp-pill draft">NOT ENROLLED</span>'}</td>
                   <td><span class="cp-pill ${acc.financialStatus.toLowerCase()}">${escapeHtml(acc.status)}</span></td>
                   <td style="text-align:center;">
-                    <button class="cp-btn sm secondary btnOpenProfile" data-name="${escapeHtml(acc.clientName)}">&#x1F464; Complete Profile</button>
+                    <div class="cp-action-group" style="display:flex; justify-content:center; gap:4px;">
+                      <button class="cp-btn sm secondary btnOpenProfile" data-name="${escapeHtml(acc.clientName)}">&#x1F464; Profile</button>
+                      <button class="cp-btn sm secondary btnOpenCust360" data-name="${escapeHtml(acc.clientName)}" title="Customer 360° View">👤 360°</button>
+                    </div>
                   </td>
                 </tr>
               `).join('')}
@@ -4729,6 +5232,35 @@ function renderStudentAccountsTab(container) {
       const name = btn.dataset.name;
       const acc = accounts.find(a => a.clientName === name);
       if (acc) openModal('studentProfile', { account: acc });
+    });
+  });
+
+  container.querySelectorAll('.btnOpenCust360').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.name;
+      const cust = state.customers.find(c => (c.name && c.name.toLowerCase() === name.toLowerCase()) || (c.fullName && c.fullName.toLowerCase() === name.toLowerCase()));
+      if (cust) {
+        openModal('customer360', { customerId: cust.id });
+      } else {
+        const dup = findCustomerDuplicate('', '', name);
+        if (dup) {
+          openModal('customer360', { customerId: dup.customer.id });
+        } else {
+          state.counters.customer = (state.counters.customer || 0) + 1;
+          const newCust = {
+            id: 'cust_' + Date.now(),
+            tenant_id: DEFAULT_TENANT_ID,
+            customerNumber: formatDocNo('customer', state.counters.customer),
+            name: name,
+            fullName: name,
+            createdAt: new Date().toISOString()
+          };
+          state.customers.push(newCust);
+          await safeSet(STORE_KEY_CUSTOMERS, state.customers);
+          await safeSet(STORE_KEY_COUNTERS, state.counters);
+          openModal('customer360', { customerId: newCust.id });
+        }
+      }
     });
   });
 }
@@ -5134,6 +5666,7 @@ function renderInvoicesTab(container) {
       }
 
       state.invoices.push(inv);
+      await createEnrolmentFromInvoice(inv.id);
 
       // Advance linked enquiry status
       if (state.pendingEnquiryForInvoice) {
@@ -5441,6 +5974,7 @@ function renderPayslipsTab(container) {
         </div>
         <div style="display:flex; gap:8px;">
           <button class="cp-btn sm secondary" id="btnExportPayslips">&#x1F4E5; Export Payroll CSV</button>
+          ${canApprove() ? '<button class="cp-btn sm success" id="btnMonthEndBatchPay">&#x1F4B3; Month-End Batch Pay</button>' : ''}
           ${canRecord() ? '<button class="cp-btn sm accent" id="btnNewPayslipBtn">+ Prepare Payslip</button>' : ''}
         </div>
       </div>
@@ -5588,6 +6122,9 @@ function renderPayslipsTab(container) {
 
   const btnGen = document.getElementById('btnNewPayslipBtn') || document.getElementById('btnEmptyGeneratePayslip');
   if (btnGen) btnGen.addEventListener('click', () => openModal('generatePayslip'));
+
+  const btnMonthEnd = document.getElementById('btnMonthEndBatchPay');
+  if (btnMonthEnd) btnMonthEnd.addEventListener('click', () => openModal('monthEndPayroll'));
 
   container.querySelectorAll('.btnViewPayslip').forEach(b => {
     b.addEventListener('click', () => {
@@ -6021,6 +6558,51 @@ function renderReportsTab(container) {
           <div style="display:flex; justify-content:space-between; padding:5px 0;"><span>Pending Payroll Approval:</span><strong style="color:var(--warning);">${fmtMoney(m.payroll.pendingApproval)}</strong></div>
         </div>
       </div>
+
+      <!-- Phase 9: Integrated Operational Programme Contribution Section -->
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <div style="font-size:14px; font-weight:700; color:var(--primary);">&#x1F393; Programme Operational Contribution Analysis</div>
+            <div style="font-size:12px; color:var(--text-secondary);">Compares actual tuition billed &amp; collected against direct facilitator session expenses to evaluate programme profitability.</div>
+          </div>
+          <button class="cp-btn sm secondary" id="btnExportProgContribution">&#x1F4E5; Export Contribution CSV</button>
+        </div>
+
+        <div class="cp-table-wrap">
+          <table class="cp-table">
+            <thead>
+              <tr>
+                <th>Programme</th>
+                <th style="text-align:center;">Enquiries</th>
+                <th style="text-align:center;">Enrolments</th>
+                <th style="text-align:center;">Conversion</th>
+                <th style="text-align:right;">Tuition Billed</th>
+                <th style="text-align:right;">Tuition Collected</th>
+                <th style="text-align:right;">Facilitator Costs</th>
+                <th style="text-align:right;">Operational Contribution</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${state.programmes.map(pr => {
+                const c = calculateProgrammeContribution(pr.id);
+                return `
+                  <tr>
+                    <td style="font-weight:700; color:var(--primary);">${escapeHtml(pr.name)}</td>
+                    <td style="text-align:center;">${c.enquiriesCount}</td>
+                    <td style="text-align:center; font-weight:700;">${c.enrolmentsCount}</td>
+                    <td style="text-align:center;"><span class="cp-pill ${c.conversionRate >= 50 ? 'paid' : (c.conversionRate > 0 ? 'category-pill' : 'draft')}">${c.conversionRate}%</span></td>
+                    <td style="text-align:right;">${fmtMoney(c.totalRevenueBilled)}</td>
+                    <td style="text-align:right; font-weight:600; color:var(--success);">${fmtMoney(c.totalRevenueCollected)}</td>
+                    <td style="text-align:right; color:var(--danger);">${c.facilitatorDirectCosts > 0 ? '-' + fmtMoney(c.facilitatorDirectCosts) : '₦0.00'}</td>
+                    <td style="text-align:right; font-weight:800; color:${c.operationalContribution >= 0 ? 'var(--primary)' : 'var(--danger)'};">${fmtMoney(c.operationalContribution)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   `;
 
@@ -6037,6 +6619,25 @@ function renderReportsTab(container) {
       { Metric: 'Payroll Disbursed', Value: m.payroll.totalDisbursed }
     ]);
   });
+
+  const btnExpCont = document.getElementById('btnExportProgContribution');
+  if (btnExpCont) {
+    btnExpCont.addEventListener('click', () => {
+      exportToCSV('Programme_Operational_Contribution', state.programmes.map(p => {
+        const c = calculateProgrammeContribution(p.id);
+        return {
+          Programme: p.name,
+          Enquiries: c.enquiriesCount,
+          Enrolments: c.enrolmentsCount,
+          ConversionRate: `${c.conversionRate}%`,
+          TuitionBilled: c.totalRevenueBilled,
+          TuitionCollected: c.totalRevenueCollected,
+          FacilitatorCosts: c.facilitatorDirectCosts,
+          OperationalContribution: c.operationalContribution
+        };
+      }));
+    });
+  }
 }
 
 // ----------------------------------------------------
@@ -7309,6 +7910,7 @@ function renderRecordPaymentModal(container, inv) {
     }
 
     state.payments.push(payment);
+    await syncPaymentToEnrolmentAndCustomer(payment, inv);
     await safeSet(STORE_KEY_PAYMENTS, state.payments);
     await safeSet(STORE_KEY_COUNTERS, state.counters);
     await logAudit('RECORD_PAYMENT', 'payment', payment.id, `Payment #${payment.receiptNo} of ₦${payment.amount} for Invoice #${inv.invoiceNo}`, null, payment);
@@ -9323,6 +9925,483 @@ function renderCollectionNotesModal(container, inv) {
   });
 }
 
+// ----------------------------------------------------
+// PHASE 9: CRM 360, ENQUIRY CONVERSION & OPERATIONS MODALS
+// ----------------------------------------------------
+function renderCustomer360Modal(container, customerId) {
+  const data = getCustomer360Data(customerId);
+  if (!data) {
+    alert('Customer record not found.');
+    closeModal();
+    return;
+  }
+  const cust = data.customer;
+  const fsCfg = state.financeSettings || DEFAULT_FINANCE_SETTINGS;
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal large" style="max-width:900px;">
+        <div class="cp-modal-header">
+          <div>
+            <div class="cp-modal-title">&#x1F464; Customer 360&deg; &mdash; ${escapeHtml(cust.name || cust.fullName)}</div>
+            <div style="font-size:12px; color:var(--text-muted);">
+              ID: <strong>${escapeHtml(cust.customerNumber || 'CUST-2026')}</strong> &middot; Status: <span class="cp-pill ${cust.status === 'active' ? 'paid' : 'draft'}">${escapeHtml((cust.status || 'active').toUpperCase())}</span> &middot; Type: <strong>${escapeHtml(cust.customerType || 'Individual')}</strong>
+            </div>
+          </div>
+          <button class="cp-modal-close" id="btnCloseC360Mod">&times;</button>
+        </div>
+
+        <div class="cp-modal-body">
+          <!-- 3-Column Financial & Academic Summary -->
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px;">
+            <div class="cp-kpi-card" style="padding:10px 14px;">
+              <div class="cp-kpi-label">Total Invoiced</div>
+              <div class="cp-kpi-val" style="font-size:18px; color:var(--primary);">${fmtMoney(data.summary.totalInvoiced)}</div>
+              <div class="cp-kpi-sub">${data.invoices.length} Invoices Issued</div>
+            </div>
+            <div class="cp-kpi-card" style="padding:10px 14px;">
+              <div class="cp-kpi-label">Total Paid</div>
+              <div class="cp-kpi-val" style="font-size:18px; color:var(--success);">${fmtMoney(data.summary.totalPaid)}</div>
+              <div class="cp-kpi-sub">${data.payments.length} Confirmed Receipts</div>
+            </div>
+            <div class="cp-kpi-card" style="padding:10px 14px;">
+              <div class="cp-kpi-label">Outstanding Balance</div>
+              <div class="cp-kpi-val" style="font-size:18px; color:${data.summary.balance > 0 ? 'var(--warning)' : 'var(--success)'};">${fmtMoney(data.summary.balance)}</div>
+              <div class="cp-kpi-sub">${data.enrolments.length} Enrolments</div>
+            </div>
+          </div>
+
+          <!-- Contact & Meta Information -->
+          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:16px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:12.5px;">
+              <div><strong>Email:</strong> ${escapeHtml(cust.email || 'N/A')}</div>
+              <div><strong>Phone:</strong> ${escapeHtml(cust.phone || 'N/A')}</div>
+              <div><strong>Source:</strong> ${escapeHtml(cust.source || 'Direct')}</div>
+              <div><strong>Address:</strong> ${escapeHtml(cust.address || 'N/A')}</div>
+              <div><strong>Student Status:</strong> <span class="cp-pill ${cust.studentStatus === 'enrolled' ? 'paid' : 'category-pill'}">${escapeHtml((cust.studentStatus || 'lead').toUpperCase())}</span></div>
+              <div><strong>Created:</strong> ${new Date(cust.createdAt || Date.now()).toLocaleDateString('en-GB')}</div>
+            </div>
+          </div>
+
+          <!-- Timeline Section -->
+          <div id="c360TimelineSection">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <span style="font-size:12px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Chronological Customer Journey (${data.timeline.length})</span>
+              <button class="cp-btn sm accent" id="btnAddFollowUpFrom360">+ Log Follow-Up</button>
+            </div>
+            <div style="max-height:200px; overflow-y:auto;">
+              ${data.timeline.length === 0 ? '<div style="font-size:12px; color:var(--text-muted); padding:10px 0;">No activities logged yet.</div>' : data.timeline.map(t => `
+                <div style="border-left:2.5px solid var(--primary); padding-left:12px; margin-bottom:10px; font-size:12px;">
+                  <div style="display:flex; justify-content:space-between;">
+                    <strong style="color:var(--primary);">${escapeHtml(t.title)}</strong>
+                    <span style="font-size:11px; color:var(--text-muted);">${new Date(t.createdAt).toLocaleString('en-GB')}</span>
+                  </div>
+                  <div style="color:var(--text-secondary); margin-top:2px;">${escapeHtml(t.description)}</div>
+                  <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                    By: ${escapeHtml(t.actorName || 'Staff')} ${t.contactMethod ? `&middot; Method: ${escapeHtml(t.contactMethod)}` : ''} ${t.outcome ? `&middot; Outcome: <strong>${escapeHtml(t.outcome)}</strong>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCloseC360Mod2">Close</button>
+          <button class="cp-btn accent" id="btnCreateInvoiceFrom360">+ Issue Invoice</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseC360Mod').addEventListener('click', closeModal);
+  document.getElementById('btnCloseC360Mod2').addEventListener('click', closeModal);
+
+  document.getElementById('btnAddFollowUpFrom360').addEventListener('click', () => {
+    openModal('logFollowUp', { customerId: cust.id, customerName: cust.name || cust.fullName });
+  });
+
+  document.getElementById('btnCreateInvoiceFrom360').addEventListener('click', () => {
+    closeModal();
+    state.tab = 'invoices';
+    state.invoiceSubTab = 'new';
+    render();
+  });
+}
+
+function renderConvertEnquiryModal(container, enquiry) {
+  const dup = findCustomerDuplicate(enquiry.email, enquiry.phone, enquiry.name);
+  const nameParts = (enquiry.name || '').trim().split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F464; Convert Enquiry to Master Customer</div>
+          <button class="cp-modal-close" id="btnCloseConvMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          ${dup ? `
+            <div style="background:#FFFBEB; border:1.5px solid var(--warning); border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:14px; font-size:12.5px; color:#92400E;">
+              <strong>⚠️ Possible Existing Customer Found:</strong> A master customer matching this ${dup.matchType} exists:<br/>
+              <strong>${escapeHtml(dup.customer.name || dup.customer.fullName)}</strong> (${escapeHtml(dup.customer.customerNumber || 'CUST')}) &middot; ${escapeHtml(dup.customer.phone || '')} &middot; ${escapeHtml(dup.customer.email || '')}
+              <div style="margin-top:8px;">
+                <button class="cp-btn sm success" id="btnLinkExistingCust" style="margin-right:6px;">Link to Existing Customer</button>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="cp-row2">
+            <div class="cp-field"><label>First Name *</label><input id="convFname" value="${escapeHtml(firstName)}" /></div>
+            <div class="cp-field"><label>Last Name *</label><input id="convLname" value="${escapeHtml(lastName)}" /></div>
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field"><label>Phone Number (WhatsApp) *</label><input id="convPhone" value="${escapeHtml(enquiry.phone || '')}" /></div>
+            <div class="cp-field"><label>Email Address</label><input id="convEmail" type="email" value="${escapeHtml(enquiry.email || '')}" /></div>
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Customer Type</label>
+              <select id="convType">
+                <option value="individual">Individual Student</option>
+                <option value="corporate">Corporate Client</option>
+                <option value="sponsored">Sponsored Candidate</option>
+              </select>
+            </div>
+            <div class="cp-field"><label>Acquisition Source</label><input id="convSource" value="${escapeHtml(enquiry.source || 'Direct')}" /></div>
+          </div>
+          <div class="cp-field"><label>Residential / Corporate Address</label><input id="convAddress" placeholder="Lagos, Nigeria" /></div>
+          <div id="convErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelConv">Cancel</button>
+          <button class="cp-btn accent" id="btnConfirmConv">&#x2714; Create Master Customer Record</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseConvMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelConv').addEventListener('click', closeModal);
+
+  if (dup) {
+    const btnLink = document.getElementById('btnLinkExistingCust');
+    if (btnLink) {
+      btnLink.addEventListener('click', async () => {
+        enquiry.convertedCustomerId = dup.customer.id;
+        await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+        await logCustomerActivity(dup.customer.id, 'ENQUIRY_LINKED', `Linked Enquiry #${enquiry.enquiryNo}`, `Linked prospect enquiry for ${enquiry.programmeName}`, { enquiryId: enquiry.id });
+        alert(`Enquiry linked to existing customer ${dup.customer.name} (${dup.customer.customerNumber}).`);
+        openModal('customer360', { customerId: dup.customer.id });
+      });
+    }
+  }
+
+  document.getElementById('btnConfirmConv').addEventListener('click', async () => {
+    const fn = document.getElementById('convFname').value.trim();
+    const ln = document.getElementById('convLname').value.trim();
+    const phone = document.getElementById('convPhone').value.trim();
+    const email = document.getElementById('convEmail').value.trim();
+    const type = document.getElementById('convType').value;
+    const src = document.getElementById('convSource').value.trim();
+    const addr = document.getElementById('convAddress').value.trim();
+    const errEl = document.getElementById('convErr');
+
+    if (!fn || !phone) {
+      errEl.textContent = 'First name and phone number are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const customer = await convertEnquiryToCustomer(enquiry.id, {
+      firstName: fn,
+      lastName: ln,
+      fullName: `${fn} ${ln}`.trim(),
+      name: `${fn} ${ln}`.trim(),
+      phone,
+      email,
+      customerType: type,
+      source: src,
+      address: addr
+    });
+
+    alert(`Customer master record ${customer.customerNumber} (${customer.fullName}) created successfully!`);
+    openModal('customer360', { customerId: customer.id });
+  });
+}
+
+function renderLogFollowUpModal(container, data = {}) {
+  const customerId = data.customerId;
+  const enquiryId = data.enquiryId;
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F4DE; Log Customer Follow-Up Activity</div>
+          <button class="cp-modal-close" id="btnCloseFupMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Contact Method *</label>
+              <select id="fupMethod">
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Phone Call">Phone Call</option>
+                <option value="Email">Email</option>
+                <option value="In-Person Consultation">In-Person Consultation</option>
+                <option value="Online Video Meeting">Online Video Meeting</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label>Interaction Stage / Outcome *</label>
+              <select id="fupOutcome">
+                <option value="Interested">Interested / Evaluating</option>
+                <option value="Consultation Scheduled">Consultation Scheduled</option>
+                <option value="Invoice Requested">Invoice Requested</option>
+                <option value="Payment Promised">Payment Promised</option>
+                <option value="Follow-Up Required">Follow-Up Required</option>
+                <option value="No Answer / Reschedule">No Answer / Reschedule</option>
+                <option value="Not Interested">Not Interested</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cp-field"><label>Activity Summary / Title *</label><input id="fupTitle" placeholder="e.g. Discussed IELTS curriculum and weekend batch schedule" /></div>
+          <div class="cp-field"><label>Detailed Notes</label><textarea id="fupNotes" rows="2" placeholder="Candidate inquired about installment payment options."></textarea></div>
+
+          <div class="cp-row2">
+            <div class="cp-field"><label>Recommended Next Action</label><input id="fupNextAct" placeholder="e.g. Send 60/40 payment plan invoice" /></div>
+            <div class="cp-field"><label>Next Follow-Up Date</label><input type="date" id="fupNextDate" value="${todayStr}" /></div>
+          </div>
+          <div id="fupErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelFup">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveFup">&#x2714; Save Follow-Up</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseFupMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelFup').addEventListener('click', closeModal);
+
+  document.getElementById('btnSaveFup').addEventListener('click', async () => {
+    const method = document.getElementById('fupMethod').value;
+    const outcome = document.getElementById('fupOutcome').value;
+    const title = document.getElementById('fupTitle').value.trim();
+    const notes = document.getElementById('fupNotes').value.trim();
+    const nextAct = document.getElementById('fupNextAct').value.trim();
+    const nextDate = document.getElementById('fupNextDate').value;
+    const errEl = document.getElementById('fupErr');
+
+    if (!title) {
+      errEl.textContent = 'Please enter an activity summary.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    await logCustomerActivity(customerId, 'FOLLOW_UP', title, notes, {
+      contactMethod: method,
+      outcome,
+      nextAction: nextAct,
+      nextFollowUpDate: nextDate,
+      enquiryId
+    });
+
+    alert('Follow-up activity logged successfully.');
+    if (customerId) {
+      openModal('customer360', { customerId });
+    } else {
+      closeModal();
+    }
+  });
+}
+
+function renderLogSessionModal(container, data = {}) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const curPeriod = todayStr.slice(0, 7);
+  const facilitators = state.personnel.filter(p => p.type === 'facilitator' && p.status !== 'deactivated');
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F393; Log Facilitator Training Session</div>
+          <button class="cp-modal-close" id="btnCloseSessMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div class="cp-field">
+            <label>Master Facilitator *</label>
+            <select id="sessFacSelect">
+              ${facilitators.map(f => `<option value="${f.id}" data-name="${escapeHtml(f.name)}" data-rate="${f.basicPay || 25000}">${escapeHtml(f.name)} (${escapeHtml(f.role || 'Facilitator')})</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Target Programme *</label>
+              <select id="sessProgSelect">
+                ${state.programmes.map(p => `<option value="${p.id}" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="cp-field"><label>Session Date *</label><input type="date" id="sessDate" value="${todayStr}" /></div>
+          </div>
+
+          <div class="cp-row3">
+            <div class="cp-field">
+              <label>Session Type</label>
+              <select id="sessType">
+                <option value="Lecture / Masterclass">Lecture / Masterclass</option>
+                <option value="Practical Workshop">Practical Workshop</option>
+                <option value="Mock Exam &amp; Review">Mock Exam &amp; Review</option>
+                <option value="1-on-1 Coaching">1-on-1 Coaching</option>
+              </select>
+            </div>
+            <div class="cp-field"><label>Sessions Count *</label><input type="number" id="sessCount" value="1" min="1" /></div>
+            <div class="cp-field"><label>Rate per Session (₦) *</label><input type="number" id="sessRate" value="25000" /></div>
+          </div>
+
+          <div class="cp-field"><label>Topic / Module Covered *</label><input id="sessTopic" placeholder="e.g. IELTS Task 2 Essay Writing Masterclass" /></div>
+          <div class="cp-field"><label>Payroll Period (YYYY-MM)</label><input type="month" id="sessPeriod" value="${curPeriod}" /></div>
+          <div id="sessErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelSess">Cancel</button>
+          <button class="cp-btn accent" id="btnSaveSess">&#x2714; Record &amp; Submit Session</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseSessMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelSess').addEventListener('click', closeModal);
+
+  document.getElementById('btnSaveSess').addEventListener('click', async () => {
+    const facSel = document.getElementById('sessFacSelect');
+    const facId = facSel.value;
+    const facName = facSel.options[facSel.selectedIndex].dataset.name;
+    const progSel = document.getElementById('sessProgSelect');
+    const progId = progSel.value;
+    const progName = progSel.options[progSel.selectedIndex].dataset.name;
+    const sDate = document.getElementById('sessDate').value;
+    const sType = document.getElementById('sessType').value;
+    const sCount = Number(document.getElementById('sessCount').value || 1);
+    const sRate = Number(document.getElementById('sessRate').value || 0);
+    const topic = document.getElementById('sessTopic').value.trim();
+    const period = document.getElementById('sessPeriod').value;
+    const errEl = document.getElementById('sessErr');
+
+    if (!topic || sCount <= 0 || sRate <= 0) {
+      errEl.textContent = 'Please provide topic, count, and session rate.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const totalAmt = safeRound(sCount * sRate);
+    const sessionRecord = {
+      id: 'fses_' + Date.now(),
+      tenant_id: DEFAULT_TENANT_ID,
+      facilitator_id: facId,
+      facilitator_name: facName,
+      programme_id: progId,
+      programme_name: progName,
+      session_date: sDate,
+      session_type: sType,
+      sessions_count: sCount,
+      rate_per_session: sRate,
+      total_amount: totalAmt,
+      topic,
+      status: 'approved',
+      payroll_period: period,
+      payment_status: 'pending',
+      approved_by: state.auth && state.auth.user ? state.auth.user.name : 'Super Admin',
+      approved_at: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    state.sessions.push(sessionRecord);
+    await dbRepo.saveRecord(STORE_KEY_FACILITATOR_SESSIONS, sessionRecord);
+    await safeSet(STORE_KEY_FACILITATOR_SESSIONS, state.sessions);
+    await logAudit('RECORD_FACILITATOR_SESSION', 'facilitator_session', sessionRecord.id, `${facName} &mdash; ${topic} (₦${totalAmt})`);
+
+    alert(`Facilitator session recorded: ${topic} (₦${totalAmt.toLocaleString()}).`);
+    closeModal();
+  });
+}
+
+function renderMonthEndPayrollModal(container, data = {}) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const curPeriod = todayStr.slice(0, 7);
+  const pendingPayslips = state.payslips.filter(p => p.payPeriod === curPeriod && (p.status === 'approved' || p.status === 'acknowledged'));
+  const totalNet = pendingPayslips.reduce((s, p) => s + Number(p.netPay || 0), 0);
+
+  container.innerHTML = `
+    <div class="cp-modal-overlay">
+      <div class="cp-modal large">
+        <div class="cp-modal-header">
+          <div class="cp-modal-title">&#x1F4B3; Month-End Payroll Batch Disbursement</div>
+          <button class="cp-modal-close" id="btnCloseMendMod">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+          <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px;">
+            <div class="cp-row3">
+              <div>Period: <strong>${escapeHtml(curPeriod)}</strong></div>
+              <div>Ready for Disbursement: <strong>${pendingPayslips.length} Staff/Facilitators</strong></div>
+              <div>Total Net Outflow: <strong style="color:var(--primary); font-size:14px;">${fmtMoney(totalNet)}</strong></div>
+            </div>
+          </div>
+
+          <div class="cp-field">
+            <label>Disbursement Bank Account *</label>
+            <select id="mendAccSelect">
+              ${state.paymentAccounts.map(a => `<option value="${a.id}">${escapeHtml(a.bankName)} &mdash; ${escapeHtml(a.accountNumber)} (${escapeHtml(a.accountName)})</option>`).join('')}
+            </select>
+          </div>
+
+          <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Approved Statements Ready for Payment</div>
+          <div class="cp-table-wrap" style="max-height:200px; overflow-y:auto; margin-bottom:12px;">
+            <table class="cp-table">
+              <thead><tr><th>Personnel</th><th>Type</th><th>Gross</th><th>Deductions</th><th>Net Pay</th><th>Status</th></tr></thead>
+              <tbody>
+                ${pendingPayslips.length === 0 ? '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No approved payslips awaiting disbursement for this period.</td></tr>' : pendingPayslips.map(p => `
+                  <tr>
+                    <td style="font-weight:700;">${escapeHtml(p.employeeName)}</td>
+                    <td><span class="cp-pill ${p.type === 'facilitator' ? 'category-pill' : 'new'}">${escapeHtml((p.type || 'staff').toUpperCase())}</span></td>
+                    <td>${fmtMoney(p.grossPay)}</td>
+                    <td style="color:var(--danger);">${p.totalDeductions > 0 ? '-' + fmtMoney(p.totalDeductions) : '₦0.00'}</td>
+                    <td style="font-weight:800; color:var(--success);">${fmtMoney(p.netPay)}</td>
+                    <td><span class="cp-pill active">${escapeHtml(p.status.toUpperCase())}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div id="mendErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+        </div>
+        <div class="cp-modal-footer">
+          <button class="cp-btn secondary" id="btnCancelMend">Close</button>
+          <button class="cp-btn success" id="btnConfirmMend" ${pendingPayslips.length === 0 ? 'disabled' : ''}>&#x2714; Execute Batch Disbursement &amp; Post Expenses</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnCloseMendMod').addEventListener('click', closeModal);
+  document.getElementById('btnCancelMend').addEventListener('click', closeModal);
+
+  document.getElementById('btnConfirmMend').addEventListener('click', async () => {
+    const accId = document.getElementById('mendAccSelect').value;
+    const disbursed = await batchDisbursePayroll(curPeriod, accId);
+    alert(`Batch disbursement complete: ${disbursed.length} payslips paid and integrated into General Ledger expenses.`);
+    closeModal();
+  });
+}
+
 function renderSupabaseModal(container) {
   const isConf = supabaseClient.isConfigured();
   const authUser = state.auth && state.auth.user ? `${state.auth.user.name} (${state.auth.user.role})` : 'Unauthenticated / Guest';
@@ -9513,7 +10592,10 @@ function renderSupabaseModal(container) {
         { key: STORE_KEY_PAYMENT_ACCOUNTS, table: 'payment_accounts', items: state.paymentAccounts },
         { key: STORE_KEY_BUDGETS, table: 'budgets', items: state.budgets },
         { key: STORE_KEY_ENQUIRIES, table: 'enquiries', items: state.enquiries },
-        { key: STORE_KEY_ENROLMENTS, table: 'enrolments', items: state.enrolments }
+        { key: STORE_KEY_ENROLMENTS, table: 'enrolments', items: state.enrolments },
+        { key: STORE_KEY_CUSTOMERS, table: 'customers', items: state.customers },
+        { key: STORE_KEY_FACILITATOR_SESSIONS, table: 'facilitator_sessions', items: state.sessions },
+        { key: STORE_KEY_CUSTOMER_TIMELINE, table: 'customer_timeline', items: state.customerTimeline }
       ];
 
       for (const t of tablesToMigrate) {
@@ -10273,7 +11355,30 @@ function renderChangeRoleModal(container, user) {
       DB_TABLE_MAPPING,
       loadAll,
       safeGet,
-      safeSet
+      safeSet,
+      // Phase 9 Operational Integration Exports
+      findCustomerDuplicate,
+      logCustomerActivity,
+      convertEnquiryToCustomer,
+      createEnrolmentFromInvoice,
+      calculateFacilitatorSessionEarnings,
+      syncPaymentToEnrolmentAndCustomer,
+      getCustomer360Data,
+      calculateProgrammeContribution,
+      batchDisbursePayroll,
+      STORE_KEY_FACILITATOR_SESSIONS,
+      STORE_KEY_CUSTOMER_TIMELINE,
+      STORE_KEY_CUSTOMERS,
+      STORE_KEY_ENQUIRIES,
+      STORE_KEY_ENROLMENTS,
+      STORE_KEY_PROGRAMMES,
+      STORE_KEY_INVOICES,
+      STORE_KEY_PAYMENTS,
+      STORE_KEY_EXPENSES,
+      STORE_KEY_PAYSLIPS,
+      STORE_KEY_PERSONNEL,
+      CRM_PIPELINE_STAGES,
+      CRM_LEAD_SOURCES
     };
   }
 })();
