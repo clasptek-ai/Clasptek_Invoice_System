@@ -202,6 +202,42 @@
     }
 
     /* Content Area */
+    /* Mobile Navigation & Sidebar Backdrop */
+    .cp-sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(2px);
+      z-index: 1050;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .cp-sidebar-backdrop.active {
+      display: block;
+      opacity: 1;
+    }
+
+    .cp-mobile-nav-btn {
+      display: none;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      width: 36px;
+      height: 36px;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+    .cp-mobile-nav-btn:hover {
+      background: var(--border);
+    }
+
+    /* Content Area */
     .cp-content-view { padding: 24px; flex: 1; }
 
     /* UI Cards & Tables */
@@ -217,11 +253,6 @@
     .cp-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
     .cp-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
 
-    @media (max-width: 1024px) {
-      .cp-grid-4 { grid-template-columns: repeat(2, 1fr); }
-      .cp-grid-3 { grid-template-columns: repeat(1, 1fr); }
-    }
-
     .cp-kpi-card {
       background: #FFFFFF; border: 1px solid var(--border); border-radius: var(--radius-md);
       padding: 16px 18px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 4px;
@@ -231,11 +262,18 @@
     .cp-kpi-sub { font-size: 11.5px; color: var(--text-muted); }
 
     /* Tables */
-    .cp-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .cp-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
     .cp-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; }
     .cp-table th {
       background: var(--surface-2); color: var(--text-secondary); font-weight: 700;
       padding: 10px 14px; border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px;
+      white-space: nowrap;
     }
     .cp-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: middle; }
     .cp-table tr:last-child td { border-bottom: none; }
@@ -245,6 +283,7 @@
     .cp-pill {
       display: inline-flex; align-items: center; gap: 4px; padding: 2.5px 8px;
       border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+      white-space: nowrap;
     }
     .cp-pill.paid, .cp-pill.approved, .cp-pill.fully_paid, .cp-pill.active { background: var(--success-bg); color: var(--success); }
     .cp-pill.unpaid, .cp-pill.draft, .cp-pill.payment_pending { background: var(--warning-bg); color: var(--warning); }
@@ -261,6 +300,7 @@
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       padding: 7px 14px; font-size: 12.5px; font-weight: 600; border-radius: var(--radius-sm);
       cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent; text-decoration: none;
+      touch-action: manipulation;
     }
     .cp-btn.primary { background: var(--primary); color: #FFFFFF; }
     .cp-btn.primary:hover { background: var(--primary-hover); }
@@ -272,7 +312,7 @@
     .cp-btn.danger:hover { background: var(--danger); color: #FFFFFF; }
     .cp-btn.success { background: var(--success); color: #FFFFFF; }
     .cp-btn.success:hover { opacity: 0.9; }
-    .cp-btn.sm { padding: 4.5px 9px; font-size: 11.5px; }
+    .cp-btn.sm { padding: 5px 10px; font-size: 11.5px; }
 
     /* Form Fields */
     .cp-field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -300,20 +340,19 @@
     .cp-modal.large { max-width: 850px; }
     .cp-modal.doc-modal { max-width: 900px; }
     .cp-modal.drawer { max-width: 540px; height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0; }
-    .cp-modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #FAFBFD; }
+    .cp-modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #FAFBFD; }
     .cp-modal-title { font-size: 15px; font-weight: 700; color: var(--primary); }
-    .cp-modal-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+    .cp-modal-close { background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 4px; }
     .cp-modal-close:hover { color: var(--danger); }
-    .cp-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-    .cp-modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #FAFBFD; }
+    .cp-modal-body { padding: 18px; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+    .cp-modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #FAFBFD; }
 
-    /* Centered Preview Canvas */
+    /* Centered Document Preview Canvas */
     .cp-doc-scroll-wrap {
-      background: #F1F5F9;
-      padding: 30px 20px;
-      display: flex;
       max-height: 80vh;
       overflow-y: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
       padding: 16px;
       background: #E2E8F0;
     }
@@ -329,6 +368,141 @@
       margin: 0 auto;
       line-height: 1.45;
       box-sizing: border-box;
+    }
+
+    /* Responsive Breakpoints */
+    @media (max-width: 1024px) {
+      .cp-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .cp-grid-3 { grid-template-columns: repeat(2, 1fr); }
+      .cp-pipe-grid { grid-template-columns: repeat(4, 1fr) !important; }
+      .cp-pipe-metrics { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+
+    @media (max-width: 768px) {
+      .cp-mobile-nav-btn {
+        display: inline-flex;
+      }
+      .cp-sidebar {
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        height: 100vh !important;
+        z-index: 1100 !important;
+        transform: translateX(-100%);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 280px !important;
+        box-shadow: none;
+      }
+      .cp-sidebar.mobile-open {
+        transform: translateX(0) !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.25) !important;
+      }
+      .cp-topbar {
+        height: auto;
+        min-height: var(--header-height);
+        padding: 8px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .cp-topbar-left {
+        width: 100%;
+        max-width: 100%;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+      }
+      .cp-omni-search {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        order: 3;
+      }
+      .cp-topbar-right {
+        width: 100%;
+        justify-content: space-between;
+        order: 2;
+      }
+      .cp-content-view {
+        padding: 12px 10px;
+      }
+      .cp-card {
+        padding: 14px 12px;
+        margin-bottom: 14px;
+      }
+      .cp-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .cp-grid-4, .cp-grid-3, .cp-grid-2 {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .cp-row2, .cp-row3, .cp-row4 {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .cp-pipe-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+      }
+      .cp-pipe-metrics {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+      }
+      .cp-table th, .cp-table td {
+        padding: 8px 10px;
+        font-size: 11.5px;
+      }
+      .cp-modal-overlay {
+        padding: 8px;
+      }
+      .cp-modal {
+        width: 100%;
+        max-width: 100%;
+        max-height: 94vh;
+        margin: 0 auto;
+      }
+      .cp-modal-body {
+        padding: 12px 14px;
+      }
+      .cp-modal-footer {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+      }
+      .cp-modal-footer .cp-btn {
+        flex: 1;
+        min-width: 110px;
+        min-height: 38px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .cp-breadcrumb {
+        font-size: 12px;
+      }
+      .cp-brand-name {
+        font-size: 12.5px;
+      }
+      .cp-pipe-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .cp-kpi-val {
+        font-size: 19px;
+      }
+      .cp-doc-paper {
+        padding: 12px 10px;
+      }
+    }
+
+    @media (max-height: 500px) and (orientation: landscape) {
+      .cp-modal {
+        max-height: 96vh;
+      }
+      .cp-modal-body {
+        max-height: 60vh;
+      }
     }
 
     .cp-doc-header {
@@ -1957,6 +2131,9 @@ function render() {
 
   root.innerHTML = `
     <div class="cp-layout">
+      <!-- Mobile Sidebar Backdrop -->
+      <div class="cp-sidebar-backdrop" id="sidebarBackdrop"></div>
+
       <!-- Left Collapsible Sidebar -->
       <aside class="cp-sidebar ${state.sidebarCollapsed ? 'collapsed' : ''}" id="appSidebar">
         <div>
@@ -2085,6 +2262,7 @@ function render() {
       <div class="cp-main-area">
         <header class="cp-topbar">
           <div class="cp-topbar-left">
+            <button class="cp-mobile-nav-btn" id="btnMobileNavToggle" title="Open Navigation Menu">&#x2630;</button>
             <div class="cp-breadcrumb">
               <span>${isEmployee ? 'My Portal' : 'Workspace'}</span> / <strong>${tabLabels[state.tab] || 'Dashboard'}</strong>
             </div>
@@ -2130,6 +2308,21 @@ function render() {
   `;
 
   // Attach Global Event Listeners
+  const appSidebar = document.getElementById('appSidebar');
+  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+  const btnMobileNavToggle = document.getElementById('btnMobileNavToggle');
+
+  if (btnMobileNavToggle && appSidebar && sidebarBackdrop) {
+    btnMobileNavToggle.addEventListener('click', () => {
+      appSidebar.classList.toggle('mobile-open');
+      sidebarBackdrop.classList.toggle('active');
+    });
+    sidebarBackdrop.addEventListener('click', () => {
+      appSidebar.classList.remove('mobile-open');
+      sidebarBackdrop.classList.remove('active');
+    });
+  }
+
   document.getElementById('btnToggleSidebar').addEventListener('click', () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     render();
@@ -2154,6 +2347,10 @@ function render() {
   document.querySelectorAll('.cp-nav-item').forEach(item => {
     item.addEventListener('click', () => {
       state.tab = item.dataset.tab;
+      if (appSidebar && sidebarBackdrop) {
+        appSidebar.classList.remove('mobile-open');
+        sidebarBackdrop.classList.remove('active');
+      }
       render();
     });
   });
@@ -2382,7 +2579,7 @@ function renderDashboardTab(container) {
       </div>
 
       <!-- Connected Flow Grid -->
-      <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; margin: 16px 0;">
+      <div class="cp-pipe-grid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:10px; margin: 16px 0;">
         
         <!-- Stage 1: Lead / Enquiry -->
         <div class="cp-card cp-pipe-card" id="pipeStageLead" style="margin:0; padding:14px 12px; cursor:pointer; background:#FAFBFD; border:1.5px solid var(--border); transition:all 0.15s ease;">
@@ -2464,7 +2661,7 @@ function renderDashboardTab(container) {
       </div>
 
       <!-- Conversion Analytics KPI Sub-Row -->
-      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+      <div class="cp-pipe-metrics" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
           <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Enquiry &rarr; Invoiced</div>
           <div style="font-size:17px; font-weight:800; color:var(--primary); margin-top:2px;">${pipe.convEnquiryToInvoice}%</div>
