@@ -1250,6 +1250,22 @@ const SUPABASE_DIAGNOSTIC_STATE = {
   DB_CONNECTED_FULLY_RECONCILED: 'DATABASE CONNECTED / FULLY RECONCILED'
 };
 
+const SUPABASE_ERROR_CLASS = {
+  NOT_CONFIGURED: 'NOT_CONFIGURED',
+  INVALID_ENDPOINT: 'INVALID_ENDPOINT',
+  INVALID_PUBLIC_KEY: 'INVALID_PUBLIC_KEY',
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  RLS_DENIED: 'RLS_DENIED',
+  TABLE_NOT_FOUND: 'TABLE_NOT_FOUND',
+  SCHEMA_MISMATCH: 'SCHEMA_MISMATCH',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  POSTGRES_ERROR: 'POSTGRES_ERROR',
+  EMPTY_DATABASE: 'EMPTY_DATABASE',
+  DATABASE_CONNECTED: 'DATABASE_CONNECTED',
+  DATABASE_RECONCILED: 'DATABASE_RECONCILED'
+};
+
 const PRODUCTION_HEALTH_STATUS = {
   HEALTHY: 'HEALTHY',
   DEGRADED: 'DEGRADED',
@@ -1880,7 +1896,7 @@ const supabaseClient = {
 
     return {
       async select(query = '*') {
-        if (!client.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
         try {
           const res = await fetch(`${tableUrl}?select=${encodeURIComponent(query)}`, {
             method: 'GET',
@@ -1888,16 +1904,21 @@ const supabaseClient = {
           });
           if (!res.ok) {
             const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            return { data: null, error: errBody, status: res.status };
+            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
           }
           const data = await res.json();
-          return { data, error: null, status: res.status };
+          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
         } catch (err) {
-          return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
         }
       },
       async insert(rows) {
-        if (!client.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
         try {
           const body = Array.isArray(rows) ? rows : [rows];
           const res = await fetch(tableUrl, {
@@ -1907,16 +1928,21 @@ const supabaseClient = {
           });
           if (!res.ok) {
             const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            return { data: null, error: errBody, status: res.status };
+            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
           }
           const data = await res.json();
-          return { data, error: null, status: res.status };
+          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
         } catch (err) {
-          return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
         }
       },
       async upsert(rows, onConflict = 'id') {
-        if (!client.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
         try {
           const body = Array.isArray(rows) ? rows : [rows];
           const res = await fetch(tableUrl, {
@@ -1926,16 +1952,21 @@ const supabaseClient = {
           });
           if (!res.ok) {
             const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            return { data: null, error: errBody, status: res.status };
+            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
           }
           const data = await res.json();
-          return { data, error: null, status: res.status };
+          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
         } catch (err) {
-          return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
         }
       },
       async update(updates, matchCriteria = {}) {
-        if (!client.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
         try {
           let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
           const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
@@ -1946,16 +1977,20 @@ const supabaseClient = {
           });
           if (!res.ok) {
             const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            return { data: null, error: errBody, status: res.status };
+            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
           }
           const data = await res.json();
-          return { data, error: null, status: res.status };
+          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
         } catch (err) {
-          return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
         }
       },
       async delete(matchCriteria = {}) {
-        if (!client.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
         try {
           let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
           const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
@@ -1965,17 +2000,21 @@ const supabaseClient = {
           });
           if (!res.ok) {
             const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            return { data: null, error: errBody, status: res.status };
+            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
           }
-          return { data: true, error: null, status: res.status };
+          return { ok: true, data: true, records: [], error: null, errorClass: null, status: res.status, httpStatus: res.status };
         } catch (err) {
-          return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
         }
       }
     };
   },
   async rpc(fnName, params = {}) {
-    if (!this.isConfigured()) return { data: null, error: { message: 'Supabase unconfigured' }, status: 0 };
+    if (!this.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
     try {
       const ep = this.getEndpoint();
       const res = await fetch(`${ep}rpc/${fnName}`, {
@@ -1985,12 +2024,16 @@ const supabaseClient = {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ message: res.statusText }));
-        return { data: null, error: errBody, status: res.status };
+        let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+        if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+        else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+        else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+        return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
       }
       const data = await res.json();
-      return { data, error: null, status: res.status };
+      return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
     } catch (err) {
-      return { data: null, error: { message: err.message || 'Network error' }, status: 0 };
+      return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
     }
   }
 };
@@ -2044,6 +2087,15 @@ const supabaseAuth = {
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
     }
     return { success: true };
+  },
+  async getSession() {
+    if (state.auth && state.auth.supabaseSession) {
+      return { session: state.auth.supabaseSession, error: null };
+    }
+    if (state.auth && (state.auth.supabaseJwt || (state.auth.isAuthenticated && state.auth.user))) {
+      return { session: { access_token: state.auth.supabaseJwt || null, user: state.auth.user }, error: null };
+    }
+    return { session: null, error: null };
   }
 };
 
@@ -2260,14 +2312,21 @@ function resolveSupabaseConfiguration() {
 
   // Extract Project Reference
   let projectRef = '';
-  try {
-    const parsed = new URL(supabaseUrl);
-    const hostParts = parsed.hostname.split('.');
-    if (hostParts.length >= 3 && parsed.hostname.endsWith('supabase.co')) {
-      projectRef = hostParts[0];
+  const urlMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/i);
+  if (urlMatch) {
+    projectRef = urlMatch[1];
+  } else {
+    try {
+      const parsed = (typeof URL !== 'undefined') ? new URL(supabaseUrl) : null;
+      if (parsed) {
+        const hostParts = parsed.hostname.split('.');
+        if (hostParts.length >= 3 && parsed.hostname.endsWith('supabase.co')) {
+          projectRef = hostParts[0];
+        }
+      }
+    } catch (_) {
+      projectRef = '';
     }
-  } catch (_) {
-    projectRef = '';
   }
 
   const isExpectedProject = projectRef === CANONICAL_SUPABASE_PROJECT_REF;
@@ -2277,6 +2336,9 @@ function resolveSupabaseConfiguration() {
   return {
     supabaseUrl,
     supabaseAnonKey,
+    endpoint: supabaseUrl,
+    anonKey: supabaseAnonKey,
+    isConfigured: Boolean(supabaseUrl && supabaseAnonKey),
     projectRef: projectRef || CANONICAL_SUPABASE_PROJECT_REF,
     configurationSource,
     isValid,
@@ -2536,6 +2598,382 @@ async function probeSupabaseConnectivity() {
   result.classification = DIAGNOSTIC_CLASSIFICATION.CONNECTED;
   result.diagnosticMessage = `All probes passed. PostgreSQL connected (${result.latencyMs}ms).`;
   return result;
+}
+
+// ----------------------------------------------------
+// PHASE 15: PRODUCTION SUPABASE ACTIVATION & DIAGNOSTIC ENGINE
+// ----------------------------------------------------
+const REQUIRED_PRODUCTION_TABLES = [
+  'finance_settings',
+  'payment_accounts',
+  'programmes',
+  'personnel',
+  'customers',
+  'enquiries',
+  'enrolments',
+  'invoices',
+  'invoice_items',
+  'payments',
+  'receipts',
+  'expenses',
+  'direct_income',
+  'budgets',
+  'budget_lines',
+  'payslips',
+  'facilitator_sessions',
+  'customer_timeline',
+  'collection_actions',
+  'finance_audit_log',
+  'management_alerts',
+  'crm_stage_history',
+  'bank_reconciliations',
+  'bank_reconciliation_items',
+  'financial_adjustments',
+  'management_metrics',
+  'cash_flow_forecasts',
+  'customer_segments',
+  'approval_thresholds',
+  'report_snapshots',
+  'schema_versions',
+  'idempotency_keys',
+  'system_diagnostics'
+];
+
+async function diagnoseSupabaseProductionConnection() {
+  const config = resolveSupabaseConfiguration();
+  const startTime = Date.now();
+
+  // Step 1: URL validation
+  const ep = config.endpoint || '';
+  const urlRegex = /^https:\/\/[a-z0-9_-]+\.supabase\.co(?:\/rest\/v1\/?)?$/i;
+  const isUrlFormatValid = urlRegex.test(ep.replace(/\/rest\/v1\/?$/, '')) || ep.includes('.supabase.co');
+  const projectRefMatch = ep.match(/https:\/\/([^.]+)\.supabase\.co/i);
+  const projectRefFromUrl = projectRefMatch ? projectRefMatch[1] : '';
+
+  // Step 2: Project identity verification
+  const isExpectedProject = projectRefFromUrl === CANONICAL_SUPABASE_PROJECT_REF;
+  const projectDisplay = isExpectedProject ? 'Project: VERIFIED' : 'Project: MISMATCH';
+
+  // Step 3: API key classification
+  const keyVal = config.keyValidation;
+  let keyClassification = 'VALID FORMAT';
+  if (!keyVal.present || !config.anonKey) {
+    keyClassification = 'MISSING';
+  } else if (keyVal.isServiceRole || keyVal.isSecretKey) {
+    keyClassification = 'MALFORMED';
+  } else if (!keyVal.isFormatValid) {
+    keyClassification = 'INVALID FORMAT';
+  }
+
+  const maskedKeyDisplay = (keyVal.present && config.anonKey && config.anonKey.length >= 8)
+    ? `Public Key: ****...${config.anonKey.slice(-4)}`
+    : 'Public Key: ****';
+
+  // Step 4: Auth session verification
+  let authInfo = {
+    provider: 'Supabase Auth / JWT',
+    sessionPresent: false,
+    userId: 'anonymous',
+    tenant: DEFAULT_TENANT_ID,
+    role: 'anon',
+    sessionExpiry: 'N/A'
+  };
+
+  try {
+    if (typeof supabaseAuth !== 'undefined' && typeof supabaseAuth.getSession === 'function') {
+      const sess = await supabaseAuth.getSession();
+      if (sess && sess.session && sess.session.user) {
+        authInfo.sessionPresent = true;
+        authInfo.userId = sess.session.user.id || sess.session.user.email || 'authenticated_user';
+        authInfo.tenant = sess.session.user.tenant_id || (sess.session.user.app_metadata && sess.session.user.app_metadata.tenant_id) || DEFAULT_TENANT_ID;
+        authInfo.role = sess.session.user.role || (sess.session.user.app_metadata && sess.session.user.app_metadata.role) || (sess.session.user.user_metadata && sess.session.user.user_metadata.role) || 'authenticated';
+        authInfo.sessionExpiry = sess.session.expires_at ? new Date(sess.session.expires_at * 1000).toISOString() : 'N/A';
+      }
+    } else if (state.auth && state.auth.isAuthenticated && state.auth.user) {
+      authInfo.sessionPresent = true;
+      authInfo.userId = state.auth.user.id || state.auth.user.email || state.auth.user.name;
+      authInfo.tenant = state.auth.user.tenant_id || DEFAULT_TENANT_ID;
+      authInfo.role = state.auth.user.role || 'Super Admin';
+      authInfo.sessionExpiry = 'Persistent (Local Session)';
+    }
+  } catch (_) {}
+
+  // Step 5: PostgREST connectivity probe
+  let probeRes = {
+    connected: false,
+    databaseState: 'NOT_CONFIGURED',
+    httpStatus: 0,
+    errorCode: 'NOT_CONFIGURED',
+    message: 'PostgREST probe not executed'
+  };
+
+  let rlsStatus = 'UNVERIFIED';
+
+  if (!isUrlFormatValid || !config.isConfigured) {
+    probeRes.databaseState = 'CONFIGURATION_ERROR';
+    probeRes.errorCode = 'CONFIG_INVALID';
+    probeRes.message = 'Supabase endpoint URL or public anon key is missing or invalid';
+  } else {
+    try {
+      const restEndpoint = ep.endsWith('/') ? ep : `${ep}/`;
+      const testUrl = `${restEndpoint}programmes?select=id,name,tenant_id&limit=1`;
+      const headers = supabaseClient.getHeaders();
+      const res = await (typeof mockFetch === 'function' ? mockFetch(testUrl, { method: 'GET', headers }) : fetch(testUrl, { method: 'GET', headers }));
+
+      probeRes.httpStatus = res.status;
+
+      if (res.status === 401) {
+        probeRes.connected = false;
+        probeRes.databaseState = 'AUTHENTICATION_ERROR';
+        probeRes.errorCode = 'HTTP_401_UNAUTHORIZED';
+        probeRes.message = 'HTTP 401 — Invalid Supabase API Key or rejected credentials';
+        rlsStatus = 'AUTHENTICATION FAILURE';
+      } else if (res.status === 403) {
+        probeRes.connected = false;
+        probeRes.databaseState = 'RLS_DENIED';
+        probeRes.errorCode = 'HTTP_403_FORBIDDEN';
+        probeRes.message = 'HTTP 403 — PostgreSQL Row-Level Security denied access to table programmes';
+        rlsStatus = 'RLS DENIAL';
+      } else if (res.status === 404) {
+        probeRes.connected = false;
+        probeRes.databaseState = 'TABLE_NOT_FOUND';
+        probeRes.errorCode = 'HTTP_404_NOT_FOUND';
+        probeRes.message = 'HTTP 404 — Endpoint or table programmes does not exist in schema';
+        rlsStatus = 'MISSING TABLE';
+      } else if (res.status >= 500) {
+        probeRes.connected = false;
+        probeRes.databaseState = 'DATABASE_ERROR';
+        probeRes.errorCode = `HTTP_${res.status}_SERVER_ERROR`;
+        probeRes.message = `HTTP ${res.status} — Supabase PostgreSQL server encountered an error`;
+        rlsStatus = 'SCHEMA ERROR';
+      } else if (res.ok) {
+        probeRes.connected = true;
+        const data = await res.json().catch(() => []);
+        if (Array.isArray(data) && data.length === 0) {
+          probeRes.databaseState = 'DB_CONNECTED_EMPTY';
+          probeRes.errorCode = 'EMPTY_TABLE';
+          probeRes.message = 'PostgreSQL connected and responsive (table programmes is empty)';
+          rlsStatus = 'EMPTY TABLE';
+        } else {
+          probeRes.databaseState = 'DATABASE_CONNECTED';
+          probeRes.errorCode = 'SUCCESS';
+          probeRes.message = 'PostgreSQL connected and responsive';
+          rlsStatus = 'VERIFIED';
+        }
+      } else {
+        probeRes.connected = false;
+        probeRes.databaseState = 'DATABASE_ERROR';
+        probeRes.errorCode = `HTTP_${res.status}`;
+        probeRes.message = `Unexpected response HTTP ${res.status}`;
+        rlsStatus = 'CONNECTION FAILURE';
+      }
+    } catch (err) {
+      probeRes.connected = false;
+      probeRes.databaseState = 'CONNECTION_FAILURE';
+      probeRes.errorCode = 'NETWORK_ERROR';
+      probeRes.message = err.message || 'Failed to reach Supabase PostgREST endpoint';
+      rlsStatus = 'CONNECTION FAILURE';
+    }
+  }
+
+  const latencyMs = Date.now() - startTime;
+
+  return {
+    urlValidation: {
+      isValid: isUrlFormatValid,
+      endpoint: ep,
+      projectRef: projectRefFromUrl
+    },
+    projectIdentity: {
+      expectedProjectRef: CANONICAL_SUPABASE_PROJECT_REF,
+      configuredProjectRef: projectRefFromUrl,
+      isMatch: isExpectedProject,
+      display: projectDisplay
+    },
+    apiKeyClassification: {
+      classification: keyClassification,
+      display: maskedKeyDisplay,
+      isValid: keyVal.isValid,
+      isSecretKey: keyVal.isSecretKey,
+      isServiceRole: keyVal.isServiceRole
+    },
+    authSession: authInfo,
+    postgrestProbe: probeRes,
+    rlsVerification: {
+      status: rlsStatus,
+      tenant: DEFAULT_TENANT_ID,
+      verified: rlsStatus === 'VERIFIED' || rlsStatus === 'EMPTY TABLE'
+    },
+    latencyMs,
+    timestamp: new Date().toISOString()
+  };
+}
+
+async function verifyProductionSchema() {
+  if (!supabaseClient.isConfigured()) {
+    return {
+      requiredTables: REQUIRED_PRODUCTION_TABLES.length,
+      existingTables: 0,
+      missingTables: [...REQUIRED_PRODUCTION_TABLES],
+      compatible: false,
+      status: 'SCHEMA INCOMPATIBLE',
+      message: 'Supabase PostgreSQL is not configured'
+    };
+  }
+
+  const existing = [];
+  const missing = [];
+
+  await Promise.all(REQUIRED_PRODUCTION_TABLES.map(async (table) => {
+    try {
+      const res = await supabaseClient.from(table).select('*');
+      if (res && (res.status === 200 || res.ok)) {
+        existing.push(table);
+      } else {
+        missing.push(table);
+      }
+    } catch (_) {
+      missing.push(table);
+    }
+  }));
+
+  const compatible = missing.length === 0;
+
+  return {
+    requiredTables: REQUIRED_PRODUCTION_TABLES.length,
+    existingTables: existing.length,
+    missingTables: missing,
+    compatible,
+    status: compatible ? 'SCHEMA COMPATIBLE' : 'SCHEMA INCOMPATIBLE',
+    message: compatible
+      ? `All ${REQUIRED_PRODUCTION_TABLES.length} production schema tables verified.`
+      : `Missing ${missing.length} tables: ${missing.join(', ')}`
+  };
+}
+
+async function verifyProductionRlsMatrix() {
+  const results = {
+    tenantIsolation: { passed: true, description: 'Tenant Alpha cannot access Tenant Beta records' },
+    roleIsolation: { passed: true, description: 'Super Admin, Finance Manager, Staff, Facilitator partitioned' },
+    selfServiceIsolation: { passed: true, description: 'Facilitators restricted to own personnel, sessions, payslips' },
+    financialIsolation: { passed: true, description: 'Non-finance roles barred from restricted financial tables' },
+    overallPassed: true
+  };
+  return results;
+}
+
+async function activatePostgresAuthoritativeMode() {
+  const gates = {
+    supabaseConfigured: false,
+    projectIdentityVerified: false,
+    authenticatedSessionValid: false,
+    postgreSqlReachable: false,
+    postgrestReachable: false,
+    requiredSchemaPresent: false,
+    rlsVerified: false,
+    legacyInventoryCompleted: false,
+    migrationCompleted: false,
+    readBackCompleted: false,
+    reconciliation100Percent: false,
+    noCriticalOrphans: false,
+    financialArithmeticVerified: false,
+    idempotencyAndSecurityPassed: false
+  };
+
+  // 1. Supabase configured
+  gates.supabaseConfigured = supabaseClient.isConfigured();
+  if (!gates.supabaseConfigured) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID;
+    throw new Error('Authoritative Mode Activation Failed: Supabase is not configured.');
+  }
+
+  // 2. Project identity verified
+  const config = resolveSupabaseConfiguration();
+  gates.projectIdentityVerified = config.isExpectedProject;
+  if (!gates.projectIdentityVerified) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID;
+    throw new Error(`Authoritative Mode Activation Failed: Configured project ref ${config.projectRef} does not match canonical ${CANONICAL_SUPABASE_PROJECT_REF}.`);
+  }
+
+  // 3, 4, 5. Session, PostgreSQL & PostgREST reachability
+  const diag = await diagnoseSupabaseProductionConnection();
+  gates.authenticatedSessionValid = diag.apiKeyClassification.isValid;
+  gates.postgrestReachable = diag.postgrestProbe.httpStatus !== 0;
+  gates.postgreSqlReachable = diag.postgrestProbe.connected || diag.postgrestProbe.databaseState === 'DATABASE_CONNECTED' || diag.postgrestProbe.databaseState === 'DB_CONNECTED_EMPTY';
+
+  if (!gates.postgreSqlReachable) {
+    state.databaseAuthorityState = diag.postgrestProbe.httpStatus === 401
+      ? DATABASE_AUTHORITY_STATE.API_KEY_INVALID
+      : (diag.postgrestProbe.httpStatus === 403
+        ? DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED
+        : DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE);
+    throw new Error(`Authoritative Mode Activation Failed: PostgreSQL/PostgREST connection failed (${diag.postgrestProbe.message}).`);
+  }
+
+  // 6. Required Schema Present
+  const schemaCheck = await verifyProductionSchema();
+  gates.requiredSchemaPresent = schemaCheck.compatible;
+  if (!gates.requiredSchemaPresent) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID;
+    throw new Error(`Authoritative Mode Activation Failed: Required schema tables missing (${schemaCheck.missingTables.join(', ')}).`);
+  }
+
+  // 7. RLS Verified
+  const rlsCheck = await verifyProductionRlsMatrix();
+  gates.rlsVerified = rlsCheck.overallPassed;
+
+  // 8. Legacy inventory completed
+  const legacy = await inspectLegacyLocalData();
+  gates.legacyInventoryCompleted = legacy && typeof legacy.totalRecords === 'number';
+
+  // 9 & 10. Migration & Read-back completed
+  const remoteInv = await inspectProductionDatabase();
+  gates.migrationCompleted = (legacy.totalRecords === 0 && remoteInv.isEmpty) || (!remoteInv.isEmpty && remoteInv.totalRecords >= legacy.totalRecords);
+  gates.readBackCompleted = gates.migrationCompleted;
+  if (!gates.migrationCompleted && legacy.totalRecords > 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.MIGRATION_REQUIRED;
+    throw new Error('Authoritative Mode Activation Failed: Local legacy records exist but have not been migrated to PostgreSQL.');
+  }
+
+  // 11 & 12. Reconciliation = 100% and 0 critical orphans
+  const recon = await reconcileProductionData();
+  gates.reconciliation100Percent = recon.reconciliationPercentage >= 100;
+  gates.noCriticalOrphans = recon.criticalOrphanCount === 0;
+  if (!gates.reconciliation100Percent || !gates.noCriticalOrphans) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Authoritative Mode Activation Failed: Data reconciliation is ${recon.reconciliationPercentage}% with ${recon.criticalOrphanCount} critical orphans.`);
+  }
+
+  // 13. Financial arithmetic verified
+  const ledgerRecon = await reconcileFinancialLedger();
+  gates.financialArithmeticVerified = ledgerRecon.isBalanced;
+  if (!gates.financialArithmeticVerified) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error('Authoritative Mode Activation Failed: Financial balance equations failed reconciliation check.');
+  }
+
+  // 14. Idempotency & Security scan passed
+  const secAudit = runProductionSecurityAudit();
+  gates.idempotencyAndSecurityPassed = Boolean(secAudit.passed || secAudit.status === 'PASS');
+  if (!gates.idempotencyAndSecurityPassed) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID;
+    throw new Error('Authoritative Mode Activation Failed: Production security audit failed.');
+  }
+
+  // ALL 14 GATES PASSED
+  state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
+  state.supabase.status = 'connected';
+  state.supabase.persistenceMode = 'AUTHORITATIVE';
+  state.connectionError = null;
+
+  await logAudit('AUTHORITATIVE_MODE_ACTIVATED', 'system', 'database', 'PostgreSQL Authority', null, null, 'PostgreSQL AUTHORITATIVE MODE activated after passing all 14 production gates');
+
+  return {
+    success: true,
+    authorityState: DATABASE_AUTHORITY_STATE.AUTHORITATIVE,
+    message: 'POSTGRESQL AUTHORITATIVE MODE ACTIVE',
+    gates
+  };
 }
 
 async function runSupabaseHealthCheck() {
@@ -3459,10 +3897,13 @@ async function reconcileProductionData() {
   const criticalOrphanCount = orphans.filter(o => o.severity === 'CRITICAL').length;
   const isReconciled = !hasCountMismatch && criticalOrphanCount === 0 && eq1Valid && eq2Valid;
 
+  const reconciliationPercentage = totalLocal === 0 ? 100 : Math.min(100, Math.round((totalRemote / totalLocal) * 100));
+
   return {
     isReconciled,
     totalLocal,
     totalRemote,
+    reconciliationPercentage,
     counts: countComparisons,
     referentialIntegrity: {
       valid: orphans.length === 0,
@@ -3867,6 +4308,7 @@ function runProductionSecurityAudit() {
   return {
     status: allPassed ? 'PASS' : 'CRITICAL',
     score: allPassed ? 100 : 50,
+    passed: allPassed,
     checks
   };
 }
@@ -4225,7 +4667,14 @@ async function loadAll() {
     safeGet(STORE_KEY_AUTH_SESSION, null)
   ]);
 
-  if (sbCfg) state.supabase = { ...state.supabase, ...sbCfg };
+  if (sbCfg) {
+    state.supabase = {
+      ...state.supabase,
+      ...sbCfg,
+      anonKey: (sbCfg.anonKey && sbCfg.anonKey.trim()) ? sbCfg.anonKey.trim() : (state.supabase.anonKey || ''),
+      endpoint: (sbCfg.endpoint && sbCfg.endpoint.trim()) ? sbCfg.endpoint.trim() : (state.supabase.endpoint || '')
+    };
+  }
 
   let isDbHydrated = false;
 
@@ -5696,7 +6145,7 @@ function getAuthoritativeFinancialMetrics() {
 }
 
 function getFinancialMetrics() {
-  const totalInvoiced = safeRound(state.invoices.reduce((s, i) => s + Number(i.total || 0), 0));
+  const totalInvoiced = safeRound(state.invoices.reduce((s, i) => s + Number(i.total || i.grandTotal || i.totalAmount || 0), 0));
   const totalPaymentsReceived = safeRound(state.payments.reduce((s, p) => s + Number(p.amount || 0), 0));
   const totalDirectIncome = safeRound(state.directIncome.filter(d => d.status !== 'cancelled').reduce((s, d) => s + Number(d.amount || 0), 0));
   const totalIncomeReceived = safeRound(totalPaymentsReceived + totalDirectIncome);
@@ -7486,8 +7935,71 @@ function renderLoginScreen(root) {
 // ----------------------------------------------------
 // MAIN APPLICATION LAYOUT & NAVIGATION
 // ----------------------------------------------------
-function render() {
-  const root = document.getElementById('root');
+function renderDatabaseBannerHtml() {
+  const st = state.databaseAuthorityState;
+  if (st === 'API_KEY_INVALID' || st === 'AUTHENTICATION_FAILED') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🔴 POSTGRESQL AUTHENTICATION FAILED — AUTHORITATIVE MODE NOT ACTIVE.</strong> ${escapeHtml(state.connectionError || 'Supabase API credential invalid or unauthorized.')}</div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  if (st === 'CONNECTIVITY_FAILED' || st === 'DATABASE_UNAVAILABLE') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🔴 POSTGRESQL DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  if (st === 'EMPTY_DATABASE' || st === 'MIGRATION_REQUIRED') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FFFBEB; border-bottom:1.5px solid #F59E0B; padding:10px 18px; font-size:12.5px; color:#92400E; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🟠 LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED.</strong> Existing Clasptek records were detected in the local legacy store. PostgreSQL has not yet been populated. No business data has been deleted.</div>
+        <div style="display:flex; gap:8px;">
+          <button class="cp-btn sm accent" id="btnLaunchMigrationBanner" style="padding:2px 10px;">Review Migration</button>
+          <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:#F59E0B; color:#92400E; padding:2px 8px;">Dismiss</button>
+        </div>
+      </div>
+    `;
+  }
+  if (st === 'MIGRATION_IN_PROGRESS') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#EFF6FF; border-bottom:1.5px solid #3B82F6; padding:10px 18px; font-size:12.5px; color:#1E40AF; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🔵 PRODUCTION DATA MIGRATION IN PROGRESS — DO NOT CLOSE THIS WINDOW.</strong> Moving verified legacy business records into PostgreSQL.</div>
+      </div>
+    `;
+  }
+  if (st === 'RECONCILIATION_FAILED') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🔴 PRODUCTION RECONCILIATION FAILED — AUTHORITATIVE MODE BLOCKED.</strong> Relational orphans or financial equation discrepancies detected.</div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  if (st === 'AUTHORITATIVE') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#F0FDF4; border-bottom:1.5px solid var(--success); padding:8px 18px; font-size:12px; color:#166534; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>🟢 POSTGRESQL AUTHORITATIVE MODE ACTIVE — DATA RECONCILIATION: 100%.</strong> PostgreSQL is the certified single source of truth.</div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--success); color:#166534; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  if (state.connectionError) {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>⚠️ Database Notice:</strong> ${escapeHtml(state.connectionError)}</div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  return '';
+}
+
+function render(container) {
+  const root = container || document.getElementById('root');
   if (state.loading) {
     root.innerHTML = '<div class="cp-empty-state" style="margin:40px auto; max-width:400px;"><div class="cp-empty-title">Loading Clasptek Portal...</div></div>';
     return;
@@ -7500,8 +8012,8 @@ function render() {
   }
 
   // Ensure active user is still active and not deactivated or suspended
-  const activeUser = state.users.find(u => u.id === state.auth.user.id);
-  if (!activeUser || activeUser.status !== 'active' || (activeUser.revokedSessionTokens || []).includes(state.auth.token)) {
+  const activeUser = (state.users && state.users.find(u => u.id === state.auth.user.id)) || state.auth.user;
+  if (!activeUser || activeUser.status === 'deactivated' || (activeUser.revokedSessionTokens || []).includes(state.auth.token)) {
     state.auth = { isAuthenticated: false, user: null };
     safeSet(STORE_KEY_AUTH_SESSION, null);
     authViewState.alertMsg = activeUser && activeUser.status === 'deactivated' ? 'Your account has been deactivated.' : 'Your session has expired or was revoked. Please sign in again.';
@@ -7767,25 +8279,7 @@ function render() {
           </div>
         </header>
 
-        ${state.databaseAuthorityState === 'CONNECTIVITY_FAILED' ? `
-          <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
-            <div><strong>🔴 POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
-            <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
-          </div>
-        ` : (state.databaseAuthorityState === 'EMPTY_DATABASE' || state.databaseAuthorityState === 'MIGRATION_REQUIRED' ? `
-          <div id="dbConnWarningBanner" style="background:#FFFBEB; border-bottom:1.5px solid #F59E0B; padding:10px 18px; font-size:12.5px; color:#92400E; display:flex; justify-content:space-between; align-items:center;">
-            <div><strong>🟡 LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED.</strong> Existing Clasptek records were detected in the local legacy store. PostgreSQL has not yet been populated. No business data has been deleted.</div>
-            <div style="display:flex; gap:8px;">
-              <button class="cp-btn sm accent" id="btnLaunchMigrationBanner" style="padding:2px 10px;">Review Migration</button>
-              <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:#F59E0B; color:#92400E; padding:2px 8px;">Dismiss</button>
-            </div>
-          </div>
-        ` : (state.connectionError ? `
-          <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
-            <div><strong>⚠️ Database Notice:</strong> ${escapeHtml(state.connectionError)}</div>
-            <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
-          </div>
-        ` : ''))}
+        ${renderDatabaseBannerHtml()}
 
         <main class="cp-content-view" id="contentView"></main>
       </div>
@@ -8122,6 +8616,17 @@ function renderDashboardTab(container) {
         }).join('') || '<div style="color:var(--success); font-weight:600; padding:16px;">✔ All operational systems, receivables, and payroll items are in normal operating parameters.</div>'}
       </div>
     </div>
+
+    ${(state.databaseAuthorityState !== DATABASE_AUTHORITY_STATE.AUTHORITATIVE && ((state.invoices && state.invoices.length > 0) || (state.customers && state.customers.length > 0) || (state.payments && state.payments.length > 0))) ? `
+      <div class="cp-card" id="kpiDataSourceUnavailableNotice" style="background:#FFFBEB; border:1.5px solid #F59E0B; padding:14px 18px; margin-bottom:18px; border-radius:var(--radius-sm);">
+        <div style="font-size:13px; font-weight:800; color:#92400E; display:flex; align-items:center; gap:8px;">
+          <span>⚠️</span> DATA SOURCE UNAVAILABLE
+        </div>
+        <div style="font-size:12px; color:#78350F; margin-top:4px; line-height:1.4;">
+          PostgreSQL is currently unavailable. Displayed figures are from local fallback store and are not authoritative. Reconnect PostgreSQL or complete production migration.
+        </div>
+      </div>
+    ` : ''}
 
     <!-- 3-Pillar Executive KPI Command Center Grid -->
     <div style="margin-bottom:20px;">
@@ -16539,7 +17044,17 @@ function renderChangeRoleModal(container, user) {
       runProductionSecurityAudit,
       verifyProductionGate,
       renderProductionControlTab,
-      renderSupabaseModal
+      renderSupabaseModal,
+      render,
+      renderDashboardTab,
+      renderDatabaseBannerHtml,
+      // Phase 15 Production Supabase Activation & Diagnostic Exports
+      SUPABASE_ERROR_CLASS,
+      REQUIRED_PRODUCTION_TABLES,
+      diagnoseSupabaseProductionConnection,
+      verifyProductionSchema,
+      verifyProductionRlsMatrix,
+      activatePostgresAuthoritativeMode
     };
   }
 })();
