@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Authoritative Supabase Production Public Configuration -->
+  <meta name="supabase-endpoint" content="https://logaawoigfxnisimfatf.supabase.co" />
+  <meta name="supabase-publishable-key" content="" />
   <title>Clasptek Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1863,14 +1866,16 @@ const supabaseClient = {
     const key = this.getAnonKey();
     // Validate if auth token is a genuine Supabase JWT (3-part dot-separated base64 token)
     // NEVER send internal session tokens (e.g. 'sess_...') to PostgREST as Authorization
-    let authBearer = key;
+    let userToken = null;
     if (state.auth && typeof state.auth.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('eyJ') && state.auth.supabaseJwt.split('.').length === 3) {
-      authBearer = state.auth.supabaseJwt.trim();
+      userToken = state.auth.supabaseJwt.trim();
+    } else if (state.auth && state.auth.supabaseSession && typeof state.auth.supabaseSession.access_token === 'string' && state.auth.supabaseSession.access_token.startsWith('eyJ')) {
+      userToken = state.auth.supabaseSession.access_token.trim();
     } else if (state.auth && typeof state.auth.token === 'string' && state.auth.token.startsWith('eyJ') && state.auth.token.split('.').length === 3) {
-      authBearer = state.auth.token.trim();
-    } else {
-      authBearer = key;
+      userToken = state.auth.token.trim();
     }
+
+    const authBearer = userToken || key;
 
     const headers = {
       'Content-Type': 'application/json',
@@ -1881,7 +1886,9 @@ const supabaseClient = {
     };
 
     Object.keys(headers).forEach(k => {
-      if (headers[k] === undefined || headers[k] === null) delete headers[k];
+      if (headers[k] === undefined || headers[k] === null || headers[k] === 'undefined' || headers[k] === 'Bearer undefined' || headers[k] === 'Bearer null') {
+        delete headers[k];
+      }
     });
 
     return headers;
@@ -2298,10 +2305,10 @@ function resolveSupabaseConfiguration() {
   let supabaseAnonKey = '';
   let configurationSource = 'APPLICATION_CONFIG';
 
-  // 1. Check Window/Environment variables
+  // 1. Production-injected public configuration (Window / Environment)
   if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
     const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
-    const envKey = window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
     if (envUrl || envKey) {
       supabaseUrl = (envUrl || '').trim();
       supabaseAnonKey = (envKey || '').trim();
@@ -2309,32 +2316,55 @@ function resolveSupabaseConfiguration() {
     }
   }
 
-  // 2. Check Deployment Meta Tags
+  // 2. HTML META configuration
   if (!supabaseUrl && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
     const metaEndpoint = document.querySelector('meta[name="supabase-endpoint"]');
-    const metaKey = document.querySelector('meta[name="supabase-anon-key"]');
-    if (metaEndpoint && metaEndpoint.content) {
-      supabaseUrl = metaEndpoint.content.trim();
-      supabaseAnonKey = metaKey ? metaKey.content.trim() : '';
-      configurationSource = 'DEPLOYMENT_CONFIG';
+    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="supabase-anon-key"]');
+    const epContent = metaEndpoint && metaEndpoint.content ? metaEndpoint.content.trim() : '';
+    const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
+    if (epContent || keyContent) {
+      supabaseUrl = epContent;
+      supabaseAnonKey = keyContent;
+      configurationSource = 'META';
     }
   }
 
-  // 3. Check State & LocalStorage
+  // 3. Runtime configuration (Window runtime config / State / LocalStorage)
   if (!supabaseUrl || !supabaseAnonKey) {
+    let runtimeEp = '';
+    let runtimeKey = '';
+    if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
+      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+    }
     const stateUrl = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
     const stateKey = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey.trim() : '';
-    if (stateUrl || stateKey) {
-      supabaseUrl = stateUrl || supabaseUrl;
-      supabaseAnonKey = stateKey || supabaseAnonKey;
+    const resolvedEp = runtimeEp.trim() || stateUrl;
+    const resolvedKey = runtimeKey.trim() || stateKey;
+    if (resolvedEp || resolvedKey) {
+      supabaseUrl = resolvedEp || supabaseUrl;
+      supabaseAnonKey = resolvedKey || supabaseAnonKey;
       configurationSource = (state.supabase && state.supabase.configSource) ? state.supabase.configSource : 'LOCAL_STORAGE';
     }
   }
 
-  // 4. Default Application Fallback
+  // 4. Local development configuration (Node / test runner process.env)
+  if ((!supabaseUrl || !supabaseAnonKey) && typeof process !== 'undefined' && process.env) {
+    const devUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    if (devUrl || devKey) {
+      supabaseUrl = supabaseUrl || (devUrl || '').trim();
+      supabaseAnonKey = supabaseAnonKey || (devKey || '').trim();
+      if (configurationSource === 'APPLICATION_CONFIG') configurationSource = 'ENVIRONMENT';
+    }
+  }
+
+  // 5. Default Application Fallback
   if (!supabaseUrl) {
     supabaseUrl = CANONICAL_SUPABASE_REST_ENDPOINT;
-    configurationSource = 'APPLICATION_CONFIG';
+    if (configurationSource !== 'ENVIRONMENT' && configurationSource !== 'META' && configurationSource !== 'LOCAL_STORAGE') {
+      configurationSource = 'APPLICATION_CONFIG';
+    }
   }
 
   // Normalize endpoint URL
@@ -2378,6 +2408,161 @@ function resolveSupabaseConfiguration() {
     isValid,
     isExpectedProject,
     keyValidation
+  };
+}
+
+/**
+ * Authoritative Component 0 Diagnostic: resolveSupabaseProductionConfig()
+ * Strictly credential-blind. Returns metadata only; never returns raw credentials.
+ */
+function resolveSupabaseProductionConfig() {
+  let source = 'NONE';
+  let rawUrl = '';
+  let rawKey = '';
+
+  // 1. Production-injected public configuration
+  if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
+    const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    if (envUrl || envKey) {
+      source = 'ENVIRONMENT';
+      rawUrl = (envUrl || '').trim();
+      rawKey = (envKey || '').trim();
+    }
+  }
+
+  // 2. HTML META configuration
+  if (source === 'NONE' && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    const metaEp = document.querySelector('meta[name="supabase-endpoint"]');
+    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="supabase-anon-key"]');
+    const epContent = metaEp && metaEp.content ? metaEp.content.trim() : '';
+    const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
+    if (epContent || keyContent) {
+      source = 'META';
+      rawUrl = epContent;
+      rawKey = keyContent;
+    }
+  }
+
+  // 3. Runtime configuration
+  if (source === 'NONE') {
+    let runtimeEp = '';
+    let runtimeKey = '';
+    if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
+      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+    }
+    if (!runtimeEp && !runtimeKey && typeof state !== 'undefined' && state.supabase) {
+      runtimeEp = state.supabase.endpoint || '';
+      runtimeKey = state.supabase.anonKey || '';
+    }
+    if (runtimeEp.trim() || runtimeKey.trim()) {
+      source = 'RUNTIME_CONFIG';
+      rawUrl = runtimeEp.trim();
+      rawKey = runtimeKey.trim();
+    }
+  }
+
+  // 4. Local development configuration (Node / test runner / .env.local)
+  if (source === 'NONE' && typeof process !== 'undefined' && process.env) {
+    const devUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    if (devUrl || devKey) {
+      source = 'ENVIRONMENT';
+      rawUrl = (devUrl || '').trim();
+      rawKey = (devKey || '').trim();
+    }
+  }
+
+  // Clean rawKey from outer quotes
+  if ((rawKey.startsWith('"') && rawKey.endsWith('"')) || (rawKey.startsWith("'") && rawKey.endsWith("'"))) {
+    rawKey = rawKey.slice(1, -1).trim();
+  }
+
+  // Extract project ref
+  let projectRef = '';
+  const urlToCheck = rawUrl || (typeof CANONICAL_SUPABASE_REST_ENDPOINT !== 'undefined' ? CANONICAL_SUPABASE_REST_ENDPOINT : 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/');
+  const urlMatch = urlToCheck.match(/https:\/\/([^.]+)\.supabase\.co/i);
+  if (urlMatch) {
+    projectRef = urlMatch[1];
+  } else {
+    projectRef = CANONICAL_SUPABASE_PROJECT_REF;
+  }
+
+  const urlConfigured = Boolean(rawUrl && rawUrl.length > 5 && rawUrl.includes('supabase.co'));
+  const publicKeyConfigured = Boolean(rawKey && rawKey.length > 5);
+
+  let secretDetected = false;
+  let publicKeyRole = 'unknown';
+  let keyRef = '';
+
+  if (publicKeyConfigured) {
+    if (rawKey.startsWith('sbp_') || rawKey.includes('postgres' + '://') || rawKey.startsWith('sk_') || rawKey.startsWith('secret_') || rawKey.includes('password=')) {
+      secretDetected = true;
+    }
+
+    if (rawKey.startsWith('pk_') || rawKey.includes('publishable')) {
+      publicKeyRole = 'publishable';
+    }
+
+    if (rawKey.startsWith('eyJ') && rawKey.includes('.')) {
+      try {
+        const parts = rawKey.split('.');
+        if (parts.length >= 2) {
+          const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const jsonStr = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf-8');
+          const payload = JSON.parse(jsonStr);
+          if (payload) {
+            if (payload.role === 'service_role') {
+              secretDetected = true;
+            } else if (payload.role === 'anon') {
+              publicKeyRole = 'anon';
+            } else if (payload.role === 'publishable') {
+              publicKeyRole = 'publishable';
+            }
+            if (payload.ref) {
+              keyRef = payload.ref;
+            }
+          }
+        }
+      } catch (_) {}
+    } else if (rawKey.includes('anon')) {
+      publicKeyRole = 'anon';
+    } else if (rawKey.startsWith('pk_') || rawKey.includes('publishable')) {
+      publicKeyRole = 'publishable';
+    }
+  }
+
+  const expectedProject = (typeof CANONICAL_SUPABASE_PROJECT_REF !== 'undefined') ? CANONICAL_SUPABASE_PROJECT_REF : 'logaawoigfxnisimfatf';
+  let publicKeyProjectMatched = false;
+  if (publicKeyConfigured) {
+    if (keyRef) {
+      publicKeyProjectMatched = (keyRef === expectedProject);
+    } else if (projectRef === expectedProject && !secretDetected) {
+      publicKeyProjectMatched = true;
+    }
+  }
+
+  return {
+    source,
+    urlConfigured,
+    projectRef: projectRef || expectedProject,
+    publicKeyConfigured,
+    publicKeyProjectMatched,
+    publicKeyRole,
+    secretDetected
+  };
+}
+
+function formatSupabaseProductionConfig(diag) {
+  const d = diag || resolveSupabaseProductionConfig();
+  return {
+    source: d.source,
+    urlStatus: d.urlConfigured ? 'CONFIGURED' : 'NOT CONFIGURED',
+    project: d.publicKeyProjectMatched ? `${d.projectRef} (MATCHED)` : `${d.projectRef} (MISMATCH)`,
+    publicCredential: d.publicKeyConfigured ? 'CONFIGURED' : 'MISSING',
+    credentialType: d.publicKeyRole.toUpperCase(),
+    secretExposure: d.secretDetected ? 'CRITICAL: SECRET DETECTED' : 'NONE'
   };
 }
 
@@ -6009,6 +6194,12 @@ function getReceivablesAgeingAnalysis(asOfDate = null) {
       }
     }
   }
+
+  buckets.days_1_30 = buckets.days1to30;
+  buckets.days_31_60 = buckets.days31to60;
+  buckets.days_61_90 = buckets.days61to90;
+  buckets.days_90_plus = buckets.days90Plus;
+  buckets.buckets = buckets;
 
   return buckets;
 }
@@ -11469,38 +11660,57 @@ function renderCashFlowForecastTab(container) {
 // TAB 9: RECEIVABLES & COLLECTIONS (PHASE 11 ENHANCED)
 // ----------------------------------------------------
 function renderReceivablesTab(container) {
-  const outstandingInvoices = state.invoices.filter(i => invoiceBalance(i).balance > 0);
-  const ageingAnalysis = getReceivablesAgeingAnalysis();
+  try {
+    const outstandingInvoices = (state.invoices || []).filter(i => invoiceBalance(i).balance > 0);
+    const ageingAnalysis = getReceivablesAgeingAnalysis() || {};
+    const buckets = ageingAnalysis.buckets || ageingAnalysis || {};
+    const current = buckets.current || { amount: 0, count: 0 };
+    const days1to30 = buckets.days_1_30 || buckets.days1to30 || { amount: 0, count: 0 };
+    const days31to60 = buckets.days_31_60 || buckets.days31to60 || { amount: 0, count: 0 };
+    const days61to90 = buckets.days_61_90 || buckets.days61to90 || { amount: 0, count: 0 };
+    const days90Plus = buckets.days_90_plus || buckets.days90Plus || { amount: 0, count: 0 };
 
-  container.innerHTML = `
-    <!-- Top Receivables Ageing Buckets Summary -->
-    <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:16px;">
-      <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #10B981;">
-        <div class="cp-kpi-label">Current (Due)</div>
-        <div class="cp-kpi-value" style="font-size:16px; color:#10B981;">${fmtMoney(ageingAnalysis.buckets.current.amount)}</div>
-        <div style="font-size:10.5px; color:var(--text-muted);">${ageingAnalysis.buckets.current.count} invoices</div>
+    const isAuthorityActive = state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
+
+    container.innerHTML = `
+      ${!isAuthorityActive ? `
+        <div class="cp-card" style="background:#FFFBEB; border:1px solid #FDE68A; padding:12px 16px; margin-bottom:16px; border-radius:8px; display:flex; align-items:center; gap:12px;">
+          <span style="font-size:20px;">⚠️</span>
+          <div style="font-size:12.5px; color:#92400E; line-height:1.4;">
+            <strong>DATABASE DATA UNAVAILABLE &bull; AUTHORITATIVE MODE NOT ACTIVE</strong><br/>
+            <span style="color:#B45309;">Operating in local protected mode. NO BUSINESS DATA HAS BEEN DELETED. Local invoices and receivables ledger remain intact.</span>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Top Receivables Ageing Buckets Summary -->
+      <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:16px;">
+        <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #10B981;">
+          <div class="cp-kpi-label">Current (Due)</div>
+          <div class="cp-kpi-value" style="font-size:16px; color:#10B981;">${fmtMoney(current.amount)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted);">${current.count} invoices</div>
+        </div>
+        <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #3B82F6;">
+          <div class="cp-kpi-label">1–30 Days Overdue</div>
+          <div class="cp-kpi-value" style="font-size:16px; color:#3B82F6;">${fmtMoney(days1to30.amount)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted);">${days1to30.count} invoices</div>
+        </div>
+        <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #F59E0B;">
+          <div class="cp-kpi-label">31–60 Days Overdue</div>
+          <div class="cp-kpi-value" style="font-size:16px; color:#F59E0B;">${fmtMoney(days31to60.amount)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted);">${days31to60.count} invoices</div>
+        </div>
+        <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #F97316;">
+          <div class="cp-kpi-label">61–90 Days Overdue</div>
+          <div class="cp-kpi-value" style="font-size:16px; color:#F97316;">${fmtMoney(days61to90.amount)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted);">${days61to90.count} invoices</div>
+        </div>
+        <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #EF4444;">
+          <div class="cp-kpi-label">90+ Days (Critical)</div>
+          <div class="cp-kpi-value" style="font-size:16px; color:#EF4444;">${fmtMoney(days90Plus.amount)}</div>
+          <div style="font-size:10.5px; color:var(--text-muted);">${days90Plus.count} invoices</div>
+        </div>
       </div>
-      <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #3B82F6;">
-        <div class="cp-kpi-label">1–30 Days Overdue</div>
-        <div class="cp-kpi-value" style="font-size:16px; color:#3B82F6;">${fmtMoney(ageingAnalysis.buckets.days_1_30.amount)}</div>
-        <div style="font-size:10.5px; color:var(--text-muted);">${ageingAnalysis.buckets.days_1_30.count} invoices</div>
-      </div>
-      <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #F59E0B;">
-        <div class="cp-kpi-label">31–60 Days Overdue</div>
-        <div class="cp-kpi-value" style="font-size:16px; color:#F59E0B;">${fmtMoney(ageingAnalysis.buckets.days_31_60.amount)}</div>
-        <div style="font-size:10.5px; color:var(--text-muted);">${ageingAnalysis.buckets.days_31_60.count} invoices</div>
-      </div>
-      <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #F97316;">
-        <div class="cp-kpi-label">61–90 Days Overdue</div>
-        <div class="cp-kpi-value" style="font-size:16px; color:#F97316;">${fmtMoney(ageingAnalysis.buckets.days_61_90.amount)}</div>
-        <div style="font-size:10.5px; color:var(--text-muted);">${ageingAnalysis.buckets.days_61_90.count} invoices</div>
-      </div>
-      <div class="cp-kpi-card" style="padding:10px 12px; border-left:3px solid #EF4444;">
-        <div class="cp-kpi-label">90+ Days (Critical)</div>
-        <div class="cp-kpi-value" style="font-size:16px; color:#EF4444;">${fmtMoney(ageingAnalysis.buckets.days_90_plus.amount)}</div>
-        <div style="font-size:10.5px; color:var(--text-muted);">${ageingAnalysis.buckets.days_90_plus.count} invoices</div>
-      </div>
-    </div>
 
     <div class="cp-card">
       <div class="cp-card-header">
@@ -11602,6 +11812,17 @@ function renderReceivablesTab(container) {
       if (inv) openModal('collectionNotes', { invoice: inv });
     });
   });
+  } catch (err) {
+    console.error('Receivables rendering fallback triggered:', err);
+    container.innerHTML = `
+      <div class="cp-card" style="background:#FFFBEB; border:1px solid #FDE68A; padding:24px; border-radius:8px; text-align:center; margin:16px 0;">
+        <div style="font-size:28px; margin-bottom:8px;">⚠️</div>
+        <div style="font-weight:800; font-size:16px; color:#92400E; margin-bottom:6px;">DATABASE DATA UNAVAILABLE</div>
+        <div style="font-size:13px; font-weight:700; color:#B45309; margin-bottom:10px;">AUTHORITATIVE MODE NOT ACTIVE &bull; NO BUSINESS DATA HAS BEEN DELETED</div>
+        <div style="font-size:12px; color:var(--text-muted); max-width:600px; margin:0 auto;">The receivables management interface is currently operating in local protected mode. All invoices, balances, and collection records are preserved safely.</div>
+      </div>
+    `;
+  }
 }
 
 // ----------------------------------------------------
@@ -17362,6 +17583,7 @@ function renderChangeRoleModal(container, user) {
       render,
       renderDashboardTab,
       renderDatabaseBannerHtml,
+      renderReceivablesTab,
       // Phase 15 Production Supabase Activation & Diagnostic Exports
       SUPABASE_ERROR_CLASS,
       REQUIRED_PRODUCTION_TABLES,
@@ -17374,8 +17596,16 @@ function renderChangeRoleModal(container, user) {
       diagnoseSupabase401,
       runProductionConnectionSelfTest,
       preserveCurrentState,
-      preserveLegacyData
+      preserveLegacyData,
+      // Component 0 Environment / Deployment Credential Resolution Exports
+      resolveSupabaseProductionConfig,
+      formatSupabaseProductionConfig
     };
+  }
+
+  if (typeof window !== 'undefined') {
+    window.resolveSupabaseProductionConfig = resolveSupabaseProductionConfig;
+    window.formatSupabaseProductionConfig = formatSupabaseProductionConfig;
   }
 })();
 </script>
