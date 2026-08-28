@@ -19,7 +19,8 @@ const suites = [
   { name: 'Phase 14: Production Data Recovery & Safe Migration', file: 'test_phase14_production_data_migration.js' },
   { name: 'Phase 15: Production Cutover, Controls & Recovery', file: 'test_phase15_production_control.js' },
   { name: 'Phase 15: Supabase Connectivity, Validation & Authoritative Mode', file: 'test_phase15_supabase_connectivity.js' },
-  { name: 'Phase 15: Production Supabase Activation, Auth Repair & Live Migration', file: 'test_phase15_supabase_activation.js' }
+  { name: 'Phase 15: Production Supabase Activation, Auth Repair & Live Migration', file: 'test_phase15_supabase_activation.js' },
+  { name: 'Phase 14.1: Supabase 401 Authentication Resolution & Connectivity Certification', file: 'test_phase14_1_supabase_401_resolution.js' }
 ];
 
 let totalPassed = 0;

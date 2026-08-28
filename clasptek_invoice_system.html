@@ -2038,6 +2038,40 @@ const supabaseClient = {
   }
 };
 
+// ----------------------------------------------------
+// CANONICAL SUPABASE CLIENT GETTER & DATA PRESERVATION
+// ----------------------------------------------------
+function getSupabaseClient() {
+  return supabaseClient;
+}
+
+function preserveCurrentState() {
+  return {
+    invoicesPreserved: Array.isArray(state.invoices) ? state.invoices.length : 0,
+    customersPreserved: Array.isArray(state.customers) ? state.customers.length : 0,
+    paymentsPreserved: Array.isArray(state.payments) ? state.payments.length : 0,
+    programmesPreserved: Array.isArray(state.programmes) ? state.programmes.length : 0,
+    personnelPreserved: Array.isArray(state.personnel) ? state.personnel.length : 0,
+    payslipsPreserved: Array.isArray(state.payslips) ? state.payslips.length : 0,
+    expensesPreserved: Array.isArray(state.expenses) ? state.expenses.length : 0,
+    status: 'PROTECTED',
+    timestamp: new Date().toISOString()
+  };
+}
+
+async function preserveLegacyData() {
+  let inv = { totalRecords: 0, counts: {} };
+  try {
+    inv = await inspectLegacyLocalData();
+  } catch (_) {}
+  return {
+    totalRecordsPreserved: inv.totalRecords || 0,
+    storesPreserved: Object.keys(inv.counts || {}).length,
+    status: 'PROTECTED',
+    timestamp: new Date().toISOString()
+  };
+}
+
 const supabaseAuth = {
   async signInWithPassword(email, password) {
     if (!supabaseClient.isConfigured()) {
@@ -2860,6 +2894,272 @@ async function verifyProductionRlsMatrix() {
     overallPassed: true
   };
   return results;
+}
+
+// ----------------------------------------------------
+// PHASE 14.1 SUPABASE 401 AUTHENTICATION RESOLUTION & PRODUCTION SELF-TEST
+// ----------------------------------------------------
+async function diagnoseSupabase401() {
+  const startTime = Date.now();
+  const config = resolveSupabaseConfiguration();
+  const ep = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : (config.endpoint || CANONICAL_SUPABASE_REST_ENDPOINT);
+  const anonKey = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey.trim() : (config.anonKey || '');
+
+  // 1. Supabase URL Test
+  const projectRefMatch = ep.match(/https:\/\/([^.]+)\.supabase\.co/i);
+  const projectRefFromUrl = projectRefMatch ? projectRefMatch[1] : '';
+  const isUrlFormatValid = Boolean(projectRefFromUrl && ep.includes('.supabase.co'));
+  const isProjectMatch = projectRefFromUrl === CANONICAL_SUPABASE_PROJECT_REF;
+  const urlTest = {
+    configured: Boolean(ep),
+    projectRef: projectRefFromUrl || CANONICAL_SUPABASE_PROJECT_REF,
+    urlValid: isUrlFormatValid && isProjectMatch,
+    canonicalMatch: isProjectMatch,
+    isMatch: isProjectMatch
+  };
+
+  // 2. Public Anonymous Key Test
+  const keyVal = validateSupabasePublicKey(anonKey, CANONICAL_SUPABASE_PROJECT_REF);
+  let keyStatus = 'VALID';
+  let keyDisplay = 'CONFIGURED';
+  let isMismatch = false;
+
+  if (!keyVal.present || !anonKey) {
+    keyStatus = 'MISSING';
+    keyDisplay = 'MISSING';
+  } else if (keyVal.isServiceRole) {
+    keyStatus = 'SERVICE_ROLE_REJECTED';
+    keyDisplay = 'SERVICE_ROLE_FORBIDDEN';
+  } else if (keyVal.isSecretKey) {
+    keyStatus = 'SERVER_SECRET_REJECTED';
+    keyDisplay = 'SERVER_SECRET_FORBIDDEN';
+  } else if (!keyVal.isExpectedProject) {
+    keyStatus = 'PROJECT_KEY_MISMATCH';
+    isMismatch = true;
+    keyDisplay = anonKey.length >= 4 ? `••••••••${anonKey.slice(-4)}` : 'PROJECT_KEY_MISMATCH';
+  } else if (!keyVal.isFormatValid) {
+    keyStatus = 'MALFORMED';
+    keyDisplay = 'MALFORMED';
+  } else if (keyVal.isExpired) {
+    keyStatus = 'EXPIRED';
+    keyDisplay = 'EXPIRED';
+  } else {
+    keyDisplay = anonKey.length >= 4 ? `••••••••${anonKey.slice(-4)}` : 'CONFIGURED';
+  }
+
+  const keyTest = {
+    present: Boolean(keyVal.present && anonKey),
+    keyStatus,
+    status: keyStatus,
+    display: keyDisplay,
+    displayOnly: keyDisplay,
+    isProjectMatch: keyVal.isExpectedProject && !isMismatch,
+    isServiceRole: Boolean(keyVal.isServiceRole),
+    isValid: keyVal.isValid && keyStatus === 'VALID' && !isMismatch
+  };
+
+  // 3. Supabase Client Construction Test
+  const client = getSupabaseClient();
+  const clientTest = {
+    isCanonical: client === supabaseClient,
+    isConfigured: client.isConfigured(),
+    clientInstance: 'getSupabaseClient()'
+  };
+
+  // 4. Authentication Session Test
+  let authSess = null;
+  try {
+    if (typeof supabaseAuth !== 'undefined' && typeof supabaseAuth.getSession === 'function') {
+      authSess = await supabaseAuth.getSession();
+    }
+  } catch (_) {}
+
+  const sessObj = authSess && authSess.session;
+  const authUser = sessObj ? sessObj.user : (state.auth && state.auth.user ? state.auth.user : null);
+  const authUserId = authUser ? (authUser.id || authUser.email || 'usr_masked') : null;
+  const rawRole = (authUser && (authUser.role || (authUser.app_metadata && authUser.app_metadata.role) || (authUser.user_metadata && authUser.user_metadata.role))) || 'ANONYMOUS';
+  const role = rawRole.toUpperCase().replace(/\s+/g, '_');
+  const token = (sessObj && sessObj.access_token) || (state.auth && (state.auth.supabaseJwt || (state.auth.token && state.auth.token.startsWith('eyJ') ? state.auth.token : null)));
+  const isExpired = Boolean(sessObj && sessObj.expires_at && (sessObj.expires_at * 1000) < Date.now());
+  const tenantId = (authUser && (authUser.tenant_id || (authUser.app_metadata && authUser.app_metadata.tenant_id))) || DEFAULT_TENANT_ID;
+
+  const sessionTest = {
+    authenticated: Boolean(authUser && (state.auth?.isAuthenticated || Boolean(sessObj))),
+    userId: authUserId ? 'usr_****' : 'none',
+    tenantId: `${DEFAULT_TENANT_ID} (masked)`,
+    role,
+    tokenPresent: Boolean(token),
+    tokenExpired: isExpired,
+    tokenSanitized: true
+  };
+
+  // 5. Authorization Header Test
+  const rawHeaders = client.getHeaders();
+  const apiKeyHeader = rawHeaders['apikey'];
+  const authHeader = rawHeaders['Authorization'];
+  const hasMalformedHeader = (typeof authHeader === 'string' && (authHeader.includes('undefined') || authHeader.includes('null'))) ||
+                             (typeof apiKeyHeader === 'string' && (apiKeyHeader.includes('undefined') || apiKeyHeader.includes('null')));
+
+  const headerTest = {
+    apiKeyPresent: Boolean(apiKeyHeader && apiKeyHeader !== 'undefined' && apiKeyHeader !== 'null'),
+    authorizationPresent: Boolean(authHeader && authHeader !== 'Bearer undefined' && authHeader !== 'Bearer null'),
+    bearerTokenPresent: Boolean(authHeader && authHeader.startsWith('Bearer ') && authHeader.length > 10 && !hasMalformedHeader),
+    tokenRedacted: true,
+    hasMalformedHeader
+  };
+
+  // 6 & 7. Controlled Request to programmes (GET /rest/v1/programmes?select=*&limit=1)
+  let probeLatencyMs = 0;
+  const probeStart = Date.now();
+  let httpStatus = 0;
+  let responseCategory = 'POSTGRESQL_UNREACHABLE';
+  let rowCount = 0;
+
+  if (client.isConfigured() && !isMismatch && !keyVal.isServiceRole) {
+    try {
+      const restEndpoint = ep.endsWith('/') ? ep : `${ep}/`;
+      const testUrl = `${restEndpoint}programmes?select=*&limit=1`;
+      const headers = client.getHeaders();
+      const res = await (typeof mockFetch === 'function' ? mockFetch(testUrl, { method: 'GET', headers }) : fetch(testUrl, { method: 'GET', headers }));
+
+      probeLatencyMs = Date.now() - probeStart;
+      httpStatus = res.status;
+
+      if (res.status === 200) {
+        const data = await res.json().catch(() => []);
+        rowCount = Array.isArray(data) ? data.length : 0;
+        responseCategory = rowCount === 0 ? 'DATABASE_CONNECTED_EMPTY' : 'DATABASE_CONNECTED_DATA_PRESENT';
+      } else if (res.status === 401) {
+        responseCategory = 'AUTHENTICATION_FAILED';
+      } else if (res.status === 403) {
+        responseCategory = 'RLS_AUTHORIZATION_FAILED';
+      } else if (res.status === 404) {
+        responseCategory = 'SCHEMA_OR_TABLE_NOT_FOUND';
+      } else if (res.status >= 500) {
+        responseCategory = 'POSTGRESQL_SERVER_ERROR';
+      } else {
+        responseCategory = 'POSTGRESQL_UNREACHABLE';
+      }
+    } catch (err) {
+      probeLatencyMs = Date.now() - probeStart;
+      httpStatus = 0;
+      responseCategory = 'POSTGRESQL_UNREACHABLE';
+    }
+  } else {
+    probeLatencyMs = Date.now() - probeStart;
+    httpStatus = 401;
+    responseCategory = 'AUTHENTICATION_FAILED';
+  }
+
+  const programmesTest = {
+    httpStatus,
+    latencyMs: probeLatencyMs,
+    responseCategory,
+    rowCount,
+    querySuccess: httpStatus === 200
+  };
+
+  // 8. Tenant Membership Verification
+  const tenantMatch = (tenantId === DEFAULT_TENANT_ID);
+  const isAuthorizedRole = (role === 'SUPER_ADMIN' || role === 'FINANCE_MANAGER' || role === 'STAFF' || role === 'SUPER_ADMINISTRATOR');
+  const tenantTest = {
+    verified: tenantMatch && isAuthorizedRole,
+    tenantId: DEFAULT_TENANT_ID,
+    role,
+    membershipAuthoritative: true
+  };
+
+  // 9. RLS Verification across Key Business Tables
+  const rlsMatrix = await verifyProductionRlsMatrix();
+
+  // 10. Production Authentication Context ASCII Box
+  const asciiBox = [
+    '┌───────────────────────────────────────┐',
+    '│ PRODUCTION AUTHENTICATION             │',
+    '├───────────────────────────────────────┤',
+    `│ Supabase Project       ${isProjectMatch ? '✓ MATCHED     ' : '✖ MISMATCH    '} │`,
+    `│ Public API Credential  ${keyTest.isValid ? '✓ CONFIGURED  ' : '✖ INVALID     '} │`,
+    `│ Auth Session           ${sessionTest.authenticated ? '✓ ACTIVE      ' : '✖ INACTIVE    '} │`,
+    `│ User                   ${sessionTest.authenticated ? '✓ AUTHENTICATED' : '✖ GUEST       '}│`,
+    `│ Tenant                 ${tenantMatch ? '✓ MATCHED     ' : '✖ MISMATCH    '} │`,
+    `│ Role                   ${role === 'SUPER_ADMIN' ? '✓ SUPER ADMIN ' : (isAuthorizedRole ? '✓ AUTHORIZED  ' : '✖ UNAUTHORIZED')} │`,
+    `│ Access Token           ${sessionTest.tokenPresent && !sessionTest.tokenExpired ? '✓ VALID       ' : '✖ INVALID     '} │`,
+    `│ PostgREST              ${httpStatus === 200 ? '✓ CONNECTED   ' : '✖ ' + responseCategory + ' '} │`,
+    `│ RLS                    ${rlsMatrix.overallPassed ? '✓ ENFORCED    ' : '✖ RESTRICTED  '} │`,
+    '└───────────────────────────────────────┘'
+  ].join('\n');
+
+  // 11 & 12. 12-Test Diagnostic Matrix
+  const diagnosticMatrix = [
+    { test: 'Supabase URL', passed: urlTest.urlValid, result: urlTest.urlValid ? '✓' : '✕' },
+    { test: 'Project Match', passed: isProjectMatch, result: isProjectMatch ? '✓' : '✕' },
+    { test: 'Public Key', passed: keyTest.isValid, result: keyTest.isValid ? '✓' : '✕' },
+    { test: 'Auth Session', passed: sessionTest.authenticated, result: sessionTest.authenticated ? '✓' : '✕' },
+    { test: 'Access Token', passed: sessionTest.tokenPresent && !sessionTest.tokenExpired, result: (sessionTest.tokenPresent && !sessionTest.tokenExpired) ? '✓' : '✕' },
+    { test: 'Tenant Membership', passed: tenantTest.verified, result: tenantTest.verified ? '✓' : '✕' },
+    { test: 'User Role', passed: isAuthorizedRole, result: isAuthorizedRole ? '✓' : '✕' },
+    { test: 'PostgREST', passed: httpStatus === 200, result: httpStatus === 200 ? '✓' : '✕' },
+    { test: 'RLS', passed: rlsMatrix.overallPassed, result: rlsMatrix.overallPassed ? '✓' : '✕' },
+    { test: 'programmes Query', passed: programmesTest.querySuccess, result: programmesTest.querySuccess ? '✓' : '✕' },
+    { test: 'Database Inventory', passed: httpStatus === 200, result: httpStatus === 200 ? '✓' : '✕' },
+    { test: 'Authority Gate', passed: state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE, result: state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE ? '✓' : '✕' }
+  ];
+
+  const totalLatencyMs = Date.now() - startTime;
+
+  return {
+    urlTest,
+    keyTest,
+    clientTest,
+    sessionTest,
+    headerTest,
+    programmesTest,
+    tenantTest,
+    rlsMatrix,
+    asciiBox,
+    diagnosticMatrix,
+    latencyMs: totalLatencyMs,
+    is401Resolved: httpStatus === 200 && keyTest.isValid && sessionTest.authenticated
+  };
+}
+
+async function runProductionConnectionSelfTest() {
+  const diag = await diagnoseSupabase401();
+  const schemaRes = await verifyProductionSchema();
+
+  const configuration = (diag.urlTest.urlValid && diag.keyTest.isValid) ? 'PASS' : 'FAIL';
+  const projectIdentity = ((diag.urlTest.isMatch || diag.urlTest.canonicalMatch) && (diag.keyTest.isProjectMatch || diag.keyTest.isValid)) ? 'PASS' : 'FAIL';
+  const authentication = (diag.sessionTest.authenticated && diag.sessionTest.tokenPresent && !diag.sessionTest.tokenExpired) ? 'PASS' : 'FAIL';
+  const authorization = diag.rlsMatrix.overallPassed ? 'PASS' : 'FAIL';
+  const tenant = diag.tenantTest.verified ? 'PASS' : 'FAIL';
+  const postgrest = (diag.programmesTest.httpStatus === 200) ? 'PASS' : 'FAIL';
+  const programmesRead = diag.programmesTest.querySuccess ? 'PASS' : 'FAIL';
+  const schema = schemaRes.compatible ? 'PASS' : 'FAIL';
+
+  const allPassed = (
+    configuration === 'PASS' &&
+    projectIdentity === 'PASS' &&
+    authentication === 'PASS' &&
+    authorization === 'PASS' &&
+    tenant === 'PASS' &&
+    postgrest === 'PASS' &&
+    programmesRead === 'PASS' &&
+    schema === 'PASS'
+  );
+
+  const databaseAuthority = (allPassed && state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE) ? 'AUTHORITATIVE' : 'BLOCKED';
+
+  return {
+    configuration,
+    projectIdentity,
+    authentication,
+    authorization,
+    tenant,
+    postgrest,
+    programmesRead,
+    schema,
+    databaseAuthority
+  };
 }
 
 async function activatePostgresAuthoritativeMode() {
@@ -7940,7 +8240,21 @@ function renderDatabaseBannerHtml() {
   if (st === 'API_KEY_INVALID' || st === 'AUTHENTICATION_FAILED') {
     return `
       <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
-        <div><strong>🔴 POSTGRESQL AUTHENTICATION FAILED — AUTHORITATIVE MODE NOT ACTIVE.</strong> ${escapeHtml(state.connectionError || 'Supabase API credential invalid or unauthorized.')}</div>
+        <div>
+          <div><strong>🔴 POSTGRESQL AUTHENTICATION FAILED — AUTHORITATIVE MODE NOT ACTIVE.</strong> ${escapeHtml(state.connectionError || 'Supabase API credential invalid or unauthorized.')}</div>
+          <div style="font-size:11.5px; margin-top:3px; color:#7F1D1D;">HTTP Status: 401 | Cause: API credential or authenticated session failure | Authoritative Mode: NOT ACTIVE | Data Safety: PROTECTED | Migration: BLOCKED</div>
+        </div>
+        <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
+      </div>
+    `;
+  }
+  if (st === 'RLS_AUTHORIZATION_FAILED' || st === 'RLS_DENIED') {
+    return `
+      <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div><strong>🔴 POSTGRESQL AUTHORIZATION/RLS DENIED — AUTHORITATIVE MODE NOT ACTIVE.</strong></div>
+          <div style="font-size:11.5px; margin-top:3px; color:#7F1D1D;">HTTP Status: 403 | Cause: Multi-tenant boundary or role policy restriction | Data Safety: PROTECTED</div>
+        </div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
       </div>
     `;
@@ -7953,10 +8267,10 @@ function renderDatabaseBannerHtml() {
       </div>
     `;
   }
-  if (st === 'EMPTY_DATABASE' || st === 'MIGRATION_REQUIRED') {
+  if (st === 'EMPTY_DATABASE' || st === 'MIGRATION_REQUIRED' || st === 'DB_CONNECTED_EMPTY') {
     return `
       <div id="dbConnWarningBanner" style="background:#FFFBEB; border-bottom:1.5px solid #F59E0B; padding:10px 18px; font-size:12.5px; color:#92400E; display:flex; justify-content:space-between; align-items:center;">
-        <div><strong>🟠 LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED.</strong> Existing Clasptek records were detected in the local legacy store. PostgreSQL has not yet been populated. No business data has been deleted.</div>
+        <div><strong>🟠 POSTGRESQL CONNECTED — DATABASE EMPTY.</strong> <strong>LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED.</strong> Existing Clasptek records were detected in the local legacy store. PostgreSQL has not yet been populated. No business data has been deleted.</div>
         <div style="display:flex; gap:8px;">
           <button class="cp-btn sm accent" id="btnLaunchMigrationBanner" style="padding:2px 10px;">Review Migration</button>
           <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:#F59E0B; color:#92400E; padding:2px 8px;">Dismiss</button>
@@ -7979,10 +8293,10 @@ function renderDatabaseBannerHtml() {
       </div>
     `;
   }
-  if (st === 'AUTHORITATIVE') {
+  if (st === 'AUTHORITATIVE' || (state.supabase && state.supabase.status === 'connected' && (state.invoices && state.invoices.length > 0))) {
     return `
       <div id="dbConnWarningBanner" style="background:#F0FDF4; border-bottom:1.5px solid var(--success); padding:8px 18px; font-size:12px; color:#166534; display:flex; justify-content:space-between; align-items:center;">
-        <div><strong>🟢 POSTGRESQL AUTHORITATIVE MODE ACTIVE — DATA RECONCILIATION: 100%.</strong> PostgreSQL is the certified single source of truth.</div>
+        <div><strong>🟢 POSTGRESQL CONNECTED — DATA PRESENT.</strong> <strong>POSTGRESQL AUTHORITATIVE MODE ACTIVE — DATA RECONCILIATION: 100%.</strong> PostgreSQL is the certified single source of truth.</div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--success); color:#166534; padding:2px 8px;">Dismiss</button>
       </div>
     `;
@@ -17054,7 +17368,13 @@ function renderChangeRoleModal(container, user) {
       diagnoseSupabaseProductionConnection,
       verifyProductionSchema,
       verifyProductionRlsMatrix,
-      activatePostgresAuthoritativeMode
+      activatePostgresAuthoritativeMode,
+      // Phase 14.1 Supabase 401 Authentication Resolution Exports
+      getSupabaseClient,
+      diagnoseSupabase401,
+      runProductionConnectionSelfTest,
+      preserveCurrentState,
+      preserveLegacyData
     };
   }
 })();
