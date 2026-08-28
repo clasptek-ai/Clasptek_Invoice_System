@@ -17,7 +17,8 @@ const suites = [
   { name: 'Production Persistence Verification Cycle', file: 'test_production_persistence_verification.js' },
   { name: 'Phase 14: Live Supabase Connectivity Repair', file: 'test_phase14_live_production_connectivity.js' },
   { name: 'Phase 14: Production Data Recovery & Safe Migration', file: 'test_phase14_production_data_migration.js' },
-  { name: 'Phase 15: Production Cutover, Controls & Recovery', file: 'test_phase15_production_control.js' }
+  { name: 'Phase 15: Production Cutover, Controls & Recovery', file: 'test_phase15_production_control.js' },
+  { name: 'Phase 15: Supabase Connectivity, Validation & Authoritative Mode', file: 'test_phase15_supabase_connectivity.js' }
 ];
 
 let totalPassed = 0;
