@@ -1863,4 +1863,173 @@ CREATE POLICY "system_diagnostics_admin_delete" ON public.system_diagnostics
 
 CREATE INDEX IF NOT EXISTS idx_system_diagnostics_probe ON public.system_diagnostics (probe_id, created_at DESC);
 
+-- =============================================================================
+-- 15. PRODUCTION DATA MIGRATION & RECONCILIATION AUDIT LOG
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.production_migration_runs (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    migration_type TEXT NOT NULL DEFAULT 'LEGACY_LOCALSTORAGE_TO_POSTGRES',
+    status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+    total_detected INTEGER NOT NULL DEFAULT 0,
+    total_migrated INTEGER NOT NULL DEFAULT 0,
+    total_existing INTEGER NOT NULL DEFAULT 0,
+    total_failed INTEGER NOT NULL DEFAULT 0,
+    entity_breakdown JSONB DEFAULT '{}'::jsonb,
+    reconciliation_summary JSONB DEFAULT '{}'::jsonb,
+    initiated_by TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_runs_tenant_status ON public.production_migration_runs (tenant_id, status, started_at DESC);
+
+ALTER TABLE public.production_migration_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "migration_runs_manage_select" ON public.production_migration_runs
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "migration_runs_manage_insert" ON public.production_migration_runs
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "migration_runs_manage_update" ON public.production_migration_runs
+    FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- =============================================================================
+-- 16. PRODUCTION CONTROL, TRANSACTION RECOVERY & CONTINUOUS RECONCILIATION
+-- =============================================================================
+
+-- Transaction Recovery Queue (Persistent failure recovery with idempotency replay)
+CREATE TABLE IF NOT EXISTS public.transaction_recovery_queue (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    idempotency_key TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    actor_name TEXT NOT NULL,
+    attempted_operation TEXT NOT NULL,
+    failure_reason TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    resolution_notes TEXT,
+    resolved_by TEXT,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_recovery_queue_tenant_idemp UNIQUE (tenant_id, idempotency_key)
+);
+
+ALTER TABLE public.transaction_recovery_queue ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "recovery_queue_manager_select" ON public.transaction_recovery_queue
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "recovery_queue_manager_insert" ON public.transaction_recovery_queue
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "recovery_queue_manager_update" ON public.transaction_recovery_queue
+    FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "recovery_queue_manager_delete" ON public.transaction_recovery_queue
+    FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Production Continuous Reconciliation Runs
+CREATE TABLE IF NOT EXISTS public.production_reconciliation_runs (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    run_type TEXT NOT NULL DEFAULT 'CONTINUOUS',
+    status TEXT NOT NULL DEFAULT 'SUCCESS',
+    total_entities_checked INTEGER NOT NULL DEFAULT 0,
+    discrepancy_count INTEGER NOT NULL DEFAULT 0,
+    summary_metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+    initiated_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.production_reconciliation_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "reconciliation_runs_manager_select" ON public.production_reconciliation_runs
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "reconciliation_runs_manager_insert" ON public.production_reconciliation_runs
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- Production Reconciliation Exceptions
+CREATE TABLE IF NOT EXISTS public.production_reconciliation_exceptions (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    run_id TEXT REFERENCES public.production_reconciliation_runs(id) ON DELETE CASCADE,
+    exception_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    severity TEXT NOT NULL DEFAULT 'MATERIAL',
+    description TEXT NOT NULL,
+    discrepancy_data JSONB DEFAULT '{}'::jsonb,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    resolved_by TEXT,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.production_reconciliation_exceptions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "reconciliation_exceptions_manager_select" ON public.production_reconciliation_exceptions
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "reconciliation_exceptions_manager_insert" ON public.production_reconciliation_exceptions
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "reconciliation_exceptions_manager_update" ON public.production_reconciliation_exceptions
+    FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- Month-End Closures Workflow Engine
+CREATE TABLE IF NOT EXISTS public.month_end_closures (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    period_key TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    reconciliation_run_id TEXT REFERENCES public.production_reconciliation_runs(id) ON DELETE SET NULL,
+    closing_checklist JSONB NOT NULL DEFAULT '{}'::jsonb,
+    total_revenue NUMERIC(15,2) DEFAULT 0,
+    total_expenses NUMERIC(15,2) DEFAULT 0,
+    net_position NUMERIC(15,2) DEFAULT 0,
+    closed_by TEXT,
+    closed_at TIMESTAMPTZ,
+    approved_by TEXT,
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_month_end_closures_period UNIQUE (tenant_id, period_key)
+);
+
+ALTER TABLE public.month_end_closures ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "month_end_closures_manager_select" ON public.month_end_closures
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "month_end_closures_manager_insert" ON public.month_end_closures
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "month_end_closures_manager_update" ON public.month_end_closures
+    FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- Financial Control Checks & Ledger Invariant Tracking
+CREATE TABLE IF NOT EXISTS public.financial_control_checks (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    check_type TEXT NOT NULL,
+    check_period TEXT NOT NULL,
+    expected_value NUMERIC(15,2) NOT NULL,
+    actual_value NUMERIC(15,2) NOT NULL,
+    variance NUMERIC(15,2) NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'BALANCED',
+    details JSONB DEFAULT '{}'::jsonb,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.financial_control_checks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "financial_control_checks_manager_select" ON public.financial_control_checks
+    FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "financial_control_checks_manager_insert" ON public.financial_control_checks
+    FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+
+-- Section 16 Performance Composite Indexes
+CREATE INDEX IF NOT EXISTS idx_recovery_queue_status ON public.transaction_recovery_queue(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reconcil_runs_tenant ON public.production_reconciliation_runs(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reconcil_exceptions_status ON public.production_reconciliation_exceptions(tenant_id, status, severity);
+CREATE INDEX IF NOT EXISTS idx_month_end_closures_period ON public.month_end_closures(tenant_id, period_key);
+CREATE INDEX IF NOT EXISTS idx_financial_control_period ON public.financial_control_checks(tenant_id, check_period, check_type);
+
 
