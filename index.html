@@ -5519,11 +5519,11 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
   await logAudit('MIGRATION_STARTED', 'system', 'migration', 'Legacy Local to PostgreSQL', null, null, 'Safe production data migration initiated');
 
   let hasFatalError = false;
+  let failedTable = null;
 
   for (const step of migrationSequence) {
     if (hasFatalError) {
-      console.warn(`Skipping migration step ${step.table} due to prior failure.`);
-      continue;
+      break;
     }
 
     const rawItems = legacy.records[step.entity] || [];
@@ -5559,7 +5559,9 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
         stats.failed += items.length;
         stats.entities[step.entity].failed += items.length;
         hasFatalError = true;
+        failedTable = step.table;
         await logAudit('MIGRATION_RECORD_FAILED', step.entity, step.table, `Failed ${items.length} records: ${error.message || ''}`, null, null);
+        break;
       } else {
         // Read back verification
         const readBackRes = await supabaseClient.from(step.table).select('*');
@@ -5592,6 +5594,8 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
       stats.failed += items.length;
       stats.entities[step.entity].failed += items.length;
       hasFatalError = true;
+      failedTable = step.table;
+      break;
     }
   }
 
@@ -5601,7 +5605,7 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
     id: runId,
     tenant_id: tenantId,
     migration_type: 'LEGACY_LOCALSTORAGE_TO_POSTGRES',
-    status: stats.failed === 0 ? 'COMPLETED' : 'PARTIAL_OR_FAILED',
+    status: (stats.failed === 0 && !hasFatalError) ? 'COMPLETED' : 'PARTIAL_OR_FAILED',
     total_detected: stats.detected,
     total_migrated: stats.migrated,
     total_existing: stats.alreadyExisting,
@@ -5620,20 +5624,22 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
 
   // Execute reconciliation immediately
   const recon = await reconcileProductionData();
-  if (recon.isReconciled && stats.failed === 0) {
+  if (recon.isReconciled && stats.failed === 0 && !hasFatalError) {
     state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
     state.supabase.persistenceMode = 'AUTHORITATIVE';
     state.supabase.status = 'connected';
     state.connectionError = null;
   } else {
     state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
-    state.connectionError = `Migration completed with exceptions: ${recon.criticalOrphanCount} critical relational orphans detected.`;
+    state.connectionError = `Migration completed with exceptions: ${recon.criticalOrphanCount || 0} critical relational orphans detected.`;
   }
 
   return {
-    success: stats.failed === 0 && recon.isReconciled,
+    success: stats.failed === 0 && !hasFatalError && recon.isReconciled,
     runId,
     stats,
+    failedTable,
+    hasFatalError,
     reconciliation: recon
   };
 }
@@ -6199,6 +6205,247 @@ async function executeRealCloudProductionMigration(options = {}) {
       duplicatesCreated: 0,
       passed: true
     },
+    gates: authActivation.gates
+  };
+}
+
+/**
+ * Component 9 & Phase 14.9 Execution Contract: executePhase14_9LiveCloudMigration()
+ * Real Production Cloud Migration Execution Controller.
+ * 
+ * Exact Execution Contract:
+ * LIVE CONFIGURATION
+ *   ↓
+ * AUTHENTICATED SUPER ADMIN SESSION
+ *   ↓
+ * REMOTE POSTGREST PROBE
+ *   ↓
+ * REMOTE DATABASE INVENTORY
+ *   ↓
+ * LOCAL LEGACY INVENTORY
+ *   ↓
+ * ZERO-WRITE DRY RUN
+ *   ↓
+ * EXPLICIT LIVE MIGRATION CONFIRMATION
+ *   ↓
+ * REAL HTTPS UPSERTS
+ *   ↓
+ * REMOTE READ-BACK
+ *   ↓
+ * RECORD-LEVEL RECONCILIATION
+ *   ↓
+ * FINANCIAL RECONCILIATION
+ *   ↓
+ * SECOND REAL REMOTE RUN
+ *   ↓
+ * IDEMPOTENCY PROOF
+ *   ↓
+ * 14-GATE CERTIFICATION
+ *   ↓
+ * AUTHORITATIVE
+ */
+async function executePhase14_9LiveCloudMigration(options = {}) {
+  const confirmed = options.confirmed === true;
+  const isMocked = (typeof fetch === 'function' && Boolean(fetch._isMock)) || false;
+  const isSimulation = currentMigrationExecutionMode === MIGRATION_EXECUTION_MODE.SIMULATION || isMocked;
+
+  // 1. LIVE CONFIGURATION & VERCEL RESOLUTION
+  const config = resolveSupabaseConfiguration();
+  const prodConfig = resolveSupabaseProductionConfig();
+  if (!config.endpoint || !config.endpoint.includes('logaawoigfxnisimfatf.supabase.co')) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+    throw new Error('Phase 14.9 Execution Failed: Target Supabase URL must be https://logaawoigfxnisimfatf.supabase.co');
+  }
+  if (config.projectRef !== CANONICAL_SUPABASE_PROJECT_REF) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+    throw new Error(`Phase 14.9 Execution Failed: Project ref mismatch. Expected ${CANONICAL_SUPABASE_PROJECT_REF}, found ${config.projectRef}`);
+  }
+  if (!config.anonKey) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+    throw new Error('Phase 14.9 Execution Failed: Public publishable API key is not configured.');
+  }
+
+  // 2. AUTHENTICATED SUPER ADMIN SESSION VALIDATION
+  const authTruth = getProductionAuthenticationTruth();
+  if (!authTruth.sessionPresent || !authTruth.userAuthenticated || !authTruth.userIdPresent) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: false,
+      remoteEvidence: false,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_MIGRATION_BLOCKED',
+      reason: 'AUTHENTICATION_REQUIRED: User is not authenticated. Live production migration requires a verified Super Admin session.'
+    };
+  }
+  if (!authTruth.authorizationHeaderValid) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: false,
+      remoteEvidence: false,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_MIGRATION_BLOCKED',
+      reason: 'INVALID_AUTHORIZATION_HEADER: Access token is expired, invalid JWT, or not issued for logaawoigfxnisimfatf.'
+    };
+  }
+
+  // 3. REMOTE POSTGREST PROBE
+  const postgrestProbe = await probeAuthenticatedPostgrest();
+  if (postgrestProbe.httpStatus !== 200) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: postgrestProbe.networkReachable,
+      remoteEvidence: false,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_MIGRATION_BLOCKED',
+      reason: `POSTGREST_PROBE_FAILED: HTTP status ${postgrestProbe.httpStatus} (${postgrestProbe.classification})`
+    };
+  }
+
+  // 4. REMOTE DATABASE INVENTORY (Read-only check across 27 tables)
+  const initialRemoteDb = await inspectProductionDatabase({ liveOnly: true });
+  if (!initialRemoteDb.connected) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: true,
+      remoteEvidence: false,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_MIGRATION_BLOCKED',
+      reason: 'REMOTE_INVENTORY_FAILED: Could not access one or more required production database tables.'
+    };
+  }
+
+  // 5. LOCAL LEGACY INVENTORY (Read-only, preserves localStorage and state)
+  const legacyLocal = await inspectLegacyLocalData();
+  if (legacyLocal.totalRecords === 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: true,
+      remoteEvidence: false,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_MIGRATION_BLOCKED',
+      reason: 'LOCAL_INVENTORY_EMPTY: Zero local legacy records found to migrate.'
+    };
+  }
+
+  // 6. ZERO-WRITE DRY RUN
+  const writesBeforeDryRun = migrationNetworkCounters.networkWritesExecuted;
+  const dryRunRes = await migrateLegacyDataToPostgres({ dryRun: true, live: false });
+  if (!dryRunRes.readyToExecute || migrationNetworkCounters.networkWritesExecuted !== writesBeforeDryRun) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error('Phase 14.9 Execution Failed: Dry-run invariant violated (attempted writes or unmappable records detected).');
+  }
+
+  // 7. EXPLICIT LIVE MIGRATION CONFIRMATION
+  if (!confirmed) {
+    return {
+      success: false,
+      executionMode: 'LIVE_REMOTE',
+      networkRequestConfirmed: true,
+      dryRunCompleted: true,
+      readyForLiveConfirmation: true,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: 'LIVE_REMOTE_READINESS',
+      dryRunResult: dryRunRes,
+      legacyLocalSummary: {
+        totalRecords: legacyLocal.totalRecords,
+        counts: legacyLocal.counts,
+        financialSummary: legacyLocal.financialSummary
+      },
+      message: 'DRY RUN COMPLETE — NO CLOUD DATA WRITTEN. Explicit administrator confirmation required to execute live migration.'
+    };
+  }
+
+  // 8. REAL HTTPS UPSERTS (Executed against Supabase Cloud)
+  if (!isSimulation) {
+    currentMigrationExecutionMode = MIGRATION_EXECUTION_MODE.LIVE_CLOUD;
+  }
+
+  const migRes = await migrateLegacyDataToPostgres({ dryRun: false, live: !isSimulation });
+  if (!migRes.success || migRes.stats.failed > 0 || migRes.hasFatalError) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    return {
+      success: false,
+      executionMode: isSimulation ? 'SIMULATION' : 'LIVE_REMOTE',
+      fatalError: true,
+      failedTable: migRes.failedTable || 'unknown',
+      writesCompletedBeforeFailure: migRes.stats.migrated || 0,
+      authorityState: DATABASE_AUTHORITY_STATE.BLOCKED,
+      evidenceClassification: isSimulation ? 'SIMULATED_TEST_ONLY' : 'LIVE_REMOTE_FAILED',
+      reason: `MIGRATION_HALTED_ON_FATAL_ERROR: Stopped at table '${migRes.failedTable || 'unknown'}'. Authority state is strictly BLOCKED.`
+    };
+  }
+
+  // 9. REMOTE READ-BACK
+  const readBack = await readBackProductionCloudData();
+  if (!readBack.is100Percent) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Remote Read-Back Verification Failed: ${readBack.missingCount} missing records, ${readBack.fieldMismatchCount} field mismatches.`);
+  }
+
+  // 10. RECORD-LEVEL RECONCILIATION
+  const recon = await reconcileProductionData();
+  if (!recon.isReconciled || recon.criticalOrphanCount > 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Record-Level Reconciliation Failed: ${recon.criticalOrphanCount} critical orphans.`);
+  }
+
+  // 11. FINANCIAL RECONCILIATION
+  const finLedger = await reconcileFinancialLedger();
+  if (!finLedger.isBalanced) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error('Financial Reconciliation Failed: Ledger equations have non-zero variance.');
+  }
+
+  // 12. SECOND REAL REMOTE RUN (Idempotency Proof)
+  const secondRun = await migrateLegacyDataToPostgres({ dryRun: false, live: !isSimulation });
+  if (secondRun.stats.migrated > 0 || secondRun.stats.failed > 0 || secondRun.hasFatalError) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Second-Run Idempotency Failed: Created ${secondRun.stats.migrated} duplicate records.`);
+  }
+
+  // 13. 14-GATE CERTIFICATION & AUTHORITY ACTIVATION
+  const authActivation = await activatePostgresAuthoritativeMode();
+  if (!authActivation.success || authActivation.authorityState !== DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    throw new Error('14-Gate Certification Failed to transition PostgreSQL to AUTHORITATIVE.');
+  }
+
+  // 14. SANITIZED EVIDENCE GENERATION
+  const evidenceClassification = isSimulation ? FORENSIC_TRUTH_LABEL.SIMULATED_TEST_ONLY : FORENSIC_TRUTH_LABEL.LIVE_CLOUD_AUTHORITY_CERTIFIED;
+
+  return {
+    success: true,
+    runId: migRes.runId,
+    executionMode: isSimulation ? 'SIMULATION' : 'LIVE_REMOTE',
+    networkRequestConfirmed: !isSimulation,
+    remoteEvidence: !isSimulation,
+    authenticated: true,
+    preflightPassed: true,
+    dryRunPassed: true,
+    liveMigrationPassed: true,
+    readBackPassed: true,
+    recordReconciliationPassed: true,
+    financialReconciliationPassed: true,
+    secondRunIdempotencyPassed: true,
+    criticalOrphans: recon.criticalOrphanCount || 0,
+    financialVariance: finLedger.summary ? finLedger.summary.totalDiscrepancy : 0,
+    authorityState: state.databaseAuthorityState,
+    evidenceClassification,
+    databaseTarget: isSimulation ? 'IN_MEMORY_MOCK' : 'SUPABASE_CLOUD',
+    networkWritesExecuted: migrationNetworkCounters.networkWritesExecuted,
+    networkReadsExecuted: migrationNetworkCounters.networkReadsExecuted,
+    remoteRowsWritten: migrationNetworkCounters.remoteRowsWritten,
+    remoteRowsRead: migrationNetworkCounters.remoteRowsRead,
     gates: authActivation.gates
   };
 }
@@ -14602,26 +14849,55 @@ function renderProductionControlTab(container) {
         </div>
       </div>
 
-      <!-- Phase 14.8 Live Migration Readiness & Simulation Notice -->
-      <div style="background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:18px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+      <!-- PHASE 14.9 REAL CLOUD MIGRATION & AUTHORITY ACTIVATION CONTROL PANEL -->
+      <div style="background:#F8FAFC; border:1.5px solid #0284C7; border-radius:var(--radius-sm); padding:16px; margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div>
-            <div style="font-size:13px; font-weight:800; color:#B45309; display:flex; align-items:center; gap:6px;">
-              <span>🛡️ PHASE 14.8: LIVE SUPABASE CONNECTIVITY &amp; READINESS GATE</span>
-              <span class="cp-pill" style="background:#FEF3C7; color:#92400E; font-size:10.5px;">LIVE_REMOTE_READINESS</span>
+            <div style="font-size:14px; font-weight:800; color:#0369A1; display:flex; align-items:center; gap:8px;">
+              <span>🚀 PHASE 14.9: REAL PRODUCTION CLOUD MIGRATION EXECUTION</span>
+              <span class="cp-pill" id="p14_9EvidenceBadge" style="background:#E0F2FE; color:#0369A1; font-size:11px; font-weight:700;">
+                ${isAuthoritative ? 'LIVE_REMOTE_CERTIFIED' : 'LIVE_REMOTE_PENDING'}
+              </span>
             </div>
-            <div style="font-size:11.5px; color:#78350F; margin-top:3px;">
-              Supabase Project: <strong>logaawoigfxnisimfatf</strong> (<code>https://logaawoigfxnisimfatf.supabase.co</code>) &middot; Remote Writes in Phase 14.8: <strong>0 (PROHIBITED)</strong>
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
+              Canonical Supabase Target: <strong>https://logaawoigfxnisimfatf.supabase.co</strong> &middot; Project: <strong>logaawoigfxnisimfatf</strong>
             </div>
           </div>
-          <div>
-            <span class="cp-pill" style="background:${state.auth && state.auth.isAuthenticated ? '#D1FAE5' : '#FEE2E2'}; color:${state.auth && state.auth.isAuthenticated ? '#065F46' : '#991B1B'}; font-weight:700;">
-              ${state.auth && state.auth.isAuthenticated ? '✔ Authenticated' : '✖ Sign-In Required'}
-            </span>
+          <div style="display:flex; gap:8px;">
+            <button class="cp-btn sm secondary" id="btnRunP14_9DryRun">&#x1F4CB; Run Zero-Write Dry Run</button>
+            <button class="cp-btn sm success" id="btnExecP14_9Live">&#x26A1; EXECUTE LIVE CLOUD MIGRATION</button>
           </div>
         </div>
-        <div style="margin-top:8px; padding:8px 12px; background:#FEF3C7; border-radius:4px; font-size:11px; color:#92400E; line-height:1.4;">
-          ⚠️ <strong>Simulation Notice:</strong> Simulation mode test passes do not constitute production migration proof. Production migration must be executed with live Supabase credentials from an authenticated Super Admin browser session.
+
+        <!-- 8-Point Forensic Live Status Matrix -->
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:12px; font-size:11.5px;">
+          <div style="background:#FFFFFF; border:1px solid var(--border); padding:8px 10px; border-radius:4px;">
+            <span style="color:var(--text-muted);">Authentication:</span> 
+            <strong id="p14_9AuthStatus" style="color:${state.auth && state.auth.isAuthenticated ? 'var(--success)' : 'var(--danger)'};">
+              ${state.auth && state.auth.isAuthenticated ? '✔ Authenticated (JWT)' : '✖ Sign-In Required'}
+            </strong>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid var(--border); padding:8px 10px; border-radius:4px;">
+            <span style="color:var(--text-muted);">PostgREST Probe:</span> 
+            <strong id="p14_9ProbeStatus" style="color:var(--primary);">Ready</strong>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid var(--border); padding:8px 10px; border-radius:4px;">
+            <span style="color:var(--text-muted);">Local Legacy Records:</span> 
+            <strong id="p14_9LocalCount" style="color:var(--text-primary);">Inspecting...</strong>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid var(--border); padding:8px 10px; border-radius:4px;">
+            <span style="color:var(--text-muted);">Remote Database:</span> 
+            <strong id="p14_9RemoteStatus" style="color:${isAuthoritative ? 'var(--success)' : 'var(--warning)'};">
+              ${isAuthoritative ? 'POPULATED' : 'EMPTY / 0 CONFIRMED'}
+            </strong>
+          </div>
+        </div>
+
+        <div id="p14_9ExecutionOutputBox" style="background:#FFFFFF; border:1px solid var(--border); border-radius:4px; padding:10px; font-size:12px; display:none; margin-bottom:10px;">
+        </div>
+
+        <div style="padding:8px 12px; background:#FEF3C7; border:1px solid #FCD34D; border-radius:4px; font-size:11px; color:#92400E; line-height:1.4;">
+          ⚠️ <strong>Forensic Authority Rule:</strong> Automated test passes are classified as <code>SIMULATED_TEST_ONLY</code> and cannot activate production PostgreSQL authority. Authoritative mode is granted strictly upon verified remote write evidence from an authenticated Super Admin session.
         </div>
       </div>
 
@@ -14839,6 +15115,107 @@ function renderProductionControlTab(container) {
   // Attach Event Listeners
   const btnSbModal = document.getElementById('btnLaunchSbModalDirect');
   if (btnSbModal) btnSbModal.addEventListener('click', () => openModal('supabaseModal'));
+
+  // Phase 14.9 Control Panel Handlers & Asynchronous Status Inspection
+  const localCountEl = document.getElementById('p14_9LocalCount');
+  if (localCountEl) {
+    inspectLegacyLocalData().then(inv => {
+      localCountEl.textContent = `${inv.totalRecords} Records Detected`;
+    }).catch(() => {
+      localCountEl.textContent = '0 Records';
+    });
+  }
+
+  const probeStatusEl = document.getElementById('p14_9ProbeStatus');
+  if (probeStatusEl && state.auth && state.auth.isAuthenticated) {
+    probeAuthenticatedPostgrest().then(p => {
+      if (p.httpStatus === 200) {
+        probeStatusEl.innerHTML = '<span style="color:var(--success);">✔ HTTP 200 (Connected)</span>';
+      } else {
+        probeStatusEl.innerHTML = `<span style="color:var(--warning);">HTTP ${p.httpStatus}</span>`;
+      }
+    }).catch(() => {
+      probeStatusEl.innerHTML = '<span style="color:var(--danger);">Unreachable</span>';
+    });
+  }
+
+  const btnDryRun14_9 = document.getElementById('btnRunP14_9DryRun');
+  if (btnDryRun14_9) {
+    btnDryRun14_9.addEventListener('click', async () => {
+      const outBox = document.getElementById('p14_9ExecutionOutputBox');
+      outBox.style.display = 'block';
+      outBox.innerHTML = '<em>Executing zero-write dry run against legacy records...</em>';
+      try {
+        const dryRes = await migrateLegacyDataToPostgres({ dryRun: true, live: false });
+        outBox.innerHTML = `
+          <div style="font-weight:700; color:var(--success); margin-bottom:4px;">
+            ✔ DRY RUN COMPLETE — ZERO CLOUD DATA WRITTEN (0 Writes Attempted, 0 Local Mutations)
+          </div>
+          <div style="font-size:11.5px; color:var(--text-secondary);">
+            Total Detected Legacy Records: <strong>${dryRes.totalDetected}</strong> &middot; Ready for Live Migration: <strong>${dryRes.readyToExecute ? 'YES' : 'NO'}</strong>
+          </div>
+        `;
+      } catch (err) {
+        outBox.innerHTML = `<div style="color:var(--danger); font-weight:700;">✖ Dry Run Failed: ${escapeHtml(err.message)}</div>`;
+      }
+    });
+  }
+
+  const btnExecLive14_9 = document.getElementById('btnExecP14_9Live');
+  if (btnExecLive14_9) {
+    btnExecLive14_9.addEventListener('click', async () => {
+      const authTruth = getProductionAuthenticationTruth();
+      if (!authTruth.userAuthenticated || !authTruth.authorizationHeaderValid) {
+        alert('EXECUTION BLOCKED: You must be logged into an authenticated Super Admin session with a valid Supabase JWT before executing live production migration.');
+        return;
+      }
+
+      const confirmed = confirm(
+        '⚠️ PRODUCTION MIGRATION CONFIRMATION\n\n' +
+        'This operation will write legacy records to the production Supabase PostgreSQL database (https://logaawoigfxnisimfatf.supabase.co).\n\n' +
+        'Existing local records will remain intact and preserved.\n\n' +
+        'Do you wish to proceed with live migration?'
+      );
+
+      if (!confirmed) return;
+
+      const outBox = document.getElementById('p14_9ExecutionOutputBox');
+      outBox.style.display = 'block';
+      outBox.innerHTML = '<em>🚀 Executing Phase 14.9 Real Cloud Production Migration...</em>';
+
+      try {
+        const migResult = await executePhase14_9LiveCloudMigration({ confirmed: true });
+        if (migResult.success) {
+          outBox.innerHTML = `
+            <div style="padding:10px; background:#F0FDF4; border:1px solid #86EFAC; border-radius:4px; margin-bottom:6px;">
+              <strong style="color:#166534; font-size:13px;">🎉 PHASE 14.9 LIVE CLOUD MIGRATION SUCCESSFUL!</strong>
+              <div style="font-size:11.5px; color:#166534; margin-top:4px;">
+                Execution Mode: <strong>${migResult.executionMode}</strong> &middot; Authority State: <strong>${migResult.authorityState}</strong> &middot; Evidence: <strong>${migResult.evidenceClassification}</strong>
+              </div>
+              <div style="font-size:11px; color:#14532D; margin-top:2px;">
+                Remote Writes: ${migResult.networkWritesExecuted} &middot; Rows Read: ${migResult.remoteRowsRead} &middot; Financial Variance: ₦0.00 &middot; Duplicates: 0
+              </div>
+            </div>
+          `;
+          renderProductionControlTab(container);
+        } else {
+          outBox.innerHTML = `
+            <div style="padding:10px; background:#FEF2F2; border:1px solid #FCA5A5; border-radius:4px;">
+              <strong style="color:#991B1B;">✖ Live Migration Blocked / Interrupted:</strong>
+              <div style="font-size:11.5px; color:#7F1D1D; margin-top:4px;">${escapeHtml(migResult.reason || 'Unknown failure')}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        outBox.innerHTML = `
+          <div style="padding:10px; background:#FEF2F2; border:1px solid #FCA5A5; border-radius:4px;">
+            <strong style="color:#991B1B;">✖ Live Migration Error:</strong>
+            <div style="font-size:11.5px; color:#7F1D1D; margin-top:4px;">${escapeHtml(err.message)}</div>
+          </div>
+        `;
+      }
+    });
+  }
 
   const btnRecon = document.getElementById('btnRunContinuousReconDirect');
   if (btnRecon) {
@@ -19461,7 +19838,9 @@ function renderChangeRoleModal(container, user) {
       upsertProductionBatchLive,
       readBackProductionCloudData,
       verifyLiveSupabaseDatabase,
-      executeRealCloudProductionMigration
+      executeRealCloudProductionMigration,
+      // Phase 14.9 Real Live Supabase Migration Execution Exports
+      executePhase14_9LiveCloudMigration
     };
   }
 
@@ -19493,6 +19872,7 @@ function renderChangeRoleModal(container, user) {
     window.readBackProductionCloudData = readBackProductionCloudData;
     window.verifyLiveSupabaseDatabase = verifyLiveSupabaseDatabase;
     window.executeRealCloudProductionMigration = executeRealCloudProductionMigration;
+    window.executePhase14_9LiveCloudMigration = executePhase14_9LiveCloudMigration;
   }
 })();
 </script>
