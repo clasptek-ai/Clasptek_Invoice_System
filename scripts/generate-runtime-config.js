@@ -108,6 +108,12 @@ function updateHtmlMetaTags(filePath, url, key) {
     `<meta name="supabase-publishable-key" content="${key}" />`
   );
 
+  // Update anon key meta tag for backward compatibility
+  html = html.replace(
+    /<meta\s+name=["']supabase-anon-key["']\s+content=["'][^"']*["']\s*\/?>/i,
+    `<meta name="supabase-anon-key" content="${key}" />`
+  );
+
   fs.writeFileSync(filePath, html, 'utf8');
 }
 

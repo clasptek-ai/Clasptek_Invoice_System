@@ -3302,14 +3302,14 @@ async function diagnoseSupabase401() {
 
   const sessObj = authSess && authSess.session;
   const sessUser = sessObj ? sessObj.user : null;
-  const stateUser = (state.auth && state.auth.user) ? state.auth.user : null;
+  const stateUser = (state.auth && (state.auth.user || state.auth.supabaseUser)) ? (state.auth.user || state.auth.supabaseUser) : null;
   const authUser = (stateUser && (stateUser.role || stateUser.tenant_id)) ? { ...sessUser, ...stateUser } : (sessUser || stateUser);
   const authUserId = authUser ? (authUser.id || authUser.email || 'usr_masked') : null;
   const rawRole = (authUser && (authUser.role || (authUser.app_metadata && authUser.app_metadata.role) || (authUser.user_metadata && authUser.user_metadata.role))) || 'ANONYMOUS';
   const role = rawRole.toUpperCase().replace(/\s+/g, '_');
   const token = (sessObj && sessObj.access_token) || (state.auth && (state.auth.supabaseJwt || (state.auth.token && state.auth.token.startsWith('eyJ') ? state.auth.token : null)));
   const isExpired = Boolean(sessObj && sessObj.expires_at && (sessObj.expires_at * 1000) < Date.now());
-  const canonicalTenant = 'clasptek_main';
+  const canonicalTenant = resolveAuthoritativeTenantId();
   const tenantId = (authUser && (authUser.tenant_id || (authUser.app_metadata && authUser.app_metadata.tenant_id))) || canonicalTenant;
 
   const sessionTest = {
