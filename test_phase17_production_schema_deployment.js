@@ -155,7 +155,7 @@ async function runPhase17Tests() {
 
   canonicalTables.forEach((tableName, idx) => {
     const tableDef = inventory.allTables[tableName];
-    assert(tableDef !== undefined, `Test ${String(011 + idx).padStart(3, '0')}: Table ${tableName} exists in schema`);
+    assert(tableDef !== undefined, `Test ${String(11 + idx).padStart(3, '0')}: Table ${tableName} exists in schema`);
   });
 
   // ---------------------------------------------------------------------------
@@ -166,14 +166,14 @@ async function runPhase17Tests() {
   canonicalTables.forEach((tableName, idx) => {
     const tableDef = inventory.allTables[tableName];
     const hasPk = tableDef && tableDef.primaryKey !== null;
-    assert(hasPk, `Test ${String(038 + idx).padStart(3, '0')}: Table ${tableName} has primary key defined`);
+    assert(hasPk, `Test ${String(38 + idx).padStart(3, '0')}: Table ${tableName} has primary key defined`);
   });
 
   const tenantTables = canonicalTables.filter(t => t !== 'finance_settings' && t !== 'approval_thresholds');
   tenantTables.forEach((tableName, idx) => {
     const tableDef = inventory.allTables[tableName];
     const hasTenant = tableDef && tableDef.hasTenantId === true;
-    assert(hasTenant, `Test ${String(065 + idx).padStart(3, '0')}: Table ${tableName} enforces tenant_id column`);
+    assert(hasTenant, `Test ${String(65 + idx).padStart(3, '0')}: Table ${tableName} enforces tenant_id column`);
   });
 
   // ---------------------------------------------------------------------------
