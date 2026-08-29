@@ -1,21 +1,12 @@
 {
+  "phase": "14.8",
   "executionMode": "LIVE_REMOTE",
   "projectRef": "logaawoigfxnisimfatf",
   "supabaseUrl": "https://logaawoigfxnisimfatf.supabase.co",
-  "timestamp": "2026-08-29T20:15:00.000Z",
-  "evidenceClassification": "LIVE_REMOTE_EXECUTION_BLOCKED",
-  "authenticated": false,
   "remoteEvidence": false,
-  "preflightPassed": false,
-  "dryRunPassed": false,
-  "liveMigrationPassed": false,
-  "readBackPassed": false,
-  "recordReconciliationPassed": false,
-  "financialReconciliationPassed": false,
-  "secondRunIdempotencyPassed": false,
-  "remoteRecordCount": 0,
-  "financialVariance": 0,
-  "criticalOrphans": 0,
+  "migrationExecuted": false,
   "authorityState": "BLOCKED",
-  "blockReason": "Authentication required. The live browser session at https://app.clasptek.org is at the sign-in screen without an active Super Admin JWT session, and public metadata credential tags require injection."
+  "evidenceClassification": "LIVE_REMOTE_READINESS",
+  "credentialsExposed": false,
+  "timestamp": "2026-08-29T21:30:00.000Z"
 }

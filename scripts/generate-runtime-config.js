@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CANONICAL_SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
+const CANONICAL_SUPABASE_PROJECT_REF = 'logaawoigfxnisimfatf';
 
 function parseEnvFile(filePath) {
   const env = {};
@@ -43,18 +44,31 @@ function resolveBuildCredentials() {
 
   const url = process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
     localEnv.SUPABASE_URL ||
     localEnv.NEXT_PUBLIC_SUPABASE_URL ||
+    localEnv.VITE_SUPABASE_URL ||
     CANONICAL_SUPABASE_URL;
 
+  // Seamless support for canonical SUPABASE_PUBLISHABLE_KEY and Vercel naming variants (Publishable_key, publishable_key, etc.)
   const key = process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.Publishable_key ||
+    process.env.publishable_key ||
+    process.env.PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
     localEnv.SUPABASE_PUBLISHABLE_KEY ||
+    localEnv.Publishable_key ||
+    localEnv.publishable_key ||
+    localEnv.PUBLISHABLE_KEY ||
     localEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    localEnv.NEXT_PUBLIC_PUBLISHABLE_KEY ||
     localEnv.SUPABASE_ANON_KEY ||
     localEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    localEnv.VITE_SUPABASE_ANON_KEY ||
     '';
 
   return { url: url.trim(), key: key.trim() };
@@ -67,6 +81,8 @@ function validatePublicCredential(key) {
     key.startsWith('sbp_') ||
     key.startsWith('sk_') ||
     key.startsWith('secret_') ||
+    key.startsWith('service_role') ||
+    key.includes('service_role') ||
     key.includes('postgres' + '://') ||
     key.includes('password=')
   ) {
@@ -90,6 +106,27 @@ function validatePublicCredential(key) {
   }
 
   return { safe: true };
+}
+
+function getSanitizedRuntimeConfigSummary() {
+  const { url, key } = resolveBuildCredentials();
+  let credType = 'none';
+  if (key) {
+    if (key.startsWith('pk_') || key.startsWith('sb_pub_') || key.includes('publishable')) {
+      credType = 'publishable';
+    } else if (key.startsWith('eyJ') || key.includes('anon')) {
+      credType = 'anon';
+    } else {
+      credType = 'unknown';
+    }
+  }
+
+  return {
+    configured: Boolean(url && key),
+    projectRef: CANONICAL_SUPABASE_PROJECT_REF,
+    credentialType: credType,
+    credentialPresent: Boolean(key && key.length > 5)
+  };
 }
 
 function updateHtmlMetaTags(filePath, url, key) {
@@ -155,6 +192,8 @@ window.__CLASPTEK_ENV__ = {
   fs.copyFileSync(path.join(process.cwd(), 'clasptek_invoice_system.html'), path.join(publicDir, 'clasptek_invoice_system.html'));
   console.log('✔ Synchronized public/ distribution directory with index.html and runtime-config.js');
 
+  const summary = getSanitizedRuntimeConfigSummary();
+  console.log('Sanitized Runtime Summary:', JSON.stringify(summary));
   console.log('=== BUILD CONFIG GENERATION COMPLETE ===\n');
 }
 
@@ -170,5 +209,6 @@ if (require.main === module) {
 module.exports = {
   resolveBuildCredentials,
   validatePublicCredential,
+  getSanitizedRuntimeConfigSummary,
   generateRuntimeConfig
 };

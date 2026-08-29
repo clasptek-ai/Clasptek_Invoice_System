@@ -29,7 +29,8 @@ const suites = [
   { name: 'Phase 14.5A: Vercel SUPABASE_PUBLISHABLE_KEY Wiring Audit & Header Certification', file: 'test_phase14_5_vercel_publishable_key_delivery.js' },
   { name: 'Phase 14.6: Controlled Live Production Migration Execution & Authority Certification', file: 'test_phase14_6_live_migration_execution.js' },
   { name: 'Phase 14.7A: Real Cloud Production Migration Execution & Independent Verification', file: 'test_phase14_7a_real_cloud_migration.js' },
-  { name: 'Phase 14.7: Forensic Production Migration Authenticity Repair & Live Cloud Gating', file: 'test_phase14_7_forensic_live_migration.js' }
+  { name: 'Phase 14.7: Forensic Production Migration Authenticity Repair & Live Cloud Gating', file: 'test_phase14_7_forensic_live_migration.js' },
+  { name: 'Phase 14.8: Live Connectivity, Authentication & Migration Readiness Certification', file: 'test_phase14_8_live_connectivity_readiness.js' }
 ];
 
 let totalPassed = 0;
@@ -67,11 +68,12 @@ console.log('===================================================================
 
 console.log('----------------------------------------------------------------------------------------');
 console.log(' FORENSIC ENVIRONMENT STATE SUMMARY:');
-console.log(' - Automated Logic & Harness Certification: CERTIFIED GREEN (24/24 Suites, ' + totalPassed + ' Assertions)');
+console.log(' - Automated Logic & Harness Certification: CERTIFIED GREEN (25/25 Suites, ' + totalPassed + ' Assertions)');
 console.log(' - Harness Execution Mode: SIMULATION / IN_MEMORY_MOCK (Truth Label: SIMULATED_TEST_ONLY)');
 console.log(' - Live Production Cloud Target: https://logaawoigfxnisimfatf.supabase.co');
 console.log(' - Live Cloud Production State: 0 Business Records in Cloud Database (Unmodified)');
 console.log(' - Live Cloud Authority Status: BLOCKED (Safe, awaiting authenticated Super Admin in browser)');
+console.log(' - Phase 14.8 Live Readiness Status: LIVE_REMOTE_READINESS (Zero Production Writes)');
 console.log(' - Browser Cloud Execution Workflow: Ready at https://app.clasptek.org');
 console.log('----------------------------------------------------------------------------------------\n');
 

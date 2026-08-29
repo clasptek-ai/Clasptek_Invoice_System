@@ -2432,7 +2432,15 @@ function resolveSupabaseConfiguration() {
   // 1. Production-injected public configuration (Window / Environment)
   if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
     const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
-    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.Publishable_key ||
+      window.__CLASPTEK_ENV__.publishable_key ||
+      window.__CLASPTEK_ENV__.PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
     if (envUrl || envKey) {
       supabaseUrl = (envUrl || '').trim();
       supabaseAnonKey = (envKey || '').trim();
@@ -2443,9 +2451,30 @@ function resolveSupabaseConfiguration() {
   // 2. HTML META configuration
   if (!supabaseUrl && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
     const metaEndpoint = document.querySelector('meta[name="supabase-endpoint"]');
-    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]') || document.querySelector('meta[name="supabase-anon-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]');
     const epContent = metaEndpoint && metaEndpoint.content ? metaEndpoint.content.trim() : '';
-    const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
+
+    const keySelectors = [
+      'meta[name="supabase-publishable-key"]',
+      'meta[name="Publishable_key"]',
+      'meta[name="publishable_key"]',
+      'meta[name="PUBLISHABLE_KEY"]',
+      'meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]',
+      'meta[name="NEXT_PUBLIC_PUBLISHABLE_KEY"]',
+      'meta[name="supabase-anon-key"]',
+      'meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]'
+    ];
+
+    let keyContent = '';
+    for (const sel of keySelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && el.content && el.content.trim().length > 0) {
+          keyContent = el.content.trim();
+          break;
+        }
+      } catch (_) {}
+    }
+
     if (epContent || keyContent) {
       supabaseUrl = epContent;
       supabaseAnonKey = keyContent;
@@ -2459,7 +2488,15 @@ function resolveSupabaseConfiguration() {
     let runtimeKey = '';
     if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
       runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
-      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.Publishable_key ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.publishable_key ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
     }
     const stateUrl = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
     const stateKey = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey.trim() : '';
@@ -2475,7 +2512,15 @@ function resolveSupabaseConfiguration() {
   // 4. Local development configuration (Node / test runner process.env)
   if ((!supabaseUrl || !supabaseAnonKey) && typeof process !== 'undefined' && process.env) {
     const devUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.Publishable_key ||
+      process.env.publishable_key ||
+      process.env.PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY;
     if (devUrl || devKey) {
       supabaseUrl = supabaseUrl || (devUrl || '').trim();
       supabaseAnonKey = supabaseAnonKey || (devKey || '').trim();
@@ -2552,7 +2597,15 @@ function resolveSupabaseProductionConfig() {
   // 1. Production-injected public configuration
   if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
     const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
-    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.Publishable_key ||
+      window.__CLASPTEK_ENV__.publishable_key ||
+      window.__CLASPTEK_ENV__.PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+      window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY ||
+      window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
     if (envUrl || envKey) {
       source = 'ENVIRONMENT';
       rawUrl = (envUrl || '').trim();
@@ -2563,9 +2616,30 @@ function resolveSupabaseProductionConfig() {
   // 2. HTML META configuration
   if (source === 'NONE' && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
     const metaEp = document.querySelector('meta[name="supabase-endpoint"]');
-    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]') || document.querySelector('meta[name="supabase-anon-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]');
     const epContent = metaEp && metaEp.content ? metaEp.content.trim() : '';
-    const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
+
+    const keySelectors = [
+      'meta[name="supabase-publishable-key"]',
+      'meta[name="Publishable_key"]',
+      'meta[name="publishable_key"]',
+      'meta[name="PUBLISHABLE_KEY"]',
+      'meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]',
+      'meta[name="NEXT_PUBLIC_PUBLISHABLE_KEY"]',
+      'meta[name="supabase-anon-key"]',
+      'meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]'
+    ];
+
+    let keyContent = '';
+    for (const sel of keySelectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && el.content && el.content.trim().length > 0) {
+          keyContent = el.content.trim();
+          break;
+        }
+      } catch (_) {}
+    }
+
     if (epContent || keyContent) {
       source = 'META';
       rawUrl = epContent;
@@ -2579,7 +2653,15 @@ function resolveSupabaseProductionConfig() {
     let runtimeKey = '';
     if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
       runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
-      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.Publishable_key ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.publishable_key ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
     }
     if (!runtimeEp && !runtimeKey && typeof state !== 'undefined' && state.supabase) {
       runtimeEp = state.supabase.endpoint || '';
@@ -2595,7 +2677,15 @@ function resolveSupabaseProductionConfig() {
   // 4. Local development configuration (Node / test runner / .env.local)
   if (source === 'NONE' && typeof process !== 'undefined' && process.env) {
     const devUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.Publishable_key ||
+      process.env.publishable_key ||
+      process.env.PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY;
     if (devUrl || devKey) {
       source = 'ENVIRONMENT';
       rawUrl = (devUrl || '').trim();
@@ -2627,7 +2717,7 @@ function resolveSupabaseProductionConfig() {
       secretDetected = true;
     }
 
-    if (rawKey.startsWith('pk_') || rawKey.includes('publishable')) {
+    if (rawKey.startsWith('pk_') || rawKey.includes('publishable') || rawKey.startsWith('sb_pub_')) {
       publicKeyRole = 'publishable';
     }
 
@@ -2654,7 +2744,7 @@ function resolveSupabaseProductionConfig() {
       } catch (_) {}
     } else if (rawKey.includes('anon')) {
       publicKeyRole = 'anon';
-    } else if (rawKey.startsWith('pk_') || rawKey.includes('publishable')) {
+    } else if (rawKey.startsWith('pk_') || rawKey.includes('publishable') || rawKey.startsWith('sb_pub_')) {
       publicKeyRole = 'publishable';
     }
   }
@@ -2680,6 +2770,152 @@ function resolveSupabaseProductionConfig() {
     publicKeyProjectMatched,
     publicKeyRole,
     secretDetected
+  };
+}
+
+/**
+ * Component 1: Code Path Audit Diagnostic
+ * Machine-readable code path inspector.
+ */
+function auditProductionCodePath() {
+  const config = resolveSupabaseConfiguration();
+  const isMocked = (typeof fetch === 'function' && Boolean(fetch._isMock)) || false;
+  const isSimulated = (typeof currentMigrationExecutionMode !== 'undefined')
+    ? currentMigrationExecutionMode === MIGRATION_EXECUTION_MODE.SIMULATION
+    : true;
+
+  return {
+    codePathAudited: true,
+    supabaseUrlSource: config.configurationSource || 'CANONICAL_DEFAULT',
+    publishableKeySource: config.configurationSource || 'NONE',
+    runtimeConfigSource: (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) ? 'WINDOW_CLASPTEK_ENV' : 'BUILTIN',
+    authClientSource: 'getSupabaseClient',
+    sessionSource: 'state.auth',
+    migrationFunction: 'migrateLegacyDataToPostgres',
+    productionFetchImplementation: typeof fetch === 'function' ? 'window.fetch' : 'none',
+    mockedFetchDetected: isMocked,
+    inMemoryDatabaseDetected: isSimulated,
+    simulationCanActivateAuthority: false
+  };
+}
+
+/**
+ * Component 10: Phase 14.8 Live Migration Readiness Gates
+ * Evaluates 25 distinct readiness gates before live migration is permitted.
+ */
+async function getPhase14_8MigrationReadiness() {
+  const gates = {
+    productionUrlCorrect: false,
+    projectIdentityCorrect: false,
+    publishableKeyConfigured: false,
+    runtimeConfigGenerated: false,
+    runtimeConfigDeployed: false,
+    supabaseClientInitialized: false,
+    authSessionPresent: false,
+    userAuthenticated: false,
+    accessTokenPresent: false,
+    accessTokenIsJwt: false,
+    accessTokenNotExpired: false,
+    accessTokenProjectMatched: false,
+    accessTokenAudienceAuthenticated: false,
+    authorizationHeaderValid: false,
+    authenticatedPostgrestHttp200: false,
+    requiredSchemaAccessible: false,
+    rlsEnforced: false,
+    localLegacyInventoryCompleted: false,
+    localDataIntegrityConfirmed: false,
+    dryRunCompleted: false,
+    zeroWriteInvariantConfirmed: false,
+    noSimulationInLivePath: false,
+    noMockedFetchInLivePath: false,
+    migrationFunctionReachable: false,
+    productionMigrationBlockedUntilExecution: false
+  };
+
+  const blockingReasons = [];
+  const config = resolveSupabaseConfiguration();
+  const authTruth = getProductionAuthenticationTruth();
+
+  // 1. Production URL correct
+  gates.productionUrlCorrect = Boolean(config.endpoint && config.endpoint.includes('logaawoigfxnisimfatf.supabase.co'));
+  if (!gates.productionUrlCorrect) blockingReasons.push('Production Supabase URL mismatch');
+
+  // 2. Project identity correct
+  gates.projectIdentityCorrect = config.projectRef === CANONICAL_SUPABASE_PROJECT_REF;
+  if (!gates.projectIdentityCorrect) blockingReasons.push('Project reference mismatch');
+
+  // 3. Publishable key configured
+  gates.publishableKeyConfigured = Boolean(config.anonKey && config.anonKey.length > 5);
+  if (!gates.publishableKeyConfigured) blockingReasons.push('Public publishable API key is not configured');
+
+  // 4 & 5. Runtime config
+  gates.runtimeConfigGenerated = typeof window !== 'undefined' && Boolean(window.__CLASPTEK_ENV__ || window.__CLASPTEK_RUNTIME_CONFIG__);
+  gates.runtimeConfigDeployed = typeof window !== 'undefined' && Boolean(window.__CLASPTEK_ENV__);
+
+  // 6. Supabase client initialized
+  gates.supabaseClientInitialized = supabaseClient.isConfigured();
+  if (!gates.supabaseClientInitialized) blockingReasons.push('Supabase client is unconfigured');
+
+  // 7, 8, 9, 10, 11, 12, 13, 14. Auth truths
+  gates.authSessionPresent = authTruth.sessionPresent;
+  gates.userAuthenticated = authTruth.userAuthenticated;
+  gates.accessTokenPresent = authTruth.accessTokenPresent;
+  gates.accessTokenIsJwt = authTruth.accessTokenIsJwt;
+  gates.accessTokenNotExpired = !authTruth.accessTokenExpired;
+  gates.accessTokenProjectMatched = authTruth.accessTokenProjectMatched;
+  gates.accessTokenAudienceAuthenticated = authTruth.accessTokenAudienceAuthenticated;
+  gates.authorizationHeaderValid = authTruth.authorizationHeaderValid;
+
+  if (!gates.userAuthenticated) blockingReasons.push('User is not authenticated');
+  if (!gates.authorizationHeaderValid) blockingReasons.push('Valid user Authorization header is missing or expired');
+
+  // 15. Authenticated PostgREST HTTP 200
+  const postgrestProbe = await probeAuthenticatedPostgrest().catch(() => ({ httpStatus: 0, classification: 'POSTGRESQL_UNREACHABLE' }));
+  gates.authenticatedPostgrestHttp200 = postgrestProbe.httpStatus === 200;
+  if (!gates.authenticatedPostgrestHttp200) blockingReasons.push(`PostgREST probe returned HTTP ${postgrestProbe.httpStatus} (${postgrestProbe.classification})`);
+
+  // 16. Required Schema Accessible
+  const schemaCheck = await verifyProductionSchema().catch(() => ({ compatible: false }));
+  gates.requiredSchemaAccessible = Boolean(schemaCheck && schemaCheck.compatible);
+  if (!gates.requiredSchemaAccessible) blockingReasons.push('Production database schema check failed');
+
+  // 17. RLS Enforced
+  const rlsCheck = await verifyProductionRlsMatrix().catch(() => ({ overallPassed: false }));
+  gates.rlsEnforced = Boolean(rlsCheck && rlsCheck.overallPassed);
+  if (!gates.rlsEnforced) blockingReasons.push('RLS matrix enforcement verification failed');
+
+  // 18 & 19. Local Legacy Inventory
+  const localInv = await inspectLegacyLocalData().catch(() => ({ hasLegacyData: false, totalRecords: 0 }));
+  gates.localLegacyInventoryCompleted = Boolean(localInv && typeof localInv.totalRecords === 'number');
+  gates.localDataIntegrityConfirmed = Boolean(localInv && localInv.totalRecords > 0);
+  if (!gates.localDataIntegrityConfirmed) blockingReasons.push('Local legacy inventory reports 0 records');
+
+  // 20 & 21. Dry Run Invariant
+  const dryRunRes = await migrateLegacyDataToPostgres({ dryRun: true }).catch(() => ({ dryRun: false, writesAttempted: 1 }));
+  gates.dryRunCompleted = Boolean(dryRunRes && dryRunRes.dryRun === true);
+  gates.zeroWriteInvariantConfirmed = Boolean(dryRunRes && dryRunRes.writesAttempted === 0);
+  if (!gates.zeroWriteInvariantConfirmed) blockingReasons.push('Dry run invariant violated');
+
+  // 22 & 23. Simulation & Mocking Check
+  const isMocked = (typeof fetch === 'function' && Boolean(fetch._isMock)) || false;
+  const isLiveCloudMode = (typeof currentMigrationExecutionMode !== 'undefined') && currentMigrationExecutionMode === MIGRATION_EXECUTION_MODE.LIVE_CLOUD;
+  gates.noSimulationInLivePath = isLiveCloudMode;
+  gates.noMockedFetchInLivePath = !isMocked;
+  if (!gates.noSimulationInLivePath) blockingReasons.push('Execution mode is SIMULATION rather than LIVE_CLOUD');
+
+  // 24. Migration Function Reachable
+  gates.migrationFunctionReachable = typeof migrateLegacyDataToPostgres === 'function';
+
+  // 25. Production Migration Blocked Until Explicit Execution
+  gates.productionMigrationBlockedUntilExecution = (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.BLOCKED || state.databaseAuthorityState === 'BLOCKED' || state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.MIGRATION_REQUIRED || state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.UNVERIFIED);
+
+  const allPassed = Object.values(gates).every(v => v === true);
+
+  return {
+    readyForLiveMigration: allPassed,
+    executionMode: isLiveCloudMode ? 'LIVE_REMOTE' : 'SIMULATION',
+    gates,
+    blockingReasons
   };
 }
 
@@ -5264,8 +5500,13 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
       stats.entities[step.entity] = { detected: items.length, migrated: 0, existing: 0, failed: 0 };
     }
     return {
+      executionMode: (typeof currentMigrationExecutionMode !== 'undefined' && currentMigrationExecutionMode === MIGRATION_EXECUTION_MODE.LIVE_CLOUD) ? 'LIVE_REMOTE_DRY_RUN' : 'SIMULATION_DRY_RUN',
       dryRun: true,
       readyToExecute: true,
+      eligible: true,
+      writesAttempted: 0,
+      writesCompleted: 0,
+      localMutations: 0,
       totalDetected: legacy.totalRecords,
       entitiesToMigrate: Object.keys(legacy.counts).filter(k => legacy.counts[k] > 0),
       unmappableRecords: 0,
@@ -14361,6 +14602,29 @@ function renderProductionControlTab(container) {
         </div>
       </div>
 
+      <!-- Phase 14.8 Live Migration Readiness & Simulation Notice -->
+      <div style="background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:13px; font-weight:800; color:#B45309; display:flex; align-items:center; gap:6px;">
+              <span>🛡️ PHASE 14.8: LIVE SUPABASE CONNECTIVITY &amp; READINESS GATE</span>
+              <span class="cp-pill" style="background:#FEF3C7; color:#92400E; font-size:10.5px;">LIVE_REMOTE_READINESS</span>
+            </div>
+            <div style="font-size:11.5px; color:#78350F; margin-top:3px;">
+              Supabase Project: <strong>logaawoigfxnisimfatf</strong> (<code>https://logaawoigfxnisimfatf.supabase.co</code>) &middot; Remote Writes in Phase 14.8: <strong>0 (PROHIBITED)</strong>
+            </div>
+          </div>
+          <div>
+            <span class="cp-pill" style="background:${state.auth && state.auth.isAuthenticated ? '#D1FAE5' : '#FEE2E2'}; color:${state.auth && state.auth.isAuthenticated ? '#065F46' : '#991B1B'}; font-weight:700;">
+              ${state.auth && state.auth.isAuthenticated ? '✔ Authenticated' : '✖ Sign-In Required'}
+            </span>
+          </div>
+        </div>
+        <div style="margin-top:8px; padding:8px 12px; background:#FEF3C7; border-radius:4px; font-size:11px; color:#92400E; line-height:1.4;">
+          ⚠️ <strong>Simulation Notice:</strong> Simulation mode test passes do not constitute production migration proof. Production migration must be executed with live Supabase credentials from an authenticated Super Admin browser session.
+        </div>
+      </div>
+
       <!-- 4 Top KPI Cards -->
       <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:18px;">
         <div style="background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px;">
@@ -19176,10 +19440,12 @@ function renderChangeRoleModal(container, user) {
       runProductionMigrationPreflight,
       readBackProductionMigration,
       executeLiveProductionMigration,
-      // Phase 14.7 Forensic Production Migration Authenticity Exports
+      // Phase 14.7 & 14.8 Forensic Production Migration Authenticity & Readiness Exports
       FORENSIC_EVIDENCE_CLASSIFICATION,
       getProductionAuthenticationTruth,
       probeAuthenticatedPostgrest,
+      auditProductionCodePath,
+      getPhase14_8MigrationReadiness,
       // Phase 14.7A Real Cloud Migration & Audit Exports
       MIGRATION_EXECUTION_MODE,
       FORENSIC_TRUTH_LABEL,
@@ -19216,6 +19482,8 @@ function renderChangeRoleModal(container, user) {
     window.FORENSIC_EVIDENCE_CLASSIFICATION = FORENSIC_EVIDENCE_CLASSIFICATION;
     window.getProductionAuthenticationTruth = getProductionAuthenticationTruth;
     window.probeAuthenticatedPostgrest = probeAuthenticatedPostgrest;
+    window.auditProductionCodePath = auditProductionCodePath;
+    window.getPhase14_8MigrationReadiness = getPhase14_8MigrationReadiness;
     window.MIGRATION_EXECUTION_MODE = MIGRATION_EXECUTION_MODE;
     window.FORENSIC_TRUTH_LABEL = FORENSIC_TRUTH_LABEL;
     window.getMigrationExecutionMode = getMigrationExecutionMode;
