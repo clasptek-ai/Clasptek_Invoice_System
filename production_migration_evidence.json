@@ -1,5 +1,5 @@
 {
-  "phase": "16",
+  "phase": "17",
   "executionMode": "LIVE_CLOUD",
   "projectRef": "logaawoigfxnisimfatf",
   "supabaseUrl": "https://logaawoigfxnisimfatf.supabase.co",
@@ -9,6 +9,16 @@
   "schemaVerified": false,
   "schemaStatus": "SCHEMA_MISSING",
   "schemaCacheError": "PGRST205: Could not find the table in the schema cache",
+  "canonicalSchemaInventory": {
+    "totalTablesDefined": 55,
+    "canonical27PresentInSql": 27,
+    "canonical27MissingInSql": 0,
+    "totalRlsEnabled": 55,
+    "totalPoliciesDefined": 101,
+    "totalFunctionsDefined": 21,
+    "totalIndexesDefined": 40,
+    "destructiveStatementsCount": 0
+  },
   "postgrestVerified": false,
   "postgrestProbeStatus": 404,
   "totalTablesEvaluated": 27,
@@ -25,6 +35,6 @@
   "authorityState": "BLOCKED",
   "evidenceClassification": "LIVE_REMOTE_EXECUTION_BLOCKED",
   "credentialsExposed": false,
-  "blockingReason": "Live PostgreSQL schema has not been applied to Supabase project logaawoigfxnisimfatf (PGRST205 on all 27 tables). Awaiting schema execution from supabase_schema.sql and authenticated Super Admin login at https://app.clasptek.org",
-  "timestamp": "2026-08-29T21:32:00.000Z"
+  "blockingReason": "Remote PostgreSQL schema has not been applied to Supabase Cloud project logaawoigfxnisimfatf (PGRST205 on all 27 tables). Awaiting schema execution from supabase_schema.sql via Supabase SQL Editor and authenticated Super Admin login.",
+  "timestamp": "2026-08-29T21:38:00.000Z"
 }

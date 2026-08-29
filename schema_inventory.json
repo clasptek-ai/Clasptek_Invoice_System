@@ -1,0 +1,5116 @@
+{
+  "sourceFile": "supabase_schema.sql",
+  "inspectedAt": "2026-08-29T21:36:45.234Z",
+  "targetProjectRef": "logaawoigfxnisimfatf",
+  "targetUrl": "https://logaawoigfxnisimfatf.supabase.co",
+  "summary": {
+    "totalTablesDefined": 55,
+    "canonical27PresentInSql": 27,
+    "canonical27MissingInSql": [],
+    "totalRlsEnabled": 55,
+    "totalPoliciesDefined": 101,
+    "totalFunctionsDefined": 21,
+    "totalIndexesDefined": 40
+  },
+  "canonical27Tables": [
+    {
+      "table": "finance_settings",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 13
+    },
+    {
+      "table": "payment_accounts",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 12
+    },
+    {
+      "table": "programmes",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 4,
+      "columnCount": 12
+    },
+    {
+      "table": "personnel",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 24
+    },
+    {
+      "table": "customers",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 4,
+      "columnCount": 11
+    },
+    {
+      "table": "enquiries",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 4,
+      "columnCount": 11
+    },
+    {
+      "table": "enrolments",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 4,
+      "columnCount": 11
+    },
+    {
+      "table": "invoices",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 4,
+      "columnCount": 23
+    },
+    {
+      "table": "invoice_items",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 9
+    },
+    {
+      "table": "payments",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 3,
+      "columnCount": 14
+    },
+    {
+      "table": "receipts",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 0,
+      "columnCount": 11
+    },
+    {
+      "table": "expenses",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 3,
+      "columnCount": 21
+    },
+    {
+      "table": "direct_income",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 3,
+      "columnCount": 16
+    },
+    {
+      "table": "budgets",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 8
+    },
+    {
+      "table": "budget_lines",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 12
+    },
+    {
+      "table": "payslips",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 40
+    },
+    {
+      "table": "facilitator_sessions",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 21
+    },
+    {
+      "table": "customer_timeline",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 2,
+      "columnCount": 14
+    },
+    {
+      "table": "collection_actions",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 10
+    },
+    {
+      "table": "finance_audit_log",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 13
+    },
+    {
+      "table": "management_alerts",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 16
+    },
+    {
+      "table": "approval_thresholds",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 9
+    },
+    {
+      "table": "financial_adjustments",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 10
+    },
+    {
+      "table": "report_snapshots",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 8
+    },
+    {
+      "table": "management_metrics",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 14
+    },
+    {
+      "table": "cash_flow_forecasts",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 12
+    },
+    {
+      "table": "customer_segments",
+      "defined": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "rlsEnabled": true,
+      "policyCount": 1,
+      "columnCount": 9
+    }
+  ],
+  "allTables": {
+    "tenants": {
+      "name": "tenants",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": false,
+      "columnCount": 5,
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "raw": "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "slug",
+          "type": "TEXT",
+          "raw": "slug TEXT NOT NULL UNIQUE,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "tenants_auth_read"
+      ]
+    },
+    "profiles": {
+      "name": "profiles",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": false,
+      "columnCount": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "raw": "id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT",
+          "raw": "email TEXT NOT NULL,"
+        },
+        {
+          "name": "full_name",
+          "type": "TEXT,",
+          "raw": "full_name TEXT,"
+        },
+        {
+          "name": "avatar_url",
+          "type": "TEXT,",
+          "raw": "avatar_url TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "profiles_own_read",
+        "profiles_own_update"
+      ]
+    },
+    "tenant_memberships": {
+      "name": "tenant_memberships",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "raw": "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "raw": "user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "raw": "role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'STAFF')),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'invited')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, user_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "memberships_tenant_read"
+      ]
+    },
+    "income_categories": {
+      "name": "income_categories",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT,",
+          "raw": "description TEXT,"
+        },
+        {
+          "name": "is_default",
+          "type": "BOOLEAN",
+          "raw": "is_default BOOLEAN DEFAULT false,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "income_cats_tenant_select",
+        "income_cats_admin_write"
+      ]
+    },
+    "expense_categories": {
+      "name": "expense_categories",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "group_name",
+          "type": "TEXT",
+          "raw": "group_name TEXT NOT NULL,"
+        },
+        {
+          "name": "sub_category",
+          "type": "TEXT",
+          "raw": "sub_category TEXT NOT NULL,"
+        },
+        {
+          "name": "is_default",
+          "type": "BOOLEAN",
+          "raw": "is_default BOOLEAN DEFAULT false,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "expense_cats_tenant_select",
+        "expense_cats_admin_write"
+      ]
+    },
+    "programmes": {
+      "name": "programmes",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 12,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "code",
+          "type": "TEXT",
+          "raw": "code TEXT NOT NULL,"
+        },
+        {
+          "name": "tuition_fee",
+          "type": "NUMERIC(14,2)",
+          "raw": "tuition_fee NUMERIC(14,2) NOT NULL CHECK (tuition_fee >= 0),"
+        },
+        {
+          "name": "max_discount_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "max_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (max_discount_pct BETWEEN 0 AND 100),"
+        },
+        {
+          "name": "allow_installments",
+          "type": "BOOLEAN",
+          "raw": "allow_installments BOOLEAN NOT NULL DEFAULT true,"
+        },
+        {
+          "name": "installment_first_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "installment_first_pct NUMERIC(5,2) NOT NULL DEFAULT 60 CHECK (installment_first_pct BETWEEN 0 AND 100),"
+        },
+        {
+          "name": "installment_second_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "installment_second_pct NUMERIC(5,2) NOT NULL DEFAULT 40 CHECK (installment_second_pct BETWEEN 0 AND 100),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "programmes_tenant_select",
+        "programmes_admin_insert",
+        "programmes_admin_update",
+        "programmes_admin_delete"
+      ]
+    },
+    "finance_approval_settings": {
+      "name": "finance_approval_settings",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "threshold_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "threshold_amount NUMERIC(14,2) NOT NULL DEFAULT 500000 CHECK (threshold_amount >= 0),"
+        },
+        {
+          "name": "require_super_admin_threshold",
+          "type": "NUMERIC(14,2)",
+          "raw": "require_super_admin_threshold NUMERIC(14,2) NOT NULL DEFAULT 2000000 CHECK (require_super_admin_threshold >= threshold_amount),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_by",
+          "type": "UUID",
+          "raw": "updated_by UUID REFERENCES auth.users(id),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "settings_tenant_select",
+        "settings_admin_write"
+      ]
+    },
+    "finance_periods": {
+      "name": "finance_periods",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "period",
+          "type": "TEXT",
+          "raw": "period TEXT NOT NULL CHECK (period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'locked')),"
+        },
+        {
+          "name": "closed_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "closed_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "closed_by",
+          "type": "UUID",
+          "raw": "closed_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "locked_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "locked_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "locked_by",
+          "type": "UUID",
+          "raw": "locked_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, period)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "periods_tenant_select",
+        "periods_admin_write"
+      ]
+    },
+    "finance_counters": {
+      "name": "finance_counters",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 5,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "invoice_seq",
+          "type": "INT",
+          "raw": "invoice_seq INT NOT NULL DEFAULT 100,"
+        },
+        {
+          "name": "receipt_seq",
+          "type": "INT",
+          "raw": "receipt_seq INT NOT NULL DEFAULT 100,"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id)"
+      ],
+      "rlsEnabled": true
+    },
+    "budgets": {
+      "name": "budgets",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "period",
+          "type": "TEXT",
+          "raw": "period TEXT NOT NULL CHECK (period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "category_group",
+          "type": "TEXT",
+          "raw": "category_group TEXT NOT NULL,"
+        },
+        {
+          "name": "budget_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "budget_amount NUMERIC(14,2) NOT NULL CHECK (budget_amount > 0),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, period, category_group)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "budgets_tenant_select",
+        "budgets_manager_write"
+      ]
+    },
+    "invoices": {
+      "name": "invoices",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 23,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "invoice_no",
+          "type": "INT",
+          "raw": "invoice_no INT NOT NULL,"
+        },
+        {
+          "name": "invoice_display_no",
+          "type": "TEXT",
+          "raw": "invoice_display_no TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL REFERENCES public.programmes(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "student_name",
+          "type": "TEXT",
+          "raw": "student_name TEXT NOT NULL,"
+        },
+        {
+          "name": "student_email",
+          "type": "TEXT,",
+          "raw": "student_email TEXT,"
+        },
+        {
+          "name": "student_phone",
+          "type": "TEXT,",
+          "raw": "student_phone TEXT,"
+        },
+        {
+          "name": "invoice_date",
+          "type": "DATE",
+          "raw": "invoice_date DATE NOT NULL,"
+        },
+        {
+          "name": "due_date",
+          "type": "DATE",
+          "raw": "due_date DATE NOT NULL,"
+        },
+        {
+          "name": "payment_plan",
+          "type": "TEXT",
+          "raw": "payment_plan TEXT NOT NULL CHECK (payment_plan IN ('full', 'installment')),"
+        },
+        {
+          "name": "installments_count",
+          "type": "INT",
+          "raw": "installments_count INT NOT NULL DEFAULT 1,"
+        },
+        {
+          "name": "base_price",
+          "type": "NUMERIC(14,2)",
+          "raw": "base_price NUMERIC(14,2) NOT NULL CHECK (base_price >= 0),"
+        },
+        {
+          "name": "discount_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "discount_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "discount_amount NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "total_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "total_amount NUMERIC(14,2) NOT NULL CHECK (total_amount >= 0),"
+        },
+        {
+          "name": "income_category",
+          "type": "TEXT",
+          "raw": "income_category TEXT NOT NULL DEFAULT 'Student Tuition',"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid', 'voided', 'cancelled')),"
+        },
+        {
+          "name": "installment_details",
+          "type": "JSONB,",
+          "raw": "installment_details JSONB,"
+        },
+        {
+          "name": "source",
+          "type": "TEXT",
+          "raw": "source TEXT NOT NULL DEFAULT 'supabase_app',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, invoice_no)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "invoices_tenant_select",
+        "invoices_staff_insert",
+        "invoices_manager_update",
+        "invoices_admin_delete"
+      ]
+    },
+    "invoice_items": {
+      "name": "invoice_items",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 9,
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "raw": "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "item_description",
+          "type": "TEXT",
+          "raw": "item_description TEXT NOT NULL,"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMERIC(10,2)",
+          "raw": "quantity NUMERIC(10,2) NOT NULL DEFAULT 1 CHECK (quantity > 0),"
+        },
+        {
+          "name": "unit_price",
+          "type": "NUMERIC(14,2)",
+          "raw": "unit_price NUMERIC(14,2) NOT NULL CHECK (unit_price >= 0),"
+        },
+        {
+          "name": "discount_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "discount_amount NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "line_total",
+          "type": "NUMERIC(14,2)",
+          "raw": "line_total NUMERIC(14,2) NOT NULL CHECK (line_total >= 0),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "invoice_items_tenant_select",
+        "invoice_items_staff_insert"
+      ]
+    },
+    "payments": {
+      "name": "payments",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "receipt_no",
+          "type": "INT",
+          "raw": "receipt_no INT NOT NULL,"
+        },
+        {
+          "name": "receipt_display_no",
+          "type": "TEXT",
+          "raw": "receipt_display_no TEXT NOT NULL,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT NOT NULL REFERENCES public.invoices(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),"
+        },
+        {
+          "name": "payment_method",
+          "type": "TEXT",
+          "raw": "payment_method TEXT NOT NULL CHECK (payment_method IN ('Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Cash', 'Other')),"
+        },
+        {
+          "name": "reference",
+          "type": "TEXT,",
+          "raw": "reference TEXT,"
+        },
+        {
+          "name": "payment_date",
+          "type": "DATE",
+          "raw": "payment_date DATE NOT NULL,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "reconciliation_status",
+          "type": "TEXT",
+          "raw": "reconciliation_status TEXT NOT NULL DEFAULT 'unreconciled' CHECK (reconciliation_status IN ('unreconciled', 'matched', 'reconciled')),"
+        },
+        {
+          "name": "source",
+          "type": "TEXT",
+          "raw": "source TEXT NOT NULL DEFAULT 'supabase_app',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, receipt_no)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "payments_tenant_select",
+        "payments_staff_insert",
+        "payments_manager_update"
+      ]
+    },
+    "receipts": {
+      "name": "receipts",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "receipt_no",
+          "type": "TEXT",
+          "raw": "receipt_no TEXT NOT NULL,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT REFERENCES public.invoices(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "payment_id",
+          "type": "TEXT",
+          "raw": "payment_id TEXT REFERENCES public.payments(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount >= 0),"
+        },
+        {
+          "name": "payment_date",
+          "type": "DATE",
+          "raw": "payment_date DATE NOT NULL,"
+        },
+        {
+          "name": "payer_name",
+          "type": "TEXT,",
+          "raw": "payer_name TEXT,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, receipt_no)"
+      ],
+      "rlsEnabled": true
+    },
+    "direct_income": {
+      "name": "direct_income",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 16,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "income_category",
+          "type": "TEXT",
+          "raw": "income_category TEXT NOT NULL,"
+        },
+        {
+          "name": "payer_name",
+          "type": "TEXT",
+          "raw": "payer_name TEXT NOT NULL,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),"
+        },
+        {
+          "name": "payment_method",
+          "type": "TEXT",
+          "raw": "payment_method TEXT NOT NULL CHECK (payment_method IN ('Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Cash', 'Other')),"
+        },
+        {
+          "name": "reference",
+          "type": "TEXT,",
+          "raw": "reference TEXT,"
+        },
+        {
+          "name": "income_date",
+          "type": "DATE",
+          "raw": "income_date DATE NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT,",
+          "raw": "description TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'voided')),"
+        },
+        {
+          "name": "cancelled_reason",
+          "type": "TEXT,",
+          "raw": "cancelled_reason TEXT,"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "cancelled_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "cancelled_by",
+          "type": "UUID",
+          "raw": "cancelled_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "source",
+          "type": "TEXT",
+          "raw": "source TEXT NOT NULL DEFAULT 'supabase_app',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "direct_income_tenant_select",
+        "direct_income_staff_insert",
+        "direct_income_manager_update"
+      ]
+    },
+    "expenses": {
+      "name": "expenses",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 21,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "category_group",
+          "type": "TEXT",
+          "raw": "category_group TEXT NOT NULL,"
+        },
+        {
+          "name": "sub_category",
+          "type": "TEXT",
+          "raw": "sub_category TEXT NOT NULL,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),"
+        },
+        {
+          "name": "expense_date",
+          "type": "DATE",
+          "raw": "expense_date DATE NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "raw": "description TEXT NOT NULL,"
+        },
+        {
+          "name": "beneficiary",
+          "type": "TEXT",
+          "raw": "beneficiary TEXT NOT NULL,"
+        },
+        {
+          "name": "payment_method",
+          "type": "TEXT",
+          "raw": "payment_method TEXT NOT NULL CHECK (payment_method IN ('Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Cash', 'Other')),"
+        },
+        {
+          "name": "reference",
+          "type": "TEXT,",
+          "raw": "reference TEXT,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT REFERENCES public.programmes(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded', 'pending_approval', 'approved', 'rejected', 'cancelled', 'voided')),"
+        },
+        {
+          "name": "approved_by",
+          "type": "UUID",
+          "raw": "approved_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "approved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "approved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "rejection_reason",
+          "type": "TEXT,",
+          "raw": "rejection_reason TEXT,"
+        },
+        {
+          "name": "cancelled_reason",
+          "type": "TEXT,",
+          "raw": "cancelled_reason TEXT,"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "cancelled_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "cancelled_by",
+          "type": "UUID",
+          "raw": "cancelled_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "source",
+          "type": "TEXT",
+          "raw": "source TEXT NOT NULL DEFAULT 'supabase_app',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "expenses_tenant_select",
+        "expenses_staff_insert",
+        "expenses_manager_update"
+      ]
+    },
+    "reconciliations": {
+      "name": "reconciliations",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 13,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "account_name",
+          "type": "TEXT",
+          "raw": "account_name TEXT NOT NULL,"
+        },
+        {
+          "name": "period",
+          "type": "TEXT",
+          "raw": "period TEXT NOT NULL CHECK (period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "opening_balance",
+          "type": "NUMERIC(14,2)",
+          "raw": "opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "expected_balance",
+          "type": "NUMERIC(14,2)",
+          "raw": "expected_balance NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "actual_balance",
+          "type": "NUMERIC(14,2)",
+          "raw": "actual_balance NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "variance",
+          "type": "NUMERIC(14,2)",
+          "raw": "variance NUMERIC(14,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'reconciled', 'discrepancy')),"
+        },
+        {
+          "name": "reconciled_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "reconciled_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "reconciled_by",
+          "type": "UUID",
+          "raw": "reconciled_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, account_name, period)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "reconciliations_manager_select",
+        "reconciliations_manager_write"
+      ]
+    },
+    "collection_notes": {
+      "name": "collection_notes",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "note",
+          "type": "TEXT",
+          "raw": "note TEXT NOT NULL,"
+        },
+        {
+          "name": "promised_date",
+          "type": "DATE,",
+          "raw": "promised_date DATE,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "collection_notes_staff_select",
+        "collection_notes_staff_insert"
+      ]
+    },
+    "payment_reminders": {
+      "name": "payment_reminders",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "channel",
+          "type": "TEXT",
+          "raw": "channel TEXT NOT NULL CHECK (channel IN ('Email', 'WhatsApp', 'SMS')),"
+        },
+        {
+          "name": "template_type",
+          "type": "TEXT",
+          "raw": "template_type TEXT NOT NULL,"
+        },
+        {
+          "name": "sent_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "sent_by",
+          "type": "UUID",
+          "raw": "sent_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "reminders_staff_select",
+        "reminders_staff_insert"
+      ]
+    },
+    "recurring_expenses": {
+      "name": "recurring_expenses",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "category_group",
+          "type": "TEXT",
+          "raw": "category_group TEXT NOT NULL,"
+        },
+        {
+          "name": "sub_category",
+          "type": "TEXT",
+          "raw": "sub_category TEXT NOT NULL,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),"
+        },
+        {
+          "name": "beneficiary",
+          "type": "TEXT",
+          "raw": "beneficiary TEXT NOT NULL,"
+        },
+        {
+          "name": "frequency",
+          "type": "TEXT",
+          "raw": "frequency TEXT NOT NULL CHECK (frequency IN ('Monthly', 'Quarterly', 'Annually')),"
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "raw": "description TEXT NOT NULL,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true
+    },
+    "recurring_invoices": {
+      "name": "recurring_invoices",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 10,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "client_name",
+          "type": "TEXT",
+          "raw": "client_name TEXT NOT NULL,"
+        },
+        {
+          "name": "client_email",
+          "type": "TEXT,",
+          "raw": "client_email TEXT,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL REFERENCES public.programmes(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),"
+        },
+        {
+          "name": "frequency",
+          "type": "TEXT",
+          "raw": "frequency TEXT NOT NULL CHECK (frequency IN ('Monthly', 'Quarterly', 'Annually')),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "raw": "created_by UUID REFERENCES auth.users(id)"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true
+    },
+    "finance_audit_log": {
+      "name": "finance_audit_log",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 13,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "action",
+          "type": "TEXT",
+          "raw": "action TEXT NOT NULL,"
+        },
+        {
+          "name": "entity_type",
+          "type": "TEXT",
+          "raw": "entity_type TEXT NOT NULL,"
+        },
+        {
+          "name": "entity_id",
+          "type": "TEXT",
+          "raw": "entity_id TEXT NOT NULL,"
+        },
+        {
+          "name": "entity_name",
+          "type": "TEXT,",
+          "raw": "entity_name TEXT,"
+        },
+        {
+          "name": "old_state",
+          "type": "JSONB,",
+          "raw": "old_state JSONB,"
+        },
+        {
+          "name": "new_state",
+          "type": "JSONB,",
+          "raw": "new_state JSONB,"
+        },
+        {
+          "name": "reason",
+          "type": "TEXT,",
+          "raw": "reason TEXT,"
+        },
+        {
+          "name": "actor_id",
+          "type": "UUID",
+          "raw": "actor_id UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "actor_role",
+          "type": "TEXT",
+          "raw": "actor_role TEXT NOT NULL DEFAULT 'SYSTEM',"
+        },
+        {
+          "name": "source",
+          "type": "TEXT",
+          "raw": "source TEXT NOT NULL DEFAULT 'supabase_app',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "audit_log_manager_select"
+      ]
+    },
+    "personnel": {
+      "name": "personnel",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 24,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "raw": "user_id UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "employee_id",
+          "type": "TEXT",
+          "raw": "employee_id TEXT NOT NULL,"
+        },
+        {
+          "name": "first_name",
+          "type": "TEXT,",
+          "raw": "first_name TEXT,"
+        },
+        {
+          "name": "last_name",
+          "type": "TEXT,",
+          "raw": "last_name TEXT,"
+        },
+        {
+          "name": "full_name",
+          "type": "TEXT",
+          "raw": "full_name TEXT NOT NULL,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT",
+          "raw": "email TEXT NOT NULL,"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT,",
+          "raw": "phone TEXT,"
+        },
+        {
+          "name": "employee_type",
+          "type": "TEXT",
+          "raw": "employee_type TEXT NOT NULL CHECK (employee_type IN ('staff', 'facilitator')),"
+        },
+        {
+          "name": "department",
+          "type": "TEXT",
+          "raw": "department TEXT NOT NULL,"
+        },
+        {
+          "name": "job_title",
+          "type": "TEXT",
+          "raw": "job_title TEXT NOT NULL,"
+        },
+        {
+          "name": "employment_status",
+          "type": "TEXT",
+          "raw": "employment_status TEXT NOT NULL DEFAULT 'active' CHECK (employment_status IN ('active', 'on_leave', 'suspended', 'deactivated', 'terminated')),"
+        },
+        {
+          "name": "date_joined",
+          "type": "DATE,",
+          "raw": "date_joined DATE,"
+        },
+        {
+          "name": "bank_name",
+          "type": "TEXT,",
+          "raw": "bank_name TEXT,"
+        },
+        {
+          "name": "account_name",
+          "type": "TEXT,",
+          "raw": "account_name TEXT,"
+        },
+        {
+          "name": "account_number",
+          "type": "TEXT,",
+          "raw": "account_number TEXT,"
+        },
+        {
+          "name": "compensation_type",
+          "type": "TEXT",
+          "raw": "compensation_type TEXT NOT NULL DEFAULT 'salaried' CHECK (compensation_type IN ('salaried', 'per_session', 'per_hour', 'per_class', 'per_programme', 'fixed_contract')),"
+        },
+        {
+          "name": "basic_pay",
+          "type": "NUMERIC(14,2)",
+          "raw": "basic_pay NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (basic_pay >= 0),"
+        },
+        {
+          "name": "facilitator_rate",
+          "type": "NUMERIC(14,2)",
+          "raw": "facilitator_rate NUMERIC(14,2) DEFAULT 0 CHECK (facilitator_rate >= 0),"
+        },
+        {
+          "name": "rate_type",
+          "type": "TEXT",
+          "raw": "rate_type TEXT DEFAULT 'session',"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, employee_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "personnel_tenant_select",
+        "personnel_manager_write"
+      ]
+    },
+    "payslips": {
+      "name": "payslips",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 40,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "payslip_no",
+          "type": "INT",
+          "raw": "payslip_no INT NOT NULL,"
+        },
+        {
+          "name": "payslip_display_no",
+          "type": "TEXT",
+          "raw": "payslip_display_no TEXT NOT NULL,"
+        },
+        {
+          "name": "personnel_id",
+          "type": "TEXT",
+          "raw": "personnel_id TEXT NOT NULL REFERENCES public.personnel(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "employee_name",
+          "type": "TEXT",
+          "raw": "employee_name TEXT NOT NULL,"
+        },
+        {
+          "name": "employee_type",
+          "type": "TEXT",
+          "raw": "employee_type TEXT NOT NULL,"
+        },
+        {
+          "name": "department",
+          "type": "TEXT",
+          "raw": "department TEXT NOT NULL,"
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "raw": "role TEXT NOT NULL,"
+        },
+        {
+          "name": "pay_period",
+          "type": "TEXT",
+          "raw": "pay_period TEXT NOT NULL CHECK (pay_period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "pay_date",
+          "type": "DATE",
+          "raw": "pay_date DATE NOT NULL,"
+        },
+        {
+          "name": "basic_pay",
+          "type": "NUMERIC(14,2)",
+          "raw": "basic_pay NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (basic_pay >= 0),"
+        },
+        {
+          "name": "allowances",
+          "type": "JSONB",
+          "raw": "allowances JSONB DEFAULT '[]'::JSONB,"
+        },
+        {
+          "name": "gross_pay",
+          "type": "NUMERIC(14,2)",
+          "raw": "gross_pay NUMERIC(14,2) NOT NULL CHECK (gross_pay >= 0),"
+        },
+        {
+          "name": "deductions",
+          "type": "JSONB",
+          "raw": "deductions JSONB DEFAULT '[]'::JSONB,"
+        },
+        {
+          "name": "total_deductions",
+          "type": "NUMERIC(14,2)",
+          "raw": "total_deductions NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total_deductions >= 0),"
+        },
+        {
+          "name": "net_pay",
+          "type": "NUMERIC(14,2)",
+          "raw": "net_pay NUMERIC(14,2) NOT NULL CHECK (net_pay >= 0),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'issued', 'acknowledged', 'approved', 'paid', 'cancelled')),"
+        },
+        {
+          "name": "statement_version",
+          "type": "INT",
+          "raw": "statement_version INT NOT NULL DEFAULT 1,"
+        },
+        {
+          "name": "payslip_hash",
+          "type": "TEXT,",
+          "raw": "payslip_hash TEXT,"
+        },
+        {
+          "name": "acknowledged_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "acknowledged_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "acknowledged_by",
+          "type": "TEXT,",
+          "raw": "acknowledged_by TEXT,"
+        },
+        {
+          "name": "acknowledgement_method",
+          "type": "TEXT,",
+          "raw": "acknowledgement_method TEXT,"
+        },
+        {
+          "name": "acknowledgement_remarks",
+          "type": "TEXT,",
+          "raw": "acknowledgement_remarks TEXT,"
+        },
+        {
+          "name": "approved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "approved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "approved_by",
+          "type": "TEXT,",
+          "raw": "approved_by TEXT,"
+        },
+        {
+          "name": "paid_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "paid_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "paid_by",
+          "type": "TEXT,",
+          "raw": "paid_by TEXT,"
+        },
+        {
+          "name": "paid_amount",
+          "type": "NUMERIC(14,2),",
+          "raw": "paid_amount NUMERIC(14,2),"
+        },
+        {
+          "name": "actual_payment_date",
+          "type": "DATE,",
+          "raw": "actual_payment_date DATE,"
+        },
+        {
+          "name": "payment_method",
+          "type": "TEXT,",
+          "raw": "payment_method TEXT,"
+        },
+        {
+          "name": "payment_reference",
+          "type": "TEXT,",
+          "raw": "payment_reference TEXT,"
+        },
+        {
+          "name": "linked_expense_id",
+          "type": "TEXT,",
+          "raw": "linked_expense_id TEXT,"
+        },
+        {
+          "name": "cancel_reason",
+          "type": "TEXT,",
+          "raw": "cancel_reason TEXT,"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "cancelled_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "cancelled_by",
+          "type": "TEXT,",
+          "raw": "cancelled_by TEXT,"
+        },
+        {
+          "name": "queries",
+          "type": "JSONB",
+          "raw": "queries JSONB DEFAULT '[]'::JSONB,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, payslip_no)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "payslips_manager_select",
+        "payslips_manager_mutate"
+      ]
+    },
+    "finance_settings": {
+      "name": "finance_settings",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 13,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "company_name",
+          "type": "TEXT",
+          "raw": "company_name TEXT NOT NULL DEFAULT 'Clasptek Coaching Limited',"
+        },
+        {
+          "name": "trading_name",
+          "type": "TEXT",
+          "raw": "trading_name TEXT DEFAULT 'Clasptek',"
+        },
+        {
+          "name": "address",
+          "type": "TEXT,",
+          "raw": "address TEXT,"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT,",
+          "raw": "phone TEXT,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT,",
+          "raw": "email TEXT,"
+        },
+        {
+          "name": "website",
+          "type": "TEXT,",
+          "raw": "website TEXT,"
+        },
+        {
+          "name": "tax_id",
+          "type": "TEXT,",
+          "raw": "tax_id TEXT,"
+        },
+        {
+          "name": "registration_number",
+          "type": "TEXT,",
+          "raw": "registration_number TEXT,"
+        },
+        {
+          "name": "invoice_footer",
+          "type": "TEXT,",
+          "raw": "invoice_footer TEXT,"
+        },
+        {
+          "name": "default_terms",
+          "type": "TEXT,",
+          "raw": "default_terms TEXT,"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "settings_tenant_read",
+        "settings_admin_write"
+      ]
+    },
+    "payment_accounts": {
+      "name": "payment_accounts",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 12,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "bank_name",
+          "type": "TEXT",
+          "raw": "bank_name TEXT NOT NULL,"
+        },
+        {
+          "name": "account_name",
+          "type": "TEXT",
+          "raw": "account_name TEXT NOT NULL,"
+        },
+        {
+          "name": "account_number",
+          "type": "TEXT",
+          "raw": "account_number TEXT NOT NULL,"
+        },
+        {
+          "name": "account_type",
+          "type": "TEXT",
+          "raw": "account_type TEXT DEFAULT 'Corporate Current',"
+        },
+        {
+          "name": "currency",
+          "type": "TEXT",
+          "raw": "currency TEXT NOT NULL DEFAULT 'NGN',"
+        },
+        {
+          "name": "is_default",
+          "type": "BOOLEAN",
+          "raw": "is_default BOOLEAN NOT NULL DEFAULT false,"
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "raw": "is_active BOOLEAN NOT NULL DEFAULT true,"
+        },
+        {
+          "name": "instructions",
+          "type": "TEXT,",
+          "raw": "instructions TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, account_number)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "accounts_tenant_read",
+        "accounts_manager_write"
+      ]
+    },
+    "enquiries": {
+      "name": "enquiries",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "student_name",
+          "type": "TEXT",
+          "raw": "student_name TEXT NOT NULL,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT,",
+          "raw": "email TEXT,"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT,",
+          "raw": "phone TEXT,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT REFERENCES public.programmes(id),"
+        },
+        {
+          "name": "source",
+          "type": "TEXT,",
+          "raw": "source TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'INTERESTED', 'APPLIED', 'OFFERED', 'ENROLLED', 'LOST')),"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "enquiries_tenant_select",
+        "enquiries_tenant_insert",
+        "enquiries_tenant_update",
+        "enquiries_admin_delete"
+      ]
+    },
+    "enrolments": {
+      "name": "enrolments",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "enquiry_id",
+          "type": "TEXT",
+          "raw": "enquiry_id TEXT REFERENCES public.enquiries(id),"
+        },
+        {
+          "name": "student_name",
+          "type": "TEXT",
+          "raw": "student_name TEXT NOT NULL,"
+        },
+        {
+          "name": "student_email",
+          "type": "TEXT,",
+          "raw": "student_email TEXT,"
+        },
+        {
+          "name": "student_phone",
+          "type": "TEXT,",
+          "raw": "student_phone TEXT,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL REFERENCES public.programmes(id),"
+        },
+        {
+          "name": "cohort",
+          "type": "TEXT,",
+          "raw": "cohort TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN')),"
+        },
+        {
+          "name": "enrolment_date",
+          "type": "DATE",
+          "raw": "enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "enrolments_tenant_select",
+        "enrolments_tenant_insert",
+        "enrolments_tenant_update",
+        "enrolments_admin_delete"
+      ]
+    },
+    "customers": {
+      "name": "customers",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT,",
+          "raw": "email TEXT,"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT,",
+          "raw": "phone TEXT,"
+        },
+        {
+          "name": "address",
+          "type": "TEXT,",
+          "raw": "address TEXT,"
+        },
+        {
+          "name": "total_invoiced",
+          "type": "NUMERIC(14,2)",
+          "raw": "total_invoiced NUMERIC(14,2) DEFAULT 0,"
+        },
+        {
+          "name": "total_paid",
+          "type": "NUMERIC(14,2)",
+          "raw": "total_paid NUMERIC(14,2) DEFAULT 0,"
+        },
+        {
+          "name": "outstanding_balance",
+          "type": "NUMERIC(14,2)",
+          "raw": "outstanding_balance NUMERIC(14,2) DEFAULT 0,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "customers_tenant_select",
+        "customers_tenant_insert",
+        "customers_tenant_update",
+        "customers_admin_delete"
+      ]
+    },
+    "facilitator_sessions": {
+      "name": "facilitator_sessions",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 21,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "facilitator_id",
+          "type": "TEXT",
+          "raw": "facilitator_id TEXT NOT NULL REFERENCES public.personnel(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "facilitator_name",
+          "type": "TEXT",
+          "raw": "facilitator_name TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT REFERENCES public.programmes(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "programme_name",
+          "type": "TEXT",
+          "raw": "programme_name TEXT NOT NULL,"
+        },
+        {
+          "name": "session_date",
+          "type": "DATE",
+          "raw": "session_date DATE NOT NULL,"
+        },
+        {
+          "name": "session_type",
+          "type": "TEXT",
+          "raw": "session_type TEXT NOT NULL DEFAULT 'Classroom Lecture',"
+        },
+        {
+          "name": "sessions_count",
+          "type": "NUMERIC(6,2)",
+          "raw": "sessions_count NUMERIC(6,2) NOT NULL DEFAULT 1 CHECK (sessions_count > 0),"
+        },
+        {
+          "name": "rate_per_session",
+          "type": "NUMERIC(14,2)",
+          "raw": "rate_per_session NUMERIC(14,2) NOT NULL CHECK (rate_per_session >= 0),"
+        },
+        {
+          "name": "total_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "total_amount NUMERIC(14,2) NOT NULL CHECK (total_amount >= 0),"
+        },
+        {
+          "name": "topic",
+          "type": "TEXT,",
+          "raw": "topic TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'pending_approval' CHECK (status IN ('pending_approval', 'approved', 'rejected', 'included_in_payslip')),"
+        },
+        {
+          "name": "payroll_period",
+          "type": "TEXT",
+          "raw": "payroll_period TEXT CHECK (payroll_period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "payment_status",
+          "type": "TEXT",
+          "raw": "payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid')),"
+        },
+        {
+          "name": "approved_by",
+          "type": "UUID",
+          "raw": "approved_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "approved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "approved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "payslip_id",
+          "type": "TEXT",
+          "raw": "payslip_id TEXT REFERENCES public.payslips(id),"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "sessions_tenant_select",
+        "sessions_manager_mutate"
+      ]
+    },
+    "customer_timeline": {
+      "name": "customer_timeline",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT",
+          "raw": "customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "enquiry_id",
+          "type": "TEXT",
+          "raw": "enquiry_id TEXT REFERENCES public.enquiries(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "event_type",
+          "type": "TEXT",
+          "raw": "event_type TEXT NOT NULL,"
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "raw": "title TEXT NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT,",
+          "raw": "description TEXT,"
+        },
+        {
+          "name": "contact_method",
+          "type": "TEXT,",
+          "raw": "contact_method TEXT,"
+        },
+        {
+          "name": "outcome",
+          "type": "TEXT,",
+          "raw": "outcome TEXT,"
+        },
+        {
+          "name": "next_action",
+          "type": "TEXT,",
+          "raw": "next_action TEXT,"
+        },
+        {
+          "name": "next_follow_up_date",
+          "type": "DATE,",
+          "raw": "next_follow_up_date DATE,"
+        },
+        {
+          "name": "reference_id",
+          "type": "TEXT,",
+          "raw": "reference_id TEXT,"
+        },
+        {
+          "name": "actor_name",
+          "type": "TEXT",
+          "raw": "actor_name TEXT NOT NULL DEFAULT 'System',"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "timeline_tenant_select",
+        "timeline_tenant_insert"
+      ]
+    },
+    "schema_versions": {
+      "name": "schema_versions",
+      "isCanonical27": false,
+      "primaryKey": "version",
+      "hasTenantId": false,
+      "columnCount": 4,
+      "columns": [
+        {
+          "name": "version",
+          "type": "TEXT",
+          "raw": "version TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "applied_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "raw": "description TEXT NOT NULL,"
+        },
+        {
+          "name": "compatible",
+          "type": "BOOLEAN",
+          "raw": "compatible BOOLEAN NOT NULL DEFAULT TRUE"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "schema_versions_select"
+      ]
+    },
+    "idempotency_keys": {
+      "name": "idempotency_keys",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "raw": "idempotency_key TEXT NOT NULL UNIQUE,"
+        },
+        {
+          "name": "resource_type",
+          "type": "TEXT",
+          "raw": "resource_type TEXT NOT NULL,"
+        },
+        {
+          "name": "resource_id",
+          "type": "TEXT",
+          "raw": "resource_id TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "idempotency_tenant_all"
+      ]
+    },
+    "management_alerts": {
+      "name": "management_alerts",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 16,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "domain",
+          "type": "TEXT",
+          "raw": "domain TEXT NOT NULL CHECK (domain IN ('finance', 'crm', 'hr', 'security', 'operations')),"
+        },
+        {
+          "name": "severity",
+          "type": "TEXT",
+          "raw": "severity TEXT NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'informational')),"
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "raw": "title TEXT NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT,",
+          "raw": "description TEXT,"
+        },
+        {
+          "name": "record_type",
+          "type": "TEXT",
+          "raw": "record_type TEXT NOT NULL,"
+        },
+        {
+          "name": "record_id",
+          "type": "TEXT,",
+          "raw": "record_id TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')),"
+        },
+        {
+          "name": "assigned_role",
+          "type": "TEXT",
+          "raw": "assigned_role TEXT NOT NULL DEFAULT 'Super Admin',"
+        },
+        {
+          "name": "action_url",
+          "type": "TEXT,",
+          "raw": "action_url TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "acknowledged_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "acknowledged_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "acknowledged_by",
+          "type": "TEXT,",
+          "raw": "acknowledged_by TEXT,"
+        },
+        {
+          "name": "resolved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "resolved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "resolved_by",
+          "type": "TEXT",
+          "raw": "resolved_by TEXT"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "alerts_tenant_all"
+      ]
+    },
+    "crm_stage_history": {
+      "name": "crm_stage_history",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 9,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "enquiry_id",
+          "type": "TEXT",
+          "raw": "enquiry_id TEXT NOT NULL REFERENCES public.enquiries(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT",
+          "raw": "customer_id TEXT REFERENCES public.customers(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "from_stage",
+          "type": "TEXT",
+          "raw": "from_stage TEXT NOT NULL,"
+        },
+        {
+          "name": "to_stage",
+          "type": "TEXT",
+          "raw": "to_stage TEXT NOT NULL,"
+        },
+        {
+          "name": "actor_name",
+          "type": "TEXT",
+          "raw": "actor_name TEXT NOT NULL,"
+        },
+        {
+          "name": "reason",
+          "type": "TEXT,",
+          "raw": "reason TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "crm_history_tenant_all"
+      ]
+    },
+    "bank_reconciliations": {
+      "name": "bank_reconciliations",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "payment_account_id",
+          "type": "TEXT",
+          "raw": "payment_account_id TEXT NOT NULL REFERENCES public.payment_accounts(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "reconciliation_period",
+          "type": "TEXT",
+          "raw": "reconciliation_period TEXT NOT NULL CHECK (reconciliation_period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "book_balance",
+          "type": "NUMERIC",
+          "raw": "book_balance NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "statement_balance",
+          "type": "NUMERIC",
+          "raw": "statement_balance NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "uncleared_inflows",
+          "type": "NUMERIC",
+          "raw": "uncleared_inflows NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "uncleared_outflows",
+          "type": "NUMERIC",
+          "raw": "uncleared_outflows NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "difference",
+          "type": "NUMERIC",
+          "raw": "difference NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'UNRECONCILED' CHECK (status IN ('UNRECONCILED', 'RECONCILED', 'EXCEPTION')),"
+        },
+        {
+          "name": "reconciled_by",
+          "type": "TEXT,",
+          "raw": "reconciled_by TEXT,"
+        },
+        {
+          "name": "reconciled_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "reconciled_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "reconciliations_manager_all"
+      ]
+    },
+    "bank_reconciliation_items": {
+      "name": "bank_reconciliation_items",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "reconciliation_id",
+          "type": "TEXT",
+          "raw": "reconciliation_id TEXT NOT NULL REFERENCES public.bank_reconciliations(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "transaction_type",
+          "type": "TEXT",
+          "raw": "transaction_type TEXT NOT NULL CHECK (transaction_type IN ('payment_inflow', 'expense_outflow', 'adjustment')),"
+        },
+        {
+          "name": "transaction_id",
+          "type": "TEXT",
+          "raw": "transaction_id TEXT NOT NULL,"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC",
+          "raw": "amount NUMERIC NOT NULL,"
+        },
+        {
+          "name": "cleared",
+          "type": "BOOLEAN",
+          "raw": "cleared BOOLEAN NOT NULL DEFAULT FALSE,"
+        },
+        {
+          "name": "cleared_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "cleared_at TIMESTAMPTZ"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "reconciliation_items_manager_all"
+      ]
+    },
+    "expense_status_history": {
+      "name": "expense_status_history",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "expense_id",
+          "type": "TEXT",
+          "raw": "expense_id TEXT NOT NULL REFERENCES public.expenses(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "from_status",
+          "type": "TEXT",
+          "raw": "from_status TEXT NOT NULL,"
+        },
+        {
+          "name": "to_status",
+          "type": "TEXT",
+          "raw": "to_status TEXT NOT NULL,"
+        },
+        {
+          "name": "actor_name",
+          "type": "TEXT",
+          "raw": "actor_name TEXT NOT NULL,"
+        },
+        {
+          "name": "reason",
+          "type": "TEXT,",
+          "raw": "reason TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "expense_history_tenant_all"
+      ]
+    },
+    "financial_adjustments": {
+      "name": "financial_adjustments",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 10,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "original_table",
+          "type": "TEXT",
+          "raw": "original_table TEXT NOT NULL,"
+        },
+        {
+          "name": "original_record_id",
+          "type": "TEXT",
+          "raw": "original_record_id TEXT NOT NULL,"
+        },
+        {
+          "name": "adjustment_type",
+          "type": "TEXT",
+          "raw": "adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('REVERSAL', 'CREDIT_NOTE', 'DEBIT_NOTE', 'REALLOCATION', 'WRITE_OFF')),"
+        },
+        {
+          "name": "amount",
+          "type": "NUMERIC",
+          "raw": "amount NUMERIC NOT NULL,"
+        },
+        {
+          "name": "reason",
+          "type": "TEXT",
+          "raw": "reason TEXT NOT NULL,"
+        },
+        {
+          "name": "financial_period",
+          "type": "TEXT",
+          "raw": "financial_period TEXT NOT NULL CHECK (financial_period ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "authorized_by",
+          "type": "TEXT",
+          "raw": "authorized_by TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "adjustments_manager_all"
+      ]
+    },
+    "financial_budgets": {
+      "name": "financial_budgets",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 11,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "financial_year",
+          "type": "TEXT",
+          "raw": "financial_year TEXT NOT NULL,"
+        },
+        {
+          "name": "period_type",
+          "type": "TEXT",
+          "raw": "period_type TEXT NOT NULL CHECK (period_type IN ('annual', 'quarterly', 'monthly')),"
+        },
+        {
+          "name": "period_key",
+          "type": "TEXT",
+          "raw": "period_key TEXT NOT NULL,"
+        },
+        {
+          "name": "department",
+          "type": "TEXT",
+          "raw": "department TEXT NOT NULL,"
+        },
+        {
+          "name": "total_budget_amount",
+          "type": "NUMERIC",
+          "raw": "total_budget_amount NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "allocated_by",
+          "type": "TEXT",
+          "raw": "allocated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'active', 'archived')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "budgets_manager_all"
+      ]
+    },
+    "budget_lines": {
+      "name": "budget_lines",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 12,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "budget_id",
+          "type": "TEXT",
+          "raw": "budget_id TEXT NOT NULL REFERENCES public.financial_budgets(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "category",
+          "type": "TEXT",
+          "raw": "category TEXT NOT NULL,"
+        },
+        {
+          "name": "sub_category",
+          "type": "TEXT,",
+          "raw": "sub_category TEXT,"
+        },
+        {
+          "name": "month_key",
+          "type": "TEXT",
+          "raw": "month_key TEXT NOT NULL CHECK (month_key ~ '^\\d{4}-\\d{2}$'),"
+        },
+        {
+          "name": "budget_amount",
+          "type": "NUMERIC",
+          "raw": "budget_amount NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "actual_amount",
+          "type": "NUMERIC",
+          "raw": "actual_amount NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "variance",
+          "type": "NUMERIC",
+          "raw": "variance NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "budget_lines_manager_all"
+      ]
+    },
+    "management_metrics": {
+      "name": "management_metrics",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "metric_period",
+          "type": "TEXT",
+          "raw": "metric_period TEXT NOT NULL,"
+        },
+        {
+          "name": "period_type",
+          "type": "TEXT",
+          "raw": "period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'quarterly', 'annual', 'custom')),"
+        },
+        {
+          "name": "total_revenue",
+          "type": "NUMERIC",
+          "raw": "total_revenue NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "revenue_collected",
+          "type": "NUMERIC",
+          "raw": "revenue_collected NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "operating_expenses",
+          "type": "NUMERIC",
+          "raw": "operating_expenses NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "payroll_costs",
+          "type": "NUMERIC",
+          "raw": "payroll_costs NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "net_position",
+          "type": "NUMERIC",
+          "raw": "net_position NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "collection_rate_pct",
+          "type": "NUMERIC",
+          "raw": "collection_rate_pct NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "operating_margin_pct",
+          "type": "NUMERIC",
+          "raw": "operating_margin_pct NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "payroll_ratio_pct",
+          "type": "NUMERIC",
+          "raw": "payroll_ratio_pct NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "snapshot_data",
+          "type": "JSONB,",
+          "raw": "snapshot_data JSONB,"
+        },
+        {
+          "name": "captured_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "management_metrics_manager_all"
+      ]
+    },
+    "cash_flow_forecasts": {
+      "name": "cash_flow_forecasts",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 12,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "forecast_date",
+          "type": "DATE",
+          "raw": "forecast_date DATE NOT NULL,"
+        },
+        {
+          "name": "horizon_days",
+          "type": "INTEGER",
+          "raw": "horizon_days INTEGER NOT NULL CHECK (horizon_days IN (7, 30, 60, 90)),"
+        },
+        {
+          "name": "opening_cash",
+          "type": "NUMERIC",
+          "raw": "opening_cash NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "expected_inflows",
+          "type": "NUMERIC",
+          "raw": "expected_inflows NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "expected_outflows",
+          "type": "NUMERIC",
+          "raw": "expected_outflows NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "forecast_closing_cash",
+          "type": "NUMERIC",
+          "raw": "forecast_closing_cash NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "runway_status",
+          "type": "TEXT",
+          "raw": "runway_status TEXT NOT NULL DEFAULT 'HEALTHY' CHECK (runway_status IN ('HEALTHY', 'TIGHT', 'CRITICAL')),"
+        },
+        {
+          "name": "forecast_breakdown",
+          "type": "JSONB,",
+          "raw": "forecast_breakdown JSONB,"
+        },
+        {
+          "name": "generated_by",
+          "type": "TEXT",
+          "raw": "generated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "cash_flow_manager_all"
+      ]
+    },
+    "customer_segments": {
+      "name": "customer_segments",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 9,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT",
+          "raw": "customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "segment",
+          "type": "TEXT",
+          "raw": "segment TEXT NOT NULL CHECK (segment IN ('VIP', 'High Value', 'Regular', 'New', 'At Risk', 'Delinquent', 'Fully Paid')),"
+        },
+        {
+          "name": "lifetime_value",
+          "type": "NUMERIC",
+          "raw": "lifetime_value NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "outstanding_balance",
+          "type": "NUMERIC",
+          "raw": "outstanding_balance NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "payment_reliability_score",
+          "type": "INTEGER",
+          "raw": "payment_reliability_score INTEGER NOT NULL DEFAULT 100,"
+        },
+        {
+          "name": "days_overdue",
+          "type": "INTEGER",
+          "raw": "days_overdue INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "last_evaluated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "last_evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "customer_segments_staff_all"
+      ]
+    },
+    "collection_actions": {
+      "name": "collection_actions",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 10,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT",
+          "raw": "customer_id TEXT NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT",
+          "raw": "invoice_id TEXT REFERENCES public.invoices(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "priority",
+          "type": "TEXT",
+          "raw": "priority TEXT NOT NULL CHECK (priority IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),"
+        },
+        {
+          "name": "action_type",
+          "type": "TEXT",
+          "raw": "action_type TEXT NOT NULL CHECK (action_type IN ('WhatsApp', 'Email', 'Phone Call', 'Escalation', 'Payment Plan Discussion', 'In-Person')),"
+        },
+        {
+          "name": "action_notes",
+          "type": "TEXT",
+          "raw": "action_notes TEXT NOT NULL,"
+        },
+        {
+          "name": "promised_payment_date",
+          "type": "DATE,",
+          "raw": "promised_payment_date DATE,"
+        },
+        {
+          "name": "actor_name",
+          "type": "TEXT",
+          "raw": "actor_name TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "collection_actions_staff_all"
+      ]
+    },
+    "approval_thresholds": {
+      "name": "approval_thresholds",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 9,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "tier_level",
+          "type": "INTEGER",
+          "raw": "tier_level INTEGER NOT NULL CHECK (tier_level IN (1, 2, 3)),"
+        },
+        {
+          "name": "min_amount",
+          "type": "NUMERIC",
+          "raw": "min_amount NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "max_amount",
+          "type": "NUMERIC,",
+          "raw": "max_amount NUMERIC,"
+        },
+        {
+          "name": "authorized_role",
+          "type": "TEXT",
+          "raw": "authorized_role TEXT NOT NULL,"
+        },
+        {
+          "name": "requires_dual_approval",
+          "type": "BOOLEAN",
+          "raw": "requires_dual_approval BOOLEAN NOT NULL DEFAULT FALSE,"
+        },
+        {
+          "name": "updated_by",
+          "type": "TEXT",
+          "raw": "updated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "approval_thresholds_admin_all"
+      ]
+    },
+    "management_recommendations": {
+      "name": "management_recommendations",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 10,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "domain",
+          "type": "TEXT",
+          "raw": "domain TEXT NOT NULL CHECK (domain IN ('receivables', 'programmes', 'budget', 'cashflow', 'payroll', 'crm', 'operations')),"
+        },
+        {
+          "name": "priority",
+          "type": "TEXT",
+          "raw": "priority TEXT NOT NULL CHECK (priority IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),"
+        },
+        {
+          "name": "finding",
+          "type": "TEXT",
+          "raw": "finding TEXT NOT NULL,"
+        },
+        {
+          "name": "evidence",
+          "type": "TEXT",
+          "raw": "evidence TEXT NOT NULL,"
+        },
+        {
+          "name": "financial_impact",
+          "type": "NUMERIC",
+          "raw": "financial_impact NUMERIC NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "recommended_action",
+          "type": "TEXT",
+          "raw": "recommended_action TEXT NOT NULL,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISMISSED', 'IMPLEMENTED')),"
+        },
+        {
+          "name": "generated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "recommendations_manager_all"
+      ]
+    },
+    "report_snapshots": {
+      "name": "report_snapshots",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "report_type",
+          "type": "TEXT",
+          "raw": "report_type TEXT NOT NULL,"
+        },
+        {
+          "name": "report_title",
+          "type": "TEXT",
+          "raw": "report_title TEXT NOT NULL,"
+        },
+        {
+          "name": "financial_period",
+          "type": "TEXT",
+          "raw": "financial_period TEXT NOT NULL,"
+        },
+        {
+          "name": "generated_by",
+          "type": "TEXT",
+          "raw": "generated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "summary_data",
+          "type": "JSONB,",
+          "raw": "summary_data JSONB,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "report_snapshots_manager_all"
+      ]
+    },
+    "system_diagnostics": {
+      "name": "system_diagnostics",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "probe_id",
+          "type": "TEXT",
+          "raw": "probe_id TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "created_by",
+          "type": "TEXT",
+          "raw": "created_by TEXT NOT NULL,"
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "raw": "payload JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "expires_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 hour')"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "system_diagnostics_admin_select",
+        "system_diagnostics_admin_insert",
+        "system_diagnostics_admin_delete"
+      ]
+    },
+    "production_migration_runs": {
+      "name": "production_migration_runs",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 13,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "migration_type",
+          "type": "TEXT",
+          "raw": "migration_type TEXT NOT NULL DEFAULT 'LEGACY_LOCALSTORAGE_TO_POSTGRES',"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'IN_PROGRESS',"
+        },
+        {
+          "name": "total_detected",
+          "type": "INTEGER",
+          "raw": "total_detected INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "total_migrated",
+          "type": "INTEGER",
+          "raw": "total_migrated INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "total_existing",
+          "type": "INTEGER",
+          "raw": "total_existing INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "total_failed",
+          "type": "INTEGER",
+          "raw": "total_failed INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "entity_breakdown",
+          "type": "JSONB",
+          "raw": "entity_breakdown JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "reconciliation_summary",
+          "type": "JSONB",
+          "raw": "reconciliation_summary JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "initiated_by",
+          "type": "TEXT",
+          "raw": "initiated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "started_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "completed_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "completed_at TIMESTAMPTZ"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "migration_runs_manage_select",
+        "migration_runs_manage_insert",
+        "migration_runs_manage_update"
+      ]
+    },
+    "transaction_recovery_queue": {
+      "name": "transaction_recovery_queue",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 16,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "idempotency_key",
+          "type": "TEXT",
+          "raw": "idempotency_key TEXT NOT NULL,"
+        },
+        {
+          "name": "transaction_type",
+          "type": "TEXT",
+          "raw": "transaction_type TEXT NOT NULL,"
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "raw": "user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "actor_name",
+          "type": "TEXT",
+          "raw": "actor_name TEXT NOT NULL,"
+        },
+        {
+          "name": "attempted_operation",
+          "type": "TEXT",
+          "raw": "attempted_operation TEXT NOT NULL,"
+        },
+        {
+          "name": "failure_reason",
+          "type": "TEXT",
+          "raw": "failure_reason TEXT NOT NULL,"
+        },
+        {
+          "name": "payload",
+          "type": "JSONB",
+          "raw": "payload JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "retry_count",
+          "type": "INTEGER",
+          "raw": "retry_count INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'PENDING',"
+        },
+        {
+          "name": "resolution_notes",
+          "type": "TEXT,",
+          "raw": "resolution_notes TEXT,"
+        },
+        {
+          "name": "resolved_by",
+          "type": "TEXT,",
+          "raw": "resolved_by TEXT,"
+        },
+        {
+          "name": "resolved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "resolved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_recovery_queue_tenant_idemp UNIQUE (tenant_id, idempotency_key)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "recovery_queue_manager_select",
+        "recovery_queue_manager_insert",
+        "recovery_queue_manager_update",
+        "recovery_queue_manager_delete"
+      ]
+    },
+    "production_reconciliation_runs": {
+      "name": "production_reconciliation_runs",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 9,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "run_type",
+          "type": "TEXT",
+          "raw": "run_type TEXT NOT NULL DEFAULT 'CONTINUOUS',"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'SUCCESS',"
+        },
+        {
+          "name": "total_entities_checked",
+          "type": "INTEGER",
+          "raw": "total_entities_checked INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "discrepancy_count",
+          "type": "INTEGER",
+          "raw": "discrepancy_count INTEGER NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "summary_metrics",
+          "type": "JSONB",
+          "raw": "summary_metrics JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "initiated_by",
+          "type": "TEXT",
+          "raw": "initiated_by TEXT NOT NULL,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "reconciliation_runs_manager_select",
+        "reconciliation_runs_manager_insert"
+      ]
+    },
+    "production_reconciliation_exceptions": {
+      "name": "production_reconciliation_exceptions",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 13,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "run_id",
+          "type": "TEXT",
+          "raw": "run_id TEXT REFERENCES public.production_reconciliation_runs(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "exception_type",
+          "type": "TEXT",
+          "raw": "exception_type TEXT NOT NULL,"
+        },
+        {
+          "name": "entity_type",
+          "type": "TEXT",
+          "raw": "entity_type TEXT NOT NULL,"
+        },
+        {
+          "name": "entity_id",
+          "type": "TEXT,",
+          "raw": "entity_id TEXT,"
+        },
+        {
+          "name": "severity",
+          "type": "TEXT",
+          "raw": "severity TEXT NOT NULL DEFAULT 'MATERIAL',"
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "raw": "description TEXT NOT NULL,"
+        },
+        {
+          "name": "discrepancy_data",
+          "type": "JSONB",
+          "raw": "discrepancy_data JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'OPEN',"
+        },
+        {
+          "name": "resolved_by",
+          "type": "TEXT,",
+          "raw": "resolved_by TEXT,"
+        },
+        {
+          "name": "resolved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "resolved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "reconciliation_exceptions_manager_select",
+        "reconciliation_exceptions_manager_insert",
+        "reconciliation_exceptions_manager_update"
+      ]
+    },
+    "month_end_closures": {
+      "name": "month_end_closures",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 14,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "period_key",
+          "type": "TEXT",
+          "raw": "period_key TEXT NOT NULL,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'OPEN',"
+        },
+        {
+          "name": "reconciliation_run_id",
+          "type": "TEXT",
+          "raw": "reconciliation_run_id TEXT REFERENCES public.production_reconciliation_runs(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "closing_checklist",
+          "type": "JSONB",
+          "raw": "closing_checklist JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "total_revenue",
+          "type": "NUMERIC(15,2)",
+          "raw": "total_revenue NUMERIC(15,2) DEFAULT 0,"
+        },
+        {
+          "name": "total_expenses",
+          "type": "NUMERIC(15,2)",
+          "raw": "total_expenses NUMERIC(15,2) DEFAULT 0,"
+        },
+        {
+          "name": "net_position",
+          "type": "NUMERIC(15,2)",
+          "raw": "net_position NUMERIC(15,2) DEFAULT 0,"
+        },
+        {
+          "name": "closed_by",
+          "type": "TEXT,",
+          "raw": "closed_by TEXT,"
+        },
+        {
+          "name": "closed_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "closed_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "approved_by",
+          "type": "TEXT,",
+          "raw": "approved_by TEXT,"
+        },
+        {
+          "name": "approved_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "approved_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_month_end_closures_period UNIQUE (tenant_id, period_key)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "month_end_closures_manager_select",
+        "month_end_closures_manager_insert",
+        "month_end_closures_manager_update"
+      ]
+    },
+    "financial_control_checks": {
+      "name": "financial_control_checks",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 10,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,"
+        },
+        {
+          "name": "check_type",
+          "type": "TEXT",
+          "raw": "check_type TEXT NOT NULL,"
+        },
+        {
+          "name": "check_period",
+          "type": "TEXT",
+          "raw": "check_period TEXT NOT NULL,"
+        },
+        {
+          "name": "expected_value",
+          "type": "NUMERIC(15,2)",
+          "raw": "expected_value NUMERIC(15,2) NOT NULL,"
+        },
+        {
+          "name": "actual_value",
+          "type": "NUMERIC(15,2)",
+          "raw": "actual_value NUMERIC(15,2) NOT NULL,"
+        },
+        {
+          "name": "variance",
+          "type": "NUMERIC(15,2)",
+          "raw": "variance NUMERIC(15,2) NOT NULL DEFAULT 0,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'BALANCED',"
+        },
+        {
+          "name": "details",
+          "type": "JSONB",
+          "raw": "details JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "checked_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+        }
+      ],
+      "constraints": [],
+      "rlsEnabled": true,
+      "policies": [
+        "financial_control_checks_manager_select",
+        "financial_control_checks_manager_insert"
+      ]
+    }
+  },
+  "policies": [
+    {
+      "name": "tenants_auth_read",
+      "table": "tenants",
+      "body": "FOR SELECT TO authenticated\nUSING (id IN (SELECT tenant_id FROM public.tenant_memberships WHERE user_id = auth.uid() AND status = 'active'))"
+    },
+    {
+      "name": "profiles_own_read",
+      "table": "profiles",
+      "body": "FOR SELECT TO authenticated USING (id = auth.uid())"
+    },
+    {
+      "name": "profiles_own_update",
+      "table": "profiles",
+      "body": "FOR UPDATE TO authenticated USING (id = auth.uid())"
+    },
+    {
+      "name": "memberships_tenant_read",
+      "table": "tenant_memberships",
+      "body": "FOR SELECT TO authenticated\nUSING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "programmes_tenant_select",
+      "table": "programmes",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "programmes_admin_insert",
+      "table": "programmes",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "programmes_admin_update",
+      "table": "programmes",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "programmes_admin_delete",
+      "table": "programmes",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "invoices_tenant_select",
+      "table": "invoices",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "invoices_staff_insert",
+      "table": "invoices",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "invoices_manager_update",
+      "table": "invoices",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "invoices_admin_delete",
+      "table": "invoices",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "invoice_items_tenant_select",
+      "table": "invoice_items",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "invoice_items_staff_insert",
+      "table": "invoice_items",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "payments_tenant_select",
+      "table": "payments",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "payments_staff_insert",
+      "table": "payments",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "payments_manager_update",
+      "table": "payments",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "expenses_tenant_select",
+      "table": "expenses",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_finance_staff() OR created_by = auth.uid()))"
+    },
+    {
+      "name": "expenses_staff_insert",
+      "table": "expenses",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff())"
+    },
+    {
+      "name": "expenses_manager_update",
+      "table": "expenses",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_finance() OR (created_by = auth.uid() AND status = 'recorded')))"
+    },
+    {
+      "name": "direct_income_tenant_select",
+      "table": "direct_income",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "direct_income_staff_insert",
+      "table": "direct_income",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "direct_income_manager_update",
+      "table": "direct_income",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "income_cats_tenant_select",
+      "table": "income_categories",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "income_cats_admin_write",
+      "table": "income_categories",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "expense_cats_tenant_select",
+      "table": "expense_categories",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "expense_cats_admin_write",
+      "table": "expense_categories",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "budgets_tenant_select",
+      "table": "budgets",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "budgets_manager_write",
+      "table": "budgets",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "audit_log_manager_select",
+      "table": "finance_audit_log",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "periods_tenant_select",
+      "table": "finance_periods",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "periods_admin_write",
+      "table": "finance_periods",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "settings_tenant_select",
+      "table": "finance_approval_settings",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "settings_admin_write",
+      "table": "finance_approval_settings",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "reconciliations_manager_select",
+      "table": "reconciliations",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliations_manager_write",
+      "table": "reconciliations",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "collection_notes_staff_select",
+      "table": "collection_notes",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "collection_notes_staff_insert",
+      "table": "collection_notes",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "reminders_staff_select",
+      "table": "payment_reminders",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "reminders_staff_insert",
+      "table": "payment_reminders",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "personnel_tenant_select",
+      "table": "personnel",
+      "body": "FOR SELECT TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_people() OR user_id = auth.uid()))"
+    },
+    {
+      "name": "personnel_manager_write",
+      "table": "personnel",
+      "body": "FOR ALL TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_people())"
+    },
+    {
+      "name": "payslips_manager_select",
+      "table": "payslips",
+      "body": "FOR SELECT TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND public.can_view_own_payslip(id))"
+    },
+    {
+      "name": "payslips_manager_mutate",
+      "table": "payslips",
+      "body": "FOR ALL TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "settings_tenant_read",
+      "table": "finance_settings",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "settings_admin_write",
+      "table": "finance_settings",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "accounts_tenant_read",
+      "table": "payment_accounts",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "accounts_manager_write",
+      "table": "payment_accounts",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "enquiries_tenant_select",
+      "table": "enquiries",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enquiries_tenant_insert",
+      "table": "enquiries",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enquiries_tenant_update",
+      "table": "enquiries",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enquiries_admin_delete",
+      "table": "enquiries",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "enrolments_tenant_select",
+      "table": "enrolments",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enrolments_tenant_insert",
+      "table": "enrolments",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enrolments_tenant_update",
+      "table": "enrolments",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "enrolments_admin_delete",
+      "table": "enrolments",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "customers_tenant_select",
+      "table": "customers",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "customers_tenant_insert",
+      "table": "customers",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "customers_tenant_update",
+      "table": "customers",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "customers_admin_delete",
+      "table": "customers",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "sessions_tenant_select",
+      "table": "facilitator_sessions",
+      "body": "FOR SELECT TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND (\n    public.can_manage_finance()\n    OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid())\n))"
+    },
+    {
+      "name": "sessions_manager_mutate",
+      "table": "facilitator_sessions",
+      "body": "FOR ALL TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND (\n    public.can_manage_finance()\n    OR (facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid()) AND status = 'pending_approval')\n))"
+    },
+    {
+      "name": "timeline_tenant_select",
+      "table": "customer_timeline",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "timeline_tenant_insert",
+      "table": "customer_timeline",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "schema_versions_select",
+      "table": "schema_versions",
+      "body": "FOR SELECT TO authenticated USING (TRUE)"
+    },
+    {
+      "name": "idempotency_tenant_all",
+      "table": "idempotency_keys",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff())"
+    },
+    {
+      "name": "alerts_tenant_all",
+      "table": "management_alerts",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_finance() OR assigned_role = public.get_auth_user_role()))"
+    },
+    {
+      "name": "crm_history_tenant_all",
+      "table": "crm_stage_history",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff())"
+    },
+    {
+      "name": "reconciliations_manager_all",
+      "table": "bank_reconciliations",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliation_items_manager_all",
+      "table": "bank_reconciliation_items",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "expense_history_tenant_all",
+      "table": "expense_status_history",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff())"
+    },
+    {
+      "name": "adjustments_manager_all",
+      "table": "financial_adjustments",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "budgets_manager_all",
+      "table": "financial_budgets",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "budget_lines_manager_all",
+      "table": "budget_lines",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "management_metrics_manager_all",
+      "table": "management_metrics",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "cash_flow_manager_all",
+      "table": "cash_flow_forecasts",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "customer_segments_staff_all",
+      "table": "customer_segments",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "collection_actions_staff_all",
+      "table": "collection_actions",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "approval_thresholds_admin_all",
+      "table": "approval_thresholds",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "recommendations_manager_all",
+      "table": "management_recommendations",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "report_snapshots_manager_all",
+      "table": "report_snapshots",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "system_diagnostics_admin_select",
+      "table": "system_diagnostics",
+      "body": "FOR SELECT\n    TO authenticated\n    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "system_diagnostics_admin_insert",
+      "table": "system_diagnostics",
+      "body": "FOR INSERT\n    TO authenticated\n    WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "system_diagnostics_admin_delete",
+      "table": "system_diagnostics",
+      "body": "FOR DELETE\n    TO authenticated\n    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "migration_runs_manage_select",
+      "table": "production_migration_runs",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "migration_runs_manage_insert",
+      "table": "production_migration_runs",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "migration_runs_manage_update",
+      "table": "production_migration_runs",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "recovery_queue_manager_select",
+      "table": "transaction_recovery_queue",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "recovery_queue_manager_insert",
+      "table": "transaction_recovery_queue",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "recovery_queue_manager_update",
+      "table": "transaction_recovery_queue",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "recovery_queue_manager_delete",
+      "table": "transaction_recovery_queue",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "reconciliation_runs_manager_select",
+      "table": "production_reconciliation_runs",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliation_runs_manager_insert",
+      "table": "production_reconciliation_runs",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliation_exceptions_manager_select",
+      "table": "production_reconciliation_exceptions",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliation_exceptions_manager_insert",
+      "table": "production_reconciliation_exceptions",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "reconciliation_exceptions_manager_update",
+      "table": "production_reconciliation_exceptions",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "month_end_closures_manager_select",
+      "table": "month_end_closures",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "month_end_closures_manager_insert",
+      "table": "month_end_closures",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "month_end_closures_manager_update",
+      "table": "month_end_closures",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "financial_control_checks_manager_select",
+      "table": "financial_control_checks",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "financial_control_checks_manager_insert",
+      "table": "financial_control_checks",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    }
+  ],
+  "functions": [
+    {
+      "name": "get_auth_tenant_id",
+      "params": "",
+      "returns": "UUID"
+    },
+    {
+      "name": "get_auth_user_role",
+      "params": "",
+      "returns": "TEXT"
+    },
+    {
+      "name": "is_super_admin",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "is_finance_manager",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "is_finance_staff",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "is_staff",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "is_facilitator",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "can_manage_finance",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "can_manage_people",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "can_view_own_personnel_record",
+      "params": "p_personnel_id TEXT",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "can_view_own_payslip",
+      "params": "p_payslip_id TEXT",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "enforce_audit_immutability",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "check_financial_period_lock",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "create_invoice_with_items",
+      "params": "p_invoice JSONB,\n    p_items JSONB DEFAULT '[]'::JSONB",
+      "returns": "JSONB"
+    },
+    {
+      "name": "execute_payment_transaction",
+      "params": "p_invoice_id TEXT,\n    p_amount NUMERIC,\n    p_method TEXT,\n    p_reference TEXT,\n    p_payment_date DATE,\n    p_notes TEXT DEFAULT NULL,\n    p_idempotency_key TEXT DEFAULT NULL",
+      "returns": "JSONB"
+    },
+    {
+      "name": "record_payment",
+      "params": "p_invoice_id TEXT,\n    p_amount NUMERIC,\n    p_method TEXT,\n    p_reference TEXT,\n    p_payment_date DATE,\n    p_notes TEXT DEFAULT NULL",
+      "returns": "JSONB"
+    },
+    {
+      "name": "record_expense",
+      "params": "p_expense JSONB",
+      "returns": "JSONB"
+    },
+    {
+      "name": "approve_expense",
+      "params": "p_expense_id TEXT,\n    p_decision TEXT, -- 'approved' or 'rejected'\n    p_reason TEXT DEFAULT NULL",
+      "returns": "JSONB"
+    },
+    {
+      "name": "void_financial_record",
+      "params": "p_entity_type TEXT, -- 'expense' or 'direct_income'\n    p_entity_id TEXT,\n    p_reason TEXT",
+      "returns": "JSONB"
+    },
+    {
+      "name": "reopen_financial_period",
+      "params": "p_period TEXT,\n    p_reason TEXT",
+      "returns": "JSONB"
+    },
+    {
+      "name": "complete_reconciliation",
+      "params": "p_rec_id TEXT,\n    p_actual_balance NUMERIC,\n    p_notes TEXT DEFAULT NULL",
+      "returns": "JSONB"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_invoices_tenant_date",
+      "table": "invoices",
+      "columns": "tenant_id, invoice_date"
+    },
+    {
+      "name": "idx_invoices_status",
+      "table": "invoices",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_payments_tenant_date",
+      "table": "payments",
+      "columns": "tenant_id, payment_date"
+    },
+    {
+      "name": "idx_payments_invoice",
+      "table": "payments",
+      "columns": "invoice_id"
+    },
+    {
+      "name": "idx_expenses_tenant_date",
+      "table": "expenses",
+      "columns": "tenant_id, expense_date"
+    },
+    {
+      "name": "idx_expenses_status",
+      "table": "expenses",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_direct_income_tenant_date",
+      "table": "direct_income",
+      "columns": "tenant_id, income_date"
+    },
+    {
+      "name": "idx_audit_log_tenant_date",
+      "table": "finance_audit_log",
+      "columns": "tenant_id, created_at DESC"
+    },
+    {
+      "name": "idx_finance_periods_lookup",
+      "table": "finance_periods",
+      "columns": "tenant_id, period"
+    },
+    {
+      "name": "idx_personnel_tenant_type",
+      "table": "personnel",
+      "columns": "tenant_id, employee_type"
+    },
+    {
+      "name": "idx_payslips_tenant_period",
+      "table": "payslips",
+      "columns": "tenant_id, pay_period"
+    },
+    {
+      "name": "idx_payslips_personnel",
+      "table": "payslips",
+      "columns": "personnel_id"
+    },
+    {
+      "name": "idx_sessions_tenant_facilitator",
+      "table": "facilitator_sessions",
+      "columns": "tenant_id, facilitator_id"
+    },
+    {
+      "name": "idx_sessions_tenant_period",
+      "table": "facilitator_sessions",
+      "columns": "tenant_id, payroll_period"
+    },
+    {
+      "name": "idx_sessions_status",
+      "table": "facilitator_sessions",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_timeline_customer",
+      "table": "customer_timeline",
+      "columns": "tenant_id, customer_id, created_at DESC"
+    },
+    {
+      "name": "idx_invoices_tenant_status",
+      "table": "invoices",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_invoices_tenant_duedate",
+      "table": "invoices",
+      "columns": "tenant_id, due_date"
+    },
+    {
+      "name": "idx_invoices_tenant_cust",
+      "table": "invoices",
+      "columns": "tenant_id, customer_id"
+    },
+    {
+      "name": "idx_enquiries_tenant_stage",
+      "table": "enquiries",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_payslips_tenant_period",
+      "table": "payslips",
+      "columns": "tenant_id, pay_period"
+    },
+    {
+      "name": "idx_expenses_tenant_period",
+      "table": "expenses",
+      "columns": "tenant_id, expense_date"
+    },
+    {
+      "name": "idx_alerts_tenant_severity",
+      "table": "management_alerts",
+      "columns": "tenant_id, severity, status"
+    },
+    {
+      "name": "idx_crm_history_tenant_enquiry",
+      "table": "crm_stage_history",
+      "columns": "tenant_id, enquiry_id"
+    },
+    {
+      "name": "idx_reconciliations_tenant_period",
+      "table": "bank_reconciliations",
+      "columns": "tenant_id, reconciliation_period"
+    },
+    {
+      "name": "idx_idempotency_tenant_key",
+      "table": "idempotency_keys",
+      "columns": "tenant_id, idempotency_key"
+    },
+    {
+      "name": "idx_budgets_tenant_period",
+      "table": "financial_budgets",
+      "columns": "tenant_id, financial_year, period_key"
+    },
+    {
+      "name": "idx_budget_lines_tenant_month",
+      "table": "budget_lines",
+      "columns": "tenant_id, month_key, category"
+    },
+    {
+      "name": "idx_forecasts_tenant_date",
+      "table": "cash_flow_forecasts",
+      "columns": "tenant_id, forecast_date, horizon_days"
+    },
+    {
+      "name": "idx_segments_tenant_cust",
+      "table": "customer_segments",
+      "columns": "tenant_id, customer_id, segment"
+    },
+    {
+      "name": "idx_collection_tenant_priority",
+      "table": "collection_actions",
+      "columns": "tenant_id, priority, customer_id"
+    },
+    {
+      "name": "idx_recommendations_tenant_priority",
+      "table": "management_recommendations",
+      "columns": "tenant_id, priority, status"
+    },
+    {
+      "name": "idx_reports_tenant_period",
+      "table": "report_snapshots",
+      "columns": "tenant_id, report_type, financial_period"
+    },
+    {
+      "name": "idx_system_diagnostics_probe",
+      "table": "system_diagnostics",
+      "columns": "probe_id, created_at DESC"
+    },
+    {
+      "name": "idx_migration_runs_tenant_status",
+      "table": "production_migration_runs",
+      "columns": "tenant_id, status, started_at DESC"
+    },
+    {
+      "name": "idx_recovery_queue_status",
+      "table": "transaction_recovery_queue",
+      "columns": "tenant_id, status, created_at DESC"
+    },
+    {
+      "name": "idx_reconcil_runs_tenant",
+      "table": "production_reconciliation_runs",
+      "columns": "tenant_id, status, created_at DESC"
+    },
+    {
+      "name": "idx_reconcil_exceptions_status",
+      "table": "production_reconciliation_exceptions",
+      "columns": "tenant_id, status, severity"
+    },
+    {
+      "name": "idx_month_end_closures_period",
+      "table": "month_end_closures",
+      "columns": "tenant_id, period_key"
+    },
+    {
+      "name": "idx_financial_control_period",
+      "table": "financial_control_checks",
+      "columns": "tenant_id, check_period, check_type"
+    }
+  ]
+}

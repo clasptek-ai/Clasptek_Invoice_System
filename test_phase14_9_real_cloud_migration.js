@@ -506,7 +506,7 @@ async function runPhase14_9Tests() {
   console.log('\n--- Section 9: Evidence File Sanitization ---');
 
   const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'production_migration_evidence.json'), 'utf8'));
-  assert(evidence.phase === '14.9' || evidence.phase === '15' || evidence.phase === '16', 'Test 112: Evidence phase is valid (14.9, 15 or 16)');
+  assert(evidence.phase === '14.9' || evidence.phase === '15' || evidence.phase === '16' || evidence.phase === '17', 'Test 112: Evidence phase is valid (14.9, 15, 16 or 17)');
   assert(evidence.projectRef === 'logaawoigfxnisimfatf', 'Test 113: Evidence projectRef is logaawoigfxnisimfatf');
   assert(evidence.credentialsExposed === false, 'Test 114: Evidence confirms credentialsExposed === false');
   assert(!JSON.stringify(evidence).includes('sb_pub_'), 'Test 115: Zero public keys in evidence file');

@@ -522,7 +522,7 @@ async function runPhase14_8Tests() {
   console.log('\n--- Section 10: Component 11 & 12 — Evidence File & Safety Rule ---');
 
   const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'production_migration_evidence.json'), 'utf8'));
-  assert(evidence.phase === '14.8' || evidence.phase === '14.9' || evidence.phase === '15' || evidence.phase === '16', 'Test 118: Evidence phase is valid (14.8, 14.9, 15 or 16)');
+  assert(evidence.phase === '14.8' || evidence.phase === '14.9' || evidence.phase === '15' || evidence.phase === '16' || evidence.phase === '17', 'Test 118: Evidence phase is valid (14.8, 14.9, 15, 16 or 17)');
   assert(evidence.authorityState === 'BLOCKED', 'Test 119: Authority state in evidence is BLOCKED');
   assert(evidence.migrationExecuted === false, 'Test 120: Evidence confirms migrationExecuted is false');
   assert(evidence.credentialsExposed === false, 'Test 121: Evidence confirms credentialsExposed is false');
