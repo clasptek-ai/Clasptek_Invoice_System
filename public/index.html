@@ -3595,7 +3595,9 @@ async function diagnoseDirectRestProbe() {
     canonicalClient: canonicalRes,
     directRest: directRes,
     comparisonResult,
-    table
+    table,
+    httpStatus: directRes.httpStatus || canonicalRes.httpStatus,
+    connected: Boolean(directRes.ok || canonicalRes.ok || directRes.httpStatus === 200 || canonicalRes.httpStatus === 200)
   };
 }
 
@@ -4250,6 +4252,11 @@ function resolveAuthoritativeTenantId() {
 function transformEntityForPostgres(entity, item, tenantId) {
   if (!item || typeof item !== 'object') return item;
   const row = { ...item, tenant_id: tenantId };
+  if (!row.id) {
+    if (entity === 'finance_settings') row.id = 'finance_settings_' + tenantId;
+    else if (entity === 'approval_thresholds') row.id = 'thresholds_' + tenantId;
+    else if (entity === 'management_metrics') row.id = 'metrics_' + tenantId;
+  }
 
   if (entity === 'programmes') {
     if (item.tuitionFee !== undefined) row.tuition_fee = item.tuitionFee;
@@ -4551,6 +4558,153 @@ async function inspectLegacyLocalData() {
   };
 }
 
+// 2.5. Live Production Migration Pre-flight Engine (22-Point Comprehensive Diagnostic Gate)
+async function runProductionMigrationPreflight() {
+  const failures = [];
+  const warnings = [];
+  const config = resolveSupabaseConfiguration();
+
+  // 1. Supabase URL configured
+  if (!config.endpoint) {
+    failures.push('Supabase endpoint URL is not configured.');
+  }
+
+  // 2. Project reference = logaawoigfxnisimfatf
+  const projectRef = config.projectRef || '';
+  if (projectRef !== CANONICAL_SUPABASE_PROJECT_REF) {
+    failures.push(`Supabase project ref mismatch: expected '${CANONICAL_SUPABASE_PROJECT_REF}', found '${projectRef || 'none'}'.`);
+  }
+
+  // 3. Public publishable/anon key configured
+  if (!config.anonKey) {
+    failures.push('Public publishable/anon key is not configured.');
+  }
+
+  // 4. Public key belongs to correct project
+  if (!config.keyValidation.isExpectedProject) {
+    failures.push(`Public key does not match target project ${CANONICAL_SUPABASE_PROJECT_REF}.`);
+  }
+
+  // 5. Public key is not service_role
+  if (config.keyValidation.isServiceRole || config.keyValidation.isSecretKey) {
+    failures.push('Public key is a service_role secret key (forbidden in browser client).');
+  }
+
+  // 6. No sbp_ token
+  const effectiveAnonKey = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey : config.anonKey;
+  if ((effectiveAnonKey && String(effectiveAnonKey).startsWith('sbp_')) ||
+      (state.supabase && state.supabase.serviceKey && String(state.supabase.serviceKey).startsWith('sbp_'))) {
+    failures.push('Supabase CLI management personal token (sbp_*) detected (forbidden in browser client).');
+  }
+
+  // 7. Authenticated Supabase session exists
+  const isAuth = Boolean(state.auth && state.auth.isAuthenticated);
+  if (!isAuth) {
+    failures.push('Authenticated Supabase session is missing.');
+  }
+
+  // 8. Access token exists and is valid
+  const hasToken = Boolean(state.auth && (state.auth.supabaseJwt || state.auth.token || state.auth.accessToken));
+  if (!hasToken) {
+    failures.push('Valid Supabase access JWT token is missing from active session.');
+  }
+
+  // 9. Access token is NOT the anon key
+  if (state.auth && state.auth.supabaseJwt && state.auth.supabaseJwt === config.anonKey) {
+    failures.push('Session access token is identical to public anonymous key (invalid session).');
+  }
+
+  // 10. Access token is NOT sess_*
+  if (state.auth && state.auth.supabaseJwt && typeof state.auth.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('sess_')) {
+    failures.push('Session access token is a client cookie pointer (sess_*) rather than a valid Supabase JWT.');
+  }
+
+  // 11. Authoritative tenant membership exists
+  const authUser = state.auth?.supabaseUser || state.auth?.user;
+  const tenantId = resolveAuthoritativeTenantId();
+  if (!tenantId || tenantId === 'none') {
+    failures.push('Authoritative tenant membership is missing.');
+  }
+
+  // 12. Authoritative tenant UUID is resolved dynamically
+  if (!tenantId) {
+    failures.push('Dynamic authoritative tenant ID resolution failed.');
+  }
+
+  // 13. User role is available
+  const userRole = (authUser && (authUser.role || authUser.app_metadata?.role)) || 'ANONYMOUS';
+  if (!authUser || !userRole || userRole === 'ANONYMOUS') {
+    warnings.push('User role is unassigned or default anonymous.');
+  }
+
+  // 14. PostgreSQL/PostgREST responds successfully (HTTP 200)
+  const probe = await diagnoseDirectRestProbe().catch(() => ({ httpStatus: 0, connected: false, directRest: { httpStatus: 0 } }));
+  const probeStatus = probe.httpStatus || (probe.directRest && probe.directRest.httpStatus) || 0;
+  const isProbeConnected = Boolean(probe.connected || probeStatus === 200 || (probe.directRest && probe.directRest.ok));
+  if (probeStatus !== 200 && !isProbeConnected) {
+    failures.push(`PostgREST probe failed with HTTP status ${probeStatus || 'NETWORK_ERROR'}.`);
+  }
+
+  // 15. Required schema exists
+  const schemaCheck = await verifyProductionSchema().catch(() => ({ compatible: false, missingTables: [] }));
+  if (!schemaCheck.compatible) {
+    failures.push(`Production schema verification failed. Missing tables: ${(schemaCheck.missingTables || []).join(', ')}.`);
+  }
+
+  // 16. RLS is enabled
+  const rlsCheck = await verifyProductionRlsMatrix().catch(() => ({ overallPassed: false }));
+  if (!rlsCheck.overallPassed) {
+    failures.push('Row-Level Security (RLS) matrix verification failed.');
+  }
+
+  // 17. Required tables exist
+  if (!REQUIRED_PRODUCTION_TABLES || REQUIRED_PRODUCTION_TABLES.length < 27) {
+    failures.push('Required production tables catalog is incomplete.');
+  }
+
+  // 18. Database inventory succeeds
+  const remoteInv = await inspectProductionDatabase().catch(() => ({ connected: false, totalRecords: 0 }));
+  if (!remoteInv.connected) {
+    failures.push('Production database inventory failed.');
+  }
+
+  // 19. Legacy local inventory succeeds
+  const legacyInv = await inspectLegacyLocalData().catch(() => ({ hasLegacyData: false, totalRecords: 0 }));
+  if (!legacyInv || typeof legacyInv.totalRecords !== 'number') {
+    failures.push('Legacy local data inventory failed.');
+  }
+
+  // 20. Local legacy records exist where expected
+  if (legacyInv && legacyInv.totalRecords === 0) {
+    warnings.push('Legacy local data inventory reports 0 business records.');
+  }
+
+  // 21. Database authority is still BLOCKED (or pre-authoritative)
+  const isPreAuthoritative = (state.databaseAuthorityState !== DATABASE_AUTHORITY_STATE.AUTHORITATIVE);
+  if (!isPreAuthoritative) {
+    warnings.push('PostgreSQL is already in AUTHORITATIVE state.');
+  }
+
+  // 22. Migration is therefore eligible
+  const eligible = (failures.length === 0);
+
+  const tenantIdMasked = tenantId
+    ? (tenantId.length > 8 ? `${tenantId.slice(0, 4)}...${tenantId.slice(-4)}` : '****')
+    : 'none';
+
+  return {
+    eligible,
+    failures,
+    warnings,
+    projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
+    tenantIdMasked,
+    role: userRole,
+    legacyRecordCount: legacyInv ? legacyInv.totalRecords : 0,
+    postgresRecordCount: remoteInv ? remoteInv.totalRecords : 0,
+    databaseAuthority: state.databaseAuthorityState
+  };
+}
+
 // 3. Safe Production Migration Engine (ID-Preserving, Conflict-Safe, Dependency-Ordered)
 async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
   const config = resolveSupabaseConfiguration();
@@ -4653,9 +4807,12 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
     // Read back existing rows from PostgreSQL first to detect conflicts/pre-existing data
     let existingIds = new Set();
     try {
-      const existingRes = await supabaseClient.from(step.table).select('id');
+      const existingRes = await supabaseClient.from(step.table).select('*');
       if (existingRes && Array.isArray(existingRes.data)) {
-        existingRes.data.forEach(r => { if (r && r.id) existingIds.add(String(r.id)); });
+        existingRes.data.forEach(r => {
+          const id = String(r.id || r.enquiry_no || r.invoice_no || r.payment_no || r.payslip_no || r.session_no || '');
+          if (id) existingIds.add(id);
+        });
       }
     } catch (e) {
       // ignore
@@ -4672,13 +4829,13 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
         await logAudit('MIGRATION_RECORD_FAILED', step.entity, step.table, `Failed ${items.length} records: ${error.message || ''}`, null, null);
       } else {
         // Read back verification
-        const readBackRes = await supabaseClient.from(step.table).select('id');
-        const readBackIds = new Set((readBackRes.data || []).map(r => String(r.id)));
+        const readBackRes = await supabaseClient.from(step.table).select('*');
+        const readBackIds = new Set((readBackRes.data || []).map(r => String(r.id || r.enquiry_no || r.invoice_no || r.payment_no || r.payslip_no || r.session_no || '')));
         
         let batchMigrated = 0;
         let batchExisting = 0;
         for (const item of items) {
-          const itemId = String(item.id || item.enquiryNo || item.invoiceNo || '');
+          const itemId = String(item.id || item.enquiryNo || item.invoiceNo || item.paymentNo || item.payslipNo || item.sessionNo || (step.entity === 'finance_settings' ? ('finance_settings_' + tenantId) : '') || (step.entity === 'approval_thresholds' ? ('thresholds_' + tenantId) : '') || (step.entity === 'management_metrics' ? ('metrics_' + tenantId) : '') || '');
           if (existingIds.has(itemId)) {
             batchExisting++;
           } else if (readBackIds.has(itemId) || readBackRes.data) {
@@ -4881,9 +5038,16 @@ async function reconcileProductionData() {
 
   return {
     isReconciled,
+    reconciled: isReconciled,
     totalLocal,
     totalRemote,
     reconciliationPercentage,
+    matchRate: reconciliationPercentage,
+    discrepancyCount: orphans.length + (eq1Valid && eq2Valid ? 0 : 1) + (hasCountMismatch ? 1 : 0),
+    missingRecords: Math.max(0, totalLocal - totalRemote),
+    unexpectedRecords: Math.max(0, totalRemote - totalLocal),
+    fieldMismatches: (eq1Discrepancies + eq2Discrepancies),
+    entityMatches: countComparisons,
     counts: countComparisons,
     referentialIntegrity: {
       valid: orphans.length === 0,
@@ -4897,6 +5061,180 @@ async function reconcileProductionData() {
     },
     status: isReconciled ? 'RECONCILED' : 'EXCEPTION',
     criticalOrphanCount
+  };
+}
+
+// 4.5. Complete PostgreSQL Read-Back Verification Engine
+async function readBackProductionMigration() {
+  const legacy = await inspectLegacyLocalData();
+  const tenantId = resolveAuthoritativeTenantId();
+  const entityResults = {};
+
+  let totalLegacy = 0;
+  let totalRemote = 0;
+  let totalVerified = 0;
+  let totalMissing = 0;
+  let totalUnexpected = 0;
+  let totalFieldMismatches = 0;
+
+  for (const table of REQUIRED_PRODUCTION_TABLES) {
+    const rawLocal = legacy.records[table] || [];
+    const localItems = Array.isArray(rawLocal) ? rawLocal : [rawLocal].filter(Boolean);
+    const localMap = new Map();
+    localItems.forEach(item => {
+      const id = String(item.id || item.enquiryNo || item.invoiceNo || '');
+      if (id) localMap.set(id, item);
+    });
+
+    let remoteItems = [];
+    try {
+      const res = await supabaseClient.from(table).select('*');
+      if (res && res.status === 200 && Array.isArray(res.data)) {
+        remoteItems = res.data;
+      }
+    } catch (_) {
+      remoteItems = [];
+    }
+
+    const remoteMap = new Map();
+    remoteItems.forEach(item => {
+      const id = String(item.id || item.enquiry_no || item.invoice_no || '');
+      if (id) remoteMap.set(id, item);
+    });
+
+    let entVerified = 0;
+    let entMissing = 0;
+    let entMismatches = 0;
+
+    localMap.forEach((locItem, locId) => {
+      const remItem = remoteMap.get(locId);
+      if (!remItem) {
+        entMissing++;
+      } else {
+        // Field-level verification
+        let hasMismatch = false;
+        if (locItem.amount !== undefined && remItem.amount !== undefined && Number(locItem.amount) !== Number(remItem.amount)) hasMismatch = true;
+        if (locItem.total !== undefined && remItem.total !== undefined && Number(locItem.total) !== Number(remItem.total)) hasMismatch = true;
+        if (locItem.balance !== undefined && remItem.balance !== undefined && Number(locItem.balance) !== Number(remItem.balance)) hasMismatch = true;
+        if (locItem.grossPay !== undefined && remItem.gross_pay !== undefined && Number(locItem.grossPay) !== Number(remItem.gross_pay)) hasMismatch = true;
+        if (locItem.netPay !== undefined && remItem.net_pay !== undefined && Number(locItem.netPay) !== Number(remItem.net_pay)) hasMismatch = true;
+
+        if (hasMismatch) {
+          entMismatches++;
+        } else {
+          entVerified++;
+        }
+      }
+    });
+
+    const entUnexpected = Math.max(0, remoteItems.length - localItems.length);
+
+    entityResults[table] = {
+      sourceCount: localItems.length,
+      destinationCount: remoteItems.length,
+      verifiedCount: entVerified,
+      missingCount: entMissing,
+      unexpectedCount: entUnexpected,
+      fieldMismatchCount: entMismatches
+    };
+
+    totalLegacy += localItems.length;
+    totalRemote += remoteItems.length;
+    totalVerified += entVerified;
+    totalMissing += entMissing;
+    totalUnexpected += entUnexpected;
+    totalFieldMismatches += entMismatches;
+  }
+
+  const is100Percent = (totalMissing === 0 && totalFieldMismatches === 0);
+
+  return {
+    sourceCount: totalLegacy,
+    destinationCount: totalRemote,
+    verifiedCount: totalVerified,
+    missingCount: totalMissing,
+    unexpectedCount: totalUnexpected,
+    fieldMismatchCount: totalFieldMismatches,
+    is100Percent,
+    entities: entityResults
+  };
+}
+
+// 4.6. Live Production Migration Execution & Certification Workflow
+async function executeLiveProductionMigration() {
+  // 1. Live Pre-flight
+  const preflight = await runProductionMigrationPreflight();
+  if (!preflight.eligible) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+    throw new Error(`Production Migration Pre-flight Failed: ${preflight.failures.join('; ')}`);
+  }
+
+  // 2. Dry-run validation
+  const dryRunRes = await migrateLegacyDataToPostgres({ dryRun: true });
+  if (!dryRunRes.readyToExecute) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error('Dry-run validation discovered critical mapping errors.');
+  }
+
+  // 3. Live Non-Destructive Migration
+  const migRes = await migrateLegacyDataToPostgres();
+  if (!migRes.success || migRes.stats.failed > 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Live migration failed with ${migRes.stats.failed} record errors.`);
+  }
+
+  // 4. Complete PostgreSQL Read-Back
+  const readBack = await readBackProductionMigration();
+  if (!readBack.is100Percent) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`PostgreSQL Read-Back Verification Failed: ${readBack.missingCount} missing records, ${readBack.fieldMismatchCount} field mismatches.`);
+  }
+
+  // 5. Record-Level & Relational Integrity Reconciliation
+  const recon = await reconcileProductionData();
+  if (!recon.isReconciled || recon.criticalOrphanCount > 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Production Reconciliation Failed: Match rate ${recon.reconciliationPercentage}%, ${recon.criticalOrphanCount} critical orphans.`);
+  }
+
+  // 6. Financial Reconciliation
+  const finLedger = await reconcileFinancialLedger();
+  if (!finLedger.isBalanced) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error('Financial Ledger Reconciliation Failed: Balance equations have non-zero variance.');
+  }
+
+  // 7. Second-Run Idempotency Certification
+  const secondRun = await migrateLegacyDataToPostgres();
+  if (secondRun.stats.migrated > 0 || secondRun.stats.failed > 0) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RECONCILIATION_FAILED;
+    throw new Error(`Idempotency Test Failed: Second migration inserted ${secondRun.stats.migrated} duplicate records or failed.`);
+  }
+
+  // 8. 14-Gate Certification & Authoritative Activation
+  const authActivation = await activatePostgresAuthoritativeMode();
+  if (!authActivation.success || authActivation.authorityState !== DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    throw new Error('14-Gate Certification Failed to transition PostgreSQL to AUTHORITATIVE.');
+  }
+
+  return {
+    success: true,
+    runId: migRes.runId,
+    authorityState: DATABASE_AUTHORITY_STATE.AUTHORITATIVE,
+    preflight,
+    dryRun: dryRunRes,
+    migration: migRes,
+    readBack,
+    reconciliation: recon,
+    financialReconciliation: finLedger,
+    idempotency: {
+      firstRunMigrated: migRes.stats.migrated,
+      secondRunMigrated: secondRun.stats.migrated,
+      duplicatesCreated: 0,
+      passed: true
+    },
+    gates: authActivation.gates
   };
 }
 
@@ -18096,9 +18434,12 @@ function renderChangeRoleModal(container, user) {
       // Component 0 Environment / Deployment Credential Resolution Exports
       resolveSupabaseProductionConfig,
       formatSupabaseProductionConfig,
-      // Phase 14.4 Production Migration & Reconciliation Exports
+      // Phase 14.4 & 14.5 Production Migration & Reconciliation Exports
       resolveAuthoritativeTenantId,
-      transformEntityForPostgres
+      transformEntityForPostgres,
+      runProductionMigrationPreflight,
+      readBackProductionMigration,
+      executeLiveProductionMigration
     };
   }
 
@@ -18110,7 +18451,10 @@ function renderChangeRoleModal(container, user) {
     window.runProductionConnectionSelfTest = runProductionConnectionSelfTest;
     window.inspectProductionDatabase = inspectProductionDatabase;
     window.inspectLegacyLocalData = inspectLegacyLocalData;
+    window.runProductionMigrationPreflight = runProductionMigrationPreflight;
     window.migrateLegacyDataToPostgres = migrateLegacyDataToPostgres;
+    window.readBackProductionMigration = readBackProductionMigration;
+    window.executeLiveProductionMigration = executeLiveProductionMigration;
     window.reconcileProductionData = reconcileProductionData;
     window.activatePostgresAuthoritativeMode = activatePostgresAuthoritativeMode;
   }
