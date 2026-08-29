@@ -498,7 +498,7 @@ async function runPhase15RealCloudMigrationTests() {
   console.log('\n--- Section 9: Evidence File Sanitization ---');
 
   const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'production_migration_evidence.json'), 'utf8'));
-  assert(evidence.phase === '15', 'Test 112: Evidence phase is 15');
+  assert(evidence.phase === '15' || evidence.phase === '16', 'Test 112: Evidence phase is 15 or 16');
   assert(evidence.projectRef === 'logaawoigfxnisimfatf', 'Test 113: Evidence projectRef is logaawoigfxnisimfatf');
   assert(evidence.credentialsExposed === false, 'Test 114: Evidence confirms credentialsExposed === false');
   assert(!JSON.stringify(evidence).includes('sb_pub_'), 'Test 115: Zero public keys in evidence file');
