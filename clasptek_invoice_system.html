@@ -6,6 +6,7 @@
   <!-- Authoritative Supabase Production Public Configuration -->
   <meta name="supabase-endpoint" content="https://logaawoigfxnisimfatf.supabase.co" />
   <meta name="supabase-publishable-key" content="" />
+  <meta name="supabase-anon-key" content="" />
   <title>Clasptek Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1830,6 +1831,10 @@ let state = {
 const supabaseClient = {
   getEndpoint() {
     let ep = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
+    if (!ep) {
+      const config = resolveSupabaseConfiguration();
+      ep = config.supabaseUrl || '';
+    }
     if (!ep) return '';
     // Strip trailing slashes first
     ep = ep.replace(/\/+$/, '');
@@ -1841,6 +1846,10 @@ const supabaseClient = {
   },
   getBaseUrl() {
     let ep = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
+    if (!ep) {
+      const config = resolveSupabaseConfiguration();
+      ep = config.supabaseUrl || '';
+    }
     if (!ep) return '';
     return ep.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
   },
@@ -1851,6 +1860,10 @@ const supabaseClient = {
   },
   getAnonKey() {
     let k = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey.trim() : '';
+    if (!k) {
+      const config = resolveSupabaseConfiguration();
+      k = config.supabaseAnonKey || '';
+    }
     // Remove surrounding quotes if user copied key with quotes
     if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
       k = k.slice(1, -1).trim();
@@ -1865,33 +1878,134 @@ const supabaseClient = {
   getHeaders(customHeaders = {}) {
     const key = this.getAnonKey();
     // Validate if auth token is a genuine Supabase JWT (3-part dot-separated base64 token)
-    // NEVER send internal session tokens (e.g. 'sess_...') to PostgREST as Authorization
+    // NEVER send internal session tokens (e.g. 'sess_...') or the public anon key as user Authorization
     let userToken = null;
-    if (state.auth && typeof state.auth.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('eyJ') && state.auth.supabaseJwt.split('.').length === 3) {
+    if (state.auth && typeof state.auth.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('eyJ') && state.auth.supabaseJwt.split('.').length === 3 && state.auth.supabaseJwt !== key) {
       userToken = state.auth.supabaseJwt.trim();
-    } else if (state.auth && state.auth.supabaseSession && typeof state.auth.supabaseSession.access_token === 'string' && state.auth.supabaseSession.access_token.startsWith('eyJ')) {
+    } else if (state.auth && state.auth.supabaseSession && typeof state.auth.supabaseSession.access_token === 'string' && state.auth.supabaseSession.access_token.startsWith('eyJ') && state.auth.supabaseSession.access_token !== key) {
       userToken = state.auth.supabaseSession.access_token.trim();
-    } else if (state.auth && typeof state.auth.token === 'string' && state.auth.token.startsWith('eyJ') && state.auth.token.split('.').length === 3) {
+    } else if (state.auth && typeof state.auth.token === 'string' && state.auth.token.startsWith('eyJ') && state.auth.token.split('.').length === 3 && state.auth.token !== key) {
       userToken = state.auth.token.trim();
     }
-
-    const authBearer = userToken || key;
 
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'apikey': key,
-      'Authorization': `Bearer ${authBearer || key}`,
       ...customHeaders
     };
 
+    if (key) {
+      headers['apikey'] = key;
+    }
+
+    // ONLY set Authorization if a genuine Supabase user access token exists
+    if (userToken) {
+      headers['Authorization'] = `Bearer ${userToken}`;
+    }
+
     Object.keys(headers).forEach(k => {
-      if (headers[k] === undefined || headers[k] === null || headers[k] === 'undefined' || headers[k] === 'Bearer undefined' || headers[k] === 'Bearer null') {
+      const val = headers[k];
+      if (val === undefined || val === null || val === 'undefined' || val === 'null' || val === 'Bearer undefined' || val === 'Bearer null' || (typeof val === 'string' && val.includes('Bearer sess_'))) {
         delete headers[k];
       }
     });
 
     return headers;
+  },
+  auth: {
+    async signInWithPassword({ email, password }) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) throw new Error('Supabase URL not configured');
+      const key = supabaseClient.getAnonKey();
+      if (!key) throw new Error('Supabase public key not configured');
+
+      const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': key
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error_description || data.msg || data.message || 'Authentication failed');
+      }
+
+      if (data && data.access_token) {
+        state.auth = state.auth || {};
+        state.auth.supabaseSession = data;
+        state.auth.supabaseJwt = data.access_token;
+        state.auth.supabaseUser = data.user;
+        state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+        await safeSet('clasptek:supabase_session', data);
+      }
+
+      return { data, error: null };
+    },
+    async getSession() {
+      if (state.auth && state.auth.supabaseSession) {
+        if (state.auth.tokenExpiresAt && state.auth.tokenExpiresAt - Date.now() < 60000) {
+          try {
+            await this.refreshSession();
+          } catch (_) {}
+        }
+        return { data: { session: state.auth.supabaseSession }, error: null };
+      }
+      const stored = await safeGet('clasptek:supabase_session', null);
+      if (stored && stored.access_token) {
+        state.auth = state.auth || {};
+        state.auth.supabaseSession = stored;
+        state.auth.supabaseJwt = stored.access_token;
+        state.auth.supabaseUser = stored.user;
+        state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+        return { data: { session: stored }, error: null };
+      }
+      return { data: { session: null }, error: null };
+    },
+    async refreshSession() {
+      const base = supabaseClient.getBaseUrl();
+      const key = supabaseClient.getAnonKey();
+      const currentSession = state.auth?.supabaseSession;
+      if (!currentSession || !currentSession.refresh_token) {
+        throw new Error('No refresh token available');
+      }
+
+      const res = await fetch(`${base}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': key
+        },
+        body: JSON.stringify({ refresh_token: currentSession.refresh_token })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error_description || data.msg || data.message || 'Session refresh failed');
+      }
+
+      state.auth = state.auth || {};
+      state.auth.supabaseSession = data;
+      state.auth.supabaseJwt = data.access_token;
+      state.auth.supabaseUser = data.user;
+      state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+      await safeSet('clasptek:supabase_session', data);
+      return { data: { session: data }, error: null };
+    },
+    async getUser() {
+      const sess = await this.getSession();
+      return { data: { user: sess.data?.session?.user || null }, error: null };
+    },
+    async signOut() {
+      state.auth = state.auth || {};
+      state.auth.supabaseSession = null;
+      state.auth.supabaseJwt = null;
+      state.auth.supabaseUser = null;
+      await safeSet('clasptek:supabase_session', null);
+      return { error: null };
+    }
   },
   async ping() {
     return await runSupabaseHealthCheck();
@@ -2307,8 +2421,8 @@ function resolveSupabaseConfiguration() {
 
   // 1. Production-injected public configuration (Window / Environment)
   if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
-    const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
-    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
     if (envUrl || envKey) {
       supabaseUrl = (envUrl || '').trim();
       supabaseAnonKey = (envKey || '').trim();
@@ -2319,7 +2433,7 @@ function resolveSupabaseConfiguration() {
   // 2. HTML META configuration
   if (!supabaseUrl && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
     const metaEndpoint = document.querySelector('meta[name="supabase-endpoint"]');
-    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="supabase-anon-key"]');
+    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]') || document.querySelector('meta[name="supabase-anon-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]');
     const epContent = metaEndpoint && metaEndpoint.content ? metaEndpoint.content.trim() : '';
     const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
     if (epContent || keyContent) {
@@ -2334,8 +2448,8 @@ function resolveSupabaseConfiguration() {
     let runtimeEp = '';
     let runtimeKey = '';
     if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
-      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
-      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
     }
     const stateUrl = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
     const stateKey = (state.supabase && state.supabase.anonKey) ? state.supabase.anonKey.trim() : '';
@@ -2350,8 +2464,8 @@ function resolveSupabaseConfiguration() {
 
   // 4. Local development configuration (Node / test runner process.env)
   if ((!supabaseUrl || !supabaseAnonKey) && typeof process !== 'undefined' && process.env) {
-    const devUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const devUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     if (devUrl || devKey) {
       supabaseUrl = supabaseUrl || (devUrl || '').trim();
       supabaseAnonKey = supabaseAnonKey || (devKey || '').trim();
@@ -2422,8 +2536,8 @@ function resolveSupabaseProductionConfig() {
 
   // 1. Production-injected public configuration
   if (typeof window !== 'undefined' && window.__CLASPTEK_ENV__) {
-    const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
-    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
+    const envUrl = window.__CLASPTEK_ENV__.SUPABASE_URL || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_ENV__.VITE_SUPABASE_URL;
+    const envKey = window.__CLASPTEK_ENV__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_ENV__.SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_ENV__.VITE_SUPABASE_ANON_KEY;
     if (envUrl || envKey) {
       source = 'ENVIRONMENT';
       rawUrl = (envUrl || '').trim();
@@ -2434,7 +2548,7 @@ function resolveSupabaseProductionConfig() {
   // 2. HTML META configuration
   if (source === 'NONE' && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
     const metaEp = document.querySelector('meta[name="supabase-endpoint"]');
-    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="supabase-anon-key"]');
+    const metaKey = document.querySelector('meta[name="supabase-publishable-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]') || document.querySelector('meta[name="supabase-anon-key"]') || document.querySelector('meta[name="NEXT_PUBLIC_SUPABASE_ANON_KEY"]');
     const epContent = metaEp && metaEp.content ? metaEp.content.trim() : '';
     const keyContent = metaKey && metaKey.content ? metaKey.content.trim() : '';
     if (epContent || keyContent) {
@@ -2449,8 +2563,8 @@ function resolveSupabaseProductionConfig() {
     let runtimeEp = '';
     let runtimeKey = '';
     if (typeof window !== 'undefined' && window.__CLASPTEK_RUNTIME_CONFIG__) {
-      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
-      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
+      runtimeEp = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_URL || window.__CLASPTEK_RUNTIME_CONFIG__.endpoint || '';
+      runtimeKey = window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.NEXT_PUBLIC_SUPABASE_ANON_KEY || window.__CLASPTEK_RUNTIME_CONFIG__.anonKey || '';
     }
     if (!runtimeEp && !runtimeKey && typeof state !== 'undefined' && state.supabase) {
       runtimeEp = state.supabase.endpoint || '';
@@ -2465,8 +2579,8 @@ function resolveSupabaseProductionConfig() {
 
   // 4. Local development configuration (Node / test runner / .env.local)
   if (source === 'NONE' && typeof process !== 'undefined' && process.env) {
-    const devUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const devUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const devKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     if (devUrl || devKey) {
       source = 'ENVIRONMENT';
       rawUrl = (devUrl || '').trim();

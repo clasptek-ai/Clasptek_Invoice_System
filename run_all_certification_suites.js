@@ -21,7 +21,8 @@ const suites = [
   { name: 'Phase 15: Supabase Connectivity, Validation & Authoritative Mode', file: 'test_phase15_supabase_connectivity.js' },
   { name: 'Phase 15: Production Supabase Activation, Auth Repair & Live Migration', file: 'test_phase15_supabase_activation.js' },
   { name: 'Phase 14.1: Supabase 401 Authentication Resolution & Connectivity Certification', file: 'test_phase14_1_supabase_401_resolution.js' },
-  { name: 'Phase 14.2: Component 0 Environment / Deployment Credential Resolution', file: 'test_phase14_2_credential_resolution.js' }
+  { name: 'Phase 14.2: Component 0 Environment / Deployment Credential Resolution', file: 'test_phase14_2_credential_resolution.js' },
+  { name: 'Phase 14.2B: Supabase Publishable Key Deployment Injection & Authentication Repair', file: 'test_phase14_2b_supabase_environment_deployment.js' }
 ];
 
 let totalPassed = 0;

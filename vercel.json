@@ -1,7 +1,16 @@
 {
   "version": 2,
+  "buildCommand": "npm run build",
   "cleanUrls": true,
   "routes": [
+    {
+      "src": "/runtime-config.js",
+      "dest": "/runtime-config.js"
+    },
+    {
+      "src": "/public/runtime-config.js",
+      "dest": "/public/runtime-config.js"
+    },
     {
       "src": "/clasptek_invoice_system.html",
       "dest": "/index.html"

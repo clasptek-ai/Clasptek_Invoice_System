@@ -258,7 +258,7 @@ async function runSuite() {
   state.auth = { isAuthenticated: false };
   let headers = supabaseClient.getHeaders();
   assert(headers['apikey'] === 'test_anon_key_12345678901234567890', 'Guest request attaches apikey header');
-  assert(headers['Authorization'] === 'Bearer test_anon_key_12345678901234567890', 'Guest request attaches Bearer anonKey in Authorization');
+  assert(headers['Authorization'] === undefined || !headers['Authorization'].includes('test_anon_key'), 'Guest request never attaches Bearer anonKey in Authorization');
 
   // Authenticated with internal session token (sess_...) - MUST NOT be sent to PostgREST
   state.auth = {
@@ -267,7 +267,7 @@ async function runSuite() {
     token: 'sess_987654321_internal_only'
   };
   headers = supabaseClient.getHeaders();
-  assert(headers['Authorization'] === 'Bearer test_anon_key_12345678901234567890', 'Internal session token sess_... is NEVER sent to PostgREST Authorization');
+  assert(!headers['Authorization'] || !headers['Authorization'].includes('sess_'), 'Internal session token sess_... is NEVER sent to PostgREST Authorization');
 
   // Authenticated with valid Supabase JWT (eyJ...)
   const validSupabaseJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsImF1ZCI6ImF1dGhlbnRpY2F0ZWQiLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signaturesample';

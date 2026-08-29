@@ -260,10 +260,10 @@ async function runPhase14_2Tests() {
   };
   const headersGuest = clientAuth.getHeaders();
   assert(headersGuest['apikey'] === validAnonKey, 'Guest request attaches anon key as apikey');
-  assert(headersGuest['Authorization'] === `Bearer ${validAnonKey}`, 'Guest request attaches anon key as Bearer fallback');
-  assert(!headersGuest['Authorization'].includes('sess_'), 'Internal session token is NOT leaked in guest Authorization header');
-  assert(!headersGuest['Authorization'].includes('undefined'), 'Authorization is never "Bearer undefined"');
-  assert(!headersGuest['Authorization'].includes('null'), 'Authorization is never "Bearer null"');
+  assert(headersGuest['Authorization'] === undefined || !headersGuest['Authorization'].includes(validAnonKey), 'Guest request does not send anon key as Bearer');
+  assert(!headersGuest['Authorization'] || !headersGuest['Authorization'].includes('sess_'), 'Internal session token is NOT leaked in guest Authorization header');
+  assert(headersGuest['Authorization'] !== 'Bearer undefined', 'Authorization is never "Bearer undefined"');
+  assert(headersGuest['Authorization'] !== 'Bearer null', 'Authorization is never "Bearer null"');
 
   // --- Tier 4: Receivables Ageing Analysis & Defensive Rendering ---
   console.log('\n--- Tier 4: Receivables Ageing Analysis & Defensive Rendering ---');

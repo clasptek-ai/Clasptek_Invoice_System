@@ -256,7 +256,7 @@ async function runTestSuite() {
   app.state.auth = { isAuthenticated: false, user: null, token: null, supabaseJwt: null };
   const unauthHeaders = app.supabaseClient.getHeaders();
   assert(unauthHeaders['apikey'] === validAnonJwt, 'Unauthenticated request sends anon key as apikey');
-  assert(unauthHeaders['Authorization'] === `Bearer ${validAnonJwt}`, 'Unauthenticated request sends anon key as Authorization Bearer');
+  assert(unauthHeaders['Authorization'] === undefined || !unauthHeaders['Authorization'].includes(validAnonJwt), 'Unauthenticated request never sends anon key as Authorization Bearer');
   assert(unauthHeaders['Content-Type'] === 'application/json', 'Content-Type is application/json');
   assert(unauthHeaders['Accept'] === 'application/json', 'Accept is application/json');
 
@@ -283,7 +283,7 @@ async function runTestSuite() {
     supabaseJwt: null
   };
   const safeSessionHeaders = app.supabaseClient.getHeaders();
-  assert(safeSessionHeaders['Authorization'] === `Bearer ${validAnonJwt}`, 'Internal session tokens (sess_...) are NEVER sent to PostgREST as Bearer');
+  assert(!safeSessionHeaders['Authorization'] || !safeSessionHeaders['Authorization'].includes('sess_'), 'Internal session tokens (sess_...) are NEVER sent to PostgREST as Bearer');
 
   // ---------------------------------------------------------------------------
   // CATEGORY 4: 5-STAGE PROGRESSIVE CONNECTIVITY PROBE (probeSupabaseConnectivity)

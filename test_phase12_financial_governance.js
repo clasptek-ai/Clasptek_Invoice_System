@@ -136,8 +136,8 @@ function createSandboxEnvironment(customStorage = {}, customFetch = null) {
 
       const headersA = exports.supabaseClient.getHeaders();
       assert(headersA['apikey'] && headersA['apikey'].startsWith('eyJ'), 'Test 1: apikey header contains public anon key');
-      assert(!headersA['Authorization'].includes('sess_'), 'Test 2: Internal session token is NEVER sent in Authorization header to PostgREST');
-      assert(headersA['Authorization'].startsWith('Bearer eyJ'), 'Test 3: Authorization defaults safely to anon key Bearer when token is internal');
+      assert(!headersA['Authorization'] || !headersA['Authorization'].includes('sess_'), 'Test 2: Internal session token is NEVER sent in Authorization header to PostgREST');
+      assert(!headersA['Authorization'] || headersA['Authorization'].startsWith('Bearer eyJ'), 'Test 3: Authorization does not send malformed tokens when token is internal');
       assert(headersA['Accept'] === 'application/json', 'Test 4: Accept header is canonically application/json');
 
       // Case B: User has a genuine Supabase JWT

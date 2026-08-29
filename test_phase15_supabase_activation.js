@@ -205,10 +205,11 @@ async function runPhase15ActivationTests() {
   assert(typeof app.supabaseAuth.getSession === 'function', 'getSession method exists');
 
   // Unauthenticated Headers
+  app.state.supabase.anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZWYiOiJsb2dhYXdvaWdmeG5pc2ltZmF0ZiIsInJvbGUiOiJhbm9uIn0.sample_anon_key';
   app.state.auth = { isAuthenticated: false, user: null, token: null, supabaseJwt: null };
   const unauthHeaders = app.supabaseClient.getHeaders();
   assert(unauthHeaders['apikey'] !== undefined, 'Unauthenticated request attaches apikey header');
-  assert(unauthHeaders['Authorization'] !== undefined, 'Unauthenticated request attaches Authorization Bearer');
+  assert(unauthHeaders['Authorization'] === undefined || !unauthHeaders['Authorization'].includes('sess_'), 'Unauthenticated request does not attach invalid Authorization Bearer');
   assert(unauthHeaders['Content-Type'] === 'application/json', 'Content-Type is application/json');
 
   // Authenticated Session Headers
