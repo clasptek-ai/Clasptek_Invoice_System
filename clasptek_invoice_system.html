@@ -1241,7 +1241,17 @@ const DATABASE_AUTHORITY_STATE = {
   MIGRATION_REQUIRED: 'MIGRATION_REQUIRED',
   MIGRATION_IN_PROGRESS: 'MIGRATION_IN_PROGRESS',
   RECONCILIATION_FAILED: 'RECONCILIATION_FAILED',
+  BLOCKED: 'BLOCKED',
   AUTHORITATIVE: 'AUTHORITATIVE'
+};
+
+const FORENSIC_EVIDENCE_CLASSIFICATION = {
+  LIVE_REMOTE_CERTIFIED: 'LIVE_REMOTE_CERTIFIED',
+  LIVE_REMOTE_PARTIAL: 'LIVE_REMOTE_PARTIAL',
+  LOCAL_SIMULATION_ONLY: 'LOCAL_SIMULATION_ONLY',
+  MOCKED_TEST_ONLY: 'MOCKED_TEST_ONLY',
+  AUTHENTICATION_BLOCKED: 'AUTHENTICATION_BLOCKED',
+  NOT_CERTIFIED: 'NOT_CERTIFIED'
 };
 
 const SUPABASE_DIAGNOSTIC_STATE = {
@@ -2710,6 +2720,131 @@ function formatSupabaseProductionConfig(diag) {
     secretExposure: isSecret ? 'CRITICAL: SECRET DETECTED' : 'NONE',
     text
   };
+}
+
+/**
+ * Component 1: Production Authentication Truth
+ * Strictly credential-blind diagnostic metadata inspector.
+ */
+function getProductionAuthenticationTruth() {
+  const config = resolveSupabaseConfiguration();
+  const auth = state.auth || {};
+  const user = auth.user || auth.supabaseUser || {};
+  const token = auth.supabaseJwt || (user && user.supabaseJwt) || auth.token || auth.accessToken || '';
+  const isJwt = typeof token === 'string' && token.startsWith('eyJ') && token.split('.').length === 3;
+  
+  let expired = false;
+  let projectMatched = false;
+  let audienceAuth = false;
+  let userIdPresent = Boolean(user && (user.id || user.sub));
+
+  if (isJwt) {
+    try {
+      const parts = token.split('.');
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const jsonStr = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf-8');
+      const payload = JSON.parse(jsonStr);
+      if (payload) {
+        if (payload.exp && payload.exp * 1000 < Date.now()) expired = true;
+        if (payload.iss && payload.iss.includes(CANONICAL_SUPABASE_PROJECT_REF)) projectMatched = true;
+        if (payload.aud === 'authenticated') audienceAuth = true;
+        if (payload.sub) userIdPresent = true;
+      }
+    } catch (_) {}
+  }
+
+  const pubKey = config.anonKey || '';
+  const isSess = typeof token === 'string' && token.startsWith('sess_');
+  const isPubKey = Boolean(token && pubKey && token === pubKey);
+  const isAuthHeaderValid = isJwt && !expired && !isSess && !isPubKey && projectMatched && audienceAuth;
+
+  let credentialType = 'unknown';
+  if (pubKey.startsWith('pk_') || pubKey.includes('publishable') || pubKey.startsWith('sb_pub_')) credentialType = 'publishable';
+  else if (pubKey.includes('anon') || pubKey.startsWith('eyJ')) credentialType = 'anon';
+
+  return {
+    configured: Boolean(config.hasEndpoint && config.hasKey),
+    projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
+    publicCredentialConfigured: Boolean(config.hasKey),
+    credentialType,
+    sessionPresent: Boolean(auth.isAuthenticated || token),
+    userAuthenticated: Boolean(auth.isAuthenticated),
+    userIdPresent,
+    accessTokenPresent: Boolean(token && token.length > 5),
+    accessTokenIsJwt: isJwt,
+    accessTokenExpired: expired,
+    accessTokenProjectMatched: projectMatched,
+    accessTokenAudienceAuthenticated: audienceAuth,
+    authorizationHeaderValid: isAuthHeaderValid
+  };
+}
+
+/**
+ * Component 2: Real PostgREST Authenticated Probe
+ * Issues live HTTPS query using canonical Supabase client credentials.
+ */
+async function probeAuthenticatedPostgrest() {
+  const config = resolveSupabaseConfiguration();
+  const authTruth = getProductionAuthenticationTruth();
+  const endpoint = `${CANONICAL_SUPABASE_BASE_URL}/rest/v1/programmes?select=id&limit=1`;
+  const headers = supabaseClient.getHeaders();
+
+  const startTime = Date.now();
+  try {
+    const fetchFn = typeof fetch === 'function' ? fetch : (typeof window !== 'undefined' ? window.fetch : null);
+    if (!fetchFn) {
+      return {
+        networkReachable: false,
+        httpStatus: 0,
+        authenticated: false,
+        authorizationAccepted: false,
+        tableReachable: false,
+        rowsReturned: 0,
+        classification: 'POSTGRESQL_UNREACHABLE',
+        error: 'No fetch implementation available'
+      };
+    }
+
+    const res = await fetchFn(endpoint, { method: 'GET', headers });
+    const httpStatus = res.status;
+    let rowsReturned = 0;
+    let data = [];
+
+    if (res.ok && httpStatus === 200) {
+      try {
+        data = await res.json();
+        rowsReturned = Array.isArray(data) ? data.length : 0;
+      } catch (_) {}
+    }
+
+    let classification = 'POSTGRESQL_UNREACHABLE';
+    if (httpStatus === 200) classification = 'POSTGRESQL_CONNECTED';
+    else if (httpStatus === 401) classification = 'AUTHENTICATION_FAILED';
+    else if (httpStatus === 403) classification = 'RLS_AUTHORIZATION_FAILED';
+    else if (httpStatus === 404) classification = 'SCHEMA_OR_TABLE_NOT_FOUND';
+    else if (httpStatus >= 500) classification = 'POSTGRESQL_SERVER_ERROR';
+
+    return {
+      networkReachable: true,
+      httpStatus,
+      authenticated: authTruth.authorizationHeaderValid && (httpStatus === 200 || httpStatus === 403),
+      authorizationAccepted: httpStatus === 200,
+      tableReachable: httpStatus === 200,
+      rowsReturned,
+      classification
+    };
+  } catch (err) {
+    return {
+      networkReachable: false,
+      httpStatus: 0,
+      authenticated: false,
+      authorizationAccepted: false,
+      tableReachable: false,
+      rowsReturned: 0,
+      classification: 'POSTGRESQL_UNREACHABLE',
+      error: err.message
+    };
+  }
 }
 
 function diagnoseSupabaseError(status, errText = '', probeContext = {}) {
@@ -4694,70 +4829,119 @@ function transformEntityForPostgres(entity, item, tenantId) {
 }
 
 // 1. Production Database Inventory (27 Entities)
-async function inspectProductionDatabase() {
+async function inspectProductionDatabase({ liveOnly = false } = {}) {
   const config = resolveSupabaseConfiguration();
   if (!supabaseClient.isConfigured()) {
+    const tableMap = {};
+    REQUIRED_PRODUCTION_TABLES.forEach(t => {
+      tableMap[t] = { table: t, status: 0, accessible: false, rowCount: null, errorClassification: 'NOT_CONFIGURED' };
+    });
     return {
       connected: false,
+      authenticated: false,
       isConfigured: false,
       projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
+      totalConfirmedRemoteRecords: 0,
       totalRecords: 0,
-      databaseEmpty: true,
-      isEmpty: true,
+      databaseEmpty: false,
+      isEmpty: false,
+      inaccessibleTables: REQUIRED_PRODUCTION_TABLES.map(t => tableMap[t]),
       tablesFound: [],
       tablesMissing: REQUIRED_PRODUCTION_TABLES,
       failedQueries: REQUIRED_PRODUCTION_TABLES.length,
       hasErrors: true,
       counts: {},
+      tables: tableMap,
       error: 'Supabase client is not configured'
     };
   }
 
   const counts = {};
+  const tables = {};
   const tablesFound = [];
   const tablesMissing = [];
-  let totalRecords = 0;
+  const inaccessibleTables = [];
+  let totalConfirmedRemoteRecords = 0;
   let failedQueries = 0;
 
   await Promise.all(REQUIRED_PRODUCTION_TABLES.map(async (table) => {
     try {
       const res = await supabaseClient.from(table).select('*');
-      if (res && res.status === 200 && Array.isArray(res.data)) {
-        counts[table] = res.data.length;
-        totalRecords += res.data.length;
+      const status = res ? (res.status || (res.ok ? 200 : (res.httpStatus || 0))) : 0;
+      
+      if (status === 200 && Array.isArray(res.data)) {
+        const count = res.data.length;
+        counts[table] = count;
+        totalConfirmedRemoteRecords += count;
         tablesFound.push(table);
+        tables[table] = {
+          table,
+          status: 200,
+          accessible: true,
+          rowCount: count,
+          errorClassification: null
+        };
       } else {
-        counts[table] = 0;
+        let errClass = 'POSTGRES_ERROR';
+        if (status === 401) errClass = 'AUTHENTICATION_FAILED';
+        else if (status === 403) errClass = 'RLS_DENIED';
+        else if (status === 404) errClass = 'TABLE_NOT_FOUND';
+        else if (status >= 500) errClass = 'POSTGRES_ERROR';
+
+        counts[table] = null; // Strictly null on access denial / error
         tablesMissing.push(table);
         failedQueries++;
+        const tableEntry = {
+          table,
+          status,
+          accessible: false,
+          rowCount: null,
+          errorClassification: errClass
+        };
+        tables[table] = tableEntry;
+        inaccessibleTables.push(tableEntry);
       }
     } catch (err) {
-      counts[table] = 0;
+      counts[table] = null;
       tablesMissing.push(table);
       failedQueries++;
+      const tableEntry = {
+        table,
+        status: 0,
+        accessible: false,
+        rowCount: null,
+        errorClassification: 'NETWORK_ERROR',
+        error: err.message
+      };
+      tables[table] = tableEntry;
+      inaccessibleTables.push(tableEntry);
     }
   }));
 
-  const isEmpty = (totalRecords === 0 && failedQueries === 0);
-  const databaseEmpty = (totalRecords === 0 && failedQueries === 0);
+  const allTablesAccessible = failedQueries === 0 && tablesFound.length === REQUIRED_PRODUCTION_TABLES.length;
+  const databaseEmpty = allTablesAccessible && totalConfirmedRemoteRecords === 0;
 
   return {
-    connected: failedQueries < REQUIRED_PRODUCTION_TABLES.length,
+    connected: tablesFound.length > 0,
+    authenticated: inaccessibleTables.every(t => t.status !== 401),
     isConfigured: true,
     projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
-    totalRecords,
+    totalConfirmedRemoteRecords,
+    totalRecords: totalConfirmedRemoteRecords,
     databaseEmpty,
-    isEmpty,
+    isEmpty: databaseEmpty,
+    inaccessibleTables,
     tablesFound,
     tablesMissing,
     failedQueries,
     hasErrors: failedQueries > 0,
-    counts
+    counts,
+    tables
   };
 }
 
 // 2. Legacy Local Data Inventory (27 Entities)
-async function inspectLegacyLocalData() {
+async function inspectLegacyLocalData({ authoritativeSource = 'LOCAL_LEGACY' } = {}) {
   const stores = [
     { key: STORE_KEY_FINANCE_SETTINGS, entity: 'finance_settings', label: 'Finance Settings' },
     { key: STORE_KEY_PAYMENT_ACCOUNTS, entity: 'payment_accounts', label: 'Payment Accounts' },
@@ -4830,7 +5014,7 @@ async function inspectLegacyLocalData() {
     }
   }
 
-  // Financial summary computation
+  // Financial summary computation using precise integer-cents arithmetic
   const invList = records.invoices || [];
   const payList = records.payments || [];
   const expList = records.expenses || [];
@@ -4838,17 +5022,18 @@ async function inspectLegacyLocalData() {
   const dirList = records.direct_income || [];
   const accList = records.payment_accounts || [];
 
-  const totalInvoiced = invList.reduce((sum, i) => sum + Number(i.total || i.amount || 0), 0);
-  const totalReceivablesOutstanding = invList.reduce((sum, i) => sum + Number(i.balance !== undefined ? i.balance : Math.max(0, (i.total || 0) - (i.amountPaid || 0))), 0);
-  const totalCollected = payList.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const totalExpenses = expList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalGrossPayroll = pslList.reduce((sum, p) => sum + Number(p.grossPay || p.basicSalary || p.basicPay || 0), 0);
-  const totalNetPayroll = pslList.reduce((sum, p) => sum + Number(p.netPay || (p.grossPay ? p.grossPay - (p.totalDeductions || 0) : 0)), 0);
-  const totalDirectIncome = dirList.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-  const totalAccountBalances = accList.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalInvoiced = invList.reduce((sum, i) => sum + Math.round(Number(i.total || i.amount || 0) * 100), 0) / 100;
+  const totalReceivablesOutstanding = invList.reduce((sum, i) => sum + Math.round(Number(i.balance !== undefined ? i.balance : Math.max(0, (i.total || 0) - (i.amountPaid || 0))) * 100), 0) / 100;
+  const totalCollected = payList.reduce((sum, p) => sum + Math.round(Number(p.amount || 0) * 100), 0) / 100;
+  const totalExpenses = expList.reduce((sum, e) => sum + Math.round(Number(e.amount || 0) * 100), 0) / 100;
+  const totalGrossPayroll = pslList.reduce((sum, p) => sum + Math.round(Number(p.grossPay || p.basicSalary || p.basicPay || 0) * 100), 0) / 100;
+  const totalNetPayroll = pslList.reduce((sum, p) => sum + Math.round(Number(p.netPay || (p.grossPay ? p.grossPay - (p.totalDeductions || 0) : 0)) * 100), 0) / 100;
+  const totalDirectIncome = dirList.reduce((sum, d) => sum + Math.round(Number(d.amount || 0) * 100), 0) / 100;
+  const totalAccountBalances = accList.reduce((sum, a) => sum + Math.round(Number(a.balance || 0) * 100), 0) / 100;
 
   return {
     hasLegacyData: totalRecords > 0,
+    authoritativeSource,
     totalRecords,
     counts,
     records,
@@ -18991,6 +19176,10 @@ function renderChangeRoleModal(container, user) {
       runProductionMigrationPreflight,
       readBackProductionMigration,
       executeLiveProductionMigration,
+      // Phase 14.7 Forensic Production Migration Authenticity Exports
+      FORENSIC_EVIDENCE_CLASSIFICATION,
+      getProductionAuthenticationTruth,
+      probeAuthenticatedPostgrest,
       // Phase 14.7A Real Cloud Migration & Audit Exports
       MIGRATION_EXECUTION_MODE,
       FORENSIC_TRUTH_LABEL,
@@ -19024,6 +19213,9 @@ function renderChangeRoleModal(container, user) {
     window.executeLiveProductionMigration = executeLiveProductionMigration;
     window.reconcileProductionData = reconcileProductionData;
     window.activatePostgresAuthoritativeMode = activatePostgresAuthoritativeMode;
+    window.FORENSIC_EVIDENCE_CLASSIFICATION = FORENSIC_EVIDENCE_CLASSIFICATION;
+    window.getProductionAuthenticationTruth = getProductionAuthenticationTruth;
+    window.probeAuthenticatedPostgrest = probeAuthenticatedPostgrest;
     window.MIGRATION_EXECUTION_MODE = MIGRATION_EXECUTION_MODE;
     window.FORENSIC_TRUTH_LABEL = FORENSIC_TRUTH_LABEL;
     window.getMigrationExecutionMode = getMigrationExecutionMode;

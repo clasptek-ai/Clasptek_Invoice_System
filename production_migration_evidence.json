@@ -1,0 +1,15 @@
+{
+  "projectRef": "logaawoigfxnisimfatf",
+  "timestamp": "2026-08-29T19:00:00.000Z",
+  "evidenceClassification": "NOT_CERTIFIED",
+  "authenticated": false,
+  "postgrestStatus": 401,
+  "remoteTablesVerified": 27,
+  "remoteRecordCount": 0,
+  "migrationCompleted": false,
+  "readBackCompleted": false,
+  "recordReconciliation": false,
+  "financialReconciliation": false,
+  "idempotency": false,
+  "authorityState": "BLOCKED"
+}
