@@ -1,9 +1,11 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "cleanUrls": true,
   "rewrites": [
     { "source": "/clasptek_invoice_system.html", "destination": "/index.html" },
-    { "source": "/((?!runtime-config\\.js|public/).*)", "destination": "/index.html" }
+    { "source": "/((?!runtime-config\\.js).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

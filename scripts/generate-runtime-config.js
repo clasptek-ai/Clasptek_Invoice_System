@@ -133,19 +133,21 @@ window.__CLASPTEK_ENV__ = {
   fs.writeFileSync(rootOut, fileContent, 'utf8');
   console.log(`✔ Generated: ${rootOut}`);
 
-  // Write to public/runtime-config.js if public/ exists or create it
+  // Inject into index.html and clasptek_invoice_system.html
+  updateHtmlMetaTags(path.join(process.cwd(), 'index.html'), url, key);
+  updateHtmlMetaTags(path.join(process.cwd(), 'clasptek_invoice_system.html'), url, key);
+  console.log('✔ Updated HTML meta tags in root index.html & clasptek_invoice_system.html');
+
+  // Write to public/ directory (including index.html, runtime-config.js)
   const publicDir = path.join(process.cwd(), 'public');
   if (!fs.existsSync(publicDir)) {
     fs.mkdirSync(publicDir, { recursive: true });
   }
-  const publicOut = path.join(publicDir, 'runtime-config.js');
-  fs.writeFileSync(publicOut, fileContent, 'utf8');
-  console.log(`✔ Generated: ${publicOut}`);
 
-  // Inject into index.html and clasptek_invoice_system.html
-  updateHtmlMetaTags(path.join(process.cwd(), 'index.html'), url, key);
-  updateHtmlMetaTags(path.join(process.cwd(), 'clasptek_invoice_system.html'), url, key);
-  console.log('✔ Updated HTML meta tags in index.html & clasptek_invoice_system.html');
+  fs.writeFileSync(path.join(publicDir, 'runtime-config.js'), fileContent, 'utf8');
+  fs.copyFileSync(path.join(process.cwd(), 'index.html'), path.join(publicDir, 'index.html'));
+  fs.copyFileSync(path.join(process.cwd(), 'clasptek_invoice_system.html'), path.join(publicDir, 'clasptek_invoice_system.html'));
+  console.log('✔ Synchronized public/ distribution directory with index.html and runtime-config.js');
 
   console.log('=== BUILD CONFIG GENERATION COMPLETE ===\n');
 }
