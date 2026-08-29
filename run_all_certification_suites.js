@@ -23,7 +23,8 @@ const suites = [
   { name: 'Phase 14.1: Supabase 401 Authentication Resolution & Connectivity Certification', file: 'test_phase14_1_supabase_401_resolution.js' },
   { name: 'Phase 14.2: Component 0 Environment / Deployment Credential Resolution', file: 'test_phase14_2_credential_resolution.js' },
   { name: 'Phase 14.2B: Supabase Publishable Key Deployment Injection & Authentication Repair', file: 'test_phase14_2b_supabase_environment_deployment.js' },
-  { name: 'Phase 14.3: Vercel Production Credential Injection & Supabase Connectivity Verification', file: 'test_phase14_3_vercel_publishable_key.js' }
+  { name: 'Phase 14.3: Vercel Production Credential Injection & Supabase Connectivity Verification', file: 'test_phase14_3_vercel_publishable_key.js' },
+  { name: 'Phase 14.4: Production Legacy Data Migration, Reconciliation & PostgreSQL Authority Activation', file: 'test_phase14_4_production_migration_reconciliation.js' }
 ];
 
 let totalPassed = 0;

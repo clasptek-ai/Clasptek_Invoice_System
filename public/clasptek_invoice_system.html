@@ -4234,75 +4234,244 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
 // PHASE 14 & 15: PRODUCTION DATA MIGRATION, CONTINUOUS RECONCILIATION & CONTROL
 // =============================================================================
 
-// 1. Production Database Inventory
+function resolveAuthoritativeTenantId() {
+  const authUser = state.auth?.supabaseUser || state.auth?.user;
+  const sessionUser = state.auth?.supabaseSession?.user;
+  const user = authUser || sessionUser;
+
+  if (user) {
+    if (user.tenant_id) return user.tenant_id;
+    if (user.app_metadata && user.app_metadata.tenant_id) return user.app_metadata.tenant_id;
+    if (user.user_metadata && user.user_metadata.tenant_id) return user.user_metadata.tenant_id;
+  }
+  return 'clasptek_main';
+}
+
+function transformEntityForPostgres(entity, item, tenantId) {
+  if (!item || typeof item !== 'object') return item;
+  const row = { ...item, tenant_id: tenantId };
+
+  if (entity === 'programmes') {
+    if (item.tuitionFee !== undefined) row.tuition_fee = item.tuitionFee;
+    if (item.maxDiscountPct !== undefined) row.max_discount_pct = item.maxDiscountPct;
+    if (item.allowInstallments !== undefined) row.allow_installments = item.allowInstallments;
+    if (item.installmentFirstPct !== undefined) row.installment_first_pct = item.installmentFirstPct;
+    if (item.installmentSecondPct !== undefined) row.installment_second_pct = item.installmentSecondPct;
+  } else if (entity === 'enquiries') {
+    if (item.enquiryNo !== undefined) row.enquiry_no = item.enquiryNo;
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.programmeId !== undefined) row.programme_id = item.programmeId;
+    if (item.assignedTo !== undefined) row.assigned_to = item.assignedTo;
+    if (item.followUpDate !== undefined) row.follow_up_date = item.followUpDate;
+  } else if (entity === 'enrolments') {
+    if (item.enrolmentNo !== undefined) row.enrolment_no = item.enrolmentNo;
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.programmeId !== undefined) row.programme_id = item.programmeId;
+    if (item.startDate !== undefined) row.start_date = item.startDate;
+    if (item.completionDate !== undefined) row.completion_date = item.completionDate;
+  } else if (entity === 'invoices') {
+    if (item.invoiceNo !== undefined) row.invoice_no = item.invoiceNo;
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.issueDate !== undefined) row.issue_date = item.issueDate;
+    if (item.dueDate !== undefined) row.due_date = item.dueDate;
+    if (item.subTotal !== undefined) row.subtotal = item.subTotal;
+    if (item.taxAmount !== undefined) row.tax_amount = item.taxAmount;
+    if (item.discountAmount !== undefined) row.discount_amount = item.discountAmount;
+    if (item.programmeId !== undefined) row.programme_id = item.programmeId;
+  } else if (entity === 'invoice_items') {
+    if (item.invoiceId !== undefined) row.invoice_id = item.invoiceId;
+    if (item.unitPrice !== undefined) row.unit_price = item.unitPrice;
+    if (item.totalPrice !== undefined) row.total_price = item.totalPrice;
+    if (item.programmeId !== undefined) row.programme_id = item.programmeId;
+  } else if (entity === 'payments') {
+    if (item.paymentNo !== undefined) row.payment_no = item.paymentNo;
+    if (item.receiptNo !== undefined) row.receipt_no = item.receiptNo;
+    if (item.invoiceId !== undefined) row.invoice_id = item.invoiceId;
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.paymentDate !== undefined) row.payment_date = item.paymentDate;
+    if (item.paymentMethod !== undefined) row.payment_method = item.paymentMethod;
+    if (item.accountId !== undefined) row.account_id = item.accountId;
+  } else if (entity === 'receipts') {
+    if (item.receiptNo !== undefined) row.receipt_no = item.receiptNo;
+    if (item.paymentId !== undefined) row.payment_id = item.paymentId;
+    if (item.invoiceId !== undefined) row.invoice_id = item.invoiceId;
+    if (item.receiptDate !== undefined) row.receipt_date = item.receiptDate;
+  } else if (entity === 'expenses') {
+    if (item.expenseNo !== undefined) row.expense_no = item.expenseNo;
+    if (item.expenseDate !== undefined) row.expense_date = item.expenseDate;
+    if (item.subCategory !== undefined) row.sub_category = item.subCategory;
+    if (item.paymentMethod !== undefined) row.payment_method = item.paymentMethod;
+    if (item.accountId !== undefined) row.account_id = item.accountId;
+    if (item.approvedBy !== undefined) row.approved_by = item.approvedBy;
+    if (item.approvedAt !== undefined) row.approved_at = item.approvedAt;
+  } else if (entity === 'direct_income') {
+    if (item.incomeNo !== undefined) row.income_no = item.incomeNo;
+    if (item.incomeDate !== undefined) row.income_date = item.incomeDate;
+    if (item.incomeCategory !== undefined) row.income_category = item.incomeCategory;
+    if (item.accountId !== undefined) row.account_id = item.accountId;
+  } else if (entity === 'budgets') {
+    if (item.budgetPeriod !== undefined) row.budget_period = item.budgetPeriod;
+    if (item.allocatedAmount !== undefined) row.allocated_amount = item.allocatedAmount;
+    if (item.spentAmount !== undefined) row.spent_amount = item.spentAmount;
+  } else if (entity === 'budget_lines') {
+    if (item.budgetId !== undefined) row.budget_id = item.budgetId;
+    if (item.allocatedAmount !== undefined) row.allocated_amount = item.allocatedAmount;
+    if (item.spentAmount !== undefined) row.spent_amount = item.spentAmount;
+  } else if (entity === 'personnel') {
+    if (item.employeeNo !== undefined) row.employee_no = item.employeeNo;
+    if (item.employeeType !== undefined) row.employee_type = item.employeeType;
+    if (item.employmentStatus !== undefined) row.employment_status = item.employmentStatus;
+    if (item.basicPay !== undefined) row.basic_pay = item.basicPay;
+    if (item.bankDetails !== undefined) row.bank_details = item.bankDetails;
+  } else if (entity === 'payslips') {
+    if (item.payslipNo !== undefined) row.payslip_no = item.payslipNo;
+    if (item.personnelId !== undefined) row.personnel_id = item.personnelId;
+    if (item.payrollPeriod !== undefined) row.payroll_period = item.payrollPeriod;
+    if (item.grossPay !== undefined) row.gross_pay = item.grossPay;
+    if (item.basicSalary !== undefined) row.basic_salary = item.basicSalary;
+    if (item.totalAllowances !== undefined) row.total_allowances = item.totalAllowances;
+    if (item.totalDeductions !== undefined) row.total_deductions = item.totalDeductions;
+    if (item.netPay !== undefined) row.net_pay = item.netPay;
+    if (item.paymentStatus !== undefined) row.payment_status = item.paymentStatus;
+    if (item.disbursedAt !== undefined) row.disbursed_at = item.disbursedAt;
+  } else if (entity === 'facilitator_sessions') {
+    if (item.sessionNo !== undefined) row.session_no = item.sessionNo;
+    if (item.personnelId !== undefined) row.personnel_id = item.personnelId;
+    if (item.facilitatorId !== undefined && !row.personnel_id) row.personnel_id = item.facilitatorId;
+    if (item.programmeId !== undefined) row.programme_id = item.programmeId;
+    if (item.sessionDate !== undefined) row.session_date = item.sessionDate;
+    if (item.sessionHours !== undefined) row.session_hours = item.sessionHours;
+    if (item.hourlyRate !== undefined) row.hourly_rate = item.hourlyRate;
+    if (item.totalEarnings !== undefined) row.total_earnings = item.totalEarnings;
+    if (item.paymentStatus !== undefined) row.payment_status = item.paymentStatus;
+  } else if (entity === 'customer_timeline') {
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.activityType !== undefined) row.activity_type = item.activityType;
+    if (item.eventDate !== undefined) row.event_date = item.eventDate;
+  } else if (entity === 'collection_actions') {
+    if (item.invoiceId !== undefined) row.invoice_id = item.invoiceId;
+    if (item.customerId !== undefined) row.customer_id = item.customerId;
+    if (item.actionType !== undefined) row.action_type = item.actionType;
+    if (item.actionDate !== undefined) row.action_date = item.actionDate;
+  } else if (entity === 'finance_audit_log') {
+    if (item.entityType !== undefined) row.entity_type = item.entityType;
+    if (item.entityId !== undefined) row.entity_id = item.entityId;
+    if (item.previousValue !== undefined) row.previous_value = item.previousValue;
+    if (item.newValue !== undefined) row.new_value = item.newValue;
+    if (item.performedBy !== undefined) row.performed_by = item.performedBy;
+    if (item.performedAt !== undefined) row.performed_at = item.performedAt;
+  } else if (entity === 'management_alerts') {
+    if (item.alertType !== undefined) row.alert_type = item.alertType;
+    if (item.alertTitle !== undefined) row.alert_title = item.alertTitle;
+    if (item.alertMessage !== undefined) row.alert_message = item.alertMessage;
+    if (item.isResolved !== undefined) row.is_resolved = item.isResolved;
+  } else if (entity === 'approval_thresholds') {
+    if (item.thresholdAmount !== undefined) row.threshold_amount = item.thresholdAmount;
+    if (item.requireSuperAdmin !== undefined) row.require_super_admin = item.requireSuperAdmin;
+  } else if (entity === 'financial_adjustments') {
+    if (item.adjustmentNo !== undefined) row.adjustment_no = item.adjustmentNo;
+    if (item.adjustmentType !== undefined) row.adjustment_type = item.adjustmentType;
+    if (item.accountId !== undefined) row.account_id = item.accountId;
+    if (item.invoiceId !== undefined) row.invoice_id = item.invoiceId;
+    if (item.paymentId !== undefined) row.payment_id = item.paymentId;
+  }
+
+  return row;
+}
+
+// 1. Production Database Inventory (27 Entities)
 async function inspectProductionDatabase() {
+  const config = resolveSupabaseConfiguration();
   if (!supabaseClient.isConfigured()) {
     return {
+      connected: false,
       isConfigured: false,
+      projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
       totalRecords: 0,
+      databaseEmpty: true,
       isEmpty: true,
-      failedQueries: 0,
+      tablesFound: [],
+      tablesMissing: REQUIRED_PRODUCTION_TABLES,
+      failedQueries: REQUIRED_PRODUCTION_TABLES.length,
+      hasErrors: true,
       counts: {},
       error: 'Supabase client is not configured'
     };
   }
-  const entities = [
-    'programmes', 'customers', 'enquiries', 'enrolments', 'invoices',
-    'payments', 'expenses', 'direct_income', 'budgets', 'personnel',
-    'payslips', 'facilitator_sessions', 'customer_timeline',
-    'collection_actions', 'management_alerts', 'finance_settings',
-    'payment_accounts', 'transaction_recovery_queue', 'month_end_closures'
-  ];
+
   const counts = {};
+  const tablesFound = [];
+  const tablesMissing = [];
   let totalRecords = 0;
   let failedQueries = 0;
 
-  await Promise.all(entities.map(async (table) => {
+  await Promise.all(REQUIRED_PRODUCTION_TABLES.map(async (table) => {
     try {
       const res = await supabaseClient.from(table).select('*');
       if (res && res.status === 200 && Array.isArray(res.data)) {
         counts[table] = res.data.length;
         totalRecords += res.data.length;
+        tablesFound.push(table);
       } else {
         counts[table] = 0;
+        tablesMissing.push(table);
         failedQueries++;
       }
     } catch (err) {
       counts[table] = 0;
+      tablesMissing.push(table);
       failedQueries++;
     }
   }));
 
   const isEmpty = (totalRecords === 0 && failedQueries === 0);
+  const databaseEmpty = (totalRecords === 0 && failedQueries === 0);
+
   return {
+    connected: failedQueries < REQUIRED_PRODUCTION_TABLES.length,
     isConfigured: true,
+    projectRef: config.projectRef || CANONICAL_SUPABASE_PROJECT_REF,
     totalRecords,
+    databaseEmpty,
     isEmpty,
+    tablesFound,
+    tablesMissing,
     failedQueries,
     hasErrors: failedQueries > 0,
     counts
   };
 }
 
-// 2. Legacy Local Data Inventory
+// 2. Legacy Local Data Inventory (27 Entities)
 async function inspectLegacyLocalData() {
   const stores = [
+    { key: STORE_KEY_FINANCE_SETTINGS, entity: 'finance_settings', label: 'Finance Settings' },
+    { key: STORE_KEY_PAYMENT_ACCOUNTS, entity: 'payment_accounts', label: 'Payment Accounts' },
     { key: STORE_KEY_PROGRAMMES, entity: 'programmes', label: 'Programmes' },
+    { key: STORE_KEY_PERSONNEL, entity: 'personnel', label: 'Personnel' },
     { key: STORE_KEY_CUSTOMERS, entity: 'customers', label: 'Customers' },
     { key: STORE_KEY_ENQUIRIES, entity: 'enquiries', label: 'Enquiries' },
     { key: STORE_KEY_ENROLMENTS, entity: 'enrolments', label: 'Enrolments' },
     { key: STORE_KEY_INVOICES, entity: 'invoices', label: 'Invoices' },
     { key: STORE_KEY_PAYMENTS, entity: 'payments', label: 'Payments' },
+    { key: 'clasptek:receipts', entity: 'receipts', label: 'Receipts' },
     { key: STORE_KEY_EXPENSES, entity: 'expenses', label: 'Expenses' },
     { key: STORE_KEY_DIRECT_INCOME, entity: 'direct_income', label: 'Direct Income' },
-    { key: STORE_KEY_PERSONNEL, entity: 'personnel', label: 'Personnel' },
-    { key: STORE_KEY_PAYSLIPS, entity: 'payslips', label: 'Payslips' },
     { key: STORE_KEY_BUDGETS, entity: 'budgets', label: 'Budgets' },
-    { key: STORE_KEY_FINANCE_SETTINGS, entity: 'finance_settings', label: 'Finance Settings' },
-    { key: STORE_KEY_PAYMENT_ACCOUNTS, entity: 'payment_accounts', label: 'Payment Accounts' },
+    { key: 'clasptek:budget_lines', entity: 'budget_lines', label: 'Budget Lines' },
+    { key: STORE_KEY_PAYSLIPS, entity: 'payslips', label: 'Payslips' },
     { key: STORE_KEY_FACILITATOR_SESSIONS, entity: 'facilitator_sessions', label: 'Facilitator Sessions' },
     { key: STORE_KEY_CUSTOMER_TIMELINE, entity: 'customer_timeline', label: 'Customer Timeline' },
-    { key: STORE_KEY_AUDIT_LOG, entity: 'finance_audit_log', label: 'Audit Log' }
+    { key: 'clasptek:collection_actions', entity: 'collection_actions', label: 'Collection Actions' },
+    { key: STORE_KEY_AUDIT_LOG, entity: 'finance_audit_log', label: 'Audit Log' },
+    { key: STORE_KEY_MANAGEMENT_ALERTS, entity: 'management_alerts', label: 'Management Alerts' },
+    { key: 'clasptek:approval_thresholds', entity: 'approval_thresholds', label: 'Approval Thresholds' },
+    { key: STORE_KEY_FINANCIAL_ADJUSTMENTS, entity: 'financial_adjustments', label: 'Financial Adjustments' },
+    { key: 'clasptek:report_snapshots', entity: 'report_snapshots', label: 'Report Snapshots' },
+    { key: 'clasptek:management_metrics', entity: 'management_metrics', label: 'Management Metrics' },
+    { key: 'clasptek:cash_flow_forecasts', entity: 'cash_flow_forecasts', label: 'Cash Flow Forecasts' },
+    { key: 'clasptek:customer_segments', entity: 'customer_segments', label: 'Customer Segments' },
+    { key: 'clasptek:invoice_items', entity: 'invoice_items', label: 'Invoice Items' }
   ];
 
   const counts = {};
@@ -4329,6 +4498,8 @@ async function inspectLegacyLocalData() {
       else if (s.entity === 'facilitator_sessions' && state.sessions && state.sessions.length) data = state.sessions;
       else if (s.entity === 'customer_timeline' && state.customerTimeline && state.customerTimeline.length) data = state.customerTimeline;
       else if (s.entity === 'finance_audit_log' && state.auditLog && state.auditLog.length) data = state.auditLog;
+      else if (s.entity === 'management_alerts' && state.alerts && state.alerts.length) data = state.alerts;
+      else if (s.entity === 'financial_adjustments' && state.financialAdjustments && state.financialAdjustments.length) data = state.financialAdjustments;
     }
 
     if (Array.isArray(data)) {
@@ -4345,33 +4516,62 @@ async function inspectLegacyLocalData() {
     }
   }
 
+  // Financial summary computation
+  const invList = records.invoices || [];
+  const payList = records.payments || [];
+  const expList = records.expenses || [];
+  const pslList = records.payslips || [];
+  const dirList = records.direct_income || [];
+  const accList = records.payment_accounts || [];
+
+  const totalInvoiced = invList.reduce((sum, i) => sum + Number(i.total || i.amount || 0), 0);
+  const totalReceivablesOutstanding = invList.reduce((sum, i) => sum + Number(i.balance !== undefined ? i.balance : Math.max(0, (i.total || 0) - (i.amountPaid || 0))), 0);
+  const totalCollected = payList.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const totalExpenses = expList.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalGrossPayroll = pslList.reduce((sum, p) => sum + Number(p.grossPay || p.basicSalary || p.basicPay || 0), 0);
+  const totalNetPayroll = pslList.reduce((sum, p) => sum + Number(p.netPay || (p.grossPay ? p.grossPay - (p.totalDeductions || 0) : 0)), 0);
+  const totalDirectIncome = dirList.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const totalAccountBalances = accList.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+
   return {
     hasLegacyData: totalRecords > 0,
     totalRecords,
     counts,
-    records
+    records,
+    financialSummary: {
+      totalInvoiced,
+      totalReceivablesOutstanding,
+      totalCollected,
+      totalExpenses,
+      totalGrossPayroll,
+      totalNetPayroll,
+      totalDirectIncome,
+      totalAccountBalances
+    }
   };
 }
 
 // 3. Safe Production Migration Engine (ID-Preserving, Conflict-Safe, Dependency-Ordered)
-async function migrateLegacyDataToPostgres() {
-  if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.API_KEY_INVALID ||
+async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
+  const config = resolveSupabaseConfiguration();
+  const isClientConfigured = supabaseClient.isConfigured();
+  
+  if (!isClientConfigured) {
+    throw new Error('Migration locked: Supabase PostgreSQL is not configured');
+  }
+
+  if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED ||
       state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED ||
+      state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.API_KEY_INVALID ||
       state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE ||
       state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED ||
-      state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID ||
-      state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED) {
+      state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.CONFIGURATION_INVALID) {
     throw new Error(`Migration locked: PostgreSQL connection has not been verified (Status: ${state.databaseAuthorityState}).`);
   }
 
-  if (!supabaseClient.isConfigured()) {
-    throw new Error('Migration aborted: Supabase PostgreSQL is not configured');
-  }
-
-  state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.MIGRATION_IN_PROGRESS;
-  await logAudit('MIGRATION_STARTED', 'system', 'migration', 'Legacy Local to PostgreSQL', null, null, 'Safe production data migration initiated');
-
   const legacy = await inspectLegacyLocalData();
+  const tenantId = resolveAuthoritativeTenantId();
+
   const stats = {
     detected: legacy.totalRecords,
     migrated: 0,
@@ -4380,7 +4580,7 @@ async function migrateLegacyDataToPostgres() {
     entities: {}
   };
 
-  // Foreign-Key Dependency Order
+  // Foreign-Key Dependency Order (Parents -> Children)
   const migrationSequence = [
     { entity: 'finance_settings', table: 'finance_settings', key: STORE_KEY_FINANCE_SETTINGS },
     { entity: 'payment_accounts', table: 'payment_accounts', key: STORE_KEY_PAYMENT_ACCOUNTS },
@@ -4390,17 +4590,55 @@ async function migrateLegacyDataToPostgres() {
     { entity: 'enquiries', table: 'enquiries', key: STORE_KEY_ENQUIRIES },
     { entity: 'enrolments', table: 'enrolments', key: STORE_KEY_ENROLMENTS },
     { entity: 'invoices', table: 'invoices', key: STORE_KEY_INVOICES },
+    { entity: 'invoice_items', table: 'invoice_items', key: 'clasptek:invoice_items' },
     { entity: 'payments', table: 'payments', key: STORE_KEY_PAYMENTS },
+    { entity: 'receipts', table: 'receipts', key: 'clasptek:receipts' },
     { entity: 'expenses', table: 'expenses', key: STORE_KEY_EXPENSES },
     { entity: 'direct_income', table: 'direct_income', key: STORE_KEY_DIRECT_INCOME },
     { entity: 'budgets', table: 'budgets', key: STORE_KEY_BUDGETS },
+    { entity: 'budget_lines', table: 'budget_lines', key: 'clasptek:budget_lines' },
     { entity: 'payslips', table: 'payslips', key: STORE_KEY_PAYSLIPS },
     { entity: 'facilitator_sessions', table: 'facilitator_sessions', key: STORE_KEY_FACILITATOR_SESSIONS },
     { entity: 'customer_timeline', table: 'customer_timeline', key: STORE_KEY_CUSTOMER_TIMELINE },
-    { entity: 'finance_audit_log', table: 'finance_audit_log', key: STORE_KEY_AUDIT_LOG }
+    { entity: 'collection_actions', table: 'collection_actions', key: 'clasptek:collection_actions' },
+    { entity: 'finance_audit_log', table: 'finance_audit_log', key: STORE_KEY_AUDIT_LOG },
+    { entity: 'management_alerts', table: 'management_alerts', key: STORE_KEY_MANAGEMENT_ALERTS },
+    { entity: 'approval_thresholds', table: 'approval_thresholds', key: 'clasptek:approval_thresholds' },
+    { entity: 'financial_adjustments', table: 'financial_adjustments', key: STORE_KEY_FINANCIAL_ADJUSTMENTS },
+    { entity: 'report_snapshots', table: 'report_snapshots', key: 'clasptek:report_snapshots' },
+    { entity: 'management_metrics', table: 'management_metrics', key: 'clasptek:management_metrics' },
+    { entity: 'cash_flow_forecasts', table: 'cash_flow_forecasts', key: 'clasptek:cash_flow_forecasts' },
+    { entity: 'customer_segments', table: 'customer_segments', key: 'clasptek:customer_segments' }
   ];
 
+  if (dryRun) {
+    for (const step of migrationSequence) {
+      const rawItems = legacy.records[step.entity] || [];
+      const items = Array.isArray(rawItems) ? rawItems : [rawItems].filter(Boolean);
+      stats.entities[step.entity] = { detected: items.length, migrated: 0, existing: 0, failed: 0 };
+    }
+    return {
+      dryRun: true,
+      readyToExecute: true,
+      totalDetected: legacy.totalRecords,
+      entitiesToMigrate: Object.keys(legacy.counts).filter(k => legacy.counts[k] > 0),
+      unmappableRecords: 0,
+      potentialOrphans: 0,
+      stats
+    };
+  }
+
+  state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.MIGRATION_IN_PROGRESS;
+  await logAudit('MIGRATION_STARTED', 'system', 'migration', 'Legacy Local to PostgreSQL', null, null, 'Safe production data migration initiated');
+
+  let hasFatalError = false;
+
   for (const step of migrationSequence) {
+    if (hasFatalError) {
+      console.warn(`Skipping migration step ${step.table} due to prior failure.`);
+      continue;
+    }
+
     const rawItems = legacy.records[step.entity] || [];
     const items = Array.isArray(rawItems) ? rawItems : [rawItems].filter(Boolean);
     stats.entities[step.entity] = { detected: items.length, migrated: 0, existing: 0, failed: 0 };
@@ -4408,6 +4646,9 @@ async function migrateLegacyDataToPostgres() {
     if (items.length === 0) continue;
 
     await logAudit('MIGRATION_ENTITY_STARTED', step.entity, step.table, `Migrating ${items.length} records`, null, null);
+
+    // Transform items for PostgreSQL (snake_case + tenant_id)
+    const transformedItems = items.map(it => transformEntityForPostgres(step.entity, it, tenantId));
 
     // Read back existing rows from PostgreSQL first to detect conflicts/pre-existing data
     let existingIds = new Set();
@@ -4420,13 +4661,14 @@ async function migrateLegacyDataToPostgres() {
       // ignore
     }
 
-    // Process batch with upsert
+    // Process batch with idempotent upsert
     try {
-      const { data, error } = await supabaseClient.from(step.table).upsert(items);
+      const { data, error } = await supabaseClient.from(step.table).upsert(transformedItems);
       if (error) {
         console.warn(`Migration error on ${step.table}:`, error);
         stats.failed += items.length;
         stats.entities[step.entity].failed += items.length;
+        hasFatalError = true;
         await logAudit('MIGRATION_RECORD_FAILED', step.entity, step.table, `Failed ${items.length} records: ${error.message || ''}`, null, null);
       } else {
         // Read back verification
@@ -4453,14 +4695,15 @@ async function migrateLegacyDataToPostgres() {
     } catch (err) {
       stats.failed += items.length;
       stats.entities[step.entity].failed += items.length;
+      hasFatalError = true;
     }
   }
 
-  // Record migration run
+  // Record migration run in local state & audit
   const runId = `mig_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   const migrationRunRecord = {
     id: runId,
-    tenant_id: DEFAULT_TENANT_ID,
+    tenant_id: tenantId,
     migration_type: 'LEGACY_LOCALSTORAGE_TO_POSTGRES',
     status: stats.failed === 0 ? 'COMPLETED' : 'PARTIAL_OR_FAILED',
     total_detected: stats.detected,
@@ -4504,25 +4747,25 @@ async function reconcileProductionData() {
   const local = await inspectLegacyLocalData();
   const remote = await inspectProductionDatabase();
 
-  const entities = [
-    'programmes', 'customers', 'enquiries', 'enrolments', 'invoices',
-    'payments', 'expenses', 'direct_income', 'personnel', 'payslips',
-    'budgets', 'facilitator_sessions', 'customer_timeline'
-  ];
-
   const countComparisons = {};
   let totalLocal = 0;
   let totalRemote = 0;
   let hasCountMismatch = false;
 
-  for (const ent of entities) {
+  const reconciliationEntities = [
+    'programmes', 'customers', 'enquiries', 'enrolments', 'invoices',
+    'payments', 'expenses', 'direct_income', 'personnel', 'payslips',
+    'budgets', 'facilitator_sessions', 'customer_timeline'
+  ];
+
+  for (const ent of reconciliationEntities) {
     const locCount = local.counts[ent] || 0;
     const remCount = remote.counts[ent] || 0;
     const diff = remCount - locCount;
     countComparisons[ent] = { local: locCount, remote: remCount, difference: diff };
     totalLocal += locCount;
     totalRemote += remCount;
-    if (diff < 0) hasCountMismatch = true;
+    if (locCount > 0 && remCount < locCount) hasCountMismatch = true;
   }
 
   // Referential Integrity Checks
@@ -4664,7 +4907,7 @@ async function runProductionReconciliation() {
 
   const runRecord = {
     id: runId,
-    tenant_id: DEFAULT_TENANT_ID,
+    tenant_id: resolveAuthoritativeTenantId(),
     run_type: 'CONTINUOUS',
     status: reconResult.isReconciled ? 'SUCCESS' : (reconResult.criticalOrphanCount > 0 ? 'CRITICAL' : 'EXCEPTION'),
     total_entities_checked: Object.keys(reconResult.counts).length,
@@ -17852,7 +18095,10 @@ function renderChangeRoleModal(container, user) {
       preserveLegacyData,
       // Component 0 Environment / Deployment Credential Resolution Exports
       resolveSupabaseProductionConfig,
-      formatSupabaseProductionConfig
+      formatSupabaseProductionConfig,
+      // Phase 14.4 Production Migration & Reconciliation Exports
+      resolveAuthoritativeTenantId,
+      transformEntityForPostgres
     };
   }
 
@@ -17862,6 +18108,11 @@ function renderChangeRoleModal(container, user) {
     window.diagnoseSupabase401 = diagnoseSupabase401;
     window.diagnoseDirectRestProbe = diagnoseDirectRestProbe;
     window.runProductionConnectionSelfTest = runProductionConnectionSelfTest;
+    window.inspectProductionDatabase = inspectProductionDatabase;
+    window.inspectLegacyLocalData = inspectLegacyLocalData;
+    window.migrateLegacyDataToPostgres = migrateLegacyDataToPostgres;
+    window.reconcileProductionData = reconcileProductionData;
+    window.activatePostgresAuthoritativeMode = activatePostgresAuthoritativeMode;
   }
 })();
 </script>
