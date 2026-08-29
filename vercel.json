@@ -1,10 +1,9 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "cleanUrls": true,
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/clasptek_invoice_system.html", "destination": "/index.html" },
+    { "source": "/((?!runtime-config\\.js|public/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
