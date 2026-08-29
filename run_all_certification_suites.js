@@ -26,7 +26,8 @@ const suites = [
   { name: 'Phase 14.3: Vercel Production Credential Injection & Supabase Connectivity Verification', file: 'test_phase14_3_vercel_publishable_key.js' },
   { name: 'Phase 14.4: Production Legacy Data Migration, Reconciliation & PostgreSQL Authority Activation', file: 'test_phase14_4_production_migration_reconciliation.js' },
   { name: 'Phase 14.5: Live Migration Execution, Reconciliation Evidence & PostgreSQL Authority Certification', file: 'test_phase14_5_live_migration_certification.js' },
-  { name: 'Phase 14.5A: Vercel SUPABASE_PUBLISHABLE_KEY Wiring Audit & Header Certification', file: 'test_phase14_5_vercel_publishable_key_delivery.js' }
+  { name: 'Phase 14.5A: Vercel SUPABASE_PUBLISHABLE_KEY Wiring Audit & Header Certification', file: 'test_phase14_5_vercel_publishable_key_delivery.js' },
+  { name: 'Phase 14.6: Controlled Live Production Migration Execution & Authority Certification', file: 'test_phase14_6_live_migration_execution.js' }
 ];
 
 let totalPassed = 0;
