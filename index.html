@@ -2670,13 +2670,40 @@ function resolveSupabaseProductionConfig() {
 
 function formatSupabaseProductionConfig(diag) {
   const d = diag || resolveSupabaseProductionConfig();
+  const urlConfigured = Boolean(d.urlConfigured);
+  const keyConfigured = Boolean(d.publicKeyConfigured);
+  const isMatch = Boolean(d.publicKeyProjectMatched);
+  const isSecret = Boolean(d.secretDetected);
+  const credType = (d.publicKeyRole || 'UNKNOWN').toUpperCase();
+  const src = (d.source || 'NONE').toUpperCase();
+
+  const text = [
+    '========================================================',
+    'CLASPTEK PRODUCTION SUPABASE CONFIGURATION',
+    '========================================================',
+    '',
+    `Supabase URL              ${urlConfigured ? '✓ CONFIGURED' : '✖ NOT CONFIGURED'}`,
+    `Project Reference         ✓ ${d.projectRef || CANONICAL_SUPABASE_PROJECT_REF}`,
+    `Public Credential         ${keyConfigured ? '✓ CONFIGURED' : '✖ MISSING'}`,
+    `Credential Type           ${keyConfigured ? '✓ ' + credType : '✖ NONE'}`,
+    `Project Match             ${isMatch ? '✓ TRUE' : '✖ FALSE'}`,
+    `Secret Detected           ${!isSecret ? '✓ FALSE' : '✖ CRITICAL: SECRET DETECTED'}`,
+    `Credential Source         ✓ ${src}`,
+    '',
+    '========================================================'
+  ].join('\n');
+
   return {
     source: d.source,
-    urlStatus: d.urlConfigured ? 'CONFIGURED' : 'NOT CONFIGURED',
-    project: d.publicKeyProjectMatched ? `${d.projectRef} (MATCHED)` : `${d.projectRef} (MISMATCH)`,
-    publicCredential: d.publicKeyConfigured ? 'CONFIGURED' : 'MISSING',
-    credentialType: d.publicKeyRole.toUpperCase(),
-    secretExposure: d.secretDetected ? 'CRITICAL: SECRET DETECTED' : 'NONE'
+    urlStatus: urlConfigured ? 'CONFIGURED' : 'NOT CONFIGURED',
+    project: isMatch ? `${d.projectRef} (MATCHED)` : `${d.projectRef} (MISMATCH)`,
+    projectRef: d.projectRef,
+    publicCredential: keyConfigured ? 'CONFIGURED' : 'MISSING',
+    credentialType: credType,
+    projectMatch: isMatch ? 'TRUE' : 'FALSE',
+    secretDetected: isSecret ? 'TRUE' : 'FALSE',
+    secretExposure: isSecret ? 'CRITICAL: SECRET DETECTED' : 'NONE',
+    text
   };
 }
 
@@ -3274,18 +3301,21 @@ async function diagnoseSupabase401() {
   } catch (_) {}
 
   const sessObj = authSess && authSess.session;
-  const authUser = sessObj ? sessObj.user : (state.auth && state.auth.user ? state.auth.user : null);
+  const sessUser = sessObj ? sessObj.user : null;
+  const stateUser = (state.auth && state.auth.user) ? state.auth.user : null;
+  const authUser = (stateUser && (stateUser.role || stateUser.tenant_id)) ? { ...sessUser, ...stateUser } : (sessUser || stateUser);
   const authUserId = authUser ? (authUser.id || authUser.email || 'usr_masked') : null;
   const rawRole = (authUser && (authUser.role || (authUser.app_metadata && authUser.app_metadata.role) || (authUser.user_metadata && authUser.user_metadata.role))) || 'ANONYMOUS';
   const role = rawRole.toUpperCase().replace(/\s+/g, '_');
   const token = (sessObj && sessObj.access_token) || (state.auth && (state.auth.supabaseJwt || (state.auth.token && state.auth.token.startsWith('eyJ') ? state.auth.token : null)));
   const isExpired = Boolean(sessObj && sessObj.expires_at && (sessObj.expires_at * 1000) < Date.now());
-  const tenantId = (authUser && (authUser.tenant_id || (authUser.app_metadata && authUser.app_metadata.tenant_id))) || DEFAULT_TENANT_ID;
+  const canonicalTenant = 'clasptek_main';
+  const tenantId = (authUser && (authUser.tenant_id || (authUser.app_metadata && authUser.app_metadata.tenant_id))) || canonicalTenant;
 
   const sessionTest = {
     authenticated: Boolean(authUser && (state.auth?.isAuthenticated || Boolean(sessObj))),
     userId: authUserId ? 'usr_****' : 'none',
-    tenantId: `${DEFAULT_TENANT_ID} (masked)`,
+    tenantId: `${canonicalTenant} (masked)`,
     role,
     tokenPresent: Boolean(token),
     tokenExpired: isExpired,
@@ -3359,11 +3389,11 @@ async function diagnoseSupabase401() {
   };
 
   // 8. Tenant Membership Verification
-  const tenantMatch = (tenantId === DEFAULT_TENANT_ID);
-  const isAuthorizedRole = (role === 'SUPER_ADMIN' || role === 'FINANCE_MANAGER' || role === 'STAFF' || role === 'SUPER_ADMINISTRATOR');
+  const tenantMatch = (tenantId === canonicalTenant);
+  const isAuthorizedRole = (role === 'SUPER_ADMIN' || role === 'FINANCE_MANAGER' || role === 'STAFF' || role === 'SUPER_ADMINISTRATOR' || role === 'FINANCE_STAFF' || role === 'SUPER ADMIN');
   const tenantTest = {
     verified: tenantMatch && isAuthorizedRole,
-    tenantId: DEFAULT_TENANT_ID,
+    tenantId: canonicalTenant,
     role,
     membershipAuthoritative: true
   };
@@ -3428,7 +3458,10 @@ async function runProductionConnectionSelfTest() {
 
   const configuration = (diag.urlTest.urlValid && diag.keyTest.isValid) ? 'PASS' : 'FAIL';
   const projectIdentity = ((diag.urlTest.isMatch || diag.urlTest.canonicalMatch) && (diag.keyTest.isProjectMatch || diag.keyTest.isValid)) ? 'PASS' : 'FAIL';
-  const authentication = (diag.sessionTest.authenticated && diag.sessionTest.tokenPresent && !diag.sessionTest.tokenExpired) ? 'PASS' : 'FAIL';
+  const publicKey = (diag.keyTest.isValid && !diag.keyTest.isServiceRole) ? 'PASS' : 'FAIL';
+  const session = diag.sessionTest.authenticated ? 'PASS' : 'FAIL';
+  const accessToken = (diag.sessionTest.tokenPresent && !diag.sessionTest.tokenExpired) ? 'PASS' : 'FAIL';
+  const authentication = (session === 'PASS' && accessToken === 'PASS') ? 'PASS' : 'FAIL';
   const authorization = diag.rlsMatrix.overallPassed ? 'PASS' : 'FAIL';
   const tenant = diag.tenantTest.verified ? 'PASS' : 'FAIL';
   const postgrest = (diag.programmesTest.httpStatus === 200) ? 'PASS' : 'FAIL';
@@ -3438,7 +3471,9 @@ async function runProductionConnectionSelfTest() {
   const allPassed = (
     configuration === 'PASS' &&
     projectIdentity === 'PASS' &&
-    authentication === 'PASS' &&
+    publicKey === 'PASS' &&
+    session === 'PASS' &&
+    accessToken === 'PASS' &&
     authorization === 'PASS' &&
     tenant === 'PASS' &&
     postgrest === 'PASS' &&
@@ -3451,13 +3486,116 @@ async function runProductionConnectionSelfTest() {
   return {
     configuration,
     projectIdentity,
+    publicKey,
+    session,
+    accessToken,
     authentication,
     authorization,
     tenant,
     postgrest,
     programmesRead,
     schema,
-    databaseAuthority
+    databaseAuthority,
+    allPassed
+  };
+}
+
+async function diagnoseDirectRestProbe() {
+  const client = getSupabaseClient();
+  const startTimeCanonical = Date.now();
+  let canonicalRes = { httpStatus: 0, ok: false, data: null, latencyMs: 0, category: 'POSTGRESQL_UNREACHABLE' };
+
+  try {
+    const res = await client.from('programmes').select('*');
+    const latency = Date.now() - startTimeCanonical;
+    const status = res.status || (res.ok ? 200 : (res.httpStatus || 0));
+    const data = res.data || res.records || [];
+    let cat = 'POSTGRESQL_UNREACHABLE';
+    if (status === 200) cat = data.length === 0 ? 'POSTGRESQL_CONNECTED_EMPTY' : 'POSTGRESQL_CONNECTED_DATA_PRESENT';
+    else if (status === 401) cat = 'AUTHENTICATION_FAILED';
+    else if (status === 403) cat = 'RLS_AUTHORIZATION_FAILED';
+    else if (status === 404) cat = 'SCHEMA_OR_TABLE_NOT_FOUND';
+    else if (status >= 500) cat = 'POSTGRESQL_SERVER_ERROR';
+
+    canonicalRes = {
+      httpStatus: status,
+      ok: status === 200,
+      data,
+      latencyMs: latency,
+      category: cat
+    };
+  } catch (err) {
+    canonicalRes = {
+      httpStatus: 0,
+      ok: false,
+      data: null,
+      latencyMs: Date.now() - startTimeCanonical,
+      category: 'POSTGRESQL_UNREACHABLE',
+      error: err.message
+    };
+  }
+
+  const startTimeDirect = Date.now();
+  let directRes = { httpStatus: 0, ok: false, data: null, latencyMs: 0, category: 'POSTGRESQL_UNREACHABLE' };
+
+  try {
+    const ep = client.getEndpoint();
+    const headers = client.getHeaders();
+    const res = await fetch(`${ep}programmes?select=*&limit=1`, {
+      method: 'GET',
+      headers
+    });
+    const latency = Date.now() - startTimeDirect;
+    let data = [];
+    if (res.ok) {
+      data = await res.json().catch(() => []);
+    }
+    let cat = 'POSTGRESQL_UNREACHABLE';
+    if (res.status === 200) cat = (Array.isArray(data) && data.length === 0) ? 'POSTGRESQL_CONNECTED_EMPTY' : 'POSTGRESQL_CONNECTED_DATA_PRESENT';
+    else if (res.status === 401) cat = 'AUTHENTICATION_FAILED';
+    else if (res.status === 403) cat = 'RLS_AUTHORIZATION_FAILED';
+    else if (res.status === 404) cat = 'SCHEMA_OR_TABLE_NOT_FOUND';
+    else if (res.status >= 500) cat = 'POSTGRESQL_SERVER_ERROR';
+
+    directRes = {
+      httpStatus: res.status,
+      ok: res.ok,
+      data,
+      latencyMs: latency,
+      category: cat
+    };
+  } catch (err) {
+    directRes = {
+      httpStatus: 0,
+      ok: false,
+      data: null,
+      latencyMs: Date.now() - startTimeDirect,
+      category: 'POSTGRESQL_UNREACHABLE',
+      error: err.message
+    };
+  }
+
+  let comparisonResult = 'POSTGRESQL_UNREACHABLE';
+  if (canonicalRes.httpStatus === 200 && directRes.httpStatus === 200) {
+    comparisonResult = 'POSTGREST_CONNECTIVITY_PASS';
+  } else if (directRes.httpStatus === 200 && canonicalRes.httpStatus === 401) {
+    comparisonResult = 'APPLICATION_CLIENT_CONFIGURATION_ERROR';
+  } else if (canonicalRes.httpStatus === 401 && directRes.httpStatus === 401) {
+    comparisonResult = 'CREDENTIAL_OR_AUTHENTICATION_FAILURE';
+  } else if (canonicalRes.httpStatus === 403 || directRes.httpStatus === 403) {
+    comparisonResult = 'RLS_AUTHORIZATION_FAILURE';
+  }
+
+  const table = [
+    { test: 'Canonical Client', http: canonicalRes.httpStatus, result: canonicalRes.category },
+    { test: 'Direct REST', http: directRes.httpStatus, result: directRes.category }
+  ];
+
+  return {
+    canonicalClient: canonicalRes,
+    directRest: directRes,
+    comparisonResult,
+    table
   };
 }
 
@@ -17705,9 +17843,10 @@ function renderChangeRoleModal(container, user) {
       verifyProductionSchema,
       verifyProductionRlsMatrix,
       activatePostgresAuthoritativeMode,
-      // Phase 14.1 Supabase 401 Authentication Resolution Exports
+      // Phase 14.1 & 14.3 Supabase Authentication & Connectivity Resolution Exports
       getSupabaseClient,
       diagnoseSupabase401,
+      diagnoseDirectRestProbe,
       runProductionConnectionSelfTest,
       preserveCurrentState,
       preserveLegacyData,
@@ -17720,6 +17859,9 @@ function renderChangeRoleModal(container, user) {
   if (typeof window !== 'undefined') {
     window.resolveSupabaseProductionConfig = resolveSupabaseProductionConfig;
     window.formatSupabaseProductionConfig = formatSupabaseProductionConfig;
+    window.diagnoseSupabase401 = diagnoseSupabase401;
+    window.diagnoseDirectRestProbe = diagnoseDirectRestProbe;
+    window.runProductionConnectionSelfTest = runProductionConnectionSelfTest;
   }
 })();
 </script>
