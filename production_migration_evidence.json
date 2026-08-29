@@ -1,13 +1,22 @@
 {
-  "phase": "14.9",
-  "executionMode": "LIVE_REMOTE",
+  "phase": "15",
+  "executionMode": "LIVE_CLOUD",
   "projectRef": "logaawoigfxnisimfatf",
   "supabaseUrl": "https://logaawoigfxnisimfatf.supabase.co",
-  "networkRequestConfirmed": false,
-  "remoteEvidence": false,
+  "authenticated": false,
+  "schemaVerified": false,
+  "postgrestVerified": false,
+  "dryRunPassed": false,
   "migrationExecuted": false,
+  "liveMigrationPassed": false,
+  "readBackPassed": false,
+  "recordReconciliationPassed": false,
+  "financialReconciliationPassed": false,
+  "secondRunIdempotencyPassed": false,
+  "liveRemoteEvidence": false,
   "authorityState": "BLOCKED",
   "evidenceClassification": "LIVE_MIGRATION_BLOCKED",
   "credentialsExposed": false,
-  "timestamp": "2026-08-29T21:45:00.000Z"
+  "blockingReason": "Awaiting authenticated Super Admin browser session at https://app.clasptek.org",
+  "timestamp": "2026-08-29T22:10:00.000Z"
 }

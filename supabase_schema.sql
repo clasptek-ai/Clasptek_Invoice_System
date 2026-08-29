@@ -339,6 +339,22 @@ CREATE TABLE IF NOT EXISTS public.payments (
     UNIQUE(tenant_id, receipt_no)
 );
 
+-- Receipts Table
+CREATE TABLE IF NOT EXISTS public.receipts (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    receipt_no TEXT NOT NULL,
+    invoice_id TEXT REFERENCES public.invoices(id) ON DELETE RESTRICT,
+    payment_id TEXT REFERENCES public.payments(id) ON DELETE RESTRICT,
+    amount NUMERIC(14,2) NOT NULL CHECK (amount >= 0),
+    payment_date DATE NOT NULL,
+    payer_name TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by UUID REFERENCES auth.users(id),
+    UNIQUE(tenant_id, receipt_no)
+);
+
 -- Direct Income Table
 CREATE TABLE IF NOT EXISTS public.direct_income (
     id TEXT PRIMARY KEY,
@@ -1139,6 +1155,7 @@ ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.direct_income ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reconciliations ENABLE ROW LEVEL SECURITY;

@@ -1,22 +1,10 @@
 /**
  * CLASPTEK ENTERPRISE MANAGEMENT PLATFORM
- * Phase 14.9 Master Suite: Real Live Supabase Migration Execution & Cloud Authority Activation Certification
+ * Test Suite 28: Phase 15 — Real Cloud Supabase Migration Execution & Production Authority Certification
  * 
- * 125+ Assertions certifying:
- * - Simulation & Mocked Fetch cannot produce LIVE_REMOTE
- * - Unauthenticated / Invalid JWT / Expired JWT / Wrong Project JWT blocks migration
- * - Publishable key & sess_* strictly rejected as Authorization Bearer tokens
- * - Strict 401/403/404/5xx/Network Error Non-Empty rowCount = null Invariant across 27 tables
- * - Zero-Write Dry Run Invariant (writesAttempted === 0, networkWritesExecuted === 0)
- * - Explicit Administrator Confirmation Gate Requirement (Never auto-runs on page load)
- * - Real HTTPS Upsert Contract preserving Original PKs, Tenant UUID, and 27-table FK order
- * - Immediate Halting on Fatal Errors with Authority strictly marked BLOCKED
- * - Zero LocalStorage & Application State Deletions / Truncations
- * - Complete Remote Read-Back & Record Reconciliation
- * - Integer-Cent Financial Ledger Reconciliation (variance = ₦0.00)
- * - Second Real Remote Migration Idempotency Proof (0 duplicates created)
- * - 14-Gate Certification activating PostgreSQL Authority ONLY with genuine remote evidence
- * - Strict Demarcation: Automated Test Certification (SIMULATED_TEST_ONLY) vs Live Cloud Migration (LIVE_REMOTE_CERTIFIED)
+ * Validates the complete 14-stage authenticated migration contract, zero-write dry run,
+ * explicit human confirmation, fatal-error break logic, remote read-back, integer-cent financial ledger
+ * reconciliation (variance = ₦0.00), second-run idempotency proof, and 14-gate PostgreSQL authority certification.
  */
 
 const fs = require('fs');
@@ -66,7 +54,7 @@ function createMockElement(tagName = 'div', attrs = {}) {
 function generateMockJwt(payloadObj) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
-  const sig = Buffer.from('mock_signature_hash_p14_9').toString('base64url');
+  const sig = Buffer.from('mock_signature_hash_phase15').toString('base64url');
   return `${header}.${payload}.${sig}`;
 }
 
@@ -102,7 +90,7 @@ function createHarness(customEnv = {}, mockFetchFn = null) {
       btoa: (s) => Buffer.from(s, 'utf-8').toString('base64'),
       __CLASPTEK_ENV__: {
         SUPABASE_URL: 'https://logaawoigfxnisimfatf.supabase.co',
-        SUPABASE_PUBLISHABLE_KEY: 'sb_pub_phase14_9_prod_key_77777',
+        SUPABASE_PUBLISHABLE_KEY: 'sb_pub_phase15_prod_key_99999',
         ...customEnv
       }
     },
@@ -113,7 +101,7 @@ function createHarness(customEnv = {}, mockFetchFn = null) {
           return createMockElement('meta', { name: 'supabase-endpoint', content: 'https://logaawoigfxnisimfatf.supabase.co' });
         }
         if (selector.includes('supabase-publishable-key') || selector.includes('Publishable_key') || selector.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')) {
-          return createMockElement('meta', { name: 'supabase-publishable-key', content: 'sb_pub_phase14_9_prod_key_77777' });
+          return createMockElement('meta', { name: 'supabase-publishable-key', content: 'sb_pub_phase15_prod_key_99999' });
         }
         return createMockElement();
       },
@@ -134,14 +122,14 @@ function createHarness(customEnv = {}, mockFetchFn = null) {
   return { app: sandbox.module.exports, sandbox, storageMap };
 }
 
-async function runPhase14_9Tests() {
+async function runPhase15RealCloudMigrationTests() {
   console.log('====================================================================================================');
-  console.log(' CLASPTEK PHASE 14.9: REAL LIVE SUPABASE MIGRATION EXECUTION & CLOUD AUTHORITY CERTIFICATION');
+  console.log(' CLASPTEK PHASE 15: REAL SUPABASE CLOUD MIGRATION & PRODUCTION AUTHORITY CERTIFICATION');
   console.log('====================================================================================================\n');
 
   const tenantUuid = 'f4a18b23-5e2b-4e1c-89a1-b3091df882b2';
   const validUserJwt = generateMockJwt({
-    sub: 'usr_superadmin_p14_9',
+    sub: 'usr_superadmin_p15',
     email: 'admin@clasptek.org',
     role: 'SUPER_ADMIN',
     tenant_id: tenantUuid,
@@ -150,7 +138,7 @@ async function runPhase14_9Tests() {
     exp: Math.floor(Date.now() / 1000) + 7200
   });
 
-  const { app, sandbox, storageMap } = createHarness();
+  const { app, sandbox } = createHarness();
 
   // ---------------------------------------------------------------------------
   // SECTION 1: Safety Gates & Simulation vs Live Demarcation
@@ -205,7 +193,7 @@ async function runPhase14_9Tests() {
   assert(wrongProjRes.authorityState === 'BLOCKED', 'Test 011: Authority state BLOCKED on mismatched project JWT');
 
   // Test 6: Publishable key / sess_* rejected as Bearer token
-  app.state.auth = { isAuthenticated: true, supabaseJwt: 'sb_pub_phase14_9_prod_key_77777', user: { id: 'u1' } };
+  app.state.auth = { isAuthenticated: true, supabaseJwt: 'sb_pub_phase15_prod_key_99999', user: { id: 'u1' } };
   const pubKeyBearerRes = await app.executePhase14_9LiveCloudMigration({ confirmed: true });
   assert(pubKeyBearerRes.success === false, 'Test 012: Publishable key rejected as Bearer token');
 
@@ -222,13 +210,13 @@ async function runPhase14_9Tests() {
   app.state.auth = {
     isAuthenticated: true,
     supabaseJwt: validUserJwt,
-    user: { id: 'usr_superadmin_p14_9', role: 'SUPER_ADMIN', email: 'admin@clasptek.org', tenant_id: tenantUuid },
-    supabaseUser: { id: 'usr_superadmin_p14_9', role: 'SUPER_ADMIN', email: 'admin@clasptek.org', tenant_id: tenantUuid }
+    user: { id: 'usr_superadmin_p15', role: 'SUPER_ADMIN', email: 'admin@clasptek.org', tenant_id: tenantUuid },
+    supabaseUser: { id: 'usr_superadmin_p15', role: 'SUPER_ADMIN', email: 'admin@clasptek.org', tenant_id: tenantUuid }
   };
 
   const vercelHarness = createHarness({
     SUPABASE_PUBLISHABLE_KEY: undefined,
-    Publishable_key: 'sb_pub_vercel_casing_p14_9'
+    Publishable_key: 'sb_pub_vercel_casing_p15'
   });
   const confVercel = vercelHarness.app.resolveSupabaseProductionConfig();
   assert(confVercel.urlConfigured === true, 'Test 014: Vercel Supabase URL configured');
@@ -296,17 +284,17 @@ async function runPhase14_9Tests() {
   console.log('\n--- Section 4: Local Legacy Inventory & Zero-Write Dry Run ---');
 
   // Seed sample local records
-  app.state.customers = [{ id: 'c_p14_9_1', name: 'Alhaji Musa Dangote', balance: 250000.25 }];
-  app.state.programmes = [{ id: 'prog_p14_9_1', name: 'Advanced Cyber Security Diploma', tuitionFee: 500000.50 }];
-  app.state.personnel = [{ id: 'pers_p14_9_1', name: 'Dr. John Doe', role: 'LECTURER', email: 'john@clasptek.org' }];
-  app.state.enquiries = [{ id: 'enq_p14_9_1', customerId: 'c_p14_9_1', programmeId: 'prog_p14_9_1', enquiryNo: 'ENQ-149-1' }];
-  app.state.enrolments = [{ id: 'enr_p14_9_1', customerId: 'c_p14_9_1', programmeId: 'prog_p14_9_1', enrolmentNo: 'ENR-149-1' }];
-  app.state.invoices = [{ id: 'inv_p14_9_1', customerId: 'c_p14_9_1', invoiceNo: 'INV-149-1', total: 500000.50, balance: 250000.25, amountPaid: 250000.25 }];
-  app.state.payments = [{ id: 'pay_p14_9_1', customerId: 'c_p14_9_1', paymentNo: 'PAY-149-1', invoiceId: 'inv_p14_9_1', amount: 250000.25 }];
-  app.state.expenses = [{ id: 'exp_p14_9_1', expenseNo: 'EXP-149-1', amount: 120000.75, category: 'OPERATIONAL', status: 'posted' }];
-  app.state.payslips = [{ id: 'psl_p14_9_1', personnelId: 'pers_p14_9_1', payslipNo: 'PSL-149-1', grossPay: 400000, totalDeductions: 40000, netPay: 360000, status: 'issued' }];
-  app.state.directIncome = [{ id: 'dir_p14_9_1', amount: 150000.00, source: 'CONSULTING' }];
-  app.state.paymentAccounts = [{ id: 'acc_p14_9_1', name: 'GTBank Enterprise Account', balance: 5000000 }];
+  app.state.customers = [{ id: 'c_p15_1', name: 'Alhaji Musa Dangote', balance: 250000.25 }];
+  app.state.programmes = [{ id: 'prog_p15_1', name: 'Advanced Cyber Security Diploma', tuitionFee: 500000.50 }];
+  app.state.personnel = [{ id: 'pers_p15_1', name: 'Dr. John Doe', role: 'LECTURER', email: 'john@clasptek.org' }];
+  app.state.enquiries = [{ id: 'enq_p15_1', customerId: 'c_p15_1', programmeId: 'prog_p15_1', enquiryNo: 'ENQ-15-1' }];
+  app.state.enrolments = [{ id: 'enr_p15_1', customerId: 'c_p15_1', programmeId: 'prog_p15_1', enrolmentNo: 'ENR-15-1' }];
+  app.state.invoices = [{ id: 'inv_p15_1', customerId: 'c_p15_1', invoiceNo: 'INV-15-1', total: 500000.50, balance: 250000.25, amountPaid: 250000.25 }];
+  app.state.payments = [{ id: 'pay_p15_1', customerId: 'c_p15_1', paymentNo: 'PAY-15-1', invoiceId: 'inv_p15_1', amount: 250000.25 }];
+  app.state.expenses = [{ id: 'exp_p15_1', expenseNo: 'EXP-15-1', amount: 120000.75, category: 'OPERATIONAL', status: 'posted' }];
+  app.state.payslips = [{ id: 'psl_p15_1', personnelId: 'pers_p15_1', payslipNo: 'PSL-15-1', grossPay: 400000, totalDeductions: 40000, netPay: 360000, status: 'issued' }];
+  app.state.directIncome = [{ id: 'dir_p15_1', amount: 150000.00, source: 'CONSULTING' }];
+  app.state.paymentAccounts = [{ id: 'acc_p15_1', name: 'GTBank Enterprise Account', balance: 5000000 }];
 
   const localStateBefore = JSON.stringify(app.state.customers);
   const localInv = await app.inspectLegacyLocalData();
@@ -342,7 +330,6 @@ async function runPhase14_9Tests() {
   // ---------------------------------------------------------------------------
   console.log('\n--- Section 5: Explicit Live Confirmation Gate ---');
 
-  // Executing without confirmed: true must NOT perform writes and must return readiness prompt
   const unconfirmedRes = await app.executePhase14_9LiveCloudMigration({ confirmed: false });
   assert(unconfirmedRes.success === false, 'Test 051: Unconfirmed execution returns success === false');
   assert(unconfirmedRes.readyForLiveConfirmation === true, 'Test 052: Reports readyForLiveConfirmation === true');
@@ -351,33 +338,39 @@ async function runPhase14_9Tests() {
   assert(unconfirmedRes.evidenceClassification === 'LIVE_REMOTE_READINESS', 'Test 055: Evidence classification is LIVE_REMOTE_READINESS');
 
   // ---------------------------------------------------------------------------
-  // SECTION 6: Fatal Error Immediate Halting & Non-Destructive Invariant
+  // SECTION 6: Fatal Error Immediate Halting & Non-Destructive Behavior
   // ---------------------------------------------------------------------------
   console.log('\n--- Section 6: Fatal Error Immediate Halting ---');
 
-  // Simulate network write failure on 'invoices' table
   let executedTables = [];
   sandbox.fetch = async (url, opts) => {
-    if (opts && (opts.method === 'POST' || opts.method === 'PATCH')) {
-      const match = url.match(/\/rest\/v1\/([^?]+)/);
-      const tableName = match ? match[1] : 'unknown';
+    const method = (opts && opts.method) || 'GET';
+    const match = url.match(/\/rest\/v1\/([^?]+)/);
+    const tableName = match ? match[1] : '';
+
+    if (method === 'POST' || method === 'PATCH' || method === 'PUT') {
       executedTables.push(tableName);
       if (tableName === 'invoices') {
-        return { ok: false, status: 500, json: async () => ({ message: 'PostgreSQL Foreign Key Violation in Invoices' }) };
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ message: 'PostgreSQL connection terminated unexpectedly', code: '57P01' }),
+          text: async () => JSON.stringify({ message: 'PostgreSQL connection terminated unexpectedly', code: '57P01' })
+        };
       }
-      return { ok: true, status: 201, json: async () => [{ id: 'ok' }] };
+      return { ok: true, status: 201, json: async () => [{ id: 'mock_1' }], text: async () => '[{"id":"mock_1"}]' };
     }
-    return { ok: true, status: 200, json: async () => ([]), text: async () => '[]' };
+    return { ok: true, status: 200, json: async () => [], text: async () => '[]' };
   };
 
-  const fatalErrorRes = await app.executePhase14_9LiveCloudMigration({ confirmed: true });
-  assert(fatalErrorRes.success === false, 'Test 056: Fatal error execution returns success === false');
-  assert(fatalErrorRes.fatalError === true, 'Test 057: Fatal error flag is true');
-  assert(fatalErrorRes.failedTable === 'invoices', 'Test 058: Failed table correctly identified as invoices');
-  assert(fatalErrorRes.authorityState === 'BLOCKED', 'Test 059: Authority state strictly BLOCKED on fatal error');
-  assert(!executedTables.includes('payments'), 'Test 060: Subsequent tables (payments) skipped after fatal error');
+  app.resetMigrationNetworkCounters();
+  const fatalResult = await app.executePhase14_9LiveCloudMigration({ confirmed: true });
 
-  // Verify local data is NOT deleted on fatal error
+  assert(fatalResult.success === false, 'Test 056: Migration failed on error');
+  assert(fatalResult.fatalError === true, 'Test 057: hasFatalError flag is true');
+  assert(fatalResult.failedTable === 'invoices', 'Test 058: Failed table correctly identified as invoices');
+  assert(fatalResult.authorityState === 'BLOCKED', 'Test 059: Authority state strictly BLOCKED on fatal error');
+  assert(!executedTables.includes('payments'), 'Test 060: Subsequent tables (payments) skipped after fatal error');
   assert(app.state.customers.length >= 1, 'Test 061: Local customers preserved on fatal error');
   assert(app.state.invoices.length >= 1, 'Test 062: Local invoices preserved on fatal error');
 
@@ -386,7 +379,6 @@ async function runPhase14_9Tests() {
   // ---------------------------------------------------------------------------
   console.log('\n--- Section 7: Full 14-Stage Real Cloud Migration ---');
 
-  // Setup fully successful cloud response mock
   const remotePostgreSqlDatabase = {};
   executedTables = [];
   let totalWritesPerformed = 0;
@@ -451,8 +443,8 @@ async function runPhase14_9Tests() {
   assert(liveMigrationRes.remoteRowsWritten > 0, 'Test 081: Remote rows written > 0');
 
   // Verify 27-table Foreign-Key Dependency Order Preservation
-  const reqTables = app.REQUIRED_PRODUCTION_TABLES || sandbox.REQUIRED_PRODUCTION_TABLES || [];
-  assert(reqTables.length >= 27, 'Test 082: At least 27 required production tables configured (found ' + reqTables.length + ')');
+  const reqTables = app.CANONICAL_27_PRODUCTION_TABLES || [];
+  assert(reqTables.length === 27, 'Test 082: 27 required production tables configured');
   assert(reqTables[0] === 'finance_settings', 'Test 083: FK Order 1 is finance_settings');
   assert(reqTables[1] === 'payment_accounts', 'Test 084: FK Order 2 is payment_accounts');
   assert(reqTables[2] === 'programmes', 'Test 085: FK Order 3 is programmes');
@@ -471,14 +463,14 @@ async function runPhase14_9Tests() {
   assert(reqTables[15] === 'payslips', 'Test 098: FK Order 16 is payslips');
 
   // Verify Original Primary Key & Tenant UUID Preservation
-  const migratedCust = remotePostgreSqlDatabase['customers'].find(c => c.id === 'c_p14_9_1');
-  assert(migratedCust !== undefined, 'Test 099: Original customer primary key c_p14_9_1 preserved');
+  const migratedCust = remotePostgreSqlDatabase['customers'].find(c => c.id === 'c_p15_1');
+  assert(migratedCust !== undefined, 'Test 099: Original customer primary key c_p15_1 preserved');
   assert(migratedCust.tenant_id === tenantUuid, 'Test 100: Dynamic tenant UUID preserved in customer');
   assert(migratedCust.name === 'Alhaji Musa Dangote', 'Test 101: Customer name intact');
 
-  const migratedInv = remotePostgreSqlDatabase['invoices'].find(i => i.id === 'inv_p14_9_1');
-  assert(migratedInv !== undefined, 'Test 102: Original invoice primary key inv_p14_9_1 preserved');
-  assert(migratedInv.invoice_no === 'INV-149-1', 'Test 103: Invoice business number preserved');
+  const migratedInv = remotePostgreSqlDatabase['invoices'].find(i => i.id === 'inv_p15_1');
+  assert(migratedInv !== undefined, 'Test 102: Original invoice primary key inv_p15_1 preserved');
+  assert(migratedInv.invoice_no === 'INV-15-1', 'Test 103: Invoice business number preserved');
   assert(migratedInv.tenant_id === tenantUuid, 'Test 104: Tenant UUID preserved in invoice');
 
   // Verify 14-Gate Results
@@ -506,7 +498,7 @@ async function runPhase14_9Tests() {
   console.log('\n--- Section 9: Evidence File Sanitization ---');
 
   const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'production_migration_evidence.json'), 'utf8'));
-  assert(evidence.phase === '14.9' || evidence.phase === '15', 'Test 112: Evidence phase is valid (14.9 or 15)');
+  assert(evidence.phase === '15', 'Test 112: Evidence phase is 15');
   assert(evidence.projectRef === 'logaawoigfxnisimfatf', 'Test 113: Evidence projectRef is logaawoigfxnisimfatf');
   assert(evidence.credentialsExposed === false, 'Test 114: Evidence confirms credentialsExposed === false');
   assert(!JSON.stringify(evidence).includes('sb_pub_'), 'Test 115: Zero public keys in evidence file');
@@ -530,7 +522,7 @@ async function runPhase14_9Tests() {
   assert(readiness.readyForLiveMigration === true, 'Test 125: Full migration readiness returns true');
 
   console.log('\n====================================================================================================');
-  console.log(` PHASE 14.9 CERTIFICATION SUMMARY: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL ${totalTests} ASSERTIONS)`);
+  console.log(` PHASE 15 CERTIFICATION SUMMARY: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL ${totalTests} ASSERTIONS)`);
   console.log('====================================================================================================\n');
 
   if (failedTests > 0) {
@@ -538,7 +530,7 @@ async function runPhase14_9Tests() {
   }
 }
 
-runPhase14_9Tests().catch(err => {
-  console.error('Unhandled error in Phase 14.9 test suite:', err);
+runPhase15RealCloudMigrationTests().catch(err => {
+  console.error('Unhandled test suite error:', err);
   process.exit(1);
 });
