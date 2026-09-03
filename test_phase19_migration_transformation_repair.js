@@ -333,6 +333,50 @@ async function runPhase19Tests() {
   // Restore client
   app.supabaseClient.from = origFrom;
 
+  // ---------------------------------------------------------------------------
+  // Category 5: Reconciliation Integrity & False Zero-Record Guard Certification
+  // ---------------------------------------------------------------------------
+  console.log('\n--- Category 5: Reconciliation Integrity & False-Zero Protection ---');
+
+  // Test 11: Reconciliation on failed/empty remote state must not be authoritative
+  const failedRecon = await app.reconcileProductionData();
+  assert(failedRecon.isReconciled === false, 'Reconciliation confirms isReconciled === false when remote is empty but local has records');
+  assert(failedRecon.status !== 'RECONCILED', 'Status is NOT RECONCILED on unsynced state');
+
+  // Test 12: Protection against treating failed query (HTTP 401) as 0 records
+  app.supabaseClient.from = () => ({
+    select: async () => ({ status: 401, ok: false, data: null, error: { message: 'JWT expired' } })
+  });
+
+  const authGuardedRecon = await app.reconcileProductionData();
+  assert(authGuardedRecon.isReconciled === false, 'Reconciliation guarded against treating 401 as 0 records');
+  assert(authGuardedRecon.authenticationRequired === true || authGuardedRecon.status === 'DATABASE_AUTHENTICATION_REQUIRED', 'Reconciliation flags authenticationRequired on 401');
+
+  // Test 10: Successful simulated migration & reconciliation
+  const mockDb = { finance_settings: [] };
+  app.supabaseClient.from = (tableName) => ({
+    select: async () => ({ status: 200, ok: true, data: mockDb[tableName] || [] }),
+    upsert: async (rows) => {
+      mockDb[tableName] = [...rows];
+      return { data: rows, error: null };
+    }
+  });
+  app.state.databaseAuthorityState = app.DATABASE_AUTHORITY_STATE.LOCAL_ONLY;
+  app.state.migrationLockActive = false;
+
+  const successMig = await app.migrateLegacyDataToPostgres({ dryRun: false });
+  assert(successMig.success === true, 'Migration succeeds when upsert succeeds across entities');
+  assert(successMig.stats.failed === 0, 'Zero failed records on successful migration');
+  assert(successMig.reconciliation.isReconciled === true, 'Reconciliation confirms 100% match on successful migration');
+
+  // Test 8: Upsert idempotency check (second run)
+  const rerunMig = await app.migrateLegacyDataToPostgres({ dryRun: false });
+  assert(rerunMig.success === true, 'Second migration run succeeds idempotently');
+  assert(rerunMig.stats.alreadyExisting >= 1, 'Second migration run detects pre-existing records without duplication');
+
+  // Restore client from
+  app.supabaseClient.from = origFrom;
+
   console.log('\n========================================================================================');
   console.log(` PHASE 19 CERTIFICATION SUMMARY: ${totalPassed} PASSED / ${totalFailed} FAILED (TOTAL ${totalPassed + totalFailed} ASSERTIONS)`);
   console.log('========================================================================================\n');
