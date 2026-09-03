@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Authoritative Supabase Production Public Configuration -->
   <meta name="supabase-endpoint" content="https://logaawoigfxnisimfatf.supabase.co" />
-  <meta name="supabase-publishable-key" content="" />
-  <meta name="supabase-anon-key" content="" />
+  <meta name="supabase-publishable-key" content="sb_publishable_VbAnvwhA28SV_PmLcEiTdg_12cc7Or9" />
+  <meta name="supabase-anon-key" content="sb_publishable_VbAnvwhA28SV_PmLcEiTdg_12cc7Or9" />
   <title>Clasptek Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1349,7 +1349,7 @@ const SYSTEM_ACCOUNTS = [
   {
     id: 'usr_sa_1',
     email: 'admin@clasptek.org',
-    name: 'Ayodele Johnson',
+    name: 'Clasptek Admin',
     role: 'Super Admin',
     title: 'Managing Director & Lead Consultant',
     status: 'active',
@@ -1497,18 +1497,18 @@ const DEFAULT_PERSONNEL_DIRECTORY = [
   {
     id: 'emp_1',
     employeeId: 'EMP-0001',
-    name: 'Ayodele Johnson',
+    name: 'Clasptek Admin',
     type: 'staff',
     department: 'Academics',
     role: 'Head of Academics & Curriculum',
     designation: 'Managing Director & Lead Consultant',
-    email: 'ayodele@clasptek.org',
+    email: 'admin@clasptek.org',
     phone: '+2348031112233',
     address: 'Lagos, Nigeria',
     dateOfJoining: '2022-01-15',
     employmentStatus: 'Full-Time',
     bankName: 'Guaranty Trust Bank (GTBank)',
-    accountName: 'Ayodele Johnson',
+    accountName: 'Clasptek Admin',
     accountNumber: '0123456789',
     taxNumber: 'TIN-EMP-001',
     nin: '12345678901',
@@ -1838,6 +1838,33 @@ let state = {
 // ----------------------------------------------------
 // LIGHTWEIGHT ZERO-DEPENDENCY SUPABASE POSTGREST & AUTH CLIENT
 // ----------------------------------------------------
+function decodeJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (payload.length % 4) payload += '=';
+    let decodedStr = '';
+    if (typeof atob === 'function') {
+      decodedStr = atob(payload);
+    } else if (typeof Buffer !== 'undefined') {
+      decodedStr = Buffer.from(payload, 'base64').toString('utf8');
+    }
+    return JSON.parse(decodedStr);
+  } catch (_) {
+    return null;
+  }
+}
+
+function isJwtExpiredOrExpiring(token, thresholdSec = 60) {
+  if (!token || typeof token !== 'string') return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload || !payload.exp) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return (payload.exp - nowSec) <= thresholdSec;
+}
+
 const supabaseClient = {
   getEndpoint() {
     let ep = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
@@ -1885,17 +1912,48 @@ const supabaseClient = {
     const key = this.getAnonKey();
     return Boolean(ep && key && key.length > 5);
   },
+  async ensureFreshSession() {
+    // 1. If in-memory token is missing, attempt restore from persisted storage
+    if (!state.auth?.supabaseJwt && !state.auth?.supabaseSession) {
+      const stored = await safeGet('clasptek:supabase_session', null);
+      if (stored && stored.access_token) {
+        state.auth = state.auth || {};
+        state.auth.supabaseSession = stored;
+        state.auth.supabaseJwt = stored.access_token;
+        state.auth.supabaseUser = stored.user;
+        state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+      }
+    }
+
+    // 2. If token is present and nearing or past expiration, proactively refresh
+    const currentJwt = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
+    if (currentJwt && isJwtExpiredOrExpiring(currentJwt, 60)) {
+      try {
+        await this.auth.refreshSession();
+      } catch (_) {
+        // Warning captured without breaking current invocation
+      }
+    }
+  },
   getHeaders(customHeaders = {}) {
     const key = this.getAnonKey();
     // Validate if auth token is a genuine Supabase JWT (3-part dot-separated base64 token)
     // NEVER send internal session tokens (e.g. 'sess_...') or the public anon key as user Authorization
+    // NEVER send an expired JWT in Authorization header
     let userToken = null;
-    if (state.auth && typeof state.auth.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('eyJ') && state.auth.supabaseJwt.split('.').length === 3 && state.auth.supabaseJwt !== key) {
-      userToken = state.auth.supabaseJwt.trim();
-    } else if (state.auth && state.auth.supabaseSession && typeof state.auth.supabaseSession.access_token === 'string' && state.auth.supabaseSession.access_token.startsWith('eyJ') && state.auth.supabaseSession.access_token !== key) {
-      userToken = state.auth.supabaseSession.access_token.trim();
-    } else if (state.auth && typeof state.auth.token === 'string' && state.auth.token.startsWith('eyJ') && state.auth.token.split('.').length === 3 && state.auth.token !== key) {
-      userToken = state.auth.token.trim();
+    const candidates = [
+      state.auth?.supabaseJwt,
+      state.auth?.supabaseSession?.access_token,
+      state.auth?.token
+    ];
+
+    for (const cand of candidates) {
+      if (typeof cand === 'string' && cand.startsWith('eyJ') && cand.split('.').length === 3 && cand !== key) {
+        if (!isJwtExpiredOrExpiring(cand, 0)) {
+          userToken = cand.trim();
+          break;
+        }
+      }
     }
 
     const headers = {
@@ -1908,7 +1966,7 @@ const supabaseClient = {
       headers['apikey'] = key;
     }
 
-    // ONLY set Authorization if a genuine Supabase user access token exists
+    // ONLY set Authorization if a genuine, unexpired Supabase user access token exists
     if (userToken) {
       headers['Authorization'] = `Bearer ${userToken}`;
     }
@@ -1935,7 +1993,7 @@ const supabaseClient = {
           'Content-Type': 'application/json',
           'apikey': key
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password })
       });
 
       const data = await res.json();
@@ -1950,6 +2008,7 @@ const supabaseClient = {
         state.auth.supabaseUser = data.user;
         state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
         await safeSet('clasptek:supabase_session', data);
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       }
 
       return { data, error: null };
@@ -1970,14 +2029,25 @@ const supabaseClient = {
         state.auth.supabaseJwt = stored.access_token;
         state.auth.supabaseUser = stored.user;
         state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
-        return { data: { session: stored }, error: null };
+        if (state.auth.tokenExpiresAt - Date.now() < 60000) {
+          try {
+            await this.refreshSession();
+          } catch (_) {}
+        }
+        return { data: { session: state.auth.supabaseSession || stored }, error: null };
       }
       return { data: { session: null }, error: null };
     },
     async refreshSession() {
       const base = supabaseClient.getBaseUrl();
       const key = supabaseClient.getAnonKey();
-      const currentSession = state.auth?.supabaseSession;
+      let currentSession = state.auth?.supabaseSession;
+      if (!currentSession || !currentSession.refresh_token) {
+        const stored = await safeGet('clasptek:supabase_session', null);
+        if (stored && stored.refresh_token) {
+          currentSession = stored;
+        }
+      }
       if (!currentSession || !currentSession.refresh_token) {
         throw new Error('No refresh token available');
       }
@@ -2002,6 +2072,7 @@ const supabaseClient = {
       state.auth.supabaseUser = data.user;
       state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
       await safeSet('clasptek:supabase_session', data);
+      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       return { data: { session: data }, error: null };
     },
     async getUser() {
@@ -2013,9 +2084,28 @@ const supabaseClient = {
       state.auth.supabaseSession = null;
       state.auth.supabaseJwt = null;
       state.auth.supabaseUser = null;
+      state.auth.tokenExpiresAt = null;
       await safeSet('clasptek:supabase_session', null);
+      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       return { error: null };
     }
+  },
+  async executeWithAuth(requestFn) {
+    if (!this.isConfigured()) {
+      return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
+    }
+    await this.ensureFreshSession();
+    let res = await requestFn();
+    if (res && res.status === 401) {
+      // Controlled 401 -> refresh session -> retry-once mechanism
+      try {
+        const refreshed = await this.auth.refreshSession();
+        if (refreshed && refreshed.data && refreshed.data.session) {
+          res = await requestFn();
+        }
+      } catch (_) {}
+    }
+    return res;
   },
   async ping() {
     return await runSupabaseHealthCheck();
@@ -2027,145 +2117,155 @@ const supabaseClient = {
 
     return {
       async select(query = '*') {
-        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-        try {
-          const res = await fetch(`${tableUrl}?select=${encodeURIComponent(query)}`, {
-            method: 'GET',
-            headers: client.getHeaders()
-          });
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
-            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        return await client.executeWithAuth(async () => {
+          try {
+            const res = await fetch(`${tableUrl}?select=${encodeURIComponent(query)}`, {
+              method: 'GET',
+              headers: client.getHeaders()
+            });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({ message: res.statusText }));
+              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+              else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+            }
+            const data = await res.json();
+            return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+          } catch (err) {
+            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
           }
-          const data = await res.json();
-          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-        } catch (err) {
-          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-        }
+        });
       },
       async insert(rows) {
-        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-        try {
-          const body = Array.isArray(rows) ? rows : [rows];
-          const res = await fetch(tableUrl, {
-            method: 'POST',
-            headers: client.getHeaders({ 'Prefer': 'return=representation' }),
-            body: JSON.stringify(body)
-          });
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
-            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        return await client.executeWithAuth(async () => {
+          try {
+            const body = Array.isArray(rows) ? rows : [rows];
+            const res = await fetch(tableUrl, {
+              method: 'POST',
+              headers: client.getHeaders({ 'Prefer': 'return=representation' }),
+              body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({ message: res.statusText }));
+              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+              else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+            }
+            const data = await res.json();
+            state.supabase.lastSuccessfulWrite = new Date().toISOString();
+            return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+          } catch (err) {
+            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
           }
-          const data = await res.json();
-          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-        } catch (err) {
-          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-        }
+        });
       },
       async upsert(rows, onConflict = 'id') {
-        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-        try {
-          const body = Array.isArray(rows) ? rows : [rows];
-          const res = await fetch(tableUrl, {
-            method: 'POST',
-            headers: client.getHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
-            body: JSON.stringify(body)
-          });
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-            else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
-            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        return await client.executeWithAuth(async () => {
+          try {
+            const body = Array.isArray(rows) ? rows : [rows];
+            const res = await fetch(tableUrl, {
+              method: 'POST',
+              headers: client.getHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
+              body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({ message: res.statusText }));
+              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+              else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+            }
+            const data = await res.json();
+            state.supabase.lastSuccessfulWrite = new Date().toISOString();
+            return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+          } catch (err) {
+            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
           }
-          const data = await res.json();
-          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-        } catch (err) {
-          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-        }
+        });
       },
       async update(updates, matchCriteria = {}) {
-        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-        try {
-          let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
-          const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
-          const res = await fetch(url, {
-            method: 'PATCH',
-            headers: client.getHeaders({ 'Prefer': 'return=representation' }),
-            body: JSON.stringify(updates)
-          });
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        return await client.executeWithAuth(async () => {
+          try {
+            let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
+            const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
+            const res = await fetch(url, {
+              method: 'PATCH',
+              headers: client.getHeaders({ 'Prefer': 'return=representation' }),
+              body: JSON.stringify(updates)
+            });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({ message: res.statusText }));
+              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+            }
+            const data = await res.json();
+            state.supabase.lastSuccessfulWrite = new Date().toISOString();
+            return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+          } catch (err) {
+            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
           }
-          const data = await res.json();
-          return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-        } catch (err) {
-          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-        }
+        });
       },
       async delete(matchCriteria = {}) {
-        if (!client.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-        try {
-          let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
-          const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
-          const res = await fetch(url, {
-            method: 'DELETE',
-            headers: client.getHeaders()
-          });
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({ message: res.statusText }));
-            let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-            if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-            else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-            else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-            return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        return await client.executeWithAuth(async () => {
+          try {
+            let queryString = Object.entries(matchCriteria).map(([k, v]) => `${encodeURIComponent(k)}=eq.${encodeURIComponent(v)}`).join('&');
+            const url = queryString ? `${tableUrl}?${queryString}` : tableUrl;
+            const res = await fetch(url, {
+              method: 'DELETE',
+              headers: client.getHeaders()
+            });
+            if (!res.ok) {
+              const errBody = await res.json().catch(() => ({ message: res.statusText }));
+              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+            }
+            state.supabase.lastSuccessfulWrite = new Date().toISOString();
+            return { ok: true, data: true, records: [], error: null, errorClass: null, status: res.status, httpStatus: res.status };
+          } catch (err) {
+            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
           }
-          return { ok: true, data: true, records: [], error: null, errorClass: null, status: res.status, httpStatus: res.status };
-        } catch (err) {
-          return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-        }
+        });
       }
     };
   },
   async rpc(fnName, params = {}) {
-    if (!this.isConfigured()) return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
-    try {
-      const ep = this.getEndpoint();
-      const res = await fetch(`${ep}rpc/${fnName}`, {
-        method: 'POST',
-        headers: this.getHeaders({ 'Prefer': 'return=representation' }),
-        body: JSON.stringify(params)
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ message: res.statusText }));
-        let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-        if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-        else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-        else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-        return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+    return await this.executeWithAuth(async () => {
+      try {
+        const ep = this.getEndpoint();
+        const res = await fetch(`${ep}rpc/${fnName}`, {
+          method: 'POST',
+          headers: this.getHeaders({ 'Prefer': 'return=representation' }),
+          body: JSON.stringify(params)
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({ message: res.statusText }));
+          let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+          if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+          else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+          else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+          return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+        }
+        const data = await res.json();
+        return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+      } catch (err) {
+        return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
       }
-      const data = await res.json();
-      return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-    } catch (err) {
-      return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
-    }
+    });
   }
 };
 
@@ -2222,15 +2322,22 @@ const supabaseAuth = {
       if (!res.ok) {
         return { success: false, error: data, status: res.status };
       }
-      if (data.access_token && state.auth) {
+      if (data.access_token) {
+        state.auth = state.auth || {};
         state.auth.supabaseJwt = data.access_token;
         state.auth.supabaseSession = data;
+        state.auth.supabaseUser = data.user;
+        state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+        await safeSet('clasptek:supabase_session', data);
         await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       }
       return { success: true, data, status: res.status };
     } catch (err) {
       return { success: false, error: { message: err.message || 'Network error' }, status: 0 };
     }
+  },
+  async refreshSession() {
+    return await supabaseClient.auth.refreshSession();
   },
   async signOut() {
     if (!supabaseClient.isConfigured()) return { success: true };
@@ -2249,18 +2356,15 @@ const supabaseAuth = {
     if (state.auth) {
       delete state.auth.supabaseJwt;
       delete state.auth.supabaseSession;
+      delete state.auth.supabaseUser;
+      delete state.auth.tokenExpiresAt;
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
     }
+    await safeSet('clasptek:supabase_session', null);
     return { success: true };
   },
   async getSession() {
-    if (state.auth && state.auth.supabaseSession) {
-      return { session: state.auth.supabaseSession, error: null };
-    }
-    if (state.auth && (state.auth.supabaseJwt || (state.auth.isAuthenticated && state.auth.user))) {
-      return { session: { access_token: state.auth.supabaseJwt || null, user: state.auth.user }, error: null };
-    }
-    return { session: null, error: null };
+    return await supabaseClient.auth.getSession();
   }
 };
 
@@ -2302,7 +2406,7 @@ function validateSupabasePublicKey(key, expectedProjectRef = CANONICAL_SUPABASE_
   const maskedKey = maskSecretKey(cleaned);
 
   // Check for forbidden server-side secrets
-  if (cleaned.startsWith('sbp_') || cleaned.includes('postgres' + '://') || cleaned.startsWith('sk_') || cleaned.startsWith('secret_')) {
+  if (cleaned.startsWith('sbp_') || cleaned.startsWith('sb_secret_') || cleaned.includes('postgres' + '://') || cleaned.startsWith('sk_') || cleaned.startsWith('secret_')) {
     return {
       present: true,
       nonEmpty: true,
@@ -2317,8 +2421,8 @@ function validateSupabasePublicKey(key, expectedProjectRef = CANONICAL_SUPABASE_
     };
   }
 
-  // Check for test mock prefixes (used in headless automated tests)
-  const isMockTestKey = cleaned.startsWith('test_') || cleaned.startsWith('valid_') || cleaned.startsWith('live_') || cleaned.startsWith('central_') || cleaned.startsWith('sb_pub_') || cleaned.startsWith('pk_') || cleaned === 'dummy_anon_key_for_testing_purposes_only';
+  // Check for test mock prefixes (used in headless automated tests) or valid modern Supabase publishable prefixes
+  const isMockTestKey = cleaned.startsWith('test_') || cleaned.startsWith('valid_') || cleaned.startsWith('live_') || cleaned.startsWith('central_') || cleaned.startsWith('sb_pub_') || cleaned.startsWith('sb_publishable_') || cleaned.startsWith('pk_') || cleaned === 'dummy_anon_key_for_testing_purposes_only';
 
   if (!isMockTestKey && cleaned.length < 20) {
     return {
@@ -3020,10 +3124,11 @@ function getProductionAuthenticationTruth() {
  * Issues live HTTPS query using canonical Supabase client credentials.
  */
 async function probeAuthenticatedPostgrest() {
+  await supabaseClient.ensureFreshSession();
   const config = resolveSupabaseConfiguration();
   const authTruth = getProductionAuthenticationTruth();
   const endpoint = `${CANONICAL_SUPABASE_BASE_URL}/rest/v1/programmes?select=id&limit=1`;
-  const headers = supabaseClient.getHeaders();
+  let headers = supabaseClient.getHeaders();
 
   const startTime = Date.now();
   try {
@@ -3041,8 +3146,21 @@ async function probeAuthenticatedPostgrest() {
       };
     }
 
-    const res = await fetchFn(endpoint, { method: 'GET', headers });
-    const httpStatus = res.status;
+    let res = await fetchFn(endpoint, { method: 'GET', headers });
+    let httpStatus = res.status;
+
+    // Controlled 401 session refresh and retry-once
+    if (httpStatus === 401) {
+      try {
+        const refreshed = await supabaseClient.auth.refreshSession();
+        if (refreshed && refreshed.data && refreshed.data.session) {
+          headers = supabaseClient.getHeaders();
+          res = await fetchFn(endpoint, { method: 'GET', headers });
+          httpStatus = res.status;
+        }
+      } catch (_) {}
+    }
+
     let rowsReturned = 0;
     let data = [];
 
@@ -3092,9 +3210,16 @@ function diagnoseSupabaseError(status, errText = '', probeContext = {}) {
 
   if (status === 401) {
     classification = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
-    summaryTitle = 'SUPABASE AUTHENTICATION / API KEY FAILURE';
-    detailedMessage = 'The configured Supabase API credential is invalid, missing, revoked, or mismatched.';
-    recommendedAction = 'Update the application\'s Supabase public API key in the configuration modal and re-run connectivity verification.';
+    const isTokenErr = Boolean(errText && (errText.includes('JWT') || errText.includes('token') || errText.includes('PGRST301') || errText.includes('claim')));
+    if (isTokenErr) {
+      summaryTitle = 'SUPABASE USER AUTHENTICATION EXPIRED';
+      detailedMessage = 'Your user session token has expired or was rejected by PostgREST. The Supabase API key is valid.';
+      recommendedAction = 'Refresh your session or sign in again to restore database access.';
+    } else {
+      summaryTitle = 'SUPABASE AUTHENTICATION / API KEY FAILURE';
+      detailedMessage = 'The configured Supabase API credential is invalid, missing, revoked, or mismatched.';
+      recommendedAction = 'Update the application\'s Supabase public API key in the configuration modal and re-run connectivity verification.';
+    }
   } else if (status === 403) {
     classification = DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED;
     summaryTitle = 'SUPABASE RLS / AUTHORIZATION FAILURE';
@@ -3130,7 +3255,7 @@ function diagnoseSupabaseError(status, errText = '', probeContext = {}) {
 ❌ ${summaryTitle}
 Project: ${config.projectRef}
 Endpoint: ${config.isExpectedProject ? 'Verified' : 'MISMATCH'}
-API Credential: ${status === 401 ? 'Rejected by Supabase' : (config.keyValidation.isValid ? 'Valid' : 'Invalid')}
+API Credential: ${status === 401 && !errText.includes('JWT') ? 'Rejected by Supabase' : (config.keyValidation.isValid ? 'Valid' : 'Invalid')}
 Authentication: ${state.auth && state.auth.isAuthenticated ? 'Authenticated' : 'Not established'}
 PostgreSQL: Not verified
 Authoritative Mode: LOCKED
@@ -3238,13 +3363,28 @@ async function probeSupabaseConnectivity() {
     return result;
   }
 
+  // Ensure fresh session before PostgREST queries
+  await supabaseClient.ensureFreshSession();
+
   // Probe 2: PostgREST Reachability
   try {
-    const p2Res = await fetch(`${restEndpoint}`, {
+    let p2Res = await fetch(`${restEndpoint}`, {
       method: 'GET',
       headers: supabaseClient.getHeaders()
     });
     result.httpStatus = p2Res.status;
+    if (p2Res.status === 401) {
+      try {
+        const refreshed = await supabaseClient.auth.refreshSession();
+        if (refreshed && refreshed.data && refreshed.data.session) {
+          p2Res = await fetch(`${restEndpoint}`, {
+            method: 'GET',
+            headers: supabaseClient.getHeaders()
+          });
+          result.httpStatus = p2Res.status;
+        }
+      } catch (_) {}
+    }
     if (p2Res.status === 401) {
       result.classification = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
       const diag = diagnoseSupabaseError(401, 'Unauthorized', { endpoint: restEndpoint });
@@ -3260,11 +3400,24 @@ async function probeSupabaseConnectivity() {
 
   // Probe 3: Authenticated Database Read
   try {
-    const p3Res = await fetch(`${restEndpoint}programmes?select=id&limit=1`, {
+    let p3Res = await fetch(`${restEndpoint}programmes?select=id&limit=1`, {
       method: 'GET',
       headers: supabaseClient.getHeaders()
     });
     result.httpStatus = p3Res.status;
+
+    if (p3Res.status === 401) {
+      try {
+        const refreshed = await supabaseClient.auth.refreshSession();
+        if (refreshed && refreshed.data && refreshed.data.session) {
+          p3Res = await fetch(`${restEndpoint}programmes?select=id&limit=1`, {
+            method: 'GET',
+            headers: supabaseClient.getHeaders()
+          });
+          result.httpStatus = p3Res.status;
+        }
+      } catch (_) {}
+    }
 
     if (p3Res.status === 401) {
       result.classification = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
@@ -3587,7 +3740,8 @@ async function diagnoseSupabaseProductionConnection() {
         authInfo.role = sess.session.user.role || (sess.session.user.app_metadata && sess.session.user.app_metadata.role) || (sess.session.user.user_metadata && sess.session.user.user_metadata.role) || 'authenticated';
         authInfo.sessionExpiry = sess.session.expires_at ? new Date(sess.session.expires_at * 1000).toISOString() : 'N/A';
       }
-    } else if (state.auth && state.auth.isAuthenticated && state.auth.user) {
+    }
+    if (!authInfo.sessionPresent && state.auth && state.auth.isAuthenticated && state.auth.user) {
       authInfo.sessionPresent = true;
       authInfo.userId = state.auth.user.id || state.auth.user.email || state.auth.user.name;
       authInfo.tenant = state.auth.user.tenant_id || DEFAULT_TENANT_ID;
@@ -4500,6 +4654,10 @@ async function activatePostgresAuthoritativeMode() {
 
   // 11 & 12. Reconciliation = 100% and 0 critical orphans
   const recon = await reconcileProductionData();
+  if (recon.authenticationRequired || recon.status === 'DATABASE_AUTHENTICATION_REQUIRED') {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+    throw new Error('Authoritative Mode Activation Failed: Database authentication required for reconciliation.');
+  }
   gates.reconciliation100Percent = recon.reconciliationPercentage >= 100;
   gates.noCriticalOrphans = recon.criticalOrphanCount === 0;
   if (!gates.reconciliation100Percent || !gates.noCriticalOrphans) {
@@ -4606,6 +4764,7 @@ async function runSupabaseHealthCheck() {
   const ep = supabaseClient.getEndpoint();
 
   try {
+    await supabaseClient.ensureFreshSession();
     let res = await fetch(`${ep}programmes?select=id&limit=1`, {
       method: 'GET',
       headers: supabaseClient.getHeaders()
@@ -4622,7 +4781,22 @@ async function runSupabaseHealthCheck() {
       }
     }
 
+    // Controlled 401 retry-once with session refresh
+    if (res.status === 401) {
+      try {
+        const refreshed = await supabaseClient.auth.refreshSession();
+        if (refreshed && refreshed.data && refreshed.data.session) {
+          res = await fetch(`${ep}programmes?select=id&limit=1`, {
+            method: 'GET',
+            headers: supabaseClient.getHeaders()
+          });
+        }
+      } catch (_) {}
+    }
+
     const latencyMs = Date.now() - startTime;
+    state.supabase.lastHttpStatus = res.status;
+    state.supabase.lastLatencyMs = latencyMs;
 
     if (res.ok) {
       const data = await res.json().catch(() => []);
@@ -4656,9 +4830,16 @@ async function runSupabaseHealthCheck() {
     if (res.status === 401) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.UNAUTHORIZED;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
-      state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.API_KEY_INVALID;
-      safeMessage = 'Supabase rejected the configured public API key. Verify that the current anon/publishable key belongs to the configured Supabase project (logaawoigfxnisimfatf).';
-      state.connectionError = '❌ HTTP 401: SUPABASE AUTHENTICATION / API KEY FAILURE. The configured Supabase API credential is invalid, missing, revoked, or mismatched. Existing business data has not been modified. No financial data has been changed.';
+      const isTokenErr = Boolean(errText && (errText.includes('JWT') || errText.includes('token') || errText.includes('PGRST301') || errText.includes('claim')));
+      if (isTokenErr) {
+        state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+        safeMessage = 'Supabase user session expired or rejected. Please re-authenticate.';
+        state.connectionError = '❌ HTTP 401: SUPABASE USER AUTHENTICATION EXPIRED. Your session token has expired. Database credentials are valid. Existing business data has not been modified.';
+      } else {
+        state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.API_KEY_INVALID;
+        safeMessage = 'Supabase rejected the configured public API key. Verify that the current anon/publishable key belongs to the configured Supabase project (logaawoigfxnisimfatf).';
+        state.connectionError = '❌ HTTP 401: SUPABASE AUTHENTICATION / API KEY FAILURE. The configured Supabase API credential is invalid, missing, revoked, or mismatched. Existing business data has not been modified. No financial data has been changed.';
+      }
     } else if (res.status === 403) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.FORBIDDEN;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED;
@@ -4709,6 +4890,8 @@ async function runSupabaseHealthCheck() {
     };
   } catch (err) {
     const latencyMs = Date.now() - startTime;
+    state.supabase.lastHttpStatus = 0;
+    state.supabase.lastLatencyMs = latencyMs;
     const isNetwork = !err.status || (err.message && (err.message.includes('fetch') || err.message.includes('Network') || err.message.includes('Failed to fetch') || err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED') || err.message.includes('unreachable') || err.message.includes('ETIMEDOUT') || err.message.includes('ECONNRESET')));
     const safeMessage = isNetwork
       ? 'Unable to reach Supabase project endpoint. Check your internet connection.'
@@ -5788,7 +5971,10 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
 
   // Execute reconciliation immediately
   const recon = await reconcileProductionData();
-  if (recon.isReconciled && stats.failed === 0 && !hasFatalError) {
+  if (recon.authenticationRequired || recon.status === 'DATABASE_AUTHENTICATION_REQUIRED') {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+    state.connectionError = 'Database authentication required. No business data has been modified.';
+  } else if (recon.isReconciled && stats.failed === 0 && !hasFatalError) {
     state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
     state.supabase.persistenceMode = 'AUTHORITATIVE';
     state.supabase.status = 'connected';
@@ -5812,6 +5998,30 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
 async function reconcileProductionData() {
   const local = await inspectLegacyLocalData();
   const remote = await inspectProductionDatabase();
+
+  // Guard: if remote queries failed due to authentication or connectivity issues,
+  // do NOT calculate reconciliation percentages or declare RECONCILIATION_FAILED!
+  if (!remote.connected || remote.authenticated === false || remote.failedQueries > 0) {
+    const isAuthErr = remote.authenticated === false || (remote.inaccessibleTables && remote.inaccessibleTables.some(t => t.status === 401));
+    return {
+      isReconciled: false,
+      reconciled: false,
+      reconciliationPercentage: 0,
+      totalLocal: local.totalRecords,
+      totalRemote: 0,
+      hasCountMismatch: false,
+      countComparisons: {},
+      orphans: [],
+      criticalOrphanCount: 0,
+      materialOrphanCount: 0,
+      financialEquations: [],
+      status: isAuthErr ? 'DATABASE_AUTHENTICATION_REQUIRED' : 'DATABASE_CONNECTIVITY_REQUIRED',
+      authenticationRequired: isAuthErr,
+      message: isAuthErr
+        ? 'Reconciliation cannot execute: PostgreSQL authentication required. No business data has been modified.'
+        : 'Reconciliation cannot execute: PostgreSQL is unreachable.'
+    };
+  }
 
   const countComparisons = {};
   let totalLocal = 0;
@@ -7368,9 +7578,10 @@ async function loadAll() {
   render();
 
   // 1. Load configuration and session from local store
-  const [sbCfg, authSession] = await Promise.all([
+  const [sbCfg, authSession, storedSbSession] = await Promise.all([
     safeGet(STORE_KEY_SUPABASE_CONFIG, { endpoint: 'https://logaawoigfxnisimfatf.supabase.co/rest/v1/', anonKey: '', status: 'fallback' }),
-    safeGet(STORE_KEY_AUTH_SESSION, null)
+    safeGet(STORE_KEY_AUTH_SESSION, null),
+    safeGet('clasptek:supabase_session', null)
   ]);
 
   if (sbCfg) {
@@ -7380,6 +7591,22 @@ async function loadAll() {
       anonKey: (sbCfg.anonKey && sbCfg.anonKey.trim()) ? sbCfg.anonKey.trim() : (state.supabase.anonKey || ''),
       endpoint: (sbCfg.endpoint && sbCfg.endpoint.trim()) ? sbCfg.endpoint.trim() : (state.supabase.endpoint || '')
     };
+  }
+
+  // 1b. Restore authenticated session & Supabase JWT before any database operations
+  if (authSession && authSession.user && (authSession.token || storedSbSession?.access_token)) {
+    state.auth = {
+      ...authSession,
+      supabaseJwt: authSession.supabaseJwt || storedSbSession?.access_token || null,
+      supabaseSession: authSession.supabaseSession || storedSbSession || null,
+      tokenExpiresAt: authSession.tokenExpiresAt || (storedSbSession?.expires_in ? Date.now() + storedSbSession.expires_in * 1000 : null)
+    };
+  } else if (storedSbSession && storedSbSession.access_token) {
+    state.auth = state.auth || {};
+    state.auth.supabaseJwt = storedSbSession.access_token;
+    state.auth.supabaseSession = storedSbSession;
+    state.auth.supabaseUser = storedSbSession.user;
+    state.auth.tokenExpiresAt = storedSbSession.expires_in ? Date.now() + storedSbSession.expires_in * 1000 : null;
   }
 
   let isDbHydrated = false;
@@ -7630,7 +7857,16 @@ async function loadAll() {
   if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
     const foundUser = state.users.find(u => u.id === authSession.user.id || (u.email && authSession.user.email && u.email.toLowerCase() === authSession.user.email.toLowerCase()));
     if (foundUser && foundUser.status === 'active' && !(foundUser.revokedSessionTokens || []).includes(authSession.token)) {
-      state.auth = { isAuthenticated: true, user: foundUser, token: authSession.token, expiresAt: authSession.expiresAt };
+      state.auth = {
+        isAuthenticated: true,
+        user: foundUser,
+        token: authSession.token,
+        expiresAt: authSession.expiresAt,
+        supabaseJwt: authSession.supabaseJwt || state.auth?.supabaseJwt || null,
+        supabaseSession: authSession.supabaseSession || state.auth?.supabaseSession || null,
+        supabaseUser: authSession.supabaseUser || state.auth?.supabaseUser || null,
+        tokenExpiresAt: authSession.tokenExpiresAt || state.auth?.tokenExpiresAt || null
+      };
     } else {
       state.auth = { isAuthenticated: false, user: null };
       await safeSet(STORE_KEY_AUTH_SESSION, null);
@@ -10307,7 +10543,15 @@ function renderLoginScreen(root) {
         user.lastLoginAt = new Date().toISOString();
         await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
 
+        // Synchronize Supabase authentication if configured
+        try {
+          if (supabaseClient.isConfigured()) {
+            await supabaseAuth.signInWithPassword(email, pwd);
+          }
+        } catch (_) {}
+
         state.auth = {
+          ...state.auth,
           isAuthenticated: true,
           user: user,
           token: sessionToken,
@@ -11042,8 +11286,12 @@ function render(container) {
   });
 
   document.getElementById('btnSidebarSignOut').addEventListener('click', async () => {
+    try {
+      await supabaseAuth.signOut();
+    } catch (_) {}
     state.auth = { isAuthenticated: false, user: null };
     await safeSet(STORE_KEY_AUTH_SESSION, null);
+    await safeSet('clasptek:supabase_session', null);
     render();
   });
 
@@ -14483,7 +14731,7 @@ function renderPreviewManagementReportModal(container, data) {
 
       <!-- Footer Signoff -->
       <div style="margin-top:24px; border-top:1px solid #E5E7EB; padding-top:12px; display:flex; justify-content:space-between; font-size:10px; color:#6B7280;">
-        <div>Prepared by: <strong>Ayodele Johnson, Managing Director</strong></div>
+        <div>Prepared by: <strong>Clasptek Admin, Managing Director</strong></div>
         <div>Authorized by Board &middot; Clasptek Enterprise OS</div>
       </div>
     </div>
@@ -16363,7 +16611,7 @@ function renderViewReceiptModal(container, payment, inv) {
 function renderGeneratePayslipModal(container) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const curPeriod = todayStr.slice(0, 7);
-  const defaultEmp = state.personnel[0] || { id: 'emp_1', name: 'Ayodele Johnson', type: 'staff', department: 'Academics', role: 'Head of Academics & Curriculum', basicPay: 250000 };
+  const defaultEmp = state.personnel[0] || { id: 'emp_1', name: 'Clasptek Admin', type: 'staff', department: 'Academics', role: 'Head of Academics & Curriculum', basicPay: 250000 };
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
@@ -18815,7 +19063,10 @@ function renderSupabaseModal(container) {
   const authRole = (state.auth && state.auth.user) ? state.auth.user.role : 'None';
   const isAuth = Boolean(state.auth && state.auth.isAuthenticated);
 
-  const isPostgrestOk = state.supabase.status === 'connected';
+  const currentHttpStatus = state.supabase.lastHttpStatus !== undefined && state.supabase.lastHttpStatus !== null
+    ? state.supabase.lastHttpStatus
+    : (state.supabase.status === 'connected' ? 200 : (state.databaseAuthorityState === 'API_KEY_INVALID' || state.databaseAuthorityState === 'AUTHENTICATION_FAILED' ? 401 : (state.databaseAuthorityState === 'RLS_AUTHORIZATION_FAILED' ? 403 : 0)));
+  const isPostgrestOk = state.supabase.status === 'connected' && currentHttpStatus === 200;
   const isAuthoritative = state.databaseAuthorityState === 'AUTHORITATIVE';
 
   const isMigrationLocked = state.databaseAuthorityState === 'API_KEY_INVALID' ||
@@ -18825,7 +19076,7 @@ function renderSupabaseModal(container) {
                             state.databaseAuthorityState === 'CONFIGURATION_INVALID' ||
                             state.databaseAuthorityState === 'CONNECTIVITY_FAILED' ||
                             state.databaseAuthorityState === 'UNVERIFIED' ||
-                            state.supabase.status !== 'connected';
+                            !isPostgrestOk;
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
@@ -18879,9 +19130,9 @@ function renderSupabaseModal(container) {
               <!-- 3. POSTGRESQL -->
               <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:4px; padding:10px;">
                 <div style="font-weight:700; color:var(--primary); font-size:11.5px; margin-bottom:6px; text-transform:uppercase;">3. Database &amp; PostgREST</div>
-                <div>PostgREST Status: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ CONNECTED (200 OK)' : (state.databaseAuthorityState === 'API_KEY_INVALID' ? '✖ 401 INVALID API KEY' : (state.databaseAuthorityState === 'RLS_AUTHORIZATION_FAILED' ? '✖ 403 RLS DENIED' : '✖ DISCONNECTED'))}</strong></div>
+                <div>PostgREST Status: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ CONNECTED (200 OK)' : (currentHttpStatus === 401 ? (state.databaseAuthorityState === 'AUTHENTICATION_FAILED' ? '✖ 401 AUTHENTICATION EXPIRED' : '✖ 401 INVALID API KEY') : (currentHttpStatus === 403 ? '✖ 403 RLS DENIED' : '✖ DISCONNECTED'))}</strong></div>
                 <div>PostgreSQL Database: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ AVAILABLE &amp; REACHABLE' : '✖ UNAVAILABLE'}</strong></div>
-                <div>HTTP Status: <code>${state.supabase.lastHttpStatus || (isPostgrestOk ? 200 : (state.databaseAuthorityState === 'API_KEY_INVALID' ? 401 : (state.databaseAuthorityState === 'RLS_AUTHORIZATION_FAILED' ? 403 : 0)))}</code></div>
+                <div>HTTP Status: <code>${currentHttpStatus}</code></div>
                 <div>Database Latency: <strong>${state.supabase.lastLatencyMs ? state.supabase.lastLatencyMs + 'ms' : (isPostgrestOk ? '<50ms' : 'N/A')}</strong></div>
                 <div>Last Successful Read: <strong style="font-family:var(--font-mono); font-size:11px;">${state.supabase.lastSuccessfulRead ? new Date(state.supabase.lastSuccessfulRead).toLocaleString('en-GB') : 'None in session'}</strong></div>
                 <div>Last Successful Write: <strong style="font-family:var(--font-mono); font-size:11px;">${state.supabase.lastSuccessfulWrite ? new Date(state.supabase.lastSuccessfulWrite).toLocaleString('en-GB') : 'None in session'}</strong></div>
@@ -19198,7 +19449,7 @@ function renderAddStaffModal(container) {
                 <option value="Contract">Contract</option>
               </select>
             </div>
-            <div class="cp-field"><label>Reporting Manager</label><input id="staffManager" value="Ayodele Johnson" /></div>
+            <div class="cp-field"><label>Reporting Manager</label><input id="staffManager" value="Clasptek Admin" /></div>
           </div>
 
           <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">3. PAYROLL &amp; BANKING DISBURSEMENT</div>
@@ -19944,6 +20195,8 @@ function renderChangeRoleModal(container, user) {
       DIAGNOSTIC_POSTGREST_STATE,
       DIAGNOSTIC_POSTGRES_STATE,
       DIAGNOSTIC_CLASSIFICATION,
+      decodeJwtPayload,
+      isJwtExpiredOrExpiring,
       supabaseAuth,
       validateSupabaseConfiguration,
       runSupabaseHealthCheck,
