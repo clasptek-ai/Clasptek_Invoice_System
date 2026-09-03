@@ -3374,26 +3374,38 @@ async function probeSupabaseConnectivity() {
     });
     result.httpStatus = p2Res.status;
     if (p2Res.status === 401) {
-      try {
-        const refreshed = await supabaseClient.auth.refreshSession();
-        if (refreshed && refreshed.data && refreshed.data.session) {
-          p2Res = await fetch(`${restEndpoint}`, {
-            method: 'GET',
-            headers: supabaseClient.getHeaders()
-          });
-          result.httpStatus = p2Res.status;
+      const p2ErrText = await p2Res.text().catch(() => '');
+      if (p2ErrText.includes('Secret API key required') || p2ErrText.includes('Only secret API keys')) {
+        // Supabase PostgREST root endpoint requires secret key for OpenAPI schema introspection.
+        // Receiving this structured 401 proves the PostgREST service gateway is online, reachable, and responsive.
+        result.probes.probe2_postgrestReachability = true;
+        result.postgrestAvailable = true;
+      } else {
+        try {
+          const refreshed = await supabaseClient.auth.refreshSession();
+          if (refreshed && refreshed.data && refreshed.data.session) {
+            p2Res = await fetch(`${restEndpoint}`, {
+              method: 'GET',
+              headers: supabaseClient.getHeaders()
+            });
+            result.httpStatus = p2Res.status;
+          }
+        } catch (_) {}
+
+        if (p2Res.status === 401) {
+          result.classification = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
+          const diag = diagnoseSupabaseError(401, p2ErrText || 'Unauthorized', { endpoint: restEndpoint });
+          result.diagnosticMessage = diag.structuredReport;
+          result.errorDetail = diag;
+          return result;
         }
-      } catch (_) {}
+        result.probes.probe2_postgrestReachability = true;
+        result.postgrestAvailable = true;
+      }
+    } else {
+      result.probes.probe2_postgrestReachability = true;
+      result.postgrestAvailable = true;
     }
-    if (p2Res.status === 401) {
-      result.classification = DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED;
-      const diag = diagnoseSupabaseError(401, 'Unauthorized', { endpoint: restEndpoint });
-      result.diagnosticMessage = diag.structuredReport;
-      result.errorDetail = diag;
-      return result;
-    }
-    result.probes.probe2_postgrestReachability = true;
-    result.postgrestAvailable = true;
   } catch (_) {
     result.postgrestAvailable = true; // Fall through to authenticated read
   }
@@ -6212,8 +6224,11 @@ async function readBackProductionMigration() {
       const res = await supabaseClient.from(table).select('*');
       if (res && res.status === 200 && Array.isArray(res.data)) {
         remoteItems = res.data;
+      } else if (res && res.status === 401) {
+        throw new Error(`Authentication failed reading table ${table} (HTTP 401)`);
       }
-    } catch (_) {
+    } catch (err) {
+      if (err.message && err.message.includes('401')) throw err;
       remoteItems = [];
     }
 
@@ -19130,7 +19145,7 @@ function renderSupabaseModal(container) {
               <!-- 3. POSTGRESQL -->
               <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:4px; padding:10px;">
                 <div style="font-weight:700; color:var(--primary); font-size:11.5px; margin-bottom:6px; text-transform:uppercase;">3. Database &amp; PostgREST</div>
-                <div>PostgREST Status: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ CONNECTED (200 OK)' : (currentHttpStatus === 401 ? (state.databaseAuthorityState === 'AUTHENTICATION_FAILED' ? '✖ 401 AUTHENTICATION EXPIRED' : '✖ 401 INVALID API KEY') : (currentHttpStatus === 403 ? '✖ 403 RLS DENIED' : '✖ DISCONNECTED'))}</strong></div>
+                <div>PostgREST Status: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ CONNECTED (200 OK)' : (currentHttpStatus === 401 ? (state.databaseAuthorityState === 'AUTHENTICATION_FAILED' ? '✖ 401 AUTHENTICATION EXPIRED' : (state.databaseAuthorityState === 'API_KEY_INVALID' ? '✖ 401 INVALID API KEY' : '✖ 401 AUTHENTICATION REQUIRED')) : (currentHttpStatus === 403 ? '✖ 403 RLS DENIED' : '✖ DISCONNECTED'))}</strong></div>
                 <div>PostgreSQL Database: <strong style="color:${isPostgrestOk ? 'var(--success)' : 'var(--danger)'};">${isPostgrestOk ? '✔ AVAILABLE &amp; REACHABLE' : '✖ UNAVAILABLE'}</strong></div>
                 <div>HTTP Status: <code>${currentHttpStatus}</code></div>
                 <div>Database Latency: <strong>${state.supabase.lastLatencyMs ? state.supabase.lastLatencyMs + 'ms' : (isPostgrestOk ? '<50ms' : 'N/A')}</strong></div>
