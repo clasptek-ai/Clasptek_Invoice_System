@@ -4017,7 +4017,7 @@ async function diagnoseSupabase401() {
   const role = rawRole.toUpperCase().replace(/\s+/g, '_');
   const token = (sessObj && sessObj.access_token) || (state.auth && (state.auth.supabaseJwt || (state.auth.token && state.auth.token.startsWith('eyJ') ? state.auth.token : null)));
   const isExpired = Boolean(sessObj && sessObj.expires_at && (sessObj.expires_at * 1000) < Date.now());
-  const canonicalTenant = resolveAuthoritativeTenantId();
+  const canonicalTenant = resolveAuthoritativeTenantId() || (authUser && authUser.tenant_id) || DEFAULT_TENANT_ID;
   const tenantId = (authUser && (authUser.tenant_id || (authUser.app_metadata && authUser.app_metadata.tenant_id))) || canonicalTenant;
 
   const sessionTest = {
@@ -4456,7 +4456,7 @@ async function runLiveCloudMigrationPreflight() {
   }
 
   const tenantId = resolveAuthoritativeTenantId();
-  if (!tenantId || tenantId === 'undefined' || tenantId === 'null') failures.push('No valid authoritative tenant UUID resolved');
+  if (!isValidUuid(tenantId)) failures.push(`No valid authoritative tenant UUID resolved (received: "${tenantId || 'none'}")`);
 
   const role = String(user.role || (auth.user && auth.user.role) || '').toUpperCase();
   if (role !== 'SUPER_ADMIN' && role !== 'ADMIN' && role !== 'FINANCE_MANAGER') {
@@ -5199,7 +5199,8 @@ async function safeSet(key, value) {
   // 2. Authoritative PostgreSQL Replication
   try {
     const tableName = DB_TABLE_MAPPING[key];
-    if (supabaseClient.isConfigured() && tableName && value !== null && typeof value !== 'undefined') {
+    const authoritativeTenantId = resolveAuthoritativeTenantId();
+    if (isValidUuid(authoritativeTenantId) && supabaseClient.isConfigured() && tableName && value !== null && typeof value !== 'undefined') {
       if (Array.isArray(value)) {
         if (value.length > 0) {
           await supabaseClient.from(tableName).upsert(value);
@@ -5275,20 +5276,52 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
 // PHASE 14 & 15: PRODUCTION DATA MIGRATION, CONTINUOUS RECONCILIATION & CONTROL
 // =============================================================================
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(val) {
+  return typeof val === 'string' && UUID_REGEX.test(val.trim());
+}
+
 function resolveAuthoritativeTenantId() {
   const supaUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user;
   if (supaUser) {
-    if (supaUser.app_metadata?.tenant_id) return supaUser.app_metadata.tenant_id;
-    if (supaUser.user_metadata?.tenant_id) return supaUser.user_metadata.tenant_id;
-    if (supaUser.tenant_id && supaUser.tenant_id !== 'clasptek_main') return supaUser.tenant_id;
+    const appTenant = supaUser.app_metadata?.tenant_id;
+    if (isValidUuid(appTenant)) return appTenant.trim();
+    const userTenant = supaUser.user_metadata?.tenant_id;
+    if (isValidUuid(userTenant)) return userTenant.trim();
+    if (isValidUuid(supaUser.tenant_id)) return supaUser.tenant_id.trim();
   }
   const user = state.auth?.user;
   if (user) {
-    if (user.app_metadata?.tenant_id) return user.app_metadata.tenant_id;
-    if (user.user_metadata?.tenant_id) return user.user_metadata.tenant_id;
-    if (user.tenant_id && user.tenant_id !== 'clasptek_main') return user.tenant_id;
+    const appTenant = user.app_metadata?.tenant_id;
+    if (isValidUuid(appTenant)) return appTenant.trim();
+    const userTenant = user.user_metadata?.tenant_id;
+    if (isValidUuid(userTenant)) return userTenant.trim();
+    if (isValidUuid(user.tenant_id)) return user.tenant_id.trim();
   }
-  return state.auth?.user?.tenant_id || 'clasptek_main';
+  if (isValidUuid(state.authoritativeTenantId)) {
+    return state.authoritativeTenantId.trim();
+  }
+  return null;
+}
+
+async function lookupAuthoritativeTenantFromDatabase() {
+  if (!supabaseClient.isConfigured()) return null;
+  const token = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
+  if (!token) return null;
+  try {
+    const res = await supabaseClient.from('tenant_memberships').select('tenant_id');
+    if (res && res.status === 200 && Array.isArray(res.data) && res.data.length > 0) {
+      for (const m of res.data) {
+        if (isValidUuid(m.tenant_id)) {
+          state.authoritativeTenantId = m.tenant_id;
+          if (state.auth?.user) state.auth.user.tenant_id = m.tenant_id;
+          return m.tenant_id;
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
 }
 
 function transformEntityForPostgres(entity, item, tenantId) {
@@ -6078,14 +6111,17 @@ async function runProductionMigrationPreflight() {
 
   // 11. Authoritative tenant membership exists
   const authUser = state.auth?.supabaseUser || state.auth?.user;
-  const tenantId = resolveAuthoritativeTenantId();
-  if (!tenantId || tenantId === 'none') {
-    failures.push('Authoritative tenant membership is missing.');
+  let tenantId = resolveAuthoritativeTenantId();
+  if (!isValidUuid(tenantId)) {
+    tenantId = await lookupAuthoritativeTenantFromDatabase().catch(() => null);
+  }
+  if (!tenantId || tenantId === 'none' || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
+    failures.push(`Authoritative PostgreSQL tenant UUID could not be established (received: "${tenantId || 'none'}"). Migration blocked.`);
   }
 
   // 12. Authoritative tenant UUID is resolved dynamically
-  if (!tenantId) {
-    failures.push('Dynamic authoritative tenant ID resolution failed.');
+  if (!tenantId || !isValidUuid(tenantId)) {
+    failures.push('Dynamic authoritative tenant UUID resolution failed. A valid RFC 4122 UUID is strictly required for PostgreSQL operations.');
   }
 
   // 13. User role is available
@@ -6145,9 +6181,9 @@ async function runProductionMigrationPreflight() {
   // 22. Migration is therefore eligible
   const eligible = (failures.length === 0);
 
-  const tenantIdMasked = tenantId
-    ? (tenantId.length > 8 ? `${tenantId.slice(0, 4)}...${tenantId.slice(-4)}` : '****')
-    : 'none';
+  const tenantIdMasked = (tenantId && isValidUuid(tenantId))
+    ? `${tenantId.slice(0, 4)}...${tenantId.slice(-4)}`
+    : (tenantId || 'none');
 
   return {
     eligible,
@@ -6181,7 +6217,18 @@ async function migrateLegacyDataToPostgres({ dryRun = false } = {}) {
   }
 
   const legacy = await inspectLegacyLocalData();
-  const tenantId = resolveAuthoritativeTenantId();
+  let tenantId = resolveAuthoritativeTenantId();
+  if (!isValidUuid(tenantId)) {
+    tenantId = await lookupAuthoritativeTenantFromDatabase().catch(() => null);
+  }
+
+  if (!isValidUuid(tenantId)) {
+    state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.BLOCKED;
+    const errMessage = `Migration blocked: Authoritative PostgreSQL tenant UUID could not be established (received: "${tenantId || 'none'}"). Zero database write requests were issued.`;
+    console.error(errMessage);
+    await logAudit('MIGRATION_BLOCKED_INVALID_TENANT', 'system', 'migration', errMessage, null, null);
+    throw new Error(errMessage);
+  }
 
   const stats = {
     detected: legacy.totalRecords,
@@ -20655,7 +20702,10 @@ function renderChangeRoleModal(container, user) {
       resolveSupabaseProductionConfig,
       formatSupabaseProductionConfig,
       // Phase 14.4 & 14.5 Production Migration & Reconciliation Exports
+      UUID_REGEX,
+      isValidUuid,
       resolveAuthoritativeTenantId,
+      lookupAuthoritativeTenantFromDatabase,
       transformEntityForPostgres,
       runProductionMigrationPreflight,
       readBackProductionMigration,
@@ -20698,6 +20748,10 @@ function renderChangeRoleModal(container, user) {
     window.runProductionConnectionSelfTest = runProductionConnectionSelfTest;
     window.inspectProductionDatabase = inspectProductionDatabase;
     window.inspectLegacyLocalData = inspectLegacyLocalData;
+    window.UUID_REGEX = UUID_REGEX;
+    window.isValidUuid = isValidUuid;
+    window.resolveAuthoritativeTenantId = resolveAuthoritativeTenantId;
+    window.lookupAuthoritativeTenantFromDatabase = lookupAuthoritativeTenantFromDatabase;
     window.runProductionMigrationPreflight = runProductionMigrationPreflight;
     window.migrateLegacyDataToPostgres = migrateLegacyDataToPostgres;
     window.readBackProductionMigration = readBackProductionMigration;

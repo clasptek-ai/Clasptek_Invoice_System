@@ -1,0 +1,70 @@
+{
+  "migrationStart": "2026-09-03T22:54:14.586Z",
+  "migrationEnd": "2026-09-03T22:54:36.118Z",
+  "authoritativeTenantUuid": "f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6",
+  "legacyIdentifier": "clasptek_main",
+  "recordsAttempted": 37,
+  "recordsSuccessfullyWritten": 37,
+  "recordsFailed": 0,
+  "tableCounts": {
+    "finance_settings": 1,
+    "payment_accounts": 0,
+    "programmes": 0,
+    "personnel": 5,
+    "customers": 0,
+    "enquiries": 0,
+    "enrolments": 0,
+    "invoices": 0,
+    "invoice_items": 0,
+    "payments": 0,
+    "receipts": 0,
+    "expenses": 0,
+    "direct_income": 0,
+    "budgets": 0,
+    "budget_lines": 0,
+    "payslips": 0,
+    "facilitator_sessions": 0,
+    "customer_timeline": 0,
+    "collection_actions": 0,
+    "finance_audit_log": 31,
+    "management_alerts": 0,
+    "approval_thresholds": 0,
+    "financial_adjustments": 0,
+    "report_snapshots": 0,
+    "management_metrics": 0,
+    "cash_flow_forecasts": 0,
+    "customer_segments": 0
+  },
+  "reconciliation": {
+    "finance_settings": {
+      "local_count": 1,
+      "remote_count": 1,
+      "matched": 1,
+      "missing": 0,
+      "unexpected": 0,
+      "mismatched": 0
+    },
+    "personnel": {
+      "local_count": 5,
+      "remote_count": 5,
+      "matched": 5,
+      "missing": 0,
+      "unexpected": 0,
+      "mismatched": 0
+    },
+    "finance_audit_log": {
+      "local_count": 31,
+      "remote_count": 31,
+      "matched": 31,
+      "missing": 0,
+      "unexpected": 0,
+      "mismatched": 0
+    }
+  },
+  "totalRemoteRecords": 37,
+  "invalidTenantRecords": 0,
+  "legacyTenantRecords": 0,
+  "localStorageIntact": true,
+  "finalAuthorityState": "AUTHORITATIVE",
+  "finalMigrationStatus": "MIGRATION COMPLETED — 37/37 RECORDS RECONCILED"
+}

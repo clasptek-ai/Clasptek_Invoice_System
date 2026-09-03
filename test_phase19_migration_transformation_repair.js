@@ -377,6 +377,89 @@ async function runPhase19Tests() {
   // Restore client from
   app.supabaseClient.from = origFrom;
 
+  // ---------------------------------------------------------------------------
+  // Category 6: Authoritative Tenant UUID Resolution & Preflight / Migration Guards
+  // ---------------------------------------------------------------------------
+  console.log('\n--- Category 6: Authoritative Tenant Resolution & Invariant Guards ---');
+
+  // Test 13: UUID validation helper
+  assert(app.isValidUuid('f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6') === true, 'isValidUuid returns true for canonical lower-case UUID');
+  assert(app.isValidUuid('F70D5788-B4AE-4425-A5D4-B7B7D0F01FF6') === true, 'isValidUuid returns true for upper-case UUID');
+  assert(app.isValidUuid('clasptek_main') === false, 'isValidUuid rejects legacy clasptek_main');
+  assert(app.isValidUuid('none') === false, 'isValidUuid rejects "none"');
+  assert(app.isValidUuid('') === false, 'isValidUuid rejects empty string');
+  assert(app.isValidUuid(null) === false, 'isValidUuid rejects null');
+  assert(app.isValidUuid(undefined) === false, 'isValidUuid rejects undefined');
+  assert(app.isValidUuid('12345') === false, 'isValidUuid rejects numeric string');
+  assert(app.isValidUuid('f70d5788-b4ae-4425-a5d4') === false, 'isValidUuid rejects truncated UUID');
+
+  // Test 14: resolveAuthoritativeTenantId with legacy/invalid credentials
+  app.state.auth = { user: { tenant_id: 'clasptek_main' } };
+  app.state.authoritativeTenantId = null;
+  assert(app.resolveAuthoritativeTenantId() === null, 'resolveAuthoritativeTenantId returns null for legacy clasptek_main');
+
+  app.state.auth = { user: null };
+  assert(app.resolveAuthoritativeTenantId() === null, 'resolveAuthoritativeTenantId returns null when no user is logged in');
+
+  // Test 15: resolveAuthoritativeTenantId with valid UUIDs across precedence levels
+  const validUuid1 = '11111111-2222-3333-4444-555555555555';
+  const validUuid2 = '22222222-3333-4444-5555-666666666666';
+  const validUuid3 = '33333333-4444-5555-6666-777777777777';
+
+  app.state.auth = {
+    supabaseUser: {
+      app_metadata: { tenant_id: validUuid1 },
+      user_metadata: { tenant_id: validUuid2 },
+      tenant_id: validUuid3
+    },
+    user: { tenant_id: 'clasptek_main' }
+  };
+  assert(app.resolveAuthoritativeTenantId() === validUuid1, 'Resolves app_metadata.tenant_id with highest priority');
+
+  app.state.auth.supabaseUser.app_metadata = {};
+  assert(app.resolveAuthoritativeTenantId() === validUuid2, 'Resolves user_metadata.tenant_id as second priority');
+
+  app.state.auth.supabaseUser.user_metadata = {};
+  assert(app.resolveAuthoritativeTenantId() === validUuid3, 'Resolves supabaseUser.tenant_id as third priority');
+
+  app.state.auth.supabaseUser = null;
+  app.state.auth.user = { tenant_id: validUuid3 };
+  assert(app.resolveAuthoritativeTenantId() === validUuid3, 'Resolves user.tenant_id when valid UUID');
+
+  // Test 16: runProductionMigrationPreflight rejects invalid tenant ID
+  app.state.auth = { user: { tenant_id: 'clasptek_main' } };
+  app.state.authoritativeTenantId = null;
+  const preflightBad = await app.runProductionMigrationPreflight();
+  assert(preflightBad.eligible === false, 'Preflight rejects migration when tenant ID is clasptek_main');
+  assert(preflightBad.failures.some(f => f.includes('Authoritative PostgreSQL tenant UUID could not be established')), 'Preflight reports specific tenant UUID diagnostic failure');
+
+  // Test 17: migrateLegacyDataToPostgres strictly aborts with zero writes on invalid tenant
+  let writeAttempted = false;
+  app.supabaseClient.from = () => ({
+    select: async () => ({ status: 200, ok: true, data: [] }),
+    upsert: async () => {
+      writeAttempted = true;
+      return { data: [], error: null };
+    }
+  });
+  app.state.databaseAuthorityState = app.DATABASE_AUTHORITY_STATE.LOCAL_ONLY;
+  app.state.migrationLockActive = false;
+
+  let caughtError = null;
+  try {
+    await app.migrateLegacyDataToPostgres({ dryRun: false });
+  } catch (err) {
+    caughtError = err;
+  }
+  assert(caughtError !== null, 'migrateLegacyDataToPostgres threw an error on invalid tenant');
+  assert(caughtError.message.includes('Migration blocked: Authoritative PostgreSQL tenant UUID could not be established'), 'Migration abort error specifies tenant UUID requirement');
+  assert(caughtError.message.includes('Zero database write requests were issued'), 'Migration abort error certifies zero database writes');
+  assert(writeAttempted === false, 'Zero database write requests were actually dispatched to PostgREST');
+  assert(app.state.databaseAuthorityState === app.DATABASE_AUTHORITY_STATE.BLOCKED, 'Authority state safely locked to BLOCKED');
+
+  // Restore client from
+  app.supabaseClient.from = origFrom;
+
   console.log('\n========================================================================================');
   console.log(` PHASE 19 CERTIFICATION SUMMARY: ${totalPassed} PASSED / ${totalFailed} FAILED (TOTAL ${totalPassed + totalFailed} ASSERTIONS)`);
   console.log('========================================================================================\n');

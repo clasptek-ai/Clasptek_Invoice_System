@@ -1,0 +1,224 @@
+{
+  "timestamp": "2026-09-03T22:28:20.838Z",
+  "targetTenantUuid": "f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6",
+  "legacyIdentifier": "clasptek_main",
+  "tables": [
+    {
+      "table": "finance_settings",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "payment_accounts",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "programmes",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "personnel",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "customers",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "enquiries",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "enrolments",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "invoices",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "invoice_items",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "payments",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "receipts",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "expenses",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "direct_income",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "budgets",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "budget_lines",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "payslips",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "facilitator_sessions",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "customer_timeline",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "collection_actions",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "finance_audit_log",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "management_alerts",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "approval_thresholds",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "financial_adjustments",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "report_snapshots",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "management_metrics",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "cash_flow_forecasts",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    },
+    {
+      "table": "customer_segments",
+      "status": 200,
+      "contentRange": "*/0",
+      "count": 0,
+      "hasRecords": false
+    }
+  ],
+  "transformation": {
+    "personnel": {
+      "localCount": 5,
+      "transformedCount": 5,
+      "valid": true
+    },
+    "finance_settings": {
+      "localCount": 1,
+      "transformedCount": 1,
+      "valid": true
+    },
+    "finance_audit_log": {
+      "localCount": 31,
+      "transformedCount": 31,
+      "valid": true
+    },
+    "totalSource": 37,
+    "totalTransformed": 37,
+    "errorsCount": 0
+  },
+  "zeroWriteProof": {
+    "POST": 0,
+    "PATCH": 0,
+    "PUT": 0,
+    "DELETE": 0,
+    "UPSERT": 0,
+    "totalWrites": 0
+  }
+}

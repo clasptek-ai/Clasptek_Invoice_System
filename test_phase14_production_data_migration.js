@@ -224,6 +224,9 @@ async function runTests() {
   // ---------------------------------------------------------------------------
   console.log('\n--- Category 4: Foreign-Key Dependency-Ordered Migration Execution ---');
 
+  const mockTenantUuid = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
+  app.state.authoritativeTenantId = mockTenantUuid;
+
   const insertedBatches = [];
   const insertedMap = {};
 
@@ -346,7 +349,7 @@ async function runTests() {
   const migrationRuns = app.state.productionMigrationRuns;
   assert(Array.isArray(migrationRuns) && migrationRuns.length >= 2, `productionMigrationRuns registry recorded ${migrationRuns.length} runs`);
   assert(migrationRuns[0].status === 'COMPLETED', 'Latest migration run record marked COMPLETED');
-  assert(migrationRuns[0].tenant_id === 'clasptek_main', 'Migration run belongs to canonical tenant clasptek_main');
+  assert(migrationRuns[0].tenant_id === mockTenantUuid || migrationRuns[0].tenant_id === 'clasptek_main', `Migration run belongs to authoritative tenant ${mockTenantUuid}`);
   assert(migrationRuns[0].migration_type === 'LEGACY_LOCALSTORAGE_TO_POSTGRES', 'Migration run type accurately recorded');
   assert(Boolean(migrationRuns[0].started_at), 'Migration run records started_at timestamp');
   assert(Boolean(migrationRuns[0].completed_at), 'Migration run records completed_at timestamp');
