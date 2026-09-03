@@ -389,7 +389,7 @@ async function runPhase14_6Tests() {
   assert(activeQuery.ok === true, 'Test 075: Invoice query succeeds in authoritative mode');
   assert(Array.isArray(activeQuery.data) && activeQuery.data.length >= 1, 'Test 076: Query returns authoritative invoice record');
   assert(activeQuery.data[0].invoice_no === 'INV-2026-801', 'Test 077: Query returns correct invoice number INV-2026-801');
-  assert(activeQuery.data[0].balance === 250000, 'Test 078: Query returns correct outstanding balance ₦250,000');
+  assert(activeQuery.data[0].total_amount === 650000, 'Test 078: Query returns correct total_amount ₦650,000');
 
   // Verify non-destructive invariant: Local data untouched
   assert(app.state.customers.length === 1, 'Test 079: Local customers array preserved intact');

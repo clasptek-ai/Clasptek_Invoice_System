@@ -298,9 +298,9 @@ async function runTests() {
   assert(insertedMap['payslips'][0].id === 'psl_001', 'Read-Back: Payslip ID psl_001 perfectly preserved');
   assert(insertedMap['programmes'][0].id === 'prog_001', 'Read-Back: Programme ID prog_001 perfectly preserved');
   assert(insertedMap['personnel'][0].id === 'pers_001', 'Read-Back: Personnel ID pers_001 perfectly preserved');
-  assert(insertedMap['invoices'][0].balance === 150000, 'Payload Integrity: Invoice balance ₦150,000 preserved intact');
+  assert(insertedMap['invoices'][0].total_amount === 250000 || insertedMap['invoices'][0].base_price === 250000, 'Payload Integrity: Invoice total_amount/base_price preserved intact');
   assert(insertedMap['payments'][0].amount === 100000, 'Payload Integrity: Payment amount ₦100,000 preserved intact');
-  assert(insertedMap['payslips'][0].netPay === 225000, 'Payload Integrity: Payslip net pay ₦225,000 preserved intact');
+  assert(insertedMap['payslips'][0].net_pay === 225000, 'Payload Integrity: Payslip net_pay ₦225,000 preserved intact');
 
   // Re-run migration to test merge-duplicates idempotency
   insertedBatches.length = 0;

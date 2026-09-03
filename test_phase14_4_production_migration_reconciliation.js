@@ -176,8 +176,8 @@ async function runPhase14_4Tests() {
   const transformedInv = app.transformEntityForPostgres('invoices', sampleInv, customTenantUuid);
   assert(transformedInv.invoice_no === 'INV-2026-001', 'Test 15: Transformation maps invoiceNo to invoice_no');
   assert(transformedInv.customer_id === 'cust_1', 'Test 16: Transformation maps customerId to customer_id');
-  assert(transformedInv.subtotal === 200000, 'Test 17: Transformation maps subTotal to subtotal');
-  assert(transformedInv.tax_amount === 15000, 'Test 18: Transformation maps taxAmount to tax_amount');
+  assert(transformedInv.base_price === 200000, 'Test 17: Transformation maps subTotal to schema column base_price');
+  assert(transformedInv.total_amount === 215000, 'Test 18: Transformation maps total to schema column total_amount');
 
   // ---------------------------------------------------------------------------
   // Category 3: Legacy Local Data Seeding & Inventory

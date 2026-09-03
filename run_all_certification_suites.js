@@ -35,7 +35,8 @@ const suites = [
   { name: 'Phase 15A: Forensic Schema Verification & Production Table Inventory', file: 'test_phase15_schema_forensic_verification.js' },
   { name: 'Phase 15: Real Supabase Cloud Migration & Production Authority Certification', file: 'test_phase15_real_cloud_migration.js' },
   { name: 'Phase 17: Production Supabase Schema Deployment & Verified Migration Readiness', file: 'test_phase17_production_schema_deployment.js' },
-  { name: 'Phase 18: Authentication Session Synchronization, Proactive Refresh & Reconciliation Integrity', file: 'test_phase18_auth_reconciliation_repair.js' }
+  { name: 'Phase 18: Authentication Session Synchronization, Proactive Refresh & Reconciliation Integrity', file: 'test_phase18_auth_reconciliation_repair.js' },
+  { name: 'Phase 19: Historical Migration Transformation Repair & Schema Whitelist Enforcement', file: 'test_phase19_migration_transformation_repair.js' }
 ];
 
 let totalPassed = 0;
