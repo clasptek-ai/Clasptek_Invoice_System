@@ -2328,6 +2328,10 @@ const supabaseAuth = {
         state.auth.supabaseSession = data;
         state.auth.supabaseUser = data.user;
         state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id;
+        if (tId && state.auth.user) {
+          state.auth.user.tenant_id = tId;
+        }
         await safeSet('clasptek:supabase_session', data);
         await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       }
@@ -5272,16 +5276,19 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
 // =============================================================================
 
 function resolveAuthoritativeTenantId() {
-  const authUser = state.auth?.supabaseUser || state.auth?.user;
-  const sessionUser = state.auth?.supabaseSession?.user;
-  const user = authUser || sessionUser;
-
-  if (user) {
-    if (user.tenant_id) return user.tenant_id;
-    if (user.app_metadata && user.app_metadata.tenant_id) return user.app_metadata.tenant_id;
-    if (user.user_metadata && user.user_metadata.tenant_id) return user.user_metadata.tenant_id;
+  const supaUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user;
+  if (supaUser) {
+    if (supaUser.app_metadata?.tenant_id) return supaUser.app_metadata.tenant_id;
+    if (supaUser.user_metadata?.tenant_id) return supaUser.user_metadata.tenant_id;
+    if (supaUser.tenant_id && supaUser.tenant_id !== 'clasptek_main') return supaUser.tenant_id;
   }
-  return 'clasptek_main';
+  const user = state.auth?.user;
+  if (user) {
+    if (user.app_metadata?.tenant_id) return user.app_metadata.tenant_id;
+    if (user.user_metadata?.tenant_id) return user.user_metadata.tenant_id;
+    if (user.tenant_id && user.tenant_id !== 'clasptek_main') return user.tenant_id;
+  }
+  return state.auth?.user?.tenant_id || 'clasptek_main';
 }
 
 function transformEntityForPostgres(entity, item, tenantId) {
@@ -7614,8 +7621,13 @@ async function loadAll() {
       ...authSession,
       supabaseJwt: authSession.supabaseJwt || storedSbSession?.access_token || null,
       supabaseSession: authSession.supabaseSession || storedSbSession || null,
+      supabaseUser: authSession.supabaseUser || storedSbSession?.user || null,
       tokenExpiresAt: authSession.tokenExpiresAt || (storedSbSession?.expires_in ? Date.now() + storedSbSession.expires_in * 1000 : null)
     };
+    const restoredTenantId = state.auth.supabaseUser?.app_metadata?.tenant_id || state.auth.supabaseUser?.user_metadata?.tenant_id || storedSbSession?.user?.app_metadata?.tenant_id;
+    if (restoredTenantId && state.auth.user && state.auth.user.tenant_id === 'clasptek_main') {
+      state.auth.user.tenant_id = restoredTenantId;
+    }
   } else if (storedSbSession && storedSbSession.access_token) {
     state.auth = state.auth || {};
     state.auth.supabaseJwt = storedSbSession.access_token;
