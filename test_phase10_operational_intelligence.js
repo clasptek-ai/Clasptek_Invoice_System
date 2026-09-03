@@ -283,10 +283,10 @@ async function runSuite() {
 
   await itAsync('3.5 Alert Lifecycle: resolveAlert transitions state to RESOLVED', async () => {
     const alertId = 'alt_test_res';
-    const updated = await app.resolveAlert(alertId, 'Ayodele Johnson');
+    const updated = await app.resolveAlert(alertId, 'Clasptek Admin');
 
     assert.strictEqual(updated.status, 'RESOLVED');
-    assert.strictEqual(updated.resolved_by, 'Ayodele Johnson');
+    assert.strictEqual(updated.resolved_by, 'Clasptek Admin');
     assert(updated.resolved_at);
   });
 

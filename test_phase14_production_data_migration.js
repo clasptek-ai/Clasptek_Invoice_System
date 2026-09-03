@@ -145,7 +145,7 @@ async function runTests() {
   const sampleEnrl = { id: 'enrl_001', customerId: 'cust_001', programmeId: 'prog_001', status: 'active' };
   const sampleInv = { id: 'inv_001', invoiceNo: 'INV-11092041', customerId: 'cust_001', total: 250000, balance: 150000, status: 'partial' };
   const samplePay = { id: 'pay_001', receiptNo: 'REC-20001', invoiceId: 'inv_001', customerId: 'cust_001', amount: 100000 };
-  const samplePers = { id: 'pers_001', name: 'Ayodele Johnson', role: 'Head of Academics', basicPay: 250000 };
+  const samplePers = { id: 'pers_001', name: 'Clasptek Admin', role: 'Head of Academics', basicPay: 250000 };
   const samplePsl = { id: 'psl_001', payslipNo: 'PSL-30001', personnelId: 'pers_001', grossPay: 250000, totalDeductions: 25000, netPay: 225000, status: 'issued' };
 
   localStorage.setItem(app.STORE_KEY_CUSTOMERS, JSON.stringify([sampleCust]));

@@ -81,6 +81,7 @@ function validatePublicCredential(key) {
     key.startsWith('sbp_') ||
     key.startsWith('sk_') ||
     key.startsWith('secret_') ||
+    key.startsWith('sb_secret_') ||
     key.startsWith('service_role') ||
     key.includes('service_role') ||
     key.includes('postgres' + '://') ||
@@ -112,7 +113,7 @@ function getSanitizedRuntimeConfigSummary() {
   const { url, key } = resolveBuildCredentials();
   let credType = 'none';
   if (key) {
-    if (key.startsWith('pk_') || key.startsWith('sb_pub_') || key.includes('publishable')) {
+    if (key.startsWith('pk_') || key.startsWith('sb_pub_') || key.startsWith('sb_publishable_') || key.includes('publishable')) {
       credType = 'publishable';
     } else if (key.startsWith('eyJ') || key.includes('anon')) {
       credType = 'anon';

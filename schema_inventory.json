@@ -1,6 +1,6 @@
 {
   "sourceFile": "supabase_schema.sql",
-  "inspectedAt": "2026-08-29T21:36:45.234Z",
+  "inspectedAt": "2026-09-01T20:34:32.554Z",
   "targetProjectRef": "logaawoigfxnisimfatf",
   "targetUrl": "https://logaawoigfxnisimfatf.supabase.co",
   "summary": {
@@ -8,9 +8,9 @@
     "canonical27PresentInSql": 27,
     "canonical27MissingInSql": [],
     "totalRlsEnabled": 55,
-    "totalPoliciesDefined": 101,
+    "totalPoliciesDefined": 105,
     "totalFunctionsDefined": 21,
-    "totalIndexesDefined": 40
+    "totalIndexesDefined": 37
   },
   "canonical27Tables": [
     {
@@ -83,7 +83,7 @@
       "hasTenantId": true,
       "rlsEnabled": true,
       "policyCount": 4,
-      "columnCount": 23
+      "columnCount": 24
     },
     {
       "table": "invoice_items",
@@ -109,7 +109,7 @@
       "primaryKey": "id",
       "hasTenantId": true,
       "rlsEnabled": true,
-      "policyCount": 0,
+      "policyCount": 2,
       "columnCount": 11
     },
     {
@@ -367,7 +367,7 @@
         {
           "name": "role",
           "type": "TEXT",
-          "raw": "role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'STAFF')),"
+          "raw": "role TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF')),"
         },
         {
           "name": "status",
@@ -799,7 +799,7 @@
       "isCanonical27": true,
       "primaryKey": "id",
       "hasTenantId": true,
-      "columnCount": 23,
+      "columnCount": 24,
       "columns": [
         {
           "name": "id",
@@ -825,6 +825,11 @@
           "name": "programme_id",
           "type": "TEXT",
           "raw": "programme_id TEXT NOT NULL REFERENCES public.programmes(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT,",
+          "raw": "customer_id TEXT,"
         },
         {
           "name": "student_name",
@@ -1142,7 +1147,11 @@
       "constraints": [
         "UNIQUE(tenant_id, receipt_no)"
       ],
-      "rlsEnabled": true
+      "rlsEnabled": true,
+      "policies": [
+        "receipts_tenant_select",
+        "receipts_manager_write"
+      ]
     },
     "direct_income": {
       "name": "direct_income",
@@ -1607,7 +1616,10 @@
         }
       ],
       "constraints": [],
-      "rlsEnabled": true
+      "rlsEnabled": true,
+      "policies": [
+        "recurring_expenses_manager_all"
+      ]
     },
     "recurring_invoices": {
       "name": "recurring_invoices",
@@ -1668,7 +1680,10 @@
         }
       ],
       "constraints": [],
-      "rlsEnabled": true
+      "rlsEnabled": true,
+      "policies": [
+        "recurring_invoices_manager_all"
+      ]
     },
     "finance_audit_log": {
       "name": "finance_audit_log",
@@ -2181,8 +2196,8 @@
       ],
       "rlsEnabled": true,
       "policies": [
-        "settings_tenant_read",
-        "settings_admin_write"
+        "finance_settings_tenant_read",
+        "finance_settings_admin_write"
       ]
     },
     "payment_accounts": {
@@ -2258,8 +2273,8 @@
       ],
       "rlsEnabled": true,
       "policies": [
-        "accounts_tenant_read",
-        "accounts_manager_write"
+        "payment_accounts_tenant_read",
+        "payment_accounts_manager_write"
       ]
     },
     "enquiries": {
@@ -2737,7 +2752,7 @@
         {
           "name": "idempotency_key",
           "type": "TEXT",
-          "raw": "idempotency_key TEXT NOT NULL UNIQUE,"
+          "raw": "idempotency_key TEXT NOT NULL,"
         },
         {
           "name": "resource_type",
@@ -2752,10 +2767,12 @@
         {
           "name": "created_at",
           "type": "TIMESTAMPTZ",
-          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
         }
       ],
-      "constraints": [],
+      "constraints": [
+        "CONSTRAINT uq_idempotency_tenant_key UNIQUE (tenant_id, idempotency_key)"
+      ],
       "rlsEnabled": true,
       "policies": [
         "idempotency_tenant_all"
@@ -2995,7 +3012,7 @@
       "constraints": [],
       "rlsEnabled": true,
       "policies": [
-        "reconciliations_manager_all"
+        "bank_reconciliations_manager_all"
       ]
     },
     "bank_reconciliation_items": {
@@ -3049,7 +3066,7 @@
       "constraints": [],
       "rlsEnabled": true,
       "policies": [
-        "reconciliation_items_manager_all"
+        "bank_reconciliation_items_manager_all"
       ]
     },
     "expense_status_history": {
@@ -4319,6 +4336,26 @@
       "body": "FOR SELECT TO authenticated\nUSING (tenant_id = public.get_auth_tenant_id())"
     },
     {
+      "name": "income_cats_tenant_select",
+      "table": "income_categories",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "income_cats_admin_write",
+      "table": "income_categories",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "expense_cats_tenant_select",
+      "table": "expense_categories",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "expense_cats_admin_write",
+      "table": "expense_categories",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
       "name": "programmes_tenant_select",
       "table": "programmes",
       "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
@@ -4337,6 +4374,36 @@
       "name": "programmes_admin_delete",
       "table": "programmes",
       "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "settings_tenant_select",
+      "table": "finance_approval_settings",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "settings_admin_write",
+      "table": "finance_approval_settings",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "periods_tenant_select",
+      "table": "finance_periods",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+    },
+    {
+      "name": "periods_admin_write",
+      "table": "finance_periods",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "budgets_tenant_select",
+      "table": "budgets",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "budgets_manager_write",
+      "table": "budgets",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
       "name": "invoices_tenant_select",
@@ -4384,6 +4451,16 @@
       "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
+      "name": "receipts_tenant_select",
+      "table": "receipts",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
+    },
+    {
+      "name": "receipts_manager_write",
+      "table": "receipts",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
       "name": "expenses_tenant_select",
       "table": "expenses",
       "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_finance_staff() OR created_by = auth.uid()))"
@@ -4412,61 +4489,6 @@
       "name": "direct_income_manager_update",
       "table": "direct_income",
       "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
-    },
-    {
-      "name": "income_cats_tenant_select",
-      "table": "income_categories",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
-    },
-    {
-      "name": "income_cats_admin_write",
-      "table": "income_categories",
-      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
-    },
-    {
-      "name": "expense_cats_tenant_select",
-      "table": "expense_categories",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
-    },
-    {
-      "name": "expense_cats_admin_write",
-      "table": "expense_categories",
-      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
-    },
-    {
-      "name": "budgets_tenant_select",
-      "table": "budgets",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
-    },
-    {
-      "name": "budgets_manager_write",
-      "table": "budgets",
-      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
-    },
-    {
-      "name": "audit_log_manager_select",
-      "table": "finance_audit_log",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
-    },
-    {
-      "name": "periods_tenant_select",
-      "table": "finance_periods",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
-    },
-    {
-      "name": "periods_admin_write",
-      "table": "finance_periods",
-      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
-    },
-    {
-      "name": "settings_tenant_select",
-      "table": "finance_approval_settings",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
-    },
-    {
-      "name": "settings_admin_write",
-      "table": "finance_approval_settings",
-      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
     },
     {
       "name": "reconciliations_manager_select",
@@ -4499,6 +4521,21 @@
       "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_finance_staff())"
     },
     {
+      "name": "recurring_expenses_manager_all",
+      "table": "recurring_expenses",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "recurring_invoices_manager_all",
+      "table": "recurring_invoices",
+      "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "audit_log_manager_select",
+      "table": "finance_audit_log",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
       "name": "personnel_tenant_select",
       "table": "personnel",
       "body": "FOR SELECT TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND (public.can_manage_people() OR user_id = auth.uid()))"
@@ -4519,22 +4556,22 @@
       "body": "FOR ALL TO authenticated \nUSING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
-      "name": "settings_tenant_read",
+      "name": "finance_settings_tenant_read",
       "table": "finance_settings",
       "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
     },
     {
-      "name": "settings_admin_write",
+      "name": "finance_settings_admin_write",
       "table": "finance_settings",
       "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
     },
     {
-      "name": "accounts_tenant_read",
+      "name": "payment_accounts_tenant_read",
       "table": "payment_accounts",
       "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
     },
     {
-      "name": "accounts_manager_write",
+      "name": "payment_accounts_manager_write",
       "table": "payment_accounts",
       "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
@@ -4639,12 +4676,12 @@
       "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff())"
     },
     {
-      "name": "reconciliations_manager_all",
+      "name": "bank_reconciliations_manager_all",
       "table": "bank_reconciliations",
       "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
-      "name": "reconciliation_items_manager_all",
+      "name": "bank_reconciliation_items_manager_all",
       "table": "bank_reconciliation_items",
       "body": "FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
@@ -4706,17 +4743,17 @@
     {
       "name": "system_diagnostics_admin_select",
       "table": "system_diagnostics",
-      "body": "FOR SELECT\n    TO authenticated\n    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
       "name": "system_diagnostics_admin_insert",
       "table": "system_diagnostics",
-      "body": "FOR INSERT\n    TO authenticated\n    WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
       "name": "system_diagnostics_admin_delete",
       "table": "system_diagnostics",
-      "body": "FOR DELETE\n    TO authenticated\n    USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
     },
     {
       "name": "migration_runs_manage_select",
@@ -4836,17 +4873,17 @@
       "returns": "BOOLEAN"
     },
     {
-      "name": "is_facilitator",
-      "params": "",
-      "returns": "BOOLEAN"
-    },
-    {
       "name": "can_manage_finance",
       "params": "",
       "returns": "BOOLEAN"
     },
     {
       "name": "can_manage_people",
+      "params": "",
+      "returns": "BOOLEAN"
+    },
+    {
+      "name": "is_facilitator",
       "params": "",
       "returns": "BOOLEAN"
     },
@@ -4923,6 +4960,16 @@
       "columns": "tenant_id, status"
     },
     {
+      "name": "idx_invoices_tenant_duedate",
+      "table": "invoices",
+      "columns": "tenant_id, due_date"
+    },
+    {
+      "name": "idx_invoices_tenant_cust",
+      "table": "invoices",
+      "columns": "tenant_id, customer_id"
+    },
+    {
       "name": "idx_payments_tenant_date",
       "table": "payments",
       "columns": "tenant_id, payment_date"
@@ -4973,6 +5020,11 @@
       "columns": "personnel_id"
     },
     {
+      "name": "idx_enquiries_tenant_stage",
+      "table": "enquiries",
+      "columns": "tenant_id, status"
+    },
+    {
       "name": "idx_sessions_tenant_facilitator",
       "table": "facilitator_sessions",
       "columns": "tenant_id, facilitator_id"
@@ -4991,36 +5043,6 @@
       "name": "idx_timeline_customer",
       "table": "customer_timeline",
       "columns": "tenant_id, customer_id, created_at DESC"
-    },
-    {
-      "name": "idx_invoices_tenant_status",
-      "table": "invoices",
-      "columns": "tenant_id, status"
-    },
-    {
-      "name": "idx_invoices_tenant_duedate",
-      "table": "invoices",
-      "columns": "tenant_id, due_date"
-    },
-    {
-      "name": "idx_invoices_tenant_cust",
-      "table": "invoices",
-      "columns": "tenant_id, customer_id"
-    },
-    {
-      "name": "idx_enquiries_tenant_stage",
-      "table": "enquiries",
-      "columns": "tenant_id, status"
-    },
-    {
-      "name": "idx_payslips_tenant_period",
-      "table": "payslips",
-      "columns": "tenant_id, pay_period"
-    },
-    {
-      "name": "idx_expenses_tenant_period",
-      "table": "expenses",
-      "columns": "tenant_id, expense_date"
     },
     {
       "name": "idx_alerts_tenant_severity",
