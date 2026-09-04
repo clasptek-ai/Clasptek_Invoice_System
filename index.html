@@ -5127,7 +5127,21 @@ const dbRepo = {
   async saveRecord(storeKey, record, idField = 'id') {
     const tableName = DB_TABLE_MAPPING[storeKey];
     if (supabaseClient.isConfigured() && tableName) {
-      const { data, error } = await supabaseClient.from(tableName).upsert(record, idField);
+      let tenantId = resolveAuthoritativeTenantId();
+      if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
+        tenantId = await lookupAuthoritativeTenantFromDatabase();
+      }
+
+      let payload = record;
+      if (tenantId && isValidUuid(tenantId) && tenantId !== 'clasptek_main') {
+        payload = typeof transformEntityForPostgres === 'function'
+          ? transformEntityForPostgres(tableName, record, tenantId)
+          : { ...record, tenant_id: tenantId };
+      } else if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE || (state.auth && state.auth.user)) {
+        throw new Error(`Cannot save to PostgreSQL: Invalid or non-authoritative tenant UUID ('${tenantId}')`);
+      }
+
+      const { data, error } = await supabaseClient.from(tableName).upsert(payload, idField);
       if (error) {
         console.error(`PostgreSQL save error on table ${tableName}:`, error);
         state.supabase.lastError = `Save failed on ${tableName}: ${error.message || JSON.stringify(error)}`;
@@ -5158,11 +5172,20 @@ const dbRepo = {
     if (!supabaseClient.isConfigured() || !tableName) {
       return { success: false, reason: 'unconfigured' };
     }
-    const { data, error } = await supabaseClient.from(tableName).select('*');
+    const tenantId = resolveAuthoritativeTenantId();
+    let query = supabaseClient.from(tableName).select('*');
+    if (tenantId && tenantId !== 'clasptek_main' && isValidUuid(tenantId)) {
+      query = query.eq('tenant_id', tenantId);
+    }
+    const { data, error } = await query;
     if (error) {
       return { success: false, reason: 'error', error };
     }
-    return { success: true, data: Array.isArray(data) ? data : [data].filter(Boolean) };
+    const rawRows = Array.isArray(data) ? data : [data].filter(Boolean);
+    const transformed = typeof transformEntityFromPostgres === 'function'
+      ? rawRows.map(r => transformEntityFromPostgres(tableName, r))
+      : rawRows;
+    return { success: true, data: transformed };
   }
 };
 
@@ -5823,6 +5846,153 @@ function transformEntityForPostgres(entity, item, tenantId) {
 
     default:
       return { ...item, tenant_id: tenantId };
+  }
+}
+
+function transformEntityFromPostgres(entity, row) {
+  if (!row || typeof row !== 'object') return row;
+
+  const base = { ...row };
+  for (const [key, value] of Object.entries(row)) {
+    if (key.includes('_')) {
+      const camel = key.replace(/_([a-z0-9])/g, (_, g) => g.toUpperCase());
+      if (base[camel] === undefined) {
+        base[camel] = value;
+      }
+    }
+  }
+
+  switch (entity) {
+    case 'personnel':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        employeeId: row.employee_id || row.employeeId || row.id,
+        employeeNo: row.employee_id || row.employeeId || row.employeeNo || row.id,
+        firstName: row.first_name || row.firstName || (row.full_name ? row.full_name.split(' ')[0] : (row.name ? row.name.split(' ')[0] : '')),
+        lastName: row.last_name || row.lastName || (row.full_name ? row.full_name.split(' ').slice(1).join(' ') : (row.name ? row.name.split(' ').slice(1).join(' ') : '')),
+        fullName: row.full_name || row.fullName || row.name || '',
+        name: row.full_name || row.name || row.fullName || '',
+        email: row.email || '',
+        phone: row.phone || '',
+        type: (row.employee_type || row.type || row.employeeType || 'staff').toLowerCase(),
+        employeeType: (row.employee_type || row.employeeType || row.type || 'staff').toLowerCase(),
+        department: row.department || '',
+        subject: row.department || row.subject || '',
+        role: row.job_title || row.role || row.designation || 'Staff',
+        jobTitle: row.job_title || row.jobTitle || row.role || 'Staff',
+        designation: row.job_title || row.designation || row.role || 'Staff',
+        status: (row.employment_status || row.status || row.employmentStatus || 'active').toLowerCase(),
+        employmentStatus: (row.employment_status || row.employmentStatus || row.status || 'active').toLowerCase(),
+        dateOfJoining: row.date_joined || row.dateOfJoining || row.dateJoined || '',
+        dateJoined: row.date_joined || row.dateJoined || row.dateOfJoining || '',
+        bankName: row.bank_name || row.bankName || '',
+        accountName: row.account_name || row.accountName || '',
+        accountNumber: row.account_number || row.accountNumber || '',
+        compensationType: row.compensation_type || row.compensationType || 'MONTHLY_SALARY',
+        basicPay: Number(row.basic_pay !== undefined ? row.basic_pay : (row.basicPay !== undefined ? row.basicPay : 0)),
+        facilitatorRate: Number(row.facilitator_rate !== undefined ? row.facilitator_rate : (row.facilitatorRate !== undefined ? row.facilitatorRate : 0)),
+        hourlyRate: Number(row.facilitator_rate !== undefined ? row.facilitator_rate : (row.hourlyRate !== undefined ? row.hourlyRate : 0)),
+        rateType: row.rate_type || row.rateType || 'PER_SESSION',
+        notes: row.notes || '',
+        userId: row.user_id || row.userId || null,
+        active: ((row.employment_status || row.status || 'active').toLowerCase() === 'active'),
+        feeStructure: row.feeStructure || (row.notes && row.notes.includes('Standard') ? 'Standard' : null)
+      };
+
+    case 'finance_settings':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        companyName: row.company_name || row.companyName || 'Clasptek Coaching Limited',
+        tradingName: row.trading_name || row.tradingName || 'Clasptek',
+        address: row.address || '',
+        phone: row.phone || '',
+        email: row.email || '',
+        website: row.website || '',
+        taxId: row.tax_id || row.taxId || '',
+        tinNumber: row.tax_id || row.tinNumber || row.taxId || '',
+        registrationNumber: row.registration_number || row.registrationNumber || '',
+        rcNumber: row.registration_number || row.rcNumber || row.registrationNumber || '',
+        invoiceFooter: row.invoice_footer || row.invoiceFooter || '',
+        defaultTerms: row.default_terms || row.defaultTerms || '',
+        updatedAt: row.updated_at || row.updatedAt || new Date().toISOString()
+      };
+
+    case 'finance_audit_log':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        entityType: row.entity_type || row.entityType,
+        entityId: row.entity_id || row.entityId,
+        action: row.action,
+        previousValue: row.previous_value || row.previousValue,
+        newValue: row.new_value || row.newValue,
+        performedBy: row.performed_by || row.performedBy,
+        performedAt: row.performed_at || row.performedAt,
+        createdAt: row.created_at || row.createdAt
+      };
+
+    case 'payment_accounts':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        bankName: row.bank_name || row.bankName || '',
+        accountName: row.account_name || row.accountName || '',
+        accountNumber: row.account_number || row.accountNumber || '',
+        accountType: row.account_type || row.accountType || 'Corporate Current',
+        currency: row.currency || 'NGN',
+        isDefault: row.is_default !== undefined ? Boolean(row.is_default) : (row.isDefault !== undefined ? Boolean(row.isDefault) : false),
+        isActive: row.is_active !== undefined ? Boolean(row.is_active) : (row.isActive !== undefined ? Boolean(row.isActive) : true),
+        instructions: row.instructions || null
+      };
+
+    case 'programmes':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        name: row.name || '',
+        code: row.code || '',
+        tuitionFee: Number(row.tuition_fee !== undefined ? row.tuition_fee : (row.tuitionFee !== undefined ? row.tuitionFee : 0)),
+        maxDiscountPct: Number(row.max_discount_pct !== undefined ? row.max_discount_pct : (row.maxDiscountPct !== undefined ? row.maxDiscountPct : 0)),
+        allowInstallments: row.allow_installments !== undefined ? Boolean(row.allow_installments) : (row.allowInstallments !== undefined ? Boolean(row.allowInstallments) : true),
+        installmentFirstPct: Number(row.installment_first_pct !== undefined ? row.installment_first_pct : (row.installmentFirstPct !== undefined ? row.installmentFirstPct : 50)),
+        installmentSecondPct: Number(row.installment_second_pct !== undefined ? row.installment_second_pct : (row.installmentSecondPct !== undefined ? row.installmentSecondPct : 50)),
+        status: row.status || 'active',
+        isActive: row.status === 'active' || row.isActive === true
+      };
+
+    case 'invoices':
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        invoiceNo: row.invoice_no || row.invoiceNo || row.id,
+        clientName: row.client_name || row.clientName || '',
+        clientEmail: row.client_email || row.clientEmail || '',
+        clientPhone: row.client_phone || row.clientPhone || '',
+        programmeId: row.programme_id || row.programmeId || null,
+        issueDate: row.issue_date || row.issueDate || row.date || '',
+        dueDate: row.due_date || row.dueDate || '',
+        date: row.issue_date || row.date || row.issueDate || '',
+        subTotal: Number(row.sub_total !== undefined ? row.sub_total : (row.subTotal !== undefined ? row.subTotal : 0)),
+        discountAmount: Number(row.discount_amount !== undefined ? row.discount_amount : (row.discountAmount !== undefined ? row.discountAmount : 0)),
+        taxAmount: Number(row.tax_amount !== undefined ? row.tax_amount : (row.taxAmount !== undefined ? row.taxAmount : 0)),
+        total: Number(row.total !== undefined ? row.total : 0),
+        amountPaid: Number(row.amount_paid !== undefined ? row.amount_paid : (row.amountPaid !== undefined ? row.amountPaid : 0)),
+        balanceDue: Number(row.balance_due !== undefined ? row.balance_due : (row.balanceDue !== undefined ? row.balanceDue : 0)),
+        status: row.status || 'unpaid',
+        notes: row.notes || '',
+        paymentTerms: row.payment_terms || row.paymentTerms || ''
+      };
+
+    default:
+      return base;
   }
 }
 
@@ -8058,7 +8228,7 @@ async function loadAll() {
         const [
           dbProgs, dbInvs, dbPays, dbExps, dbDirInc,
           dbIncCats, dbExpCats, dbBdgs, dbAudits, dbFPeriods,
-          dbFSet, dbPAccs, dbPSlips, dbPers, dbSysUsers,
+          dbFSet, dbPAccs, dbPSlips, dbPers,
           dbEnqs, dbEnrls, dbCusts, dbCNotes, dbPRems,
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline
         ] = await Promise.all([
@@ -8076,7 +8246,6 @@ async function loadAll() {
           supabaseClient.from('payment_accounts').select('*'),
           supabaseClient.from('payslips').select('*'),
           supabaseClient.from('personnel').select('*'),
-          supabaseClient.from('system_users').select('*'),
           supabaseClient.from('enquiries').select('*'),
           supabaseClient.from('enrolments').select('*'),
           supabaseClient.from('customers').select('*'),
@@ -8089,15 +8258,21 @@ async function loadAll() {
           supabaseClient.from('customer_timeline').select('*')
         ]);
 
-        // Check if query had critical errors
-        const queryResults = [dbProgs, dbInvs, dbPays, dbExps, dbPSlips, dbPers, dbFSet, dbPAccs, dbEnqs, dbEnrls, dbCusts];
-        const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || r.error.message));
+        // Check if query had critical errors (excluding optional table 404s)
+        const queryResults = [
+          dbProgs, dbInvs, dbPays, dbExps, dbDirInc,
+          dbIncCats, dbExpCats, dbBdgs, dbAudits, dbFPeriods,
+          dbFSet, dbPAccs, dbPSlips, dbPers,
+          dbEnqs, dbEnrls, dbCusts, dbCNotes, dbPRems,
+          dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline
+        ];
+        const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.error.message)));
 
         if (!hasDbErrors) {
-          const dbTotalRecords = (dbProgs.data ? dbProgs.data.length : 0) +
-            (dbInvs.data ? dbInvs.data.length : 0) +
-            (dbPays.data ? dbPays.data.length : 0) +
-            (dbCusts.data ? dbCusts.data.length : 0);
+          // Check total canonical records across all 24 queried business entities
+          const dbTotalRecords = queryResults.reduce((sum, res) => {
+            return sum + (res && Array.isArray(res.data) ? res.data.length : 0);
+          }, 0);
 
           const localCheck = await inspectLegacyLocalData();
 
@@ -8110,29 +8285,29 @@ async function loadAll() {
             state.connectionError = 'LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED. Existing Clasptek records were detected in the local legacy store. PostgreSQL has not yet been populated. No business data has been deleted.';
             isDbHydrated = false;
           } else {
-            state.programmes = Array.isArray(dbProgs.data) ? dbProgs.data : [];
-            state.invoices = Array.isArray(dbInvs.data) ? dbInvs.data : [];
-            state.payments = Array.isArray(dbPays.data) ? dbPays.data : [];
-            state.expenses = Array.isArray(dbExps.data) ? dbExps.data : [];
-            state.directIncome = Array.isArray(dbDirInc.data) ? dbDirInc.data : [];
-            state.budgets = Array.isArray(dbBdgs.data) ? dbBdgs.data : [];
-            state.auditLog = Array.isArray(dbAudits.data) ? dbAudits.data : [];
-            state.financePeriods = Array.isArray(dbFPeriods.data) ? dbFPeriods.data : [];
-            state.financeSettings = (Array.isArray(dbFSet.data) && dbFSet.data[0]) ? dbFSet.data[0] : DEFAULT_FINANCE_SETTINGS;
-            state.paymentAccounts = (Array.isArray(dbPAccs.data) && dbPAccs.data.length) ? dbPAccs.data : DEFAULT_PAYMENT_ACCOUNTS;
-            state.payslips = Array.isArray(dbPSlips.data) ? dbPSlips.data : [];
-            state.personnel = (Array.isArray(dbPers.data) && dbPers.data.length) ? dbPers.data : DEFAULT_PERSONNEL_DIRECTORY;
-            state.users = (Array.isArray(dbSysUsers.data) && dbSysUsers.data.length) ? dbSysUsers.data : SYSTEM_ACCOUNTS;
-            state.enquiries = Array.isArray(dbEnqs.data) ? dbEnqs.data : [];
-            state.enrolments = Array.isArray(dbEnrls.data) ? dbEnrls.data : [];
-            state.customers = Array.isArray(dbCusts.data) ? dbCusts.data : [];
-            state.collectionNotes = Array.isArray(dbCNotes.data) ? dbCNotes.data : [];
-            state.paymentReminders = Array.isArray(dbPRems.data) ? dbPRems.data : [];
-            state.recurringExpenses = Array.isArray(dbRExps.data) ? dbRExps.data : [];
-            state.recurringInvoices = Array.isArray(dbRInvs.data) ? dbRInvs.data : [];
-            state.reconciliations = Array.isArray(dbRecons.data) ? dbRecons.data : [];
-            state.sessions = (dbSessions && Array.isArray(dbSessions.data)) ? dbSessions.data : [];
-            state.customerTimeline = (dbCTimeline && Array.isArray(dbCTimeline.data)) ? dbCTimeline.data : [];
+            state.programmes = Array.isArray(dbProgs.data) ? dbProgs.data.map(r => transformEntityFromPostgres('programmes', r)) : [];
+            state.invoices = Array.isArray(dbInvs.data) ? dbInvs.data.map(r => transformEntityFromPostgres('invoices', r)) : [];
+            state.payments = Array.isArray(dbPays.data) ? dbPays.data.map(r => transformEntityFromPostgres('payments', r)) : [];
+            state.expenses = Array.isArray(dbExps.data) ? dbExps.data.map(r => transformEntityFromPostgres('expenses', r)) : [];
+            state.directIncome = Array.isArray(dbDirInc.data) ? dbDirInc.data.map(r => transformEntityFromPostgres('direct_income', r)) : [];
+            state.budgets = Array.isArray(dbBdgs.data) ? dbBdgs.data.map(r => transformEntityFromPostgres('budgets', r)) : [];
+            state.auditLog = Array.isArray(dbAudits.data) ? dbAudits.data.map(r => transformEntityFromPostgres('finance_audit_log', r)) : [];
+            state.financePeriods = Array.isArray(dbFPeriods.data) ? dbFPeriods.data.map(r => transformEntityFromPostgres('finance_periods', r)) : [];
+            state.financeSettings = (Array.isArray(dbFSet.data) && dbFSet.data[0]) ? transformEntityFromPostgres('finance_settings', dbFSet.data[0]) : DEFAULT_FINANCE_SETTINGS;
+            state.paymentAccounts = (Array.isArray(dbPAccs.data) && dbPAccs.data.length) ? dbPAccs.data.map(r => transformEntityFromPostgres('payment_accounts', r)) : DEFAULT_PAYMENT_ACCOUNTS;
+            state.payslips = Array.isArray(dbPSlips.data) ? dbPSlips.data.map(r => transformEntityFromPostgres('payslips', r)) : [];
+            state.personnel = (Array.isArray(dbPers.data) && dbPers.data.length) ? dbPers.data.map(r => transformEntityFromPostgres('personnel', r)) : DEFAULT_PERSONNEL_DIRECTORY;
+            state.users = state.users || SYSTEM_ACCOUNTS;
+            state.enquiries = Array.isArray(dbEnqs.data) ? dbEnqs.data.map(r => transformEntityFromPostgres('enquiries', r)) : [];
+            state.enrolments = Array.isArray(dbEnrls.data) ? dbEnrls.data.map(r => transformEntityFromPostgres('enrolments', r)) : [];
+            state.customers = Array.isArray(dbCusts.data) ? dbCusts.data.map(r => transformEntityFromPostgres('customers', r)) : [];
+            state.collectionNotes = Array.isArray(dbCNotes.data) ? dbCNotes.data.map(r => transformEntityFromPostgres('collection_notes', r)) : [];
+            state.paymentReminders = Array.isArray(dbPRems.data) ? dbPRems.data.map(r => transformEntityFromPostgres('payment_reminders', r)) : [];
+            state.recurringExpenses = Array.isArray(dbRExps.data) ? dbRExps.data.map(r => transformEntityFromPostgres('recurring_expenses', r)) : [];
+            state.recurringInvoices = Array.isArray(dbRInvs.data) ? dbRInvs.data.map(r => transformEntityFromPostgres('recurring_invoices', r)) : [];
+            state.reconciliations = Array.isArray(dbRecons.data) ? dbRecons.data.map(r => transformEntityFromPostgres('reconciliations', r)) : [];
+            state.sessions = (dbSessions && Array.isArray(dbSessions.data)) ? dbSessions.data.map(r => transformEntityFromPostgres('facilitator_sessions', r)) : [];
+            state.customerTimeline = (dbCTimeline && Array.isArray(dbCTimeline.data)) ? dbCTimeline.data.map(r => transformEntityFromPostgres('customer_timeline', r)) : [];
 
             state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
             state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.DB_CONNECTED_FULLY_RECONCILED;
@@ -20707,6 +20882,7 @@ function renderChangeRoleModal(container, user) {
       resolveAuthoritativeTenantId,
       lookupAuthoritativeTenantFromDatabase,
       transformEntityForPostgres,
+      transformEntityFromPostgres,
       runProductionMigrationPreflight,
       readBackProductionMigration,
       executeLiveProductionMigration,
