@@ -13,68 +13,94 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Primary Brand & Accent Palette */
+      /* Primary Brand Identity (Oxford Navy & ClaspTek Crimson) */
       --primary: #14213D;
-      --primary-hover: #1f325c;
-      --primary-light: #F1F5F9;
+      --primary-hover: #1E293B;
+      --primary-light: #F8FAFC;
       --accent: #C1272D;
-      --accent-hover: #a51f25;
+      --accent-hover: #9E1F24;
       --accent-light: #FEF2F2;
+
+      /* Primary Interactive Action (Royal Indigo / Cobalt for high-trust business CTAs) */
+      --interactive: #1D4ED8;
+      --interactive-hover: #1E40AF;
+      --interactive-light: #EFF6FF;
+      --interactive-border: #BFDBFE;
       
-      /* Semantic Status Colors */
-      --success: #107C41;
-      --success-bg: #EAF7EE;
-      --success-border: #BBF7D0;
-      --warning: #B25E02;
-      --warning-bg: #FFF4E5;
+      /* Semantic Status Colors (WCAG AA Compliant) */
+      --success: #059669;
+      --success-hover: #047857;
+      --success-bg: #ECFDF5;
+      --success-border: #A7F3D0;
+      
+      --warning: #D97706;
+      --warning-hover: #B45309;
+      --warning-bg: #FFFBEB;
       --warning-border: #FDE68A;
-      --danger: #D13438;
-      --danger-bg: #FDE7E9;
-      --danger-border: #FECACA;
-      --info: #0078D4;
-      --info-bg: #EFF6FC;
-      --info-border: #BFDBFE;
       
-      /* Surfaces & Neutral Backgrounds */
-      --neutral-bg: #F8F9FA;
+      --danger: #DC2626;
+      --danger-hover: #B91C1C;
+      --danger-bg: #FEF2F2;
+      --danger-border: #FECACA;
+      
+      --info: #0284C7;
+      --info-hover: #0369A1;
+      --info-bg: #F0F9FF;
+      --info-border: #BAE6FD;
+      
+      /* Surfaces & Neutral Backgrounds (Standardized Elevation Hierarchy) */
+      --neutral-bg: #F8FAFC;
       --surface-0: #FFFFFF;
-      --surface-1: #FFFFFF;
-      --surface-2: #F4F5F7;
+      --surface-1: #F8FAFC;
+      --surface-2: #F1F5F9;
       --surface-3: #E2E8F0;
       --border: #E2E8F0;
-      --border-strong: #CBD5E1;
+      --border-hover: #CBD5E1;
+      --border-strong: #94A3B8;
       
-      /* Content Typography Palette */
+      /* Content Typography Palette (WCAG AA Compliant) */
       --text-primary: #0F172A;
-      --text-secondary: #475569;
-      --text-muted: #94A3B8;
+      --text-secondary: #334155;
+      --text-muted: #64748B;
+      --text-inverse: #FFFFFF;
       
+      /* Standardized 8-Point Spatial System */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+
       /* Corner Radius Standards */
       --radius-xs: 4px;
       --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
       --radius-pill: 9999px;
       
       /* Elevation Shadows */
       --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.04);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.15), 0 10px 10px -5px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+      --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.12), 0 10px 10px -5px rgba(0,0,0,0.04);
       
       /* Global Design System Typography Tokens */
       --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, Monaco, monospace;
       
-      --font-size-2xs: 10px;
-      --font-size-xs: 11px;
-      --font-size-sm: 12px;
-      --font-size-base: 13px;
-      --font-size-md: 14.5px;
+      --font-size-2xs: 11px;
+      --font-size-xs: 12px;
+      --font-size-sm: 13px;
+      --font-size-base: 14px;
+      --font-size-md: 15px;
       --font-size-lg: 16px;
-      --font-size-xl: 20px;
-      --font-size-2xl: 24px;
+      --font-size-xl: 18px;
+      --font-size-2xl: 22px;
+      --font-size-3xl: 28px;
       
       --font-weight-regular: 400;
       --font-weight-medium: 500;
@@ -84,12 +110,14 @@
       --font-weight-black: 900;
       
       --line-height-tight: 1.25;
+      --line-height-heading: 1.2;
       --line-height-normal: 1.5;
-      --line-height-relaxed: 1.65;
+      --line-height-relaxed: 1.6;
       
       --sidebar-width: 260px;
       --sidebar-collapsed-width: 72px;
       --header-height: 64px;
+      --content-max-width: 1440px;
     }
 
     *, *::before, *::after {
@@ -112,6 +140,7 @@
 
     button, input, select, textarea, optgroup {
       font-family: var(--font-sans);
+      color: inherit;
     }
     
     code, kbd, samp, pre, .cp-mono, .cp-acc-num, .cp-ref-num, .cp-doc-no {
@@ -126,7 +155,7 @@
     /* Left Sidebar */
     .cp-sidebar {
       width: var(--sidebar-width);
-      background: #FFFFFF;
+      background: var(--surface-0);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
@@ -142,17 +171,18 @@
     .cp-sidebar.collapsed { width: var(--sidebar-collapsed-width); }
     .cp-sidebar.collapsed .cp-sidebar-brand-text,
     .cp-sidebar.collapsed .cp-nav-label,
+    .cp-sidebar.collapsed .cp-nav-badge,
     .cp-sidebar.collapsed .cp-nav-section-title,
     .cp-sidebar.collapsed .cp-user-info-text,
     .cp-sidebar.collapsed .cp-conn-text { display: none; }
     .cp-sidebar.collapsed .cp-sidebar-header { justify-content: center; padding: 16px 8px; }
-    .cp-sidebar.collapsed .cp-nav-item { justify-content: center; padding: 10px; }
+    .cp-sidebar.collapsed .cp-nav-item { justify-content: center; padding: 10px; border-left: none; }
 
-    .cp-sidebar-header { padding: 18px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); gap: 10px; }
+    .cp-sidebar-header { padding: 16px var(--space-4); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); gap: 10px; }
     .cp-sidebar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
     .cp-sidebar-logo { height: 34px; width: auto; object-fit: contain; }
     .cp-sidebar-brand-text { display: flex; flex-direction: column; }
-    .cp-brand-name { font-size: var(--font-size-base); font-weight: var(--font-weight-bold); color: var(--primary); line-height: 1.2; }
+    .cp-brand-name { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--primary); line-height: 1.2; letter-spacing: -0.2px; }
     .cp-brand-sub { font-size: var(--font-size-2xs); color: var(--text-muted); font-weight: var(--font-weight-medium); }
 
     .cp-collapse-btn {
@@ -160,72 +190,82 @@
       color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer;
       display: flex; align-items: center; justify-content: center; font-size: var(--font-size-base); transition: all 0.15s ease;
     }
-    .cp-collapse-btn:hover { background: var(--surface-2); color: var(--primary); }
+    .cp-collapse-btn:hover { background: var(--surface-2); color: var(--primary); border-color: var(--border-hover); }
+    .cp-collapse-btn:focus-visible { outline: 2px solid var(--interactive); }
 
     /* Navigation Menu */
-    .cp-sidebar-nav { flex: 1; overflow-y: auto; padding: 14px 10px; }
-    .cp-nav-section { margin-bottom: 16px; }
-    .cp-nav-section-title { font-size: var(--font-size-2xs); font-weight: var(--font-weight-bold); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; padding: 4px 10px 6px; }
+    .cp-sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 10px; }
+    .cp-nav-section { margin-bottom: var(--space-4); }
+    .cp-nav-section-title {
+      font-size: var(--font-size-2xs); font-weight: var(--font-weight-bold); color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.6px; padding: 4px 12px 6px;
+    }
 
     .cp-nav-item {
-      display: flex; align-items: center; gap: 10px; padding: 8.5px 12px;
-      border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--font-size-base); font-weight: var(--font-weight-medium);
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border-radius: var(--radius-sm); color: var(--text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
       cursor: pointer; text-decoration: none; transition: all 0.15s ease; margin-bottom: 2px; user-select: none;
-      position: relative;
+      position: relative; border-left: 3px solid transparent;
     }
     .cp-nav-item:hover { background: var(--surface-2); color: var(--primary); }
-    .cp-nav-item.active { background: var(--info-bg); color: var(--info); font-weight: var(--font-weight-semibold); }
-    .cp-nav-icon { font-size: var(--font-size-lg); width: 20px; text-align: center; display: inline-flex; justify-content: center; }
-    .cp-nav-label { flex: 1; white-space: nowrap; }
-    .cp-nav-badge {
-      background: var(--surface-2); color: var(--text-secondary); font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
-      padding: 1px 6px; border-radius: 10px;
+    .cp-nav-item:focus-visible { outline: 2px solid var(--interactive); outline-offset: -2px; }
+    .cp-nav-item.active {
+      background: var(--interactive-light); color: var(--interactive); font-weight: var(--font-weight-semibold);
+      border-left-color: var(--interactive);
     }
-    .cp-nav-item.active .cp-nav-badge { background: var(--info); color: #FFFFFF; }
+    .cp-nav-icon { font-size: var(--font-size-lg); width: 20px; text-align: center; display: inline-flex; justify-content: center; flex-shrink: 0; }
+    .cp-nav-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cp-nav-badge {
+      background: var(--surface-2); color: var(--text-secondary); font-size: var(--font-size-2xs); font-weight: var(--font-weight-bold);
+      padding: 1px 7px; border-radius: 10px; line-height: 1.4;
+    }
+    .cp-nav-item.active .cp-nav-badge { background: var(--interactive); color: #FFFFFF; }
 
     /* Sidebar Footer */
-    .cp-sidebar-footer { padding: 14px; border-top: 1px solid var(--border); background: #FFFFFF; display: flex; flex-direction: column; gap: 10px; }
+    .cp-sidebar-footer { padding: 14px; border-top: 1px solid var(--border); background: var(--surface-0); display: flex; flex-direction: column; gap: 10px; }
     .cp-conn-pill {
       display: flex; align-items: center; gap: 6px; font-size: var(--font-size-xs); color: var(--text-secondary);
-      background: var(--surface-2); padding: 5px 8px; border-radius: var(--radius-sm);
+      background: var(--surface-2); padding: 5px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border);
     }
-    .cp-conn-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .cp-conn-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
     .cp-conn-dot.connected { background: var(--success); box-shadow: 0 0 0 2px var(--success-bg); }
     .cp-conn-dot.fallback { background: var(--warning); }
+    .cp-conn-dot.warning { background: var(--warning); }
 
     .cp-user-card { display: flex; align-items: center; justify-content: space-between; }
     .cp-user-info { display: flex; align-items: center; gap: 8px; overflow: hidden; }
     .cp-user-avatar {
       width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #FFFFFF;
-      display: flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); flex-shrink: 0;
     }
     .cp-user-info-text { display: flex; flex-direction: column; overflow: hidden; }
-    .cp-user-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--primary); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .cp-user-name { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--primary); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
     .cp-user-role { font-size: var(--font-size-2xs); color: var(--text-muted); }
     .cp-signout-btn {
       background: transparent; border: none; color: var(--text-muted); cursor: pointer;
-      padding: 6px; border-radius: var(--radius-sm); font-size: var(--font-size-base);
+      padding: 6px; border-radius: var(--radius-sm); font-size: var(--font-size-base); transition: all 0.15s ease;
     }
     .cp-signout-btn:hover { color: var(--danger); background: var(--danger-bg); }
+    .cp-signout-btn:focus-visible { outline: 2px solid var(--interactive); }
 
     /* Main Area */
-    .cp-main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .cp-main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--neutral-bg); }
 
     /* Topbar Header */
     .cp-topbar {
       height: var(--header-height);
-      background: #FFFFFF;
+      background: var(--surface-0);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
+      padding: 0 var(--space-6);
       position: sticky;
       top: 0;
       z-index: 90;
     }
     .cp-topbar-left { display: flex; align-items: center; gap: 16px; flex: 1; max-width: 600px; }
-    .cp-breadcrumb { font-size: var(--font-size-base); color: var(--text-muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .cp-breadcrumb { font-size: var(--font-size-sm); color: var(--text-muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .cp-breadcrumb strong { color: var(--primary); font-weight: var(--font-weight-semibold); }
 
     .cp-omni-search {
@@ -236,11 +276,13 @@
       border-radius: var(--radius-sm); padding: 0 12px 0 34px; font-size: var(--font-size-sm); color: var(--text-primary);
       transition: all 0.15s ease;
     }
-    .cp-omni-input:focus { background: #FFFFFF; border-color: var(--info); outline: none; box-shadow: 0 0 0 3px var(--info-bg); }
-    .cp-omni-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: var(--font-size-base); color: var(--text-muted); }
+    .cp-omni-input::placeholder { color: var(--text-muted); }
+    .cp-omni-input:hover { border-color: var(--border-hover); background: var(--surface-1); }
+    .cp-omni-input:focus { background: #FFFFFF; border-color: var(--interactive); outline: none; box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15); }
+    .cp-omni-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: var(--font-size-base); color: var(--text-muted); pointer-events: none; }
 
     .cp-search-dropdown {
-      position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #FFFFFF;
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface-0);
       border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
       max-height: 380px; overflow-y: auto; display: none; z-index: 200;
     }
@@ -257,7 +299,7 @@
     /* Action Dropdown */
     .cp-dropdown-wrap { position: relative; }
     .cp-dropdown-menu {
-      position: absolute; right: 0; top: calc(100% + 6px); background: #FFFFFF;
+      position: absolute; right: 0; top: calc(100% + 6px); background: var(--surface-0);
       border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
       min-width: 200px; padding: 6px; display: none; z-index: 200;
     }
@@ -269,12 +311,90 @@
     .cp-dropdown-item:hover { background: var(--surface-2); color: var(--primary); }
 
     .cp-role-tag {
-      display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+      display: flex; align-items: center; gap: 6px; padding: 4px 10px;
       background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-      font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--primary);
+      font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--primary);
     }
 
-    /* Content Area */
+    /* Subtabs Navigation (Component Integration) */
+    .cp-subtabs {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: var(--space-4);
+      padding-bottom: 2px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cp-subtab-btn {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 8px 14px;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cp-subtab-btn:hover {
+      color: var(--primary);
+      background: var(--surface-1);
+    }
+    .cp-subtab-btn.active {
+      color: var(--interactive);
+      border-bottom-color: var(--interactive);
+      font-weight: var(--font-weight-semibold);
+      background: transparent;
+    }
+    .cp-subtab-btn:focus-visible {
+      outline: 2px solid var(--interactive);
+      outline-offset: 2px;
+    }
+
+    /* Action Groups (Table Action Column) */
+    .cp-action-group {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+
+    /* Empty States */
+    .cp-empty-state {
+      padding: var(--space-8) var(--space-4);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .cp-empty-icon {
+      font-size: 36px;
+      margin-bottom: var(--space-2);
+      line-height: 1;
+    }
+    .cp-empty-title {
+      font-size: var(--font-size-md);
+      font-weight: var(--font-weight-bold);
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .cp-empty-desc {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+      max-width: 380px;
+      margin: 0 auto var(--space-4);
+      line-height: var(--line-height-normal);
+    }
+
     /* Mobile Navigation & Sidebar Backdrop */
     .cp-sidebar-backdrop {
       position: fixed;
@@ -309,29 +429,44 @@
     .cp-mobile-nav-btn:hover {
       background: var(--border);
     }
-
-    /* Content Area */
-    .cp-content-view { padding: 24px; flex: 1; }
-
-    /* UI Cards & Tables */
-    .cp-card {
-      background: #FFFFFF; border: 1px solid var(--border); border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 20px;
+    .cp-mobile-nav-btn:focus-visible {
+      outline: 2px solid var(--interactive);
     }
-    .cp-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
-    .cp-section-title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--primary); display: flex; align-items: center; gap: 8px; }
-    .cp-section-desc { font-size: var(--font-size-sm); color: var(--text-secondary); margin-top: 2px; }
 
-    .cp-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-    .cp-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
-    .cp-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+    /* Content Area with Maximum Width Containment on Ultrawide Displays */
+    .cp-content-view {
+      padding: var(--space-6);
+      flex: 1;
+      max-width: var(--content-max-width);
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* UI Cards & Grids */
+    .cp-card {
+      background: var(--surface-0); border: 1px solid var(--border); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm); padding: var(--space-5); margin-bottom: var(--space-5);
+      transition: border-color 0.15s ease;
+    }
+    .cp-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); gap: var(--space-3); }
+    .cp-section-title {
+      font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--primary);
+      display: flex; align-items: center; gap: 8px; line-height: var(--line-height-heading);
+    }
+    .cp-section-desc { font-size: var(--font-size-xs); color: var(--text-secondary); margin-top: 2px; }
+
+    .cp-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: var(--space-5); }
+    .cp-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: var(--space-5); }
+    .cp-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: var(--space-5); }
 
     .cp-kpi-card {
-      background: #FFFFFF; border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface-0); border: 1px solid var(--border); border-radius: var(--radius-md);
       padding: 16px 18px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 4px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
+    .cp-kpi-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
     .cp-kpi-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
-    .cp-kpi-val { font-size: var(--font-size-xl); font-weight: var(--font-weight-extrabold); color: var(--primary); }
+    .cp-kpi-val { font-size: var(--font-size-2xl); font-weight: var(--font-weight-extrabold); color: var(--primary); line-height: 1.2; }
     .cp-kpi-sub { font-size: var(--font-size-xs); color: var(--text-muted); }
 
     /* Tables */
@@ -341,61 +476,122 @@
       -webkit-overflow-scrolling: touch;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
+      background: var(--surface-0);
+      position: relative;
     }
     .cp-table { width: 100%; border-collapse: collapse; text-align: left; font-size: var(--font-size-sm); }
     .cp-table th {
       background: var(--surface-2); color: var(--text-secondary); font-weight: var(--font-weight-bold);
-      padding: 10px 14px; border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: var(--font-size-xs); letter-spacing: 0.5px;
+      padding: 11px 16px; border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: var(--font-size-2xs); letter-spacing: 0.5px;
       white-space: nowrap;
     }
-    .cp-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: middle; }
+    .cp-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: middle; }
     .cp-table tr:last-child td { border-bottom: none; }
-    .cp-table tr:hover td { background: #FAFBFD; }
+    .cp-table tr:hover td { background: var(--surface-1); }
 
     /* Status Pills */
     .cp-pill {
-      display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+      display: inline-flex; align-items: center; gap: 4px; padding: 2.5px 8px;
       border-radius: var(--radius-pill); font-size: var(--font-size-2xs); font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: 0.4px;
-      white-space: nowrap;
+      white-space: nowrap; border: 1px solid transparent; line-height: 1.3;
     }
-    .cp-pill.paid, .cp-pill.approved, .cp-pill.fully_paid, .cp-pill.active { background: var(--success-bg); color: var(--success); }
-    .cp-pill.unpaid, .cp-pill.draft, .cp-pill.payment_pending { background: var(--warning-bg); color: var(--warning); }
-    .cp-pill.partial, .cp-pill.partially_paid { background: #FEF3C7; color: #92400E; }
-    .cp-pill.overdue, .cp-pill.cancelled, .cp-pill.lost { background: var(--danger-bg); color: var(--danger); }
-    .cp-pill.new, .cp-pill.interested, .cp-pill.category-pill { background: var(--info-bg); color: var(--info); }
-    .cp-pill.prio-critical { background: var(--danger-bg); color: var(--danger); }
-    .cp-pill.prio-high { background: var(--warning-bg); color: var(--warning); }
-    .cp-pill.prio-medium { background: #FEF3C7; color: #92400E; }
-    .cp-pill.prio-low { background: var(--surface-2); color: var(--text-secondary); }
+    .cp-pill.paid, .cp-pill.approved, .cp-pill.fully_paid, .cp-pill.active, .cp-pill.success {
+      background: var(--success-bg); color: var(--success); border-color: var(--success-border);
+    }
+    .cp-pill.unpaid, .cp-pill.draft, .cp-pill.payment_pending, .cp-pill.warning {
+      background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border);
+    }
+    .cp-pill.partial, .cp-pill.partially_paid {
+      background: #FEF3C7; color: #92400E; border-color: #FDE68A;
+    }
+    .cp-pill.overdue, .cp-pill.cancelled, .cp-pill.lost, .cp-pill.danger, .cp-pill.error {
+      background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border);
+    }
+    .cp-pill.inactive, .cp-pill.suspended {
+      background: var(--surface-2); color: var(--text-muted); border-color: var(--border);
+    }
+    .cp-pill.rejected {
+      background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border);
+    }
+    .cp-pill.new, .cp-pill.interested, .cp-pill.category-pill, .cp-pill.info {
+      background: var(--info-bg); color: var(--info); border-color: var(--info-border);
+    }
+    .cp-pill.prio-critical { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+    .cp-pill.prio-high { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
+    .cp-pill.prio-medium { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+    .cp-pill.prio-low { background: var(--surface-2); color: var(--text-secondary); border-color: var(--border); }
 
     /* Buttons */
     .cp-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 7.5px 14px; font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); border-radius: var(--radius-sm);
+      min-height: 36px; padding: 7px 14px; font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); border-radius: var(--radius-sm);
       cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent; text-decoration: none;
-      touch-action: manipulation;
+      touch-action: manipulation; user-select: none; line-height: 1;
     }
-    .cp-btn.primary { background: var(--primary); color: #FFFFFF; }
-    .cp-btn.primary:hover { background: var(--primary-hover); }
-    .cp-btn.accent { background: var(--accent); color: #FFFFFF; }
-    .cp-btn.accent:hover { background: var(--accent-hover); }
-    .cp-btn.secondary { background: #FFFFFF; border-color: var(--border-strong); color: var(--text-primary); }
-    .cp-btn.secondary:hover { background: var(--surface-2); border-color: var(--text-secondary); }
-    .cp-btn.danger { background: var(--danger-bg); color: var(--danger); border-color: #F87171; }
-    .cp-btn.danger:hover { background: var(--danger); color: #FFFFFF; }
-    .cp-btn.success { background: var(--success); color: #FFFFFF; }
-    .cp-btn.success:hover { opacity: 0.9; }
-    .cp-btn.sm { padding: 5px 10px; font-size: var(--font-size-xs); }
+    .cp-btn:hover { transform: translateY(-0.5px); }
+    .cp-btn:active { transform: translateY(0.5px); }
+    .cp-btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.25);
+    }
+    .cp-btn:disabled, .cp-btn[disabled] {
+      opacity: 0.55;
+      cursor: not-allowed !important;
+      pointer-events: none !important;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+
+    /* Primary Brand Button (Oxford Navy) */
+    .cp-btn.primary { background: var(--primary); color: #FFFFFF; border-color: var(--primary); }
+    .cp-btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+    /* Primary Interactive Action (Cobalt Blue for Create, Pay, Save, New Transaction) */
+    .cp-btn.accent { background: var(--interactive); color: #FFFFFF; border-color: var(--interactive); }
+    .cp-btn.accent:hover { background: var(--interactive-hover); border-color: var(--interactive-hover); }
+
+    /* Secondary Neutral Button */
+    .cp-btn.secondary { background: var(--surface-0); border-color: var(--border-hover); color: var(--text-primary); }
+    .cp-btn.secondary:hover { background: var(--surface-1); border-color: var(--border-strong); color: var(--primary); }
+
+    /* Destructive / Danger Button */
+    .cp-btn.danger { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+    .cp-btn.danger:hover { background: var(--danger); color: #FFFFFF; border-color: var(--danger); }
+
+    /* Success Button */
+    .cp-btn.success { background: var(--success); color: #FFFFFF; border-color: var(--success); }
+    .cp-btn.success:hover { background: var(--success-hover); border-color: var(--success-hover); }
+
+    /* Small Button */
+    .cp-btn.sm { min-height: 30px; padding: 4px 10px; font-size: var(--font-size-xs); }
 
     /* Form Fields */
-    .cp-field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .cp-field { margin-bottom: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
     .cp-field label { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--text-secondary); }
     .cp-field input, .cp-field select, .cp-field textarea {
-      padding: 8px 10px; font-size: var(--font-size-sm); border: 1px solid var(--border-strong);
-      border-radius: var(--radius-sm); background: #FFFFFF; color: var(--text-primary); font-family: inherit;
+      min-height: 38px;
+      padding: 8px 12px; font-size: var(--font-size-sm); border: 1px solid var(--border-hover);
+      border-radius: var(--radius-sm); background: var(--surface-0); color: var(--text-primary); font-family: inherit;
+      transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+      box-sizing: border-box;
+    }
+    .cp-field textarea { min-height: 72px; padding: 10px 12px; line-height: var(--line-height-normal); }
+    .cp-field input::placeholder, .cp-field textarea::placeholder { color: #94A3B8; }
+    .cp-field input:hover, .cp-field select:hover, .cp-field textarea:hover {
+      border-color: var(--border-strong);
     }
     .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus {
-      outline: none; border-color: var(--info); box-shadow: 0 0 0 3px var(--info-bg);
+      outline: none; border-color: var(--interactive); box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+    }
+    .cp-field input:disabled, .cp-field select:disabled, .cp-field textarea:disabled {
+      background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; border-color: var(--border);
+    }
+    .cp-field.has-error input, .cp-field.has-error select, .cp-field.has-error textarea {
+      border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+    }
+    .cp-error {
+      color: var(--danger); font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
+      margin-top: 4px; display: block; line-height: 1.4;
     }
     .cp-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .cp-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
@@ -404,21 +600,33 @@
     /* Modals */
     .cp-modal-overlay {
       position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px);
-      display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+      display: flex; align-items: center; justify-content: center; z-index: 1000; padding: var(--space-5);
     }
     .cp-modal {
-      background: #FFFFFF; border-radius: var(--radius-lg); width: 100%; max-width: 600px;
-      max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); overflow: hidden;
+      background: var(--surface-0); border-radius: var(--radius-lg); width: 100%; max-width: 600px;
+      max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-xl); overflow: hidden;
+      border: 1px solid var(--border);
     }
     .cp-modal.large { max-width: 850px; }
     .cp-modal.doc-modal { max-width: 900px; }
     .cp-modal.drawer { max-width: 540px; height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0; }
-    .cp-modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #FAFBFD; }
-    .cp-modal-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--primary); }
-    .cp-modal-close { background: transparent; border: none; font-size: var(--font-size-xl); cursor: pointer; color: var(--text-muted); padding: 4px; }
-    .cp-modal-close:hover { color: var(--danger); }
-    .cp-modal-body { padding: 18px; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
-    .cp-modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #FAFBFD; }
+    .cp-modal-header {
+      padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; background: var(--surface-1);
+    }
+    .cp-modal-title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--primary); line-height: 1.25; }
+    .cp-modal-close {
+      background: transparent; border: none; font-size: var(--font-size-2xl); cursor: pointer; color: var(--text-muted);
+      width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease; padding: 0; line-height: 1;
+    }
+    .cp-modal-close:hover { color: var(--danger); background: var(--danger-bg); }
+    .cp-modal-close:focus-visible { outline: 2px solid var(--interactive); }
+    .cp-modal-body { padding: var(--space-5); overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+    .cp-modal-footer {
+      padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: var(--space-2);
+      background: var(--surface-1);
+    }
 
     /* Clean, Professional Corporate Authentication UI */
     .cp-auth-wrap {
@@ -432,9 +640,9 @@
       box-sizing: border-box;
     }
     .cp-auth-card {
-      background: #FFFFFF;
+      background: var(--surface-0);
       border: 1px solid rgba(226, 232, 240, 0.9);
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
       box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.4), 0 10px 20px -5px rgba(0, 0, 0, 0.2);
       width: 100%;
       max-width: 440px;
@@ -461,40 +669,40 @@
       display: block;
     }
     .cp-auth-title {
-      font-size: var(--font-size-xl);
+      font-size: var(--font-size-2xl);
       font-weight: var(--font-weight-extrabold);
       color: var(--primary);
       letter-spacing: -0.3px;
       margin-bottom: 4px;
     }
     .cp-auth-sub {
-      font-size: var(--font-size-base);
+      font-size: var(--font-size-sm);
       color: var(--text-secondary);
       line-height: var(--line-height-normal);
     }
     .cp-auth-alert {
       padding: 10px 12px;
       border-radius: var(--radius-sm);
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-xs);
       margin-bottom: 16px;
       display: none;
       line-height: 1.4;
     }
     .cp-auth-alert.error {
       background: var(--danger-bg);
-      border: 1px solid #F87171;
+      border: 1px solid var(--danger-border);
       color: #991B1B;
       display: block;
     }
     .cp-auth-alert.success {
       background: var(--success-bg);
-      border: 1px solid #86EFAC;
+      border: 1px solid var(--success-border);
       color: #166534;
       display: block;
     }
     .cp-auth-alert.warning {
       background: var(--warning-bg);
-      border: 1px solid #FCD34D;
+      border: 1px solid var(--warning-border);
       color: #92400E;
       display: block;
     }
@@ -521,9 +729,13 @@
       align-items: center;
       justify-content: center;
       transition: color 0.15s ease;
+      border-radius: var(--radius-xs);
     }
     .cp-password-toggle:hover {
       color: var(--primary);
+    }
+    .cp-password-toggle:focus-visible {
+      outline: 2px solid var(--interactive);
     }
     .cp-auth-footer-links {
       display: flex;
@@ -533,7 +745,7 @@
       font-size: var(--font-size-sm);
     }
     .cp-auth-link {
-      color: var(--info);
+      color: var(--interactive);
       text-decoration: none;
       cursor: pointer;
       font-weight: var(--font-weight-semibold);
@@ -541,9 +753,13 @@
       border: none;
       padding: 0;
       font-family: inherit;
+      border-radius: var(--radius-xs);
     }
     .cp-auth-link:hover {
       text-decoration: underline;
+    }
+    .cp-auth-link:focus-visible {
+      outline: 2px solid var(--interactive);
     }
     .cp-auth-footer {
       margin-top: 24px;
@@ -571,15 +787,15 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       padding: 16px;
-      background: #E2E8F0;
+      background: var(--surface-3);
     }
     .cp-doc-paper {
-      background: #FFFFFF;
+      background: var(--surface-0);
       padding: 20px 24px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-      border-radius: 4px;
+      border-radius: var(--radius-xs);
       font-size: 11.5px;
-      color: #0F172A;
+      color: var(--text-primary);
       width: 100%;
       max-width: 790px;
       margin: 0 auto;
@@ -670,7 +886,7 @@
       }
       .cp-table th, .cp-table td {
         padding: 8px 10px;
-        font-size: 11.5px;
+        font-size: 12px;
       }
       .cp-modal-overlay {
         padding: 8px;
@@ -691,7 +907,13 @@
       .cp-modal-footer .cp-btn {
         flex: 1;
         min-width: 110px;
-        min-height: 38px;
+        min-height: 40px;
+      }
+      .cp-btn {
+        min-height: 40px;
+      }
+      .cp-btn.sm {
+        min-height: 32px;
       }
     }
 
@@ -700,7 +922,7 @@
         font-size: 12px;
       }
       .cp-brand-name {
-        font-size: 12.5px;
+        font-size: 13px;
       }
       .cp-pipe-grid {
         grid-template-columns: 1fr !important;
@@ -1915,13 +2137,34 @@ const supabaseClient = {
   async ensureFreshSession() {
     // 1. If in-memory token is missing, attempt restore from persisted storage
     if (!state.auth?.supabaseJwt && !state.auth?.supabaseSession) {
-      const stored = await safeGet('clasptek:supabase_session', null);
+      let stored = await safeGet('clasptek:supabase_session', null);
+      if (!stored && typeof localStorage !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && /^sb-.*-auth-token$/i.test(k)) {
+              const val = localStorage.getItem(k);
+              if (val) {
+                const parsed = JSON.parse(val);
+                if (parsed && (parsed.access_token || parsed.session?.access_token)) {
+                  stored = parsed.session || parsed;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
       if (stored && stored.access_token) {
         state.auth = state.auth || {};
         state.auth.supabaseSession = stored;
         state.auth.supabaseJwt = stored.access_token;
-        state.auth.supabaseUser = stored.user;
+        state.auth.supabaseUser = stored.user || state.auth.supabaseUser;
         state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+        const tId = stored.user?.app_metadata?.tenant_id || stored.user?.user_metadata?.tenant_id || stored.user?.tenant_id;
+        if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+          state.authoritativeTenantId = tId;
+        }
       }
     }
 
@@ -2007,6 +2250,16 @@ const supabaseClient = {
         state.auth.supabaseJwt = data.access_token;
         state.auth.supabaseUser = data.user;
         state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
+        if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+          state.authoritativeTenantId = tId;
+          state.auth.tenant_id = tId;
+          state.auth.tenantId = tId;
+          if (state.auth.user) {
+            state.auth.user.tenant_id = tId;
+            state.auth.user.tenantId = tId;
+          }
+        }
         await safeSet('clasptek:supabase_session', data);
         await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
       }
@@ -2116,28 +2369,52 @@ const supabaseClient = {
     const tableUrl = `${ep}${tableName}`;
 
     return {
-      async select(query = '*') {
-        return await client.executeWithAuth(async () => {
-          try {
-            const res = await fetch(`${tableUrl}?select=${encodeURIComponent(query)}`, {
-              method: 'GET',
-              headers: client.getHeaders()
-            });
-            if (!res.ok) {
-              const errBody = await res.json().catch(() => ({ message: res.statusText }));
-              let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
-              if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
-              else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
-              else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
-              else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
-              return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+      select(query = '*') {
+        const filters = [];
+        const execute = async () => {
+          return await client.executeWithAuth(async () => {
+            try {
+              let url = (typeof query === 'string' && (query.startsWith('select=') || query.includes('&')))
+                ? `${tableUrl}?${query}`
+                : `${tableUrl}?select=${encodeURIComponent(query)}`;
+              if (filters.length > 0) {
+                const joinChar = url.includes('?') ? '&' : '?';
+                url += `${joinChar}${filters.join('&')}`;
+              }
+              const res = await fetch(url, {
+                method: 'GET',
+                headers: client.getHeaders()
+              });
+              if (!res.ok) {
+                const errBody = await res.json().catch(() => ({ message: res.statusText }));
+                let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
+                if (res.status === 401) errClass = SUPABASE_ERROR_CLASS.AUTHENTICATION_FAILED;
+                else if (res.status === 403) errClass = SUPABASE_ERROR_CLASS.RLS_DENIED;
+                else if (res.status === 404) errClass = SUPABASE_ERROR_CLASS.TABLE_NOT_FOUND;
+                else if (res.status === 409 || res.status === 422) errClass = SUPABASE_ERROR_CLASS.SCHEMA_MISMATCH;
+                return { ok: false, data: null, records: null, error: errBody, errorClass: errClass, status: res.status, httpStatus: res.status };
+              }
+              const data = await res.json();
+              return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
+            } catch (err) {
+              return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
             }
-            const data = await res.json();
-            return { ok: true, data, records: data, error: null, errorClass: null, status: res.status, httpStatus: res.status };
-          } catch (err) {
-            return { ok: false, data: null, records: null, error: { message: err.message || 'Network error' }, errorClass: SUPABASE_ERROR_CLASS.NETWORK_ERROR, status: 0, httpStatus: 0 };
+          });
+        };
+
+        const builder = {
+          eq(column, value) {
+            filters.push(`${encodeURIComponent(column)}=eq.${encodeURIComponent(value)}`);
+            return builder;
+          },
+          then(onFulfilled, onRejected) {
+            return execute().then(onFulfilled, onRejected);
+          },
+          catch(onRejected) {
+            return execute().catch(onRejected);
           }
-        });
+        };
+        return builder;
       },
       async insert(rows) {
         return await client.executeWithAuth(async () => {
@@ -2328,9 +2605,15 @@ const supabaseAuth = {
         state.auth.supabaseSession = data;
         state.auth.supabaseUser = data.user;
         state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
-        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id;
-        if (tId && state.auth.user) {
-          state.auth.user.tenant_id = tId;
+        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
+        if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+          state.authoritativeTenantId = tId;
+          state.auth.tenant_id = tId;
+          state.auth.tenantId = tId;
+          if (state.auth.user) {
+            state.auth.user.tenant_id = tId;
+            state.auth.user.tenantId = tId;
+          }
         }
         await safeSet('clasptek:supabase_session', data);
         await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
@@ -2357,11 +2640,14 @@ const supabaseAuth = {
         }
       });
     } catch (_) {}
+    state.authoritativeTenantId = null;
     if (state.auth) {
       delete state.auth.supabaseJwt;
       delete state.auth.supabaseSession;
       delete state.auth.supabaseUser;
       delete state.auth.tokenExpiresAt;
+      delete state.auth.tenant_id;
+      delete state.auth.tenantId;
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
     }
     await safeSet('clasptek:supabase_session', null);
@@ -5172,7 +5458,10 @@ const dbRepo = {
     if (!supabaseClient.isConfigured() || !tableName) {
       return { success: false, reason: 'unconfigured' };
     }
-    const tenantId = resolveAuthoritativeTenantId();
+    let tenantId = resolveAuthoritativeTenantId();
+    if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
+      tenantId = await lookupAuthoritativeTenantFromDatabase();
+    }
     let query = supabaseClient.from(tableName).select('*');
     if (tenantId && tenantId !== 'clasptek_main' && isValidUuid(tenantId)) {
       query = query.eq('tenant_id', tenantId);
@@ -5306,44 +5595,200 @@ function isValidUuid(val) {
 }
 
 function resolveAuthoritativeTenantId() {
-  const supaUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user;
+  const checkCandidate = (cand) => {
+    if (typeof cand === 'string') {
+      const trimmed = cand.trim();
+      if (trimmed !== 'clasptek_main' && isValidUuid(trimmed)) {
+        return trimmed;
+      }
+    }
+    return null;
+  };
+
+  // 1. Current Supabase user / session user in-memory
+  const supaUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user || state.auth?.session?.user;
   if (supaUser) {
-    const appTenant = supaUser.app_metadata?.tenant_id;
-    if (isValidUuid(appTenant)) return appTenant.trim();
-    const userTenant = supaUser.user_metadata?.tenant_id;
-    if (isValidUuid(userTenant)) return userTenant.trim();
-    if (isValidUuid(supaUser.tenant_id)) return supaUser.tenant_id.trim();
+    const c1 = checkCandidate(supaUser.app_metadata?.tenant_id) ||
+               checkCandidate(supaUser.user_metadata?.tenant_id) ||
+               checkCandidate(supaUser.tenant_id) ||
+               checkCandidate(supaUser.tenantId);
+    if (c1) {
+      state.authoritativeTenantId = c1;
+      return c1;
+    }
   }
+
+  // 2. JWT claims from current token in memory
+  const jwtCandidates = [
+    state.auth?.supabaseJwt,
+    state.auth?.supabaseSession?.access_token,
+    state.auth?.session?.access_token,
+    state.auth?.token
+  ];
+  for (const token of jwtCandidates) {
+    if (typeof token === 'string' && token.startsWith('eyJ') && token.includes('.')) {
+      const payload = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(token) : null;
+      if (payload) {
+        const cJwt = checkCandidate(payload.app_metadata?.tenant_id) ||
+                     checkCandidate(payload.user_metadata?.tenant_id) ||
+                     checkCandidate(payload.tenant_id) ||
+                     checkCandidate(payload.tenantId);
+        if (cJwt) {
+          state.authoritativeTenantId = cJwt;
+          return cJwt;
+        }
+      }
+    }
+  }
+
+  // 3. Cached authoritative tenant UUID in application state
+  const cCached = checkCandidate(state.authoritativeTenantId);
+  if (cCached) return cCached;
+
+  // 4. Authenticated user object in state.auth (if carrying valid UUID, never clasptek_main)
   const user = state.auth?.user;
   if (user) {
-    const appTenant = user.app_metadata?.tenant_id;
-    if (isValidUuid(appTenant)) return appTenant.trim();
-    const userTenant = user.user_metadata?.tenant_id;
-    if (isValidUuid(userTenant)) return userTenant.trim();
-    if (isValidUuid(user.tenant_id)) return user.tenant_id.trim();
+    const cUser = checkCandidate(user.app_metadata?.tenant_id) ||
+                  checkCandidate(user.user_metadata?.tenant_id) ||
+                  checkCandidate(user.tenant_id) ||
+                  checkCandidate(user.tenantId);
+    if (cUser) {
+      state.authoritativeTenantId = cUser;
+      return cUser;
+    }
   }
-  if (isValidUuid(state.authoritativeTenantId)) {
-    return state.authoritativeTenantId.trim();
+
+  // 5. Explicit tenant fields on state.auth / state.tenant
+  const cStateAuth = checkCandidate(state.auth?.tenant_id) ||
+                     checkCandidate(state.auth?.tenantId) ||
+                     checkCandidate(state.tenant?.tenant_id) ||
+                     checkCandidate(state.tenant?.id);
+  if (cStateAuth) {
+    state.authoritativeTenantId = cStateAuth;
+    return cStateAuth;
   }
+
+  // 6. Restored Supabase session from localStorage (synchronous inspection for browser environments)
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const sessionKeys = ['clasptek:supabase_session', 'clasptek:auth_session'];
+      for (const k of sessionKeys) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const u = parsed.user || parsed.supabaseUser || parsed.session?.user;
+          if (u) {
+            const cStorage = checkCandidate(u.app_metadata?.tenant_id) ||
+                             checkCandidate(u.user_metadata?.tenant_id) ||
+                             checkCandidate(u.tenant_id) ||
+                             checkCandidate(u.tenantId);
+            if (cStorage) {
+              state.authoritativeTenantId = cStorage;
+              return cStorage;
+            }
+          }
+          if (parsed.access_token || parsed.supabaseJwt) {
+            const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(parsed.access_token || parsed.supabaseJwt) : null;
+            if (pJwt) {
+              const cSJwt = checkCandidate(pJwt.app_metadata?.tenant_id) ||
+                            checkCandidate(pJwt.user_metadata?.tenant_id) ||
+                            checkCandidate(pJwt.tenant_id) ||
+                            checkCandidate(pJwt.tenantId);
+              if (cSJwt) {
+                state.authoritativeTenantId = cSJwt;
+                return cSJwt;
+              }
+            }
+          }
+        }
+      }
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && /^sb-.*-auth-token$/i.test(k)) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const sess = parsed.session || parsed;
+            const u = sess.user;
+            if (u) {
+              const cSb = checkCandidate(u.app_metadata?.tenant_id) ||
+                          checkCandidate(u.user_metadata?.tenant_id) ||
+                          checkCandidate(u.tenant_id);
+              if (cSb) {
+                state.authoritativeTenantId = cSb;
+                return cSb;
+              }
+            }
+            if (sess.access_token) {
+              const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(sess.access_token) : null;
+              if (pJwt) {
+                const cSbJwt = checkCandidate(pJwt.app_metadata?.tenant_id) ||
+                               checkCandidate(pJwt.user_metadata?.tenant_id) ||
+                               checkCandidate(pJwt.tenant_id);
+                if (cSbJwt) {
+                  state.authoritativeTenantId = cSbJwt;
+                  return cSbJwt;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   return null;
 }
 
 async function lookupAuthoritativeTenantFromDatabase() {
   if (!supabaseClient.isConfigured()) return null;
+
+  // 1. Proactively ensure fresh session & hydrate in-memory tokens from persisted storage
+  try {
+    await supabaseClient.ensureFreshSession();
+  } catch (_) {}
+
+  // 2. Check if resolveAuthoritativeTenantId() now resolves the authoritative tenant
+  const candidate = resolveAuthoritativeTenantId();
+  if (candidate && isValidUuid(candidate) && candidate !== 'clasptek_main') {
+    state.authoritativeTenantId = candidate;
+    return candidate;
+  }
+
+  // 3. Fallback to validated tenant-membership lookup via PostgREST
   const token = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
   if (!token) return null;
+
   try {
     const res = await supabaseClient.from('tenant_memberships').select('tenant_id');
     if (res && res.status === 200 && Array.isArray(res.data) && res.data.length > 0) {
       for (const m of res.data) {
-        if (isValidUuid(m.tenant_id)) {
-          state.authoritativeTenantId = m.tenant_id;
-          if (state.auth?.user) state.auth.user.tenant_id = m.tenant_id;
-          return m.tenant_id;
+        if (m && typeof m.tenant_id === 'string') {
+          const tid = m.tenant_id.trim();
+          if (isValidUuid(tid) && tid !== 'clasptek_main') {
+            state.authoritativeTenantId = tid;
+            if (state.auth?.user) state.auth.user.tenant_id = tid;
+            return tid;
+          }
         }
       }
     }
   } catch (_) {}
+
+  // 4. Fallback to RPC get_auth_tenant_id if defined
+  try {
+    const rpcRes = await supabaseClient.rpc('get_auth_tenant_id');
+    if (rpcRes && rpcRes.status === 200 && typeof rpcRes.data === 'string') {
+      const tid = rpcRes.data.trim();
+      if (isValidUuid(tid) && tid !== 'clasptek_main') {
+        state.authoritativeTenantId = tid;
+        if (state.auth?.user) state.auth.user.tenant_id = tid;
+        return tid;
+      }
+    }
+  } catch (_) {}
+
   return null;
 }
 
@@ -8198,24 +8643,63 @@ async function loadAll() {
   }
 
   // 1b. Restore authenticated session & Supabase JWT before any database operations
-  if (authSession && authSession.user && (authSession.token || storedSbSession?.access_token)) {
+  let effectiveSbSession = storedSbSession;
+  if (!effectiveSbSession && typeof localStorage !== 'undefined') {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && /^sb-.*-auth-token$/i.test(k)) {
+          const val = localStorage.getItem(k);
+          if (val) {
+            const parsed = JSON.parse(val);
+            if (parsed && (parsed.access_token || parsed.session?.access_token)) {
+              effectiveSbSession = parsed.session || parsed;
+              break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (authSession && authSession.user && (authSession.token || effectiveSbSession?.access_token)) {
+    const supaUser = authSession.supabaseUser || effectiveSbSession?.user || null;
+    const restoredTenantId = supaUser?.app_metadata?.tenant_id ||
+                             supaUser?.user_metadata?.tenant_id ||
+                             effectiveSbSession?.user?.app_metadata?.tenant_id ||
+                             effectiveSbSession?.user?.user_metadata?.tenant_id ||
+                             authSession.tenant_id ||
+                             authSession.tenantId;
+
+    if (typeof isValidUuid === 'function' && isValidUuid(restoredTenantId) && restoredTenantId !== 'clasptek_main') {
+      state.authoritativeTenantId = restoredTenantId;
+      if (authSession.user) {
+        authSession.user.tenant_id = restoredTenantId;
+        authSession.user.tenantId = restoredTenantId;
+      }
+    }
+
     state.auth = {
       ...authSession,
-      supabaseJwt: authSession.supabaseJwt || storedSbSession?.access_token || null,
-      supabaseSession: authSession.supabaseSession || storedSbSession || null,
-      supabaseUser: authSession.supabaseUser || storedSbSession?.user || null,
-      tokenExpiresAt: authSession.tokenExpiresAt || (storedSbSession?.expires_in ? Date.now() + storedSbSession.expires_in * 1000 : null)
+      tenant_id: state.authoritativeTenantId || null,
+      tenantId: state.authoritativeTenantId || null,
+      supabaseJwt: authSession.supabaseJwt || effectiveSbSession?.access_token || null,
+      supabaseSession: authSession.supabaseSession || effectiveSbSession || null,
+      supabaseUser: supaUser,
+      tokenExpiresAt: authSession.tokenExpiresAt || (effectiveSbSession?.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null)
     };
-    const restoredTenantId = state.auth.supabaseUser?.app_metadata?.tenant_id || state.auth.supabaseUser?.user_metadata?.tenant_id || storedSbSession?.user?.app_metadata?.tenant_id;
-    if (restoredTenantId && state.auth.user && state.auth.user.tenant_id === 'clasptek_main') {
-      state.auth.user.tenant_id = restoredTenantId;
-    }
-  } else if (storedSbSession && storedSbSession.access_token) {
+  } else if (effectiveSbSession && effectiveSbSession.access_token) {
     state.auth = state.auth || {};
-    state.auth.supabaseJwt = storedSbSession.access_token;
-    state.auth.supabaseSession = storedSbSession;
-    state.auth.supabaseUser = storedSbSession.user;
-    state.auth.tokenExpiresAt = storedSbSession.expires_in ? Date.now() + storedSbSession.expires_in * 1000 : null;
+    state.auth.supabaseJwt = effectiveSbSession.access_token;
+    state.auth.supabaseSession = effectiveSbSession;
+    state.auth.supabaseUser = effectiveSbSession.user;
+    state.auth.tokenExpiresAt = effectiveSbSession.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null;
+    const restoredTenantId = effectiveSbSession.user?.app_metadata?.tenant_id || effectiveSbSession.user?.user_metadata?.tenant_id;
+    if (typeof isValidUuid === 'function' && isValidUuid(restoredTenantId) && restoredTenantId !== 'clasptek_main') {
+      state.authoritativeTenantId = restoredTenantId;
+      state.auth.tenant_id = restoredTenantId;
+      state.auth.tenantId = restoredTenantId;
+    }
   }
 
   let isDbHydrated = false;
@@ -8471,14 +8955,38 @@ async function loadAll() {
   if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
     const foundUser = state.users.find(u => u.id === authSession.user.id || (u.email && authSession.user.email && u.email.toLowerCase() === authSession.user.email.toLowerCase()));
     if (foundUser && foundUser.status === 'active' && !(foundUser.revokedSessionTokens || []).includes(authSession.token)) {
+      const supaUser = authSession.supabaseUser || state.auth?.supabaseUser || null;
+      const authTenant = state.authoritativeTenantId ||
+                         authSession.tenant_id ||
+                         authSession.tenantId ||
+                         supaUser?.app_metadata?.tenant_id ||
+                         supaUser?.user_metadata?.tenant_id;
+      if (typeof isValidUuid === 'function' && isValidUuid(authTenant) && authTenant !== 'clasptek_main') {
+        state.authoritativeTenantId = authTenant;
+        foundUser.tenant_id = authTenant;
+        foundUser.tenantId = authTenant;
+      }
+      const mergedUser = {
+        ...foundUser,
+        ...(supaUser || {}),
+        name: foundUser.name || authSession.user.name,
+        role: foundUser.role || authSession.user.role,
+        tenant_id: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(foundUser.tenant_id) && foundUser.tenant_id !== 'clasptek_main') ? foundUser.tenant_id : null),
+        tenantId: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(foundUser.tenantId) && foundUser.tenantId !== 'clasptek_main') ? foundUser.tenantId : null),
+        localUser: foundUser
+      };
+
       state.auth = {
         isAuthenticated: true,
-        user: foundUser,
+        user: mergedUser,
+        localUser: foundUser,
         token: authSession.token,
         expiresAt: authSession.expiresAt,
+        tenant_id: state.authoritativeTenantId || null,
+        tenantId: state.authoritativeTenantId || null,
         supabaseJwt: authSession.supabaseJwt || state.auth?.supabaseJwt || null,
         supabaseSession: authSession.supabaseSession || state.auth?.supabaseSession || null,
-        supabaseUser: authSession.supabaseUser || state.auth?.supabaseUser || null,
+        supabaseUser: supaUser,
         tokenExpiresAt: authSession.tokenExpiresAt || state.auth?.tokenExpiresAt || null
       };
     } else {
@@ -11164,12 +11672,36 @@ function renderLoginScreen(root) {
           }
         } catch (_) {}
 
+        const authoritativeTenant = resolveAuthoritativeTenantId();
+        if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
+          state.authoritativeTenantId = authoritativeTenant;
+          user.tenant_id = authoritativeTenant;
+          user.tenantId = authoritativeTenant;
+        }
+
+        const supaUser = state.auth?.supabaseUser || null;
+        const mergedUser = {
+          ...user,
+          ...(supaUser || {}),
+          name: user.name || supaUser?.user_metadata?.name || email,
+          role: user.role || supaUser?.user_metadata?.role || 'Super Admin',
+          tenant_id: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(user.tenant_id) && user.tenant_id !== 'clasptek_main') ? user.tenant_id : null),
+          tenantId: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(user.tenantId) && user.tenantId !== 'clasptek_main') ? user.tenantId : null),
+          localUser: user
+        };
+
         state.auth = {
           ...state.auth,
           isAuthenticated: true,
-          user: user,
+          user: mergedUser,
+          localUser: user,
           token: sessionToken,
-          expiresAt: sessionExpiry
+          expiresAt: sessionExpiry,
+          tenant_id: state.authoritativeTenantId || null,
+          tenantId: state.authoritativeTenantId || null,
+          supabaseJwt: state.auth?.supabaseJwt || null,
+          supabaseSession: state.auth?.supabaseSession || null,
+          supabaseUser: supaUser
         };
         await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
 
@@ -11279,11 +11811,20 @@ function renderLoginScreen(root) {
       const sessionToken = generateRandomToken('sess_');
       const sessionExpiry = Date.now() + 24 * 3600 * 1000;
 
+      const authoritativeTenant = resolveAuthoritativeTenantId();
+      if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
+        state.authoritativeTenantId = authoritativeTenant;
+        user.tenant_id = authoritativeTenant;
+        user.tenantId = authoritativeTenant;
+      }
       state.auth = {
+        ...state.auth,
         isAuthenticated: true,
         user: user,
         token: sessionToken,
-        expiresAt: sessionExpiry
+        expiresAt: sessionExpiry,
+        tenant_id: state.authoritativeTenantId || null,
+        tenantId: state.authoritativeTenantId || null
       };
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
 
@@ -11482,11 +12023,20 @@ function renderLoginScreen(root) {
       const sessionToken = generateRandomToken('sess_');
       const sessionExpiry = Date.now() + 24 * 3600 * 1000;
 
+      const authoritativeTenant = resolveAuthoritativeTenantId();
+      if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
+        state.authoritativeTenantId = authoritativeTenant;
+        user.tenant_id = authoritativeTenant;
+        user.tenantId = authoritativeTenant;
+      }
       state.auth = {
+        ...state.auth,
         isAuthenticated: true,
         user: user,
         token: sessionToken,
-        expiresAt: sessionExpiry
+        expiresAt: sessionExpiry,
+        tenant_id: state.authoritativeTenantId || null,
+        tenantId: state.authoritativeTenantId || null
       };
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
 
@@ -11903,6 +12453,7 @@ function render(container) {
     try {
       await supabaseAuth.signOut();
     } catch (_) {}
+    state.authoritativeTenantId = null;
     state.auth = { isAuthenticated: false, user: null };
     await safeSet(STORE_KEY_AUTH_SESSION, null);
     await safeSet('clasptek:supabase_session', null);
