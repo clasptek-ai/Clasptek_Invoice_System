@@ -2446,7 +2446,8 @@ const supabaseClient = {
         return await client.executeWithAuth(async () => {
           try {
             const body = Array.isArray(rows) ? rows : [rows];
-            const res = await fetch(tableUrl, {
+            const url = onConflict ? `${tableUrl}?on_conflict=${encodeURIComponent(onConflict)}` : tableUrl;
+            const res = await fetch(url, {
               method: 'POST',
               headers: client.getHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
               body: JSON.stringify(body)
@@ -5413,17 +5414,31 @@ const dbRepo = {
   async saveRecord(storeKey, record, idField = 'id') {
     const tableName = DB_TABLE_MAPPING[storeKey];
     if (supabaseClient.isConfigured() && tableName) {
-      let tenantId = resolveAuthoritativeTenantId();
+      let tenantId = resolveAuthoritativeTenantId(record);
       if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
-        tenantId = await lookupAuthoritativeTenantFromDatabase();
+        tenantId = await lookupAuthoritativeTenantFromDatabase(record);
       }
 
       let payload = record;
       if (tenantId && isValidUuid(tenantId) && tenantId !== 'clasptek_main') {
+        // Candidate record security review:
+        // A candidate record cannot cause a cross-tenant write simply by containing another valid tenant UUID.
+        // The candidate record tenant must match the authoritative tenant.
+        if (record && typeof record === 'object') {
+          const recTenant = (typeof record.tenant_id === 'string' && record.tenant_id.trim()) ||
+                            (typeof record.tenantId === 'string' && record.tenantId.trim());
+          if (recTenant && recTenant !== 'clasptek_main' && isValidUuid(recTenant)) {
+            if (recTenant !== tenantId) {
+              throw new Error(`Cannot save to PostgreSQL: Cross-tenant write rejected (record tenant '${recTenant}' does not match authoritative tenant '${tenantId}')`);
+            }
+          }
+        }
+
+        record.tenant_id = tenantId;
         payload = typeof transformEntityForPostgres === 'function'
           ? transformEntityForPostgres(tableName, record, tenantId)
           : { ...record, tenant_id: tenantId };
-      } else if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE || (state.auth && state.auth.user)) {
+      } else if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE || (state.auth && (state.auth.user || state.auth.supabaseUser))) {
         throw new Error(`Cannot save to PostgreSQL: Invalid or non-authoritative tenant UUID ('${tenantId}')`);
       }
 
@@ -5594,82 +5609,85 @@ function isValidUuid(val) {
   return typeof val === 'string' && UUID_REGEX.test(val.trim());
 }
 
-function resolveAuthoritativeTenantId() {
+function resolveAuthoritativeTenantId(candidateRecord = null) {
   const checkCandidate = (cand) => {
     if (typeof cand === 'string') {
       const trimmed = cand.trim();
-      if (trimmed !== 'clasptek_main' && isValidUuid(trimmed)) {
+      if (trimmed !== 'clasptek_main' && trimmed !== 'null' && trimmed !== 'undefined' && isValidUuid(trimmed)) {
         return trimmed;
       }
     }
     return null;
   };
 
-  // 1. Current Supabase user / session user in-memory
+  let authoritativeId = null;
+
+  // 1. Authenticated Supabase identity (claims & verified JWT in memory)
   const supaUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user || state.auth?.session?.user;
   if (supaUser) {
-    const c1 = checkCandidate(supaUser.app_metadata?.tenant_id) ||
-               checkCandidate(supaUser.user_metadata?.tenant_id) ||
-               checkCandidate(supaUser.tenant_id) ||
-               checkCandidate(supaUser.tenantId);
-    if (c1) {
-      state.authoritativeTenantId = c1;
-      return c1;
-    }
+    authoritativeId = checkCandidate(supaUser.app_metadata?.tenant_id) ||
+                      checkCandidate(supaUser.user_metadata?.tenant_id) ||
+                      checkCandidate(supaUser.tenant_id) ||
+                      checkCandidate(supaUser.tenantId);
   }
 
-  // 2. JWT claims from current token in memory
-  const jwtCandidates = [
-    state.auth?.supabaseJwt,
-    state.auth?.supabaseSession?.access_token,
-    state.auth?.session?.access_token,
-    state.auth?.token
-  ];
-  for (const token of jwtCandidates) {
-    if (typeof token === 'string' && token.startsWith('eyJ') && token.includes('.')) {
-      const payload = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(token) : null;
-      if (payload) {
-        const cJwt = checkCandidate(payload.app_metadata?.tenant_id) ||
-                     checkCandidate(payload.user_metadata?.tenant_id) ||
-                     checkCandidate(payload.tenant_id) ||
-                     checkCandidate(payload.tenantId);
-        if (cJwt) {
-          state.authoritativeTenantId = cJwt;
-          return cJwt;
+  // 2. Verified JWT claims from current token in memory (ensure token is not expired)
+  if (!authoritativeId) {
+    const jwtCandidates = [
+      state.auth?.supabaseJwt,
+      state.auth?.supabaseSession?.access_token,
+      state.auth?.session?.access_token,
+      state.auth?.token
+    ];
+    for (const token of jwtCandidates) {
+      if (typeof token === 'string' && token.startsWith('eyJ') && token.includes('.')) {
+        if (typeof isJwtExpiredOrExpiring === 'function' && isJwtExpiredOrExpiring(token, 0)) {
+          continue;
+        }
+        const payload = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(token) : null;
+        if (payload) {
+          authoritativeId = checkCandidate(payload.app_metadata?.tenant_id) ||
+                            checkCandidate(payload.user_metadata?.tenant_id) ||
+                            checkCandidate(payload.tenant_id) ||
+                            checkCandidate(payload.tenantId);
+          if (authoritativeId) break;
         }
       }
     }
   }
 
-  // 3. Cached authoritative tenant UUID in application state
-  const cCached = checkCandidate(state.authoritativeTenantId);
-  if (cCached) return cCached;
+  // 3. Existing authoritative state (established by auth or verified DB hydration)
+  if (!authoritativeId) {
+    authoritativeId = checkCandidate(state.authoritativeTenantId);
+  }
 
-  // 4. Authenticated user object in state.auth (if carrying valid UUID, never clasptek_main)
-  const user = state.auth?.user;
-  if (user) {
-    const cUser = checkCandidate(user.app_metadata?.tenant_id) ||
-                  checkCandidate(user.user_metadata?.tenant_id) ||
-                  checkCandidate(user.tenant_id) ||
-                  checkCandidate(user.tenantId);
-    if (cUser) {
-      state.authoritativeTenantId = cUser;
-      return cUser;
+  // 4. Authenticated user object in state.auth (only if valid UUID, never clasptek_main)
+  if (!authoritativeId) {
+    const user = state.auth?.user;
+    if (user) {
+      authoritativeId = checkCandidate(user.app_metadata?.tenant_id) ||
+                        checkCandidate(user.user_metadata?.tenant_id) ||
+                        checkCandidate(user.tenant_id) ||
+                        checkCandidate(user.tenantId);
     }
   }
 
   // 5. Explicit tenant fields on state.auth / state.tenant
-  const cStateAuth = checkCandidate(state.auth?.tenant_id) ||
-                     checkCandidate(state.auth?.tenantId) ||
-                     checkCandidate(state.tenant?.tenant_id) ||
-                     checkCandidate(state.tenant?.id);
-  if (cStateAuth) {
-    state.authoritativeTenantId = cStateAuth;
-    return cStateAuth;
+  if (!authoritativeId) {
+    authoritativeId = checkCandidate(state.auth?.tenant_id) ||
+                      checkCandidate(state.auth?.tenantId) ||
+                      checkCandidate(state.tenant?.tenant_id) ||
+                      checkCandidate(state.tenant?.id);
   }
 
-  // 6. Restored Supabase session from localStorage (synchronous inspection for browser environments)
-  if (typeof localStorage !== 'undefined') {
+  // 6. Hydrated application data from PostgreSQL RLS (scoped by RLS to authenticated user)
+  if (!authoritativeId) {
+    authoritativeId = checkCandidate(state.financeSettings?.tenant_id) ||
+                      checkCandidate(state.financeSettings?.tenantId);
+  }
+
+  // 7. Restored Supabase session from localStorage (synchronous inspection for browser environments)
+  if (!authoritativeId && typeof localStorage !== 'undefined') {
     try {
       const sessionKeys = ['clasptek:supabase_session', 'clasptek:auth_session'];
       for (const k of sessionKeys) {
@@ -5678,57 +5696,52 @@ function resolveAuthoritativeTenantId() {
           const parsed = JSON.parse(raw);
           const u = parsed.user || parsed.supabaseUser || parsed.session?.user;
           if (u) {
-            const cStorage = checkCandidate(u.app_metadata?.tenant_id) ||
-                             checkCandidate(u.user_metadata?.tenant_id) ||
-                             checkCandidate(u.tenant_id) ||
-                             checkCandidate(u.tenantId);
-            if (cStorage) {
-              state.authoritativeTenantId = cStorage;
-              return cStorage;
-            }
+            authoritativeId = checkCandidate(u.app_metadata?.tenant_id) ||
+                              checkCandidate(u.user_metadata?.tenant_id) ||
+                              checkCandidate(u.tenant_id) ||
+                              checkCandidate(u.tenantId);
+            if (authoritativeId) break;
           }
           if (parsed.access_token || parsed.supabaseJwt) {
-            const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(parsed.access_token || parsed.supabaseJwt) : null;
-            if (pJwt) {
-              const cSJwt = checkCandidate(pJwt.app_metadata?.tenant_id) ||
-                            checkCandidate(pJwt.user_metadata?.tenant_id) ||
-                            checkCandidate(pJwt.tenant_id) ||
-                            checkCandidate(pJwt.tenantId);
-              if (cSJwt) {
-                state.authoritativeTenantId = cSJwt;
-                return cSJwt;
+            const tokenStr = parsed.access_token || parsed.supabaseJwt;
+            if (typeof isJwtExpiredOrExpiring !== 'function' || !isJwtExpiredOrExpiring(tokenStr, 0)) {
+              const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(tokenStr) : null;
+              if (pJwt) {
+                authoritativeId = checkCandidate(pJwt.app_metadata?.tenant_id) ||
+                                  checkCandidate(pJwt.user_metadata?.tenant_id) ||
+                                  checkCandidate(pJwt.tenant_id) ||
+                                  checkCandidate(pJwt.tenantId);
+                if (authoritativeId) break;
               }
             }
           }
         }
       }
 
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && /^sb-.*-auth-token$/i.test(k)) {
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            const sess = parsed.session || parsed;
-            const u = sess.user;
-            if (u) {
-              const cSb = checkCandidate(u.app_metadata?.tenant_id) ||
-                          checkCandidate(u.user_metadata?.tenant_id) ||
-                          checkCandidate(u.tenant_id);
-              if (cSb) {
-                state.authoritativeTenantId = cSb;
-                return cSb;
+      if (!authoritativeId) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && /^sb-.*-auth-token$/i.test(k)) {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const sess = parsed.session || parsed;
+              const u = sess.user;
+              if (u) {
+                authoritativeId = checkCandidate(u.app_metadata?.tenant_id) ||
+                                  checkCandidate(u.user_metadata?.tenant_id) ||
+                                  checkCandidate(u.tenant_id);
+                if (authoritativeId) break;
               }
-            }
-            if (sess.access_token) {
-              const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(sess.access_token) : null;
-              if (pJwt) {
-                const cSbJwt = checkCandidate(pJwt.app_metadata?.tenant_id) ||
-                               checkCandidate(pJwt.user_metadata?.tenant_id) ||
-                               checkCandidate(pJwt.tenant_id);
-                if (cSbJwt) {
-                  state.authoritativeTenantId = cSbJwt;
-                  return cSbJwt;
+              if (sess.access_token) {
+                if (typeof isJwtExpiredOrExpiring !== 'function' || !isJwtExpiredOrExpiring(sess.access_token, 0)) {
+                  const pJwt = typeof decodeJwtPayload === 'function' ? decodeJwtPayload(sess.access_token) : null;
+                  if (pJwt) {
+                    authoritativeId = checkCandidate(pJwt.app_metadata?.tenant_id) ||
+                                      checkCandidate(pJwt.user_metadata?.tenant_id) ||
+                                      checkCandidate(pJwt.tenant_id);
+                    if (authoritativeId) break;
+                  }
                 }
               }
             }
@@ -5738,10 +5751,33 @@ function resolveAuthoritativeTenantId() {
     } catch (_) {}
   }
 
-  return null;
+  // Cache established authoritative tenant ID in state
+  if (authoritativeId) {
+    state.authoritativeTenantId = authoritativeId;
+  }
+
+  // Candidate record security review:
+  // A candidate record alone MUST NOT become an arbitrary tenant-selection mechanism.
+  // If candidateRecord provides a tenant ID:
+  // - If no authoritative tenant association exists, candidateRecord alone cannot grant authority (return null).
+  // - It must match the authoritative tenant ID if one is established.
+  // - If it contradicts the authoritative tenant ID, reject immediately with a cross-tenant error.
+  if (candidateRecord && typeof candidateRecord === 'object') {
+    const cRec = checkCandidate(candidateRecord.tenant_id) || checkCandidate(candidateRecord.tenantId);
+    if (cRec) {
+      if (!authoritativeId) {
+        return null;
+      }
+      if (cRec !== authoritativeId) {
+        throw new Error(`Cannot save to PostgreSQL: Cross-tenant write rejected (record tenant '${cRec}' does not match authoritative tenant '${authoritativeId}')`);
+      }
+    }
+  }
+
+  return authoritativeId;
 }
 
-async function lookupAuthoritativeTenantFromDatabase() {
+async function lookupAuthoritativeTenantFromDatabase(candidateRecord = null) {
   if (!supabaseClient.isConfigured()) return null;
 
   // 1. Proactively ensure fresh session & hydrate in-memory tokens from persisted storage
@@ -5750,25 +5786,29 @@ async function lookupAuthoritativeTenantFromDatabase() {
   } catch (_) {}
 
   // 2. Check if resolveAuthoritativeTenantId() now resolves the authoritative tenant
-  const candidate = resolveAuthoritativeTenantId();
+  const candidate = resolveAuthoritativeTenantId(candidateRecord);
   if (candidate && isValidUuid(candidate) && candidate !== 'clasptek_main') {
     state.authoritativeTenantId = candidate;
     return candidate;
   }
 
-  // 3. Fallback to validated tenant-membership lookup via PostgREST
-  const token = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
-  if (!token) return null;
-
+  // 3. Fallback to validated tenant-membership lookup via PostgREST for authenticated identity
   try {
-    const res = await supabaseClient.from('tenant_memberships').select('tenant_id');
+    const authUserId = state.auth?.supabaseUser?.id || state.auth?.user?.id;
+    let query = supabaseClient.from('tenant_memberships').select('tenant_id');
+    if (authUserId) {
+      query = query.eq('user_id', authUserId);
+    }
+    const res = await query;
     if (res && res.status === 200 && Array.isArray(res.data) && res.data.length > 0) {
       for (const m of res.data) {
         if (m && typeof m.tenant_id === 'string') {
           const tid = m.tenant_id.trim();
           if (isValidUuid(tid) && tid !== 'clasptek_main') {
             state.authoritativeTenantId = tid;
-            if (state.auth?.user) state.auth.user.tenant_id = tid;
+            if (state.auth?.user && (!state.auth.user.tenant_id || state.auth.user.tenant_id === 'clasptek_main')) {
+              state.auth.user.tenant_id = tid;
+            }
             return tid;
           }
         }
@@ -5776,14 +5816,16 @@ async function lookupAuthoritativeTenantFromDatabase() {
     }
   } catch (_) {}
 
-  // 4. Fallback to RPC get_auth_tenant_id if defined
+  // 4. Fallback to RPC get_auth_tenant_id if defined (derives tenant securely from auth.uid())
   try {
     const rpcRes = await supabaseClient.rpc('get_auth_tenant_id');
     if (rpcRes && rpcRes.status === 200 && typeof rpcRes.data === 'string') {
       const tid = rpcRes.data.trim();
       if (isValidUuid(tid) && tid !== 'clasptek_main') {
         state.authoritativeTenantId = tid;
-        if (state.auth?.user) state.auth.user.tenant_id = tid;
+        if (state.auth?.user && (!state.auth.user.tenant_id || state.auth.user.tenant_id === 'clasptek_main')) {
+          state.auth.user.tenant_id = tid;
+        }
         return tid;
       }
     }
@@ -5856,18 +5898,18 @@ function transformEntityForPostgres(entity, item, tenantId) {
         full_name: item.fullName || item.full_name || item.name || '',
         email: item.email || null,
         phone: item.phone || null,
-        employee_type: (item.employeeType || item.employee_type || item.type || 'STAFF').toUpperCase(),
+        employee_type: (item.employeeType || item.employee_type || item.type || 'staff').toLowerCase(),
         department: item.department || null,
         job_title: item.jobTitle || item.job_title || item.role || item.designation || null,
-        employment_status: ((item.employmentStatus || item.employment_status || item.status || 'ACTIVE').toUpperCase().includes('ACTIVE') ? 'ACTIVE' : 'SUSPENDED'),
+        employment_status: ((item.employmentStatus || item.employment_status || item.status || 'active').toLowerCase().includes('active') ? 'active' : 'suspended'),
         date_joined: item.dateJoined || item.date_joined || item.dateOfJoining || null,
         bank_name: item.bankName || item.bank_name || null,
         account_name: item.accountName || item.account_name || null,
         account_number: item.accountNumber || item.account_number || null,
-        compensation_type: item.compensationType || item.compensation_type || 'MONTHLY_SALARY',
+        compensation_type: (item.compensationType || item.compensation_type || 'per_session').toLowerCase().includes('salary') ? 'salaried' : ((item.compensationType || item.compensation_type || 'per_session').toLowerCase()),
         basic_pay: Number(item.basicPay !== undefined ? item.basicPay : (item.basic_pay !== undefined ? item.basic_pay : 0)),
         facilitator_rate: Number(item.facilitatorRate !== undefined ? item.facilitatorRate : (item.facilitator_rate !== undefined ? item.facilitator_rate : 0)),
-        rate_type: item.rateType || item.rate_type || 'PER_SESSION',
+        rate_type: (item.rateType || item.rate_type || 'session').toLowerCase(),
         notes: item.notes || null,
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
@@ -8800,6 +8842,23 @@ async function loadAll() {
             state.supabase.lastSuccessfulRead = new Date().toISOString();
             state.connectionError = null;
             isDbHydrated = true;
+
+            // Establish authoritative tenant context from database-derived records securely scoped by RLS
+            let candidateHydrated = null;
+            if (Array.isArray(dbFSet.data) && dbFSet.data.length > 0) {
+              const allSame = dbFSet.data.every(r => r && r.tenant_id && r.tenant_id === dbFSet.data[0].tenant_id);
+              if (allSame) candidateHydrated = dbFSet.data[0].tenant_id;
+            }
+            if (!candidateHydrated && Array.isArray(dbPers.data) && dbPers.data.length > 0) {
+              const allSame = dbPers.data.every(r => r && r.tenant_id && r.tenant_id === dbPers.data[0].tenant_id);
+              if (allSame) candidateHydrated = dbPers.data[0].tenant_id;
+            }
+            if (typeof isValidUuid === 'function' && isValidUuid(candidateHydrated) && candidateHydrated !== 'clasptek_main') {
+              state.authoritativeTenantId = candidateHydrated;
+              if (state.auth?.user && (!state.auth.user.tenant_id || state.auth.user.tenant_id === 'clasptek_main')) {
+                state.auth.user.tenant_id = candidateHydrated;
+              }
+            }
           }
         } else {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
@@ -21304,6 +21363,10 @@ function renderChangeRoleModal(container, user) {
       STORE_KEY_PAYMENTS,
       STORE_KEY_EXPENSES,
       STORE_KEY_PAYSLIPS,
+      STORE_KEY_PERSONNEL,
+      STORE_KEY_FINANCE_SETTINGS,
+      STORE_KEY_PAYMENT_ACCOUNTS,
+      STORE_KEY_AUDIT_LOG,
       CRM_PIPELINE_STAGES,
       CRM_LEAD_SOURCES,
       // Phase 10 Operational Intelligence & Hardening Exports

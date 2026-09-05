@@ -220,6 +220,124 @@ function createFreshEnv() {
     assert.strictEqual(threw, true);
   });
 
+  // Test 11: Candidate record ALONE cannot grant authority when user has no authenticated tenant association
+  await it('Candidate record alone cannot grant authority without authenticated tenant association', () => {
+    const { app } = createFreshEnv();
+    app.state.auth = { user: { id: 'admin_local', tenant_id: 'clasptek_main' } };
+    const candidateRecord = { id: 'pers_001', name: 'Admin', tenant_id: TARGET_TENANT_UUID };
+    const resolved = app.resolveAuthoritativeTenantId(candidateRecord);
+    // Must return null because there is no authenticated or authoritative tenant association!
+    assert.strictEqual(resolved, null);
+  });
+
+  // Test 12: Resolves from state.financeSettings.tenant_id (Hydrated RLS-scoped state)
+  await it('Resolves from state.financeSettings.tenant_id (Hydrated RLS-scoped state)', () => {
+    const { app } = createFreshEnv();
+    app.state.auth = { user: { id: 'admin_local', tenant_id: 'clasptek_main' } };
+    app.state.financeSettings = { id: 'fset_1', companyName: 'Clasptek', tenant_id: TARGET_TENANT_UUID };
+    const resolved = app.resolveAuthoritativeTenantId();
+    assert.strictEqual(resolved, TARGET_TENANT_UUID);
+    assert.strictEqual(app.state.authoritativeTenantId, TARGET_TENANT_UUID);
+  });
+
+  // Test 13: Candidate record with matching tenant UUID is accepted when authorized tenant exists
+  await it('Candidate record with matching tenant UUID is accepted when authorized tenant is established', () => {
+    const { app } = createFreshEnv();
+    app.state.authoritativeTenantId = TARGET_TENANT_UUID;
+    const candidateRecord = { id: 'pers_001', name: 'Admin', tenant_id: TARGET_TENANT_UUID };
+    const resolved = app.resolveAuthoritativeTenantId(candidateRecord);
+    assert.strictEqual(resolved, TARGET_TENANT_UUID);
+  });
+
+  // Test 14: Candidate record with conflicting tenant UUID throws cross-tenant write rejected error (fail-closed)
+  await it('Candidate record with conflicting tenant UUID throws cross-tenant write rejected error', () => {
+    const { app } = createFreshEnv();
+    app.state.authoritativeTenantId = TARGET_TENANT_UUID;
+    const candidateRecord = { id: 'pers_001', name: 'Admin', tenant_id: '11111111-2222-3333-4444-555555555555' };
+    assert.throws(
+      () => app.resolveAuthoritativeTenantId(candidateRecord),
+      /Cross-tenant write rejected/
+    );
+  });
+
+  // Test 15: Cross-Tenant Negative Test: User A in Tenant A cannot save a record belonging to Tenant B
+  await it('CROSS-TENANT NEGATIVE TEST: dbRepo.saveRecord rejects write when candidate record has another tenant UUID', async () => {
+    const { app } = createFreshEnv();
+    app.state.databaseAuthorityState = 'AUTHORITATIVE';
+    app.state.auth = {
+      supabaseUser: {
+        id: 'user_a',
+        app_metadata: { tenant_id: TARGET_TENANT_UUID }
+      }
+    };
+    app.state.authoritativeTenantId = TARGET_TENANT_UUID;
+
+    const attackerRecord = {
+      id: 'pers_malicious',
+      name: 'Cross Tenant Attacker',
+      tenant_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' // Tenant B
+    };
+
+    let threw = false;
+    let errorMessage = '';
+    try {
+      await app.dbRepo.saveRecord('clasptek:personnel', attackerRecord);
+    } catch (err) {
+      threw = true;
+      errorMessage = err.message;
+    }
+    assert.strictEqual(threw, true);
+    assert(errorMessage.includes('Cross-tenant write rejected'), `Expected cross-tenant write rejected message, got: ${errorMessage}`);
+  });
+
+  // Test 16: Invalid UUID test matrix: null, undefined, '', 'null', 'clasptek_main', 'random-string', '123', malformed UUID
+  await it('Invalid UUID test matrix: rejects all non-canonical and malformed representations', () => {
+    const { app } = createFreshEnv();
+    const invalidValues = [
+      null,
+      undefined,
+      '',
+      'null',
+      'undefined',
+      'clasptek_main',
+      'random-string',
+      '123',
+      'f70d5788-b4ae-4425-a5d4-b7b7d0f01ffX', // invalid hex char
+      'f70d5788-b4ae-4425-a5d4', // truncated
+      '{f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6}' // curly braces
+    ];
+
+    for (const val of invalidValues) {
+      assert.strictEqual(app.isValidUuid(val), false, `Expected isValidUuid("${val}") to be false`);
+
+      app.state.auth = { user: { id: 'usr_inv', tenant_id: val } };
+      app.state.authoritativeTenantId = null;
+      const res = app.resolveAuthoritativeTenantId();
+      assert.strictEqual(res, null, `Expected resolveAuthoritativeTenantId() with "${val}" to return null`);
+    }
+  });
+
+  // Test 17: Candidate record with legacy 'clasptek_main' or null is stamped with authoritative tenant UUID
+  await it('Legacy or unset tenant_id in candidate record is safely stamped with authoritative tenant UUID', async () => {
+    const { app } = createFreshEnv();
+    app.state.databaseAuthorityState = 'AUTHORITATIVE';
+    app.state.authoritativeTenantId = TARGET_TENANT_UUID;
+
+    let savedPayload = null;
+    app.supabaseClient.from = (table) => ({
+      upsert: async (payload) => {
+        savedPayload = payload;
+        return { data: [payload], error: null };
+      }
+    });
+
+    const newRecord = { id: 'p_new', name: 'New Staff', tenant_id: 'clasptek_main' };
+    await app.dbRepo.saveRecord('clasptek:personnel', newRecord);
+
+    assert.strictEqual(savedPayload.tenant_id, TARGET_TENANT_UUID);
+    assert.strictEqual(newRecord.tenant_id, TARGET_TENANT_UUID);
+  });
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
