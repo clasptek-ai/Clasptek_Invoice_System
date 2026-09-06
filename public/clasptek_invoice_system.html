@@ -601,31 +601,48 @@
     .cp-modal-overlay {
       position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px);
       display: flex; align-items: center; justify-content: center; z-index: 1000; padding: var(--space-5);
+      overscroll-behavior: contain;
+    }
+    body.cp-modal-open {
+      overflow: hidden !important;
     }
     .cp-modal {
       background: var(--surface-0); border-radius: var(--radius-lg); width: 100%; max-width: 600px;
       max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--shadow-xl); overflow: hidden;
       border: 1px solid var(--border);
+      overscroll-behavior: contain;
+      position: relative;
     }
-    .cp-modal.large { max-width: 850px; }
+    .cp-modal.large { max-width: 880px; }
     .cp-modal.doc-modal { max-width: 900px; }
     .cp-modal.drawer { max-width: 540px; height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0; }
     .cp-modal-header {
       padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center; background: var(--surface-1);
+      flex-shrink: 0;
     }
     .cp-modal-title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--primary); line-height: 1.25; }
     .cp-modal-close {
       background: transparent; border: none; font-size: var(--font-size-2xl); cursor: pointer; color: var(--text-muted);
       width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
-      transition: all 0.15s ease; padding: 0; line-height: 1;
+      transition: all 0.15s ease; padding: 0; line-height: 1; flex-shrink: 0;
     }
     .cp-modal-close:hover { color: var(--danger); background: var(--danger-bg); }
     .cp-modal-close:focus-visible { outline: 2px solid var(--interactive); }
-    .cp-modal-body { padding: var(--space-5); overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+    .cp-modal-body {
+      padding: var(--space-5);
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: calc(90vh - 120px);
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
     .cp-modal-footer {
       padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: var(--space-2);
       background: var(--surface-1);
+      flex-shrink: 0;
     }
 
     /* Clean, Professional Corporate Authentication UI */
@@ -899,6 +916,7 @@
       }
       .cp-modal-body {
         padding: 12px 14px;
+        max-height: calc(94vh - 110px);
       }
       .cp-modal-footer {
         padding: 10px 14px;
@@ -940,7 +958,7 @@
         max-height: 96vh;
       }
       .cp-modal-body {
-        max-height: 60vh;
+        max-height: calc(96vh - 90px);
       }
     }
 
@@ -12719,19 +12737,81 @@ function render(container) {
   }
 
   if (state.modal) {
+    document.body.classList.add('cp-modal-open');
     renderModal(state.modal.type, state.modal.data);
+  } else {
+    document.body.classList.remove('cp-modal-open');
   }
 }
 
 // Modal Control Helpers
 function openModal(type, data = {}) {
   state.modal = { type, data };
+  document.body.classList.add('cp-modal-open');
   render();
 }
 
 function closeModal() {
   state.modal = null;
+  document.body.classList.remove('cp-modal-open');
   render();
+}
+
+function attachModalWheelHandling(container) {
+  if (!container) return;
+  const overlay = container.querySelector('.cp-modal-overlay') || container;
+  const modal = container.querySelector('.cp-modal');
+  const modalBody = container.querySelector('.cp-modal-body');
+  if (!modal || !modalBody) return;
+
+  if (overlay.__hasWheelHandler) return;
+  overlay.__hasWheelHandler = true;
+
+  overlay.addEventListener('wheel', (e) => {
+    // Stop event bubbling to underlying page
+    e.stopPropagation();
+
+    // Check if event target is inside a nested scrollable element that can scroll
+    let target = e.target;
+    let isNestedScrollable = false;
+    while (target && target !== modalBody && target !== modal && target !== overlay) {
+      if (target.scrollHeight > target.clientHeight) {
+        const style = window.getComputedStyle ? window.getComputedStyle(target) : target.style;
+        const oY = style && (style.overflowY || style.overflow);
+        if (oY === 'auto' || oY === 'scroll') {
+          const canScrollDown = e.deltaY > 0 && target.scrollTop + target.clientHeight < target.scrollHeight - 1;
+          const canScrollUp = e.deltaY < 0 && target.scrollTop > 1;
+          if (canScrollDown || canScrollUp) {
+            isNestedScrollable = true;
+            break;
+          }
+        }
+      }
+      target = target.parentElement;
+    }
+
+    if (isNestedScrollable) {
+      return; // Let nested scroll container handle it natively
+    }
+
+    // If mouse is directly over the main scrollable body
+    if (modalBody.contains(e.target) || e.target === modalBody) {
+      // Native scrolling handles it; prevent boundary scroll-chaining to page
+      const atTop = modalBody.scrollTop <= 0 && e.deltaY < 0;
+      const atBottom = modalBody.scrollTop + modalBody.clientHeight >= modalBody.scrollHeight - 1 && e.deltaY > 0;
+      if (atTop || atBottom) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    // If mouse is over header, footer, modal borders, or right side near scrollbar:
+    // Forward the wheel movement directly to modalBody
+    if (modal.contains(e.target) || e.target === modal || e.target === overlay) {
+      e.preventDefault();
+      modalBody.scrollTop += e.deltaY;
+    }
+  }, { passive: false });
 }
 
 function renderModal(type, data) {
@@ -12782,6 +12862,9 @@ function renderModal(type, data) {
   else if (type === 'budgetDrilldown') renderBudgetDrilldownModal(container, data);
   else if (type === 'logCollectionAction') renderLogCollectionActionModal(container, data);
   else if (type === 'previewManagementReport') renderPreviewManagementReportModal(container, data);
+
+  // Attach robust modal mouse-wheel scrolling
+  attachModalWheelHandling(container);
 }
 
 // ----------------------------------------------------
@@ -20513,6 +20596,7 @@ Action: Update the application's Supabase public API key in the field above and 
 
   document.getElementById('btnCloseSbMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelSb').addEventListener('click', closeModal);
+  attachModalWheelHandling(container);
 
   // 1. Revalidate Configuration Handler
   document.getElementById('btnRevalidateConfig').addEventListener('click', async () => {
