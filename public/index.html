@@ -2404,6 +2404,12 @@ const supabaseClient = {
 
         const builder = {
           eq(column, value) {
+            if (tableName === 'tenant_memberships' && column === 'user_id') {
+              if (typeof isValidUuid === 'function' && !isValidUuid(value)) {
+                console.warn(`[Supabase Query Guard] Refusing to filter tenant_memberships.user_id by non-UUID value '${value}'.`);
+                return builder;
+              }
+            }
             filters.push(`${encodeURIComponent(column)}=eq.${encodeURIComponent(value)}`);
             return builder;
           },
@@ -5792,12 +5798,48 @@ async function lookupAuthoritativeTenantFromDatabase(candidateRecord = null) {
     return candidate;
   }
 
-  // 3. Fallback to validated tenant-membership lookup via PostgREST for authenticated identity
+  // 3. Primary Authoritative Mechanism: Server-Side RPC get_auth_tenant_id()
+  // Derives active tenant UUID directly and securely from auth.uid() in PostgreSQL.
+  // Immune to client parameter tampering and avoids redundant client queries.
   try {
-    const authUserId = state.auth?.supabaseUser?.id || state.auth?.user?.id;
+    const rpcRes = await supabaseClient.rpc('get_auth_tenant_id');
+    if (rpcRes && rpcRes.status === 200 && typeof rpcRes.data === 'string') {
+      const tid = rpcRes.data.trim();
+      if (isValidUuid(tid) && tid !== 'clasptek_main') {
+        state.authoritativeTenantId = tid;
+        if (state.auth?.user && (!state.auth.user.tenant_id || state.auth.user.tenant_id === 'clasptek_main')) {
+          state.auth.user.tenant_id = tid;
+        }
+        return tid;
+      }
+    }
+  } catch (_) {}
+
+  // 4. Secondary Fallback: Scoped tenant_memberships query via PostgREST
+  // DEFENSIVE SECURITY VALIDATION:
+  // tenant_memberships.user_id is a PostgreSQL UUID column referencing auth.users(id).
+  // Internal application IDs (such as 'usr_sa_1') must NEVER be passed to user_id filter.
+  // Only a cryptographically verified Supabase Auth user UUID may be used.
+  try {
+    let authUuid = null;
+    if (supabaseClient.auth && typeof supabaseClient.auth.getUser === 'function') {
+      const userRes = await supabaseClient.auth.getUser().catch(() => null);
+      if (userRes && userRes.data && userRes.data.user && typeof userRes.data.user.id === 'string') {
+        authUuid = userRes.data.user.id.trim();
+      }
+    }
+    if (!authUuid) {
+      const sbUser = state.auth?.supabaseUser || state.auth?.supabaseSession?.user;
+      if (sbUser && typeof sbUser.id === 'string') {
+        authUuid = sbUser.id.trim();
+      }
+    }
+
+    const validAuthUuid = (authUuid && isValidUuid(authUuid) && authUuid !== 'clasptek_main') ? authUuid : null;
+
     let query = supabaseClient.from('tenant_memberships').select('tenant_id');
-    if (authUserId) {
-      query = query.eq('user_id', authUserId);
+    if (validAuthUuid && typeof query.eq === 'function') {
+      query = query.eq('user_id', validAuthUuid);
     }
     const res = await query;
     if (res && res.status === 200 && Array.isArray(res.data) && res.data.length > 0) {
@@ -5812,21 +5854,6 @@ async function lookupAuthoritativeTenantFromDatabase(candidateRecord = null) {
             return tid;
           }
         }
-      }
-    }
-  } catch (_) {}
-
-  // 4. Fallback to RPC get_auth_tenant_id if defined (derives tenant securely from auth.uid())
-  try {
-    const rpcRes = await supabaseClient.rpc('get_auth_tenant_id');
-    if (rpcRes && rpcRes.status === 200 && typeof rpcRes.data === 'string') {
-      const tid = rpcRes.data.trim();
-      if (isValidUuid(tid) && tid !== 'clasptek_main') {
-        state.authoritativeTenantId = tid;
-        if (state.auth?.user && (!state.auth.user.tenant_id || state.auth.user.tenant_id === 'clasptek_main')) {
-          state.auth.user.tenant_id = tid;
-        }
-        return tid;
       }
     }
   } catch (_) {}

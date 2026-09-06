@@ -338,6 +338,85 @@ function createFreshEnv() {
     assert.strictEqual(newRecord.tenant_id, TARGET_TENANT_UUID);
   });
 
+  // Test 18: lookupAuthoritativeTenantFromDatabase() invokes RPC get_auth_tenant_id first
+  await it('lookupAuthoritativeTenantFromDatabase() invokes RPC get_auth_tenant_id first without calling tenant_memberships REST', async () => {
+    const { app } = createFreshEnv();
+    app.state.auth = { user: { id: 'usr_sa_1', email: 'admin@clasptek.org', tenant_id: 'clasptek_main' } };
+    app.state.authoritativeTenantId = null;
+
+    let rpcCalled = false;
+    let restMembershipsCalled = false;
+
+    app.supabaseClient.rpc = async (fn) => {
+      if (fn === 'get_auth_tenant_id') {
+        rpcCalled = true;
+        return { status: 200, data: TARGET_TENANT_UUID };
+      }
+      return { status: 404, data: null };
+    };
+
+    const origFrom = app.supabaseClient.from;
+    app.supabaseClient.from = (table) => {
+      if (table === 'tenant_memberships') {
+        restMembershipsCalled = true;
+      }
+      return origFrom.call(app.supabaseClient, table);
+    };
+
+    const res = await app.lookupAuthoritativeTenantFromDatabase();
+    assert.strictEqual(res, TARGET_TENANT_UUID);
+    assert.strictEqual(rpcCalled, true, 'RPC get_auth_tenant_id must be invoked');
+    assert.strictEqual(restMembershipsCalled, false, 'tenant_memberships REST endpoint must NOT be called when RPC succeeds');
+  });
+
+  // Test 19: Defensive validation: application ID 'usr_sa_1' is NEVER sent to tenant_memberships.user_id filter
+  await it('Defensive validation: application ID usr_sa_1 is NEVER sent as tenant_memberships.user_id filter', async () => {
+    const { app } = createFreshEnv();
+    app.state.auth = { user: { id: 'usr_sa_1', email: 'admin@clasptek.org', tenant_id: 'clasptek_main' } };
+    app.state.authoritativeTenantId = null;
+
+    // RPC fails, forcing fallback
+    app.supabaseClient.rpc = async () => ({ status: 500, data: null });
+
+    let capturedUserIdFilter = null;
+    app.supabaseClient.from = (table) => {
+      if (table === 'tenant_memberships') {
+        return {
+          select: () => {
+            const b = {
+              eq: (col, val) => {
+                if (col === 'user_id') capturedUserIdFilter = val;
+                return b;
+              },
+              then: (cb) => Promise.resolve({ status: 200, data: [{ tenant_id: TARGET_TENANT_UUID }] }).then(cb),
+              catch: () => b
+            };
+            return b;
+          }
+        };
+      }
+      return { select: () => ({ eq: () => ({}) }) };
+    };
+
+    const res = await app.lookupAuthoritativeTenantFromDatabase();
+    assert.strictEqual(capturedUserIdFilter, null, 'Must NOT construct user_id filter with usr_sa_1');
+    assert.strictEqual(res, TARGET_TENANT_UUID);
+  });
+
+  // Test 20: Query Guard in builder.eq refuses to construct user_id filter for non-UUID values on tenant_memberships
+  await it('Query Guard in builder.eq refuses to construct user_id filter for non-UUID on tenant_memberships', async () => {
+    const { app } = createFreshEnv();
+    let urlBuilt = '';
+    global.fetch = async (url) => {
+      urlBuilt = String(url);
+      return { ok: true, status: 200, json: async () => [] };
+    };
+
+    await app.supabaseClient.from('tenant_memberships').select('tenant_id').eq('user_id', 'usr_sa_1');
+    assert(!urlBuilt.includes('usr_sa_1'), `URL must not contain "usr_sa_1", got: ${urlBuilt}`);
+    assert(!urlBuilt.includes('user_id=eq'), `URL must not contain "user_id=eq", got: ${urlBuilt}`);
+  });
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
