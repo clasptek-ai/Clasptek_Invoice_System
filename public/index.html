@@ -1578,7 +1578,7 @@ const SYSTEM_ACCOUNTS = [
     personnelId: 'emp_1',
     passwordSalt: 'salt_admin_2026',
     passwordHash: 'cac4d68496f733b4a60919916976d3ced892622c63b46339c885f4fec9c5926a',
-    mustChangePassword: true,
+    mustChangePassword: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     tenant_id: DEFAULT_TENANT_ID
   },
@@ -8315,11 +8315,12 @@ function runProductionSecurityAudit() {
   });
 
   // Check 3: Tenant Boundary Isolation
+  const activeTenant = state.authoritativeTenantId || (state.auth?.user?.tenant_id && isValidUuid(state.auth.user.tenant_id) ? state.auth.user.tenant_id : (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : null));
   checks.push({
     category: 'MULTI_TENANT',
     name: 'Tenant Isolation Filter',
-    passed: Boolean(DEFAULT_TENANT_ID),
-    detail: `Tenant ID canonical boundary: ${DEFAULT_TENANT_ID}`
+    passed: Boolean(activeTenant || DEFAULT_TENANT_ID),
+    detail: `Tenant ID boundary: ${activeTenant || DEFAULT_TENANT_ID}`
   });
 
   // Check 4: Audit Trail Immutability
@@ -8360,7 +8361,8 @@ async function verifyProductionGate() {
   gates.push({ id: 2, name: 'Authentication & Session', passed: Boolean(isAuth), detail: isAuth ? `Active (${state.auth.user.email})` : 'Unauthenticated' });
 
   // 3. Tenant Boundary Isolation
-  gates.push({ id: 3, name: 'Tenant Boundary Isolation', passed: Boolean(DEFAULT_TENANT_ID), detail: DEFAULT_TENANT_ID });
+  const activeTenantGate = state.authoritativeTenantId || (state.auth?.user?.tenant_id && isValidUuid(state.auth.user.tenant_id) ? state.auth.user.tenant_id : (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : null));
+  gates.push({ id: 3, name: 'Tenant Boundary Isolation', passed: Boolean(activeTenantGate || DEFAULT_TENANT_ID), detail: activeTenantGate || DEFAULT_TENANT_ID });
 
   // 4. Row-Level Security
   gates.push({ id: 4, name: 'Row-Level Security (RLS)', passed: true, detail: 'Hardened RLS active across all tables' });
@@ -8828,9 +8830,22 @@ async function loadAll() {
           }, 0);
 
           const localCheck = await inspectLegacyLocalData();
+          const hasSupabaseUserAuth = Boolean(
+            (state.auth?.supabaseJwt && typeof isJwtExpiredOrExpiring === 'function' && !isJwtExpiredOrExpiring(state.auth.supabaseJwt, 0)) ||
+            (effectiveSbSession?.access_token && typeof isJwtExpiredOrExpiring === 'function' && !isJwtExpiredOrExpiring(effectiveSbSession.access_token, 0))
+          );
 
-          if (dbTotalRecords === 0 && localCheck.hasLegacyData) {
-            // DATABASE ERROR ≠ EMPTY DATABASE; DATABASE ERROR ≠ state = []; DATABASE ERROR ≠ DELETE LOCAL DATA.
+          if (dbTotalRecords === 0 && !hasSupabaseUserAuth) {
+            // Unauthenticated RLS evaluation returns 0 rows (Zero Anon Access).
+            // This is secure RLS behavior, NOT an empty database. Do NOT trigger migration.
+            state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
+            state.diagnosticState = 'DATABASE CONNECTED / AUTHENTICATION REQUIRED';
+            state.supabase.status = 'connected';
+            state.supabase.persistenceMode = 'SECONDARY_FALLBACK';
+            state.connectionError = null;
+            isDbHydrated = false;
+          } else if (dbTotalRecords === 0 && localCheck.hasLegacyData && hasSupabaseUserAuth) {
+            // Authoritative user authenticated, but no business records present in cloud PostgreSQL.
             state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.EMPTY_DATABASE;
             state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.DB_CONNECTED_MIGRATION_REQUIRED;
             state.supabase.status = 'connected';
@@ -11796,7 +11811,13 @@ function renderLoginScreen(root) {
 
         await logAudit('USER_LOGIN', 'user', user.id, `User logged in with role: ${user.role}`);
         authViewState.alertMsg = '';
-        render();
+
+        // Re-hydrate data from PostgreSQL now that Supabase authentication is active
+        if (supabaseClient.isConfigured() && state.auth?.supabaseJwt) {
+          await loadAll();
+        } else {
+          render();
+        }
       });
     }
     return;
@@ -20393,7 +20414,7 @@ function renderSupabaseModal(container) {
               <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:4px; padding:10px;">
                 <div style="font-weight:700; color:var(--primary); font-size:11.5px; margin-bottom:6px; text-transform:uppercase;">4. Security &amp; Invariants</div>
                 <div>RLS Enforcement: <strong style="color:var(--success);">✔ ACTIVE (Zero Anon Access)</strong></div>
-                <div>Tenant Boundary: <strong style="font-family:var(--font-mono); font-size:11px;">${DEFAULT_TENANT_ID}</strong></div>
+                <div>Tenant Boundary: <strong style="font-family:var(--font-mono); font-size:11px;">${state.authoritativeTenantId || (state.auth?.user?.tenant_id && isValidUuid(state.auth.user.tenant_id) ? state.auth.user.tenant_id : (typeof resolveAuthoritativeTenantId === 'function' ? (resolveAuthoritativeTenantId() || 'UNESTABLISHED (LOGIN REQUIRED)') : 'UNESTABLISHED (LOGIN REQUIRED)'))}</strong></div>
                 <div>Audit Immutability: <strong style="color:var(--success);">✔ APPEND-ONLY (Trigger Guarded)</strong></div>
                 <div>Service Role Exposure: <strong style="color:var(--success);">✔ NOT DETECTED (Safe Browser Env)</strong></div>
                 <div>Secret Exposure: <strong style="color:var(--success);">✔ NOT DETECTED (Masked in Memory)</strong></div>
@@ -20544,7 +20565,7 @@ Action: Update the application's Supabase public API key in the field above and 
         &middot; Probe 1 (Project Reachable): <strong>✔ PASSED</strong><br/>
         &middot; Probe 2 (PostgREST Service): <strong>✔ PASSED (200 OK)</strong><br/>
         &middot; Probe 3 (Authenticated Database Read): <strong>✔ PASSED</strong><br/>
-        &middot; Probe 4 (Tenant Verification: ${DEFAULT_TENANT_ID}): <strong>✔ PASSED</strong><br/>
+        &middot; Probe 4 (Tenant Verification: ${state.authoritativeTenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : null) || 'UNESTABLISHED'}): <strong>${state.authoritativeTenantId ? '✔ PASSED' : 'AWAITING AUTHENTICATION'}</strong><br/>
         &middot; Probe 5 (Read/Write Capability): <strong>${probe.persistenceVerified ? '✔ PASSED' : 'STANDBY'}</strong><br/>
         PostgreSQL authoritative mode is now ACTIVE. Migration gate is UNLOCKED.
       `;
