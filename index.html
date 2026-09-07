@@ -9487,7 +9487,7 @@ async function loadAll() {
           dbFSet, dbPAccs, dbPSlips, dbPers,
           dbEnqs, dbEnrls, dbCohorts, dbCusts, dbStudents, dbCNotes, dbPRems,
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
-          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates, dbCertRevocations
+          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
         ] = await Promise.all([
           supabaseClient.from('programmes').select('*'),
           supabaseClient.from('invoices').select('*'),
@@ -9519,8 +9519,7 @@ async function loadAll() {
           supabaseClient.from('training_sessions').select('*'),
           supabaseClient.from('attendance').select('*'),
           supabaseClient.from('facilitator_reports').select('*'),
-          supabaseClient.from('certificates').select('*'),
-          supabaseClient.from('certificate_revocations').select('*')
+          supabaseClient.from('certificates').select('*')
         ]);
 
         // Check if query had critical errors (excluding optional table 404s)
@@ -9530,7 +9529,7 @@ async function loadAll() {
           dbFSet, dbPAccs, dbPSlips, dbPers,
           dbEnqs, dbEnrls, dbCohorts, dbCusts, dbStudents, dbCNotes, dbPRems,
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
-          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates, dbCertRevocations
+          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
         ];
         const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.error.message)));
 
@@ -9587,7 +9586,7 @@ async function loadAll() {
             state.attendance = (dbAttendance && Array.isArray(dbAttendance.data)) ? dbAttendance.data.map(r => transformEntityFromPostgres('attendance', r)) : [];
             state.facilitatorReports = (dbFacilitatorReports && Array.isArray(dbFacilitatorReports.data)) ? dbFacilitatorReports.data.map(r => transformEntityFromPostgres('facilitator_reports', r)) : [];
             state.certificates = (dbCertificates && Array.isArray(dbCertificates.data)) ? dbCertificates.data.map(r => transformEntityFromPostgres('certificates', r)) : [];
-            state.certificateRevocations = (dbCertRevocations && Array.isArray(dbCertRevocations.data)) ? dbCertRevocations.data.map(r => transformEntityFromPostgres('certificate_revocations', r)) : [];
+            state.certificateRevocations = [];
             state.collectionNotes = Array.isArray(dbCNotes.data) ? dbCNotes.data.map(r => transformEntityFromPostgres('collection_notes', r)) : [];
             state.paymentReminders = Array.isArray(dbPRems.data) ? dbPRems.data.map(r => transformEntityFromPostgres('payment_reminders', r)) : [];
             state.recurringExpenses = Array.isArray(dbRExps.data) ? dbRExps.data.map(r => transformEntityFromPostgres('recurring_expenses', r)) : [];
@@ -30791,7 +30790,7 @@ function renderResetPasswordModal(container, user) {
       if (supabaseClient.isConfigured()) {
         const res = await supabaseClient.auth.resetPasswordForEmail(user.email);
         if (res && (!res.success || res.error)) {
-          throw new Error("We couldn't send the password reset email right now. Please verify Supabase SMTP configuration.");
+          throw new Error("We couldn't send the password reset email right now. Please try again in a few moments.");
         }
       }
       await logAudit('RESET_USER_PASSWORD_REQUESTED', 'user', user.id, `Password reset email requested for ${user.email}`);
