@@ -1,9 +1,11 @@
 -- =============================================================================
 -- CLASPTEK ENTERPRISE PLATFORM
--- Migration: Phase 5.1 Professional CRM Intake & Applicant Management
+-- Migration: Phase 5.1 Professional CRM Intake & Applicant Management (Fix 02)
 -- Target Database: PostgreSQL / Supabase (logaawoigfxnisimfatf)
 -- Safe, Additive, Idempotent, Non-Destructive, Transaction-Safe
--- Hardened: Zero-Exam Model, Authoritative RPC Ingestion, Concurrency-Safe Counters
+-- Hardened: Zero-Exam Model, Authoritative RPC Ingestion, Concurrency-Safe Counters,
+--           Strict Tenant Isolation, Immutable Raw Submissions, CSPRNG Identifiers,
+--           Financial Data Separation & Strict Academic Conversion Authorization
 -- =============================================================================
 
 BEGIN;
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS public.crm_intake_applications (
     match_notes TEXT,
     review_reason TEXT,
     
-    -- Immutable Raw Submission Snapshot
+    -- Immutable Raw Submission Snapshot (Guarded by Trigger)
     applicant_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -101,7 +103,30 @@ CREATE INDEX IF NOT EXISTS idx_intake_apps_email ON public.crm_intake_applicatio
 CREATE INDEX IF NOT EXISTS idx_intake_apps_phone ON public.crm_intake_applications(tenant_id, phone);
 
 -- -----------------------------------------------------------------------------
--- 4. CONCURRENCY-SAFE ATOMIC APPLICATION NUMBERING (INTERNAL HELPER ONLY)
+-- 4. DATABASE TRIGGER: IMMUTABILITY ENFORCEMENT ON RAW APPLICANT DATA
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.trg_crm_intake_immutable_applicant_data()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF NEW.applicant_data IS DISTINCT FROM OLD.applicant_data THEN
+        RAISE EXCEPTION 'IMMUTABLE_FIELD: applicant_data preserves the authoritative raw submission snapshot and cannot be modified';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prevent_applicant_data_update ON public.crm_intake_applications;
+CREATE TRIGGER trg_prevent_applicant_data_update
+    BEFORE UPDATE ON public.crm_intake_applications
+    FOR EACH ROW
+    EXECUTE FUNCTION public.trg_crm_intake_immutable_applicant_data();
+
+-- -----------------------------------------------------------------------------
+-- 5. CONCURRENCY-SAFE ATOMIC APPLICATION NUMBERING (INTERNAL HELPER ONLY)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.get_next_application_number(p_tenant_id UUID)
 RETURNS TEXT
@@ -144,7 +169,7 @@ REVOKE ALL ON FUNCTION public.get_next_application_number(UUID) FROM PUBLIC, ano
 GRANT EXECUTE ON FUNCTION public.get_next_application_number(UUID) TO service_role;
 
 -- -----------------------------------------------------------------------------
--- 5. HARDENED PUBLIC INTAKE RPC FUNCTION (AUTHORITATIVE INGESTION PATH)
+-- 6. HARDENED PUBLIC INTAKE RPC FUNCTION (AUTHORITATIVE INGESTION PATH)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.submit_applicant_intake(
     p_source TEXT,
@@ -206,7 +231,7 @@ DECLARE
 BEGIN
     -- 1. Anti-Bot / Honeypot Gate
     IF p_honeypot IS NOT NULL AND TRIM(p_honeypot) <> '' THEN
-        -- Silent rejection / drop for automated bots
+        -- Silent drop for automated bots
         RETURN jsonb_build_object(
             'success', true,
             'application_number', 'APP-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-000000',
@@ -216,37 +241,28 @@ BEGIN
     END IF;
 
     -- 2. Determine Caller Privilege Level (Used for Sanitizing Public Responses)
-    v_is_staff := (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin'));
+    v_is_staff := (public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'admin', 'TRAINING_ADMIN', 'STAFF'));
 
-    -- 3. Authoritative Tenant Resolution (Controlled Server-Side Resolver, Fail-Closed)
+    -- 3. Authoritative Public Tenant Resolution (Designated Intake Tenant, Fail-Closed)
+    -- Never allow an anonymous caller to select or switch tenant via programme identifiers.
     v_tenant_id := public.get_auth_tenant_id();
     IF v_tenant_id IS NULL THEN
-        -- Unauthenticated public submission:
-        -- Path A: Resolve from authoritative catalogue programme
-        IF p_programme_id IS NOT NULL AND TRIM(p_programme_id) <> '' THEN
-            SELECT tenant_id INTO v_tenant_id 
-            FROM public.programmes 
-            WHERE (id = TRIM(p_programme_id) OR code = TRIM(p_programme_id))
-            LIMIT 1;
-        END IF;
-
-        -- Path B: Controlled canonical public-intake tenant resolver
+        -- Resolve the designated intake tenant authoritatively
+        SELECT id INTO v_tenant_id 
+        FROM public.tenants 
+        WHERE slug = 'clasptek_main';
+        
+        -- Fallback: resolve ONLY if there is an unambiguous single tenant registered
         IF v_tenant_id IS NULL THEN
             SELECT id INTO v_tenant_id 
             FROM public.tenants 
-            WHERE slug = 'clasptek_main';
-            
-            -- If clasptek_main is not present, check if there is an unambiguous single tenant
-            IF v_tenant_id IS NULL THEN
-                SELECT id INTO v_tenant_id 
-                FROM public.tenants 
-                HAVING count(*) = 1;
-            END IF;
+            WHERE (SELECT count(*) FROM public.tenants) = 1
+            LIMIT 1;
         END IF;
     END IF;
 
     IF v_tenant_id IS NULL THEN
-        RAISE EXCEPTION 'TENANT_RESOLUTION_FAILED: Authoritative tenant could not be determined unambiguously. Public intake requires an authoritative programme or designated tenant configuration.';
+        RAISE EXCEPTION 'TENANT_RESOLUTION_FAILED: Authoritative tenant could not be determined unambiguously. Public intake requires a designated tenant.';
     END IF;
 
     -- 4. Parameter Validation & Server-Side String Bounds
@@ -355,7 +371,7 @@ BEGIN
       AND source_submission_id = TRIM(p_source_submission_id);
 
     IF v_existing_app.id IS NOT NULL THEN
-        -- Sanitized Response for Public / Detailed for Staff (No Oracle Leakage)
+        -- Sanitized Response for Public / Detailed for Staff (Zero Oracle Leakage)
         IF v_is_staff THEN
             RETURN jsonb_build_object(
                 'success', true,
@@ -379,7 +395,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- 6. Authoritative Programme Resolution (Canonical Lowercase Status)
+    -- 6. Authoritative Programme Resolution strictly within Authoritative Tenant
     IF p_programme_id IS NOT NULL AND TRIM(p_programme_id) <> '' THEN
         SELECT * INTO v_programme 
         FROM public.programmes 
@@ -390,7 +406,7 @@ BEGIN
         IF v_programme.id IS NULL THEN
             v_status := 'REVIEW_REQUIRED';
             v_review_reason := 'PROGRAMME_NOT_FOUND_OR_RETIRED';
-            v_match_notes := 'Submitted programme identifier could not be resolved to an active catalogue programme';
+            v_match_notes := 'Submitted programme identifier could not be resolved to an active catalogue programme in the designated tenant';
         ELSIF v_programme.status <> 'active' THEN
             v_status := 'REVIEW_REQUIRED';
             v_review_reason := 'PROGRAMME_NOT_FOUND_OR_RETIRED';
@@ -497,7 +513,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- 8. Prepare Immutable Snapshot
+    -- 8. Prepare Immutable Raw Snapshot
     v_raw_snapshot := jsonb_build_object(
         'first_name', v_clean_first,
         'last_name', v_clean_last,
@@ -614,7 +630,7 @@ BEGIN
         )
         RETURNING id INTO v_new_app_id;
 
-        -- Authoritative Database-Level Audit Log on Creation
+        -- Authoritative Database-Level Audit Log on Creation (CSPRNG Identifier)
         INSERT INTO public.finance_audit_log (
             id,
             tenant_id,
@@ -684,7 +700,7 @@ BEGIN
         END IF;
     END;
 
-    -- Return Sanitized Response for Public / Detailed for Staff
+    -- Return Sanitized Response for Public / Detailed for Staff (Zero Oracle Leakage)
     IF v_is_staff THEN
         RETURN jsonb_build_object(
             'success', true,
@@ -716,7 +732,7 @@ GRANT EXECUTE ON FUNCTION public.submit_applicant_intake(
 ) TO anon, authenticated;
 
 -- -----------------------------------------------------------------------------
--- 6. TRANSACTIONAL GOVERNED CONVERSION FUNCTION (AUTHORITATIVE CONVERSION PATH)
+-- 7. TRANSACTIONAL GOVERNED CONVERSION FUNCTION (ACADEMIC GOVERNANCE)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.convert_intake_application(
     p_application_id UUID,
@@ -744,13 +760,17 @@ DECLARE
     v_student_no TEXT;
     v_enrolment_no TEXT;
     v_cohort_id TEXT;
+    v_enrolment_tuition NUMERIC(14,2);
 BEGIN
-    -- 1. Authorization Gate (Admin/Staff only)
+    -- 1. Authorization Gate (Training Admin / Super Admin ONLY — Finance-only roles strictly denied)
     v_tenant_id := public.get_auth_tenant_id();
     v_role := public.get_auth_user_role();
 
-    IF v_tenant_id IS NULL OR NOT (public.is_staff() OR public.is_super_admin() OR v_role IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin')) THEN
-        RAISE EXCEPTION 'UNAUTHORIZED: Only an administrator or staff can convert intake applications';
+    IF v_tenant_id IS NULL OR NOT (
+        public.is_super_admin() OR 
+        v_role IN ('SUPER_ADMIN', 'super admin', 'admin', 'TRAINING_ADMIN', 'STAFF')
+    ) THEN
+        RAISE EXCEPTION 'UNAUTHORIZED: Only training administrators or super administrators can convert intake applications';
     END IF;
 
     -- 2. Fetch Application with Row Lock
@@ -804,7 +824,9 @@ BEGIN
         END IF;
 
         v_student_no := 'STU-' || v_year || '-' || LPAD(v_stu_seq::TEXT, 4, '0');
-        v_student_id := 'stu_' || EXTRACT(EPOCH FROM NOW())::BIGINT || '_' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 5);
+        
+        -- CSPRNG Cryptographically Secure Student Identifier
+        v_student_id := 'stu_' || EXTRACT(EPOCH FROM NOW())::BIGINT || '_' || SUBSTRING(REPLACE(gen_random_uuid()::TEXT, '-', '') FROM 1 FOR 8);
 
         INSERT INTO public.students (
             id,
@@ -845,7 +867,7 @@ BEGIN
         );
     END IF;
 
-    -- 4. Create Enrolment with Strict Cohort & Programme Tenant Isolation
+    -- 4. Create Enrolment with Strict Cohort & Programme Tenant Isolation & Financial Separation
     v_cohort_id := TRIM(COALESCE(p_options->>'cohort_id', ''));
     IF v_cohort_id = '' THEN
         v_cohort_id := NULL;
@@ -879,6 +901,17 @@ BEGIN
             RAISE EXCEPTION 'PROGRAMME_NOT_FOUND: Programme % does not exist in your tenant', v_app.programme_id;
         END IF;
 
+        -- Financial Data Separation: The public claimed fee CANNOT unilaterally set enrolment tuition.
+        -- Enrolment tuition defaults to authoritative programme catalogue tuition fee,
+        -- or an explicit administrator-approved tuition passed in p_options.
+        IF p_options->>'approved_tuition_fee' IS NOT NULL AND (p_options->>'approved_tuition_fee')::NUMERIC >= 0 THEN
+            v_enrolment_tuition := (p_options->>'approved_tuition_fee')::NUMERIC;
+        ELSIF p_options->>'agreed_tuition_fee' IS NOT NULL AND (p_options->>'agreed_tuition_fee')::NUMERIC >= 0 THEN
+            v_enrolment_tuition := (p_options->>'agreed_tuition_fee')::NUMERIC;
+        ELSE
+            v_enrolment_tuition := COALESCE(v_prog.tuition_fee, 0);
+        END IF;
+
         -- Concurrency-Safe Enrolment Number Allocation via Atomic Row Lock Counter
         INSERT INTO public.crm_intake_counters (tenant_id, application_seq, student_seq, enrolment_seq, updated_at)
         VALUES (v_tenant_id, 1, 100, 1001, NOW())
@@ -901,9 +934,11 @@ BEGIN
         END IF;
 
         v_enrolment_no := 'ENR-' || v_year || '-' || LPAD(v_enr_seq::TEXT, 4, '0');
-        v_enrolment_id := 'enr_' || EXTRACT(EPOCH FROM NOW())::BIGINT || '_' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 5);
+        
+        -- CSPRNG Cryptographically Secure Enrolment Identifier
+        v_enrolment_id := 'enr_' || EXTRACT(EPOCH FROM NOW())::BIGINT || '_' || SUBSTRING(REPLACE(gen_random_uuid()::TEXT, '-', '') FROM 1 FOR 8);
 
-        -- Insert Enrolment (Preserving Agreed Tuition Snapshot, Triggers Capacity Lock)
+        -- Insert Enrolment (Preserving Authoritative Enrolment Tuition & Capacity Integrity)
         INSERT INTO public.enrolments (
             id,
             tenant_id,
@@ -922,7 +957,7 @@ BEGIN
             v_cohort_id,
             v_enrolment_no,
             CURRENT_DATE,
-            COALESCE(v_app.agreed_tuition_fee, v_prog.tuition_fee),
+            v_enrolment_tuition,
             'ACTIVE'
         );
     END IF;
@@ -943,7 +978,7 @@ BEGIN
         WHERE id = v_app.enquiry_id AND tenant_id = v_tenant_id;
     END IF;
 
-    -- 7. Authoritative Database-Level Audit Log on Conversion
+    -- 7. Authoritative Database-Level Audit Log on Conversion (CSPRNG Identifier)
     INSERT INTO public.finance_audit_log (
         id,
         tenant_id,
@@ -975,7 +1010,7 @@ BEGIN
         ),
         'Intake application successfully converted to student profile and cohort enrolment',
         auth.uid(),
-        COALESCE(v_role, 'ADMIN'),
+        COALESCE(v_role, 'TRAINING_ADMIN'),
         'supabase_rpc',
         NOW()
     );
@@ -997,12 +1032,12 @@ REVOKE EXECUTE ON FUNCTION public.convert_intake_application(UUID, JSONB) FROM P
 GRANT EXECUTE ON FUNCTION public.convert_intake_application(UUID, JSONB) TO authenticated;
 
 -- -----------------------------------------------------------------------------
--- 7. ROW LEVEL SECURITY (RLS) POLICIES
+-- 8. ROW LEVEL SECURITY (RLS) POLICIES
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.crm_intake_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.crm_intake_counters ENABLE ROW LEVEL SECURITY;
 
--- Revoke direct table inserts from public/anon
+-- Revoke direct table modifications from public/anon
 REVOKE INSERT, UPDATE, DELETE ON public.crm_intake_applications FROM anon, public;
 REVOKE INSERT, UPDATE, DELETE ON public.crm_intake_counters FROM anon, public;
 
@@ -1017,7 +1052,7 @@ CREATE POLICY intake_apps_select_admin_staff ON public.crm_intake_applications
     TO authenticated
     USING (
         tenant_id = public.get_auth_tenant_id() AND
-        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin'))
+        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin', 'TRAINING_ADMIN'))
     );
 
 -- Policy 2: Student can only view their own linked application
@@ -1032,17 +1067,20 @@ CREATE POLICY intake_apps_select_student ON public.crm_intake_applications
         )
     );
 
--- Policy 3: Admin/Staff can update applications within their tenant
+-- Policy 3: Admin/Training Staff can update applications within their tenant
 CREATE POLICY intake_apps_modify_admin ON public.crm_intake_applications
     FOR UPDATE
     TO authenticated
     USING (
         tenant_id = public.get_auth_tenant_id() AND
-        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin'))
+        (public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'admin', 'TRAINING_ADMIN', 'STAFF'))
     )
     WITH CHECK (
         tenant_id = public.get_auth_tenant_id() AND
-        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin'))
+        (public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'admin', 'TRAINING_ADMIN', 'STAFF'))
     );
+
+-- Schema Reload Notification for PostgREST
+NOTIFY pgrst, 'reload schema';
 
 COMMIT;

@@ -238,9 +238,10 @@ BEGIN
             
             -- If clasptek_main is not present, check if there is an unambiguous single tenant
             IF v_tenant_id IS NULL THEN
-                SELECT id INTO v_tenant_id 
-                FROM public.tenants 
-                HAVING count(*) = 1;
+                SELECT id INTO v_tenant_id
+                FROM public.tenants
+                WHERE (SELECT count(*) FROM public.tenants) = 1
+                LIMIT 1;
             END IF;
         END IF;
     END IF;
@@ -1044,5 +1045,7 @@ CREATE POLICY intake_apps_modify_admin ON public.crm_intake_applications
         tenant_id = public.get_auth_tenant_id() AND
         (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('SUPER_ADMIN', 'FINANCE_MANAGER', 'FINANCE_STAFF', 'STAFF', 'admin', 'staff', 'super admin'))
     );
+
+NOTIFY pgrst, 'reload schema';
 
 COMMIT;

@@ -5684,7 +5684,13 @@ const dbRepo = {
         throw new Error(`Cannot save to PostgreSQL: Invalid or non-authoritative tenant UUID ('${tenantId}')`);
       }
 
-      const { data, error } = await supabaseClient.from(tableName).upsert(payload, idField);
+      let saveRes;
+      if (tableName === 'crm_intake_applications') {
+        saveRes = await supabaseClient.from(tableName).update(payload, { id: record.id });
+      } else {
+        saveRes = await supabaseClient.from(tableName).upsert(payload, idField);
+      }
+      const { data, error } = saveRes;
       if (error) {
         console.error(`PostgreSQL save error on table ${tableName}:`, error);
         state.supabase.lastError = `Save failed on ${tableName}: ${error.message || JSON.stringify(error)}`;
@@ -6872,6 +6878,52 @@ function transformEntityForPostgres(entity, item, tenantId) {
         payment_reliability_score: Number(item.paymentReliabilityScore !== undefined ? item.paymentReliabilityScore : (item.payment_reliability_score !== undefined ? item.payment_reliability_score : 100)),
         days_overdue: Number(item.daysOverdue !== undefined ? item.daysOverdue : (item.days_overdue !== undefined ? item.days_overdue : 0)),
         last_evaluated_at: item.lastEvaluatedAt || item.last_evaluated_at || new Date().toISOString()
+      };
+
+    case 'crm_intake_applications':
+      return {
+        id: item.id,
+        tenant_id: tenantId,
+        application_number: item.applicationNumber || item.application_number,
+        source: item.source || 'WEB_INTAKE',
+        source_submission_id: item.sourceSubmissionId || item.source_submission_id,
+        submitted_at: item.submittedAt || item.submitted_at || new Date().toISOString(),
+        status: item.status || 'NEW',
+        first_name: item.firstName || item.first_name,
+        last_name: item.lastName || item.last_name,
+        email: item.email || null,
+        phone: item.phone || null,
+        date_of_birth: item.dateOfBirth || item.date_of_birth || null,
+        gender: item.gender || null,
+        marital_status: item.maritalStatus || item.marital_status || null,
+        state_of_origin: item.stateOfOrigin || item.state_of_origin || null,
+        nationality: item.nationality || 'Nigerian',
+        address: item.address || null,
+        programme_id: item.programmeId || item.programme_id || null,
+        expertise_level: item.expertiseLevel || item.expertise_level || null,
+        preferred_schedule: item.preferredSchedule || item.preferred_schedule || null,
+        preferred_start_date: item.preferredStartDate || item.preferred_start_date || null,
+        preferred_duration: item.preferredDuration || item.preferred_duration || null,
+        delivery_mode: item.deliveryMode || item.delivery_mode || 'IN_PERSON',
+        sponsor_type: item.sponsorType || item.sponsor_type || 'Self-sponsored',
+        sponsor_name: item.sponsorName || item.sponsor_name || null,
+        sponsor_phone: item.sponsorPhone || item.sponsor_phone || null,
+        sponsor_email: item.sponsorEmail || item.sponsor_email || null,
+        claimed_student_number: item.claimedStudentNumber || item.claimed_student_number || null,
+        employment_status: item.employmentStatus || item.employment_status || null,
+        referral_source: item.referralSource || item.referral_source || null,
+        notes: item.notes || null,
+        agreed_tuition_fee: item.agreedTuitionFee !== undefined ? item.agreedTuitionFee : (item.agreed_tuition_fee || 0),
+        consent_acknowledged: item.consentAcknowledged !== undefined ? item.consentAcknowledged : true,
+        matched_student_id: item.matchedStudentId || item.matched_student_id || null,
+        enquiry_id: item.enquiryId || item.enquiry_id || null,
+        enrolment_id: item.enrolmentId || item.enrolment_id || null,
+        identity_confidence: item.identityConfidence || item.identity_confidence || null,
+        match_notes: item.matchNotes || item.match_notes || null,
+        review_reason: item.reviewReason || item.review_reason || null,
+        applicant_data: item.applicantData || item.applicant_data || {},
+        created_at: item.createdAt || item.created_at || new Date().toISOString(),
+        updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
     default:
@@ -13293,11 +13345,77 @@ async function submitAuthoritativeApplication(payload, source = 'WEB_INTAKE', so
     updatedAt: new Date().toISOString()
   };
 
+  // 10. Authoritative Ingestion via Database RPC (Fail-Closed to RLS)
+  if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof supabaseClient.isConfigured === 'function' && supabaseClient.isConfigured() && typeof supabaseClient.rpc === 'function') {
+    try {
+      const rpcParams = {
+        p_source: source,
+        p_source_submission_id: finalSubmissionId,
+        p_first_name: normalized.firstName,
+        p_last_name: normalized.lastName,
+        p_email: normalized.email || null,
+        p_phone: normalized.phone || null,
+        p_date_of_birth: normalized.dateOfBirth || null,
+        p_gender: normalized.gender || null,
+        p_marital_status: normalized.maritalStatus || null,
+        p_state_of_origin: normalized.stateOfOrigin || null,
+        p_nationality: normalized.nationality || 'Nigerian',
+        p_address: normalized.address || null,
+        p_programme_id: normalized.programmeId || null,
+        p_expertise_level: normalized.expertiseLevel || null,
+        p_preferred_schedule: normalized.preferredSchedule || null,
+        p_preferred_start_date: normalized.preferredStartDate || null,
+        p_preferred_duration: normalized.preferredDuration || null,
+        p_delivery_mode: normalized.deliveryMode || 'IN_PERSON',
+        p_sponsor_type: normalized.sponsorType || 'Self-sponsored',
+        p_sponsor_name: normalized.sponsorName || null,
+        p_sponsor_phone: normalized.sponsorPhone || null,
+        p_sponsor_email: normalized.sponsorEmail || null,
+        p_claimed_student_number: normalized.claimedStudentNumber || null,
+        p_employment_status: normalized.employmentStatus || null,
+        p_referral_source: normalized.referralSource || null,
+        p_notes: normalized.notes || null,
+        p_agreed_tuition_fee: normalized.agreedTuitionFee || 0,
+        p_consent_acknowledged: true,
+        p_honeypot: payload.honeypot || null
+      };
+
+      const rpcRes = await supabaseClient.rpc('submit_applicant_intake', rpcParams);
+      if (!rpcRes || !rpcRes.ok || rpcRes.error) {
+        const errorMsg = (rpcRes && rpcRes.error && (rpcRes.error.message || rpcRes.error.details)) || 'Database intake ingestion failed';
+        console.error('[CRM Intake RPC] submit_applicant_intake failed on PostgreSQL:', errorMsg);
+        throw new Error(`APPLICATION_SUBMISSION_FAILED: ${errorMsg}`);
+      }
+      const d = rpcRes.data;
+      if (d && d.is_replay) {
+        return {
+          success: true,
+          isReplay: true,
+          applicationId: d.application_id || appId,
+          applicationNumber: d.application_number,
+          status: d.status,
+          identityConfidence: d.identity_confidence || identityConfidence,
+          matchedStudentId: d.matched_student_id || matchedStudentId,
+          programmeId: d.programme_id || applicationRecord.programmeId,
+          message: d.message || 'Application already received (idempotent replay)'
+        };
+      }
+      if (d && d.application_id) applicationRecord.id = d.application_id;
+      if (d && d.application_number) {
+        applicationNumber = d.application_number;
+        applicationRecord.applicationNumber = d.application_number;
+      }
+      if (d && d.status) applicationRecord.status = d.status;
+      if (d && d.matched_student_id !== undefined) applicationRecord.matchedStudentId = d.matched_student_id;
+      if (d && d.identity_confidence !== undefined) applicationRecord.identityConfidence = d.identity_confidence;
+    } catch (rpcErr) {
+      console.error('[CRM Intake RPC] submit_applicant_intake exception:', rpcErr);
+      throw new Error(`APPLICATION_SUBMISSION_FAILED: ${rpcErr.message || 'Network or database failure during application submission'}`);
+    }
+  }
+
   if (!state.intakeApplications) state.intakeApplications = [];
   state.intakeApplications.push(applicationRecord);
-  if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord && supabaseClient && supabaseClient.isConfigured()) {
-    await dbRepo.saveRecord(STORE_KEY_INTAKE_APPLICATIONS, applicationRecord);
-  }
   await safeSet(STORE_KEY_INTAKE_APPLICATIONS, state.intakeApplications);
 
   // 10. Audit Logging
@@ -13525,6 +13643,14 @@ async function convertApplicationToStudentAndEnrolment(applicationId, options = 
     let createdEnrolment = null;
     const cohortId = options.cohortId || options.cohort_id;
     if (cohortId && app.programmeId) {
+      const cohort = (state.cohorts || []).find(c => c.id === cohortId);
+      if (!cohort || (cohort.tenantId && cohort.tenantId !== tenantId)) {
+        throw new Error(`COHORT_NOT_FOUND: Cohort '${cohortId}' does not exist or belongs to another tenant`);
+      }
+      if (cohort.programmeId && cohort.programmeId !== app.programmeId) {
+        throw new Error(`COHORT_PROGRAMME_MISMATCH: Cohort '${cohortId}' belongs to programme '${cohort.programmeId}' but application is for '${app.programmeId}'`);
+      }
+
       const prog = findProgrammeById(app.programmeId);
       if (!prog) {
         throw new Error(`PROGRAMME_NOT_FOUND: Programme '${app.programmeId}' not found`);
@@ -13559,6 +13685,28 @@ async function convertApplicationToStudentAndEnrolment(applicationId, options = 
     app.matchedStudentId = targetStudent.id;
     app.enrolmentId = createdEnrolment ? createdEnrolment.id : null;
     app.updatedAt = new Date().toISOString();
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof supabaseClient.isConfigured === 'function' && supabaseClient.isConfigured() && typeof supabaseClient.rpc === 'function') {
+      try {
+        const rpcRes = await supabaseClient.rpc('convert_intake_application', {
+          p_application_id: app.id,
+          p_options: { cohort_id: cohortId || null }
+        });
+        if (!rpcRes || !rpcRes.ok || rpcRes.error) {
+          const errorMsg = (rpcRes && rpcRes.error && (rpcRes.error.message || rpcRes.error.details)) || 'Database intake conversion failed';
+          console.error('[CRM Conversion RPC] convert_intake_application failed on PostgreSQL:', errorMsg);
+          throw new Error(`CONVERSION_FAILED: ${errorMsg}`);
+        }
+        const d = rpcRes.data;
+        if (d && d.student_id) targetStudent.id = d.student_id;
+        if (d && d.student_number) targetStudent.studentNumber = d.student_number;
+        if (createdEnrolment && d && d.enrolment_id) createdEnrolment.id = d.enrolment_id;
+        if (createdEnrolment && d && d.enrolment_number) createdEnrolment.enrolmentNumber = d.enrolment_number;
+      } catch (rpcErr) {
+        console.error('[CRM Conversion RPC] convert_intake_application exception:', rpcErr);
+        throw new Error(`CONVERSION_FAILED: ${rpcErr.message || 'Database error during application conversion'}`);
+      }
+    }
+
     if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord && supabaseClient && supabaseClient.isConfigured()) {
       await dbRepo.saveRecord(STORE_KEY_INTAKE_APPLICATIONS, app);
     }
