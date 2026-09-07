@@ -36,7 +36,14 @@ const suites = [
   { name: 'Phase 15: Real Supabase Cloud Migration & Production Authority Certification', file: 'test_phase15_real_cloud_migration.js' },
   { name: 'Phase 17: Production Supabase Schema Deployment & Verified Migration Readiness', file: 'test_phase17_production_schema_deployment.js' },
   { name: 'Phase 18: Authentication Session Synchronization, Proactive Refresh & Reconciliation Integrity', file: 'test_phase18_auth_reconciliation_repair.js' },
-  { name: 'Phase 19: Historical Migration Transformation Repair & Schema Whitelist Enforcement', file: 'test_phase19_migration_transformation_repair.js' }
+  { name: 'Phase 19: Historical Migration Transformation Repair & Schema Whitelist Enforcement', file: 'test_phase19_migration_transformation_repair.js' },
+  { name: 'CRM & Training Phase 1: Authoritative Student Model', file: 'scripts/test_phase1_authoritative_student_model.js' },
+  { name: 'Phase 1 Security Gate: Adversarial Security Certification', file: 'scripts/test_phase1_security_gate.js' },
+  { name: 'Phase 2: Programme, Cohort & Authoritative Enrolment Model', file: 'scripts/test_phase2_programme_cohort_enrolment.js' },
+  { name: 'Phase 3: Authoritative Training Delivery, Attendance & Completion Model', file: 'scripts/test_phase3_training_attendance_completion.js' },
+  { name: 'Phase 4: Authoritative Certificate of Completion Model', file: 'scripts/test_phase4_certificates.js' },
+  { name: 'Phase 5: Admin CRM & Training Operations Model', file: 'scripts/test_phase5_admin_crm_training_ops.js' },
+  { name: 'Phase 5.1: Professional CRM Intake & Applicant Management', file: 'scripts/test_phase5_1_crm_intake.js' }
 ];
 
 let totalPassed = 0;

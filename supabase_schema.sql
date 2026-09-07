@@ -73,21 +73,31 @@ CREATE TABLE IF NOT EXISTS public.expense_categories (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. Programmes Table
+-- 6. Programmes Table (Authoritative Educational Catalog)
 CREATE TABLE IF NOT EXISTS public.programmes (
     id TEXT PRIMARY KEY,
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
-    name TEXT NOT NULL,
     code TEXT NOT NULL,
-    tuition_fee NUMERIC(14,2) NOT NULL CHECK (tuition_fee >= 0),
+    name TEXT NOT NULL,
+    description TEXT,
+    duration_weeks INT NOT NULL DEFAULT 8 CHECK (duration_weeks > 0),
+    session_count INT NOT NULL DEFAULT 16 CHECK (session_count > 0),
+    tuition_fee NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (tuition_fee >= 0),
     max_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (max_discount_pct BETWEEN 0 AND 100),
     allow_installments BOOLEAN NOT NULL DEFAULT true,
     installment_first_pct NUMERIC(5,2) NOT NULL DEFAULT 60 CHECK (installment_first_pct BETWEEN 0 AND 100),
     installment_second_pct NUMERIC(5,2) NOT NULL DEFAULT 40 CHECK (installment_second_pct BETWEEN 0 AND 100),
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft')),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_programme_installments CHECK (NOT allow_installments OR (installment_first_pct + installment_second_pct = 100)),
+    CONSTRAINT uq_programmes_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_programmes_tenant_code UNIQUE (tenant_id, code)
 );
+
+CREATE INDEX IF NOT EXISTS idx_programmes_tenant ON public.programmes(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_programmes_status ON public.programmes(tenant_id, status);
 
 -- 7. Finance Approval Settings
 CREATE TABLE IF NOT EXISTS public.finance_approval_settings (
@@ -169,7 +179,8 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by UUID REFERENCES auth.users(id),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(tenant_id, invoice_no)
+    UNIQUE(tenant_id, invoice_no),
+    CONSTRAINT uq_invoices_tenant_id UNIQUE (tenant_id, id)
 );
 
 -- 12. Invoice Line Items Table
@@ -381,7 +392,8 @@ CREATE TABLE IF NOT EXISTS public.personnel (
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(tenant_id, employee_id)
+    UNIQUE(tenant_id, employee_id),
+    CONSTRAINT uq_personnel_tenant_id UNIQUE (tenant_id, id)
 );
 
 -- 24. Payslips & Compensation Statements
@@ -476,25 +488,11 @@ CREATE TABLE IF NOT EXISTS public.enquiries (
     status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'INTERESTED', 'APPLIED', 'OFFERED', 'ENROLLED', 'LOST')),
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_enquiries_tenant_id UNIQUE (tenant_id, id)
 );
 
--- 28. Student Enrolments
-CREATE TABLE IF NOT EXISTS public.enrolments (
-    id TEXT PRIMARY KEY,
-    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
-    enquiry_id TEXT REFERENCES public.enquiries(id),
-    student_name TEXT NOT NULL,
-    student_email TEXT,
-    student_phone TEXT,
-    programme_id TEXT NOT NULL REFERENCES public.programmes(id),
-    cohort TEXT,
-    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN')),
-    enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 29. Customer Registry
+-- 28. Customer Registry
 CREATE TABLE IF NOT EXISTS public.customers (
     id TEXT PRIMARY KEY,
     tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
@@ -506,8 +504,271 @@ CREATE TABLE IF NOT EXISTS public.customers (
     total_paid NUMERIC(14,2) DEFAULT 0,
     outstanding_balance NUMERIC(14,2) DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_customers_tenant_id UNIQUE (tenant_id, id)
 );
+
+-- 29. Authoritative Student Registry (Training Identity)
+CREATE TABLE IF NOT EXISTS public.students (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    customer_id TEXT,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    student_number TEXT NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    gender TEXT,
+    address TEXT,
+    emergency_contact_name TEXT,
+    emergency_contact_phone TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'SUSPENDED', 'WITHDRAWN')),
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id, student_number),
+    UNIQUE(tenant_id, email),
+    CONSTRAINT uq_students_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT fk_students_customer_tenant FOREIGN KEY (tenant_id, customer_id)
+        REFERENCES public.customers(tenant_id, id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_students_tenant_status ON public.students(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_students_tenant_email ON public.students(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_students_customer_id ON public.students(customer_id);
+
+-- 30. Cohorts Model (Programme Offerings & Capacity)
+CREATE TABLE IF NOT EXISTS public.cohorts (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    programme_id TEXT NOT NULL,
+    lead_facilitator_id TEXT,
+    cohort_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    delivery_mode TEXT NOT NULL DEFAULT 'IN_PERSON' CHECK (delivery_mode IN ('IN_PERSON', 'ONLINE', 'HYBRID')),
+    capacity INTEGER NOT NULL CHECK (capacity > 0),
+    status TEXT NOT NULL DEFAULT 'UPCOMING' CHECK (status IN ('PLANNING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_cohort_dates CHECK (end_date >= start_date),
+    CONSTRAINT uq_cohorts_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_cohorts_tenant_code UNIQUE (tenant_id, cohort_code),
+    CONSTRAINT uq_cohorts_tenant_prog UNIQUE (tenant_id, id, programme_id),
+    CONSTRAINT fk_cohorts_programme_tenant FOREIGN KEY (tenant_id, programme_id)
+        REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_cohorts_facilitator_tenant FOREIGN KEY (tenant_id, lead_facilitator_id)
+        REFERENCES public.personnel(tenant_id, id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cohorts_tenant_status ON public.cohorts(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_cohorts_tenant_prog ON public.cohorts(tenant_id, programme_id);
+CREATE INDEX IF NOT EXISTS idx_cohorts_tenant_dates ON public.cohorts(tenant_id, start_date, end_date);
+
+-- 31. Authoritative Student Enrolments (Contractual Lifecycle)
+CREATE TABLE IF NOT EXISTS public.enrolments (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    student_id TEXT NOT NULL,
+    programme_id TEXT NOT NULL,
+    cohort_id TEXT NOT NULL,
+    invoice_id TEXT,
+    customer_id TEXT,
+    enquiry_id TEXT,
+    enrolment_number TEXT NOT NULL,
+    enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    agreed_tuition_fee NUMERIC(14,2) NOT NULL CHECK (agreed_tuition_fee >= 0),
+    discount_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+    discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (discount_pct >= 0 AND discount_pct <= 100),
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING_PAYMENT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN', 'CANCELLED')),
+    completion_date DATE,
+    completion_status TEXT NOT NULL DEFAULT 'NOT_ELIGIBLE' CHECK (completion_status IN ('NOT_ELIGIBLE', 'ELIGIBLE', 'VERIFIED')),
+    completion_verified_by UUID REFERENCES auth.users(id),
+    completion_verified_at TIMESTAMPTZ,
+    completion_notes TEXT,
+    completion_attendance_pct NUMERIC(5,2) CHECK (completion_attendance_pct IS NULL OR (completion_attendance_pct >= 0 AND completion_attendance_pct <= 100)),
+    certificate_issued BOOLEAN NOT NULL DEFAULT false,
+    certificate_number TEXT,
+    certificate_issued_at TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_enrolments_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_enrolments_tenant_number UNIQUE (tenant_id, enrolment_number),
+    CONSTRAINT uq_enrolments_student_cohort UNIQUE (tenant_id, student_id, cohort_id),
+    CONSTRAINT uq_enrolments_tenant_cohort UNIQUE (tenant_id, id, cohort_id),
+    CONSTRAINT fk_enrolments_student_tenant FOREIGN KEY (tenant_id, student_id)
+        REFERENCES public.students(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_enrolments_programme_tenant FOREIGN KEY (tenant_id, programme_id)
+        REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_enrolments_cohort_tenant FOREIGN KEY (tenant_id, cohort_id)
+        REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_enrolments_cohort_prog_tenant FOREIGN KEY (tenant_id, cohort_id, programme_id)
+        REFERENCES public.cohorts(tenant_id, id, programme_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_enrolments_invoice_tenant FOREIGN KEY (tenant_id, invoice_id)
+        REFERENCES public.invoices(tenant_id, id) ON DELETE SET NULL,
+    CONSTRAINT fk_enrolments_customer_tenant FOREIGN KEY (tenant_id, customer_id)
+        REFERENCES public.customers(tenant_id, id) ON DELETE SET NULL,
+    CONSTRAINT fk_enrolments_enquiry_tenant FOREIGN KEY (tenant_id, enquiry_id)
+        REFERENCES public.enquiries(tenant_id, id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrolments_tenant_status ON public.enrolments(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_enrolments_tenant_student ON public.enrolments(tenant_id, student_id);
+CREATE INDEX IF NOT EXISTS idx_enrolments_tenant_cohort ON public.enrolments(tenant_id, cohort_id);
+CREATE INDEX IF NOT EXISTS idx_enrolments_tenant_programme ON public.enrolments(tenant_id, programme_id);
+CREATE INDEX IF NOT EXISTS idx_enrolments_invoice_id ON public.enrolments(invoice_id);
+
+-- 32. Authoritative Cohort Training Sessions
+CREATE TABLE IF NOT EXISTS public.training_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    cohort_id TEXT NOT NULL,
+    facilitator_id TEXT NOT NULL,
+    session_number INT NOT NULL CHECK (session_number > 0),
+    session_title TEXT NOT NULL,
+    session_date DATE NOT NULL,
+    start_time TIME,
+    end_time TIME,
+    delivery_mode TEXT NOT NULL DEFAULT 'IN_PERSON' CHECK (delivery_mode IN ('IN_PERSON', 'ONLINE', 'HYBRID')),
+    location TEXT,
+    status TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'COMPLETED', 'CANCELLED', 'RESCHEDULED')),
+    notes TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_training_sessions_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_training_sessions_tenant_number UNIQUE (tenant_id, cohort_id, session_number),
+    CONSTRAINT uq_training_sessions_tenant_cohort UNIQUE (tenant_id, id, cohort_id),
+    CONSTRAINT fk_training_sessions_tenant_cohort FOREIGN KEY (tenant_id, cohort_id)
+        REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_training_sessions_tenant_facilitator FOREIGN KEY (tenant_id, facilitator_id)
+        REFERENCES public.personnel(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_training_session_times CHECK (
+        end_time IS NULL OR start_time IS NULL OR end_time > start_time
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_sessions_tenant_cohort ON public.training_sessions(tenant_id, cohort_id);
+CREATE INDEX IF NOT EXISTS idx_training_sessions_tenant_facilitator ON public.training_sessions(tenant_id, facilitator_id);
+CREATE INDEX IF NOT EXISTS idx_training_sessions_tenant_date ON public.training_sessions(tenant_id, session_date);
+CREATE INDEX IF NOT EXISTS idx_training_sessions_tenant_status ON public.training_sessions(tenant_id, status);
+
+-- 33. Authoritative Training Attendance (With Database-Enforced Cohort Match)
+CREATE TABLE IF NOT EXISTS public.attendance (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    cohort_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    enrolment_id TEXT NOT NULL,
+    attendance_status TEXT NOT NULL CHECK (attendance_status IN ('PRESENT', 'ABSENT', 'LATE', 'EXCUSED')),
+    check_in_at TIMESTAMPTZ,
+    check_out_at TIMESTAMPTZ,
+    facilitator_note TEXT,
+    recorded_by UUID REFERENCES auth.users(id),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT uq_attendance_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_attendance_session_enrolment UNIQUE (tenant_id, session_id, enrolment_id),
+    CONSTRAINT fk_attendance_session_cohort FOREIGN KEY (tenant_id, session_id, cohort_id)
+        REFERENCES public.training_sessions(tenant_id, id, cohort_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_attendance_enrolment_cohort FOREIGN KEY (tenant_id, enrolment_id, cohort_id)
+        REFERENCES public.enrolments(tenant_id, id, cohort_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_tenant_cohort ON public.attendance(tenant_id, cohort_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_tenant_session ON public.attendance(tenant_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_tenant_enrolment ON public.attendance(tenant_id, enrolment_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_tenant_status ON public.attendance(tenant_id, attendance_status);
+
+-- 34. Authoritative Facilitator Training Delivery Reports
+CREATE TABLE IF NOT EXISTS public.facilitator_reports (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    cohort_id TEXT NOT NULL,
+    session_id TEXT,
+    facilitator_id TEXT NOT NULL,
+    report_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    session_summary TEXT NOT NULL,
+    topics_covered TEXT NOT NULL,
+    attendance_observations TEXT,
+    student_participation_notes TEXT,
+    issues_encountered TEXT,
+    follow_up_recommendations TEXT,
+    status TEXT NOT NULL DEFAULT 'SUBMITTED' CHECK (status IN ('DRAFT', 'SUBMITTED', 'REVIEWED')),
+    reviewed_by UUID REFERENCES auth.users(id),
+    reviewed_at TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_facilitator_reports_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT fk_facilitator_reports_cohort FOREIGN KEY (tenant_id, cohort_id)
+        REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_facilitator_reports_facilitator FOREIGN KEY (tenant_id, facilitator_id)
+        REFERENCES public.personnel(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_facilitator_reports_session_cohort FOREIGN KEY (tenant_id, session_id, cohort_id)
+        REFERENCES public.training_sessions(tenant_id, id, cohort_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_facilitator_reports_tenant_cohort ON public.facilitator_reports(tenant_id, cohort_id);
+CREATE INDEX IF NOT EXISTS idx_facilitator_reports_tenant_facilitator ON public.facilitator_reports(tenant_id, facilitator_id);
+CREATE INDEX IF NOT EXISTS idx_facilitator_reports_tenant_session ON public.facilitator_reports(tenant_id, session_id);
+
+-- 35. Authoritative Certificates of Completion
+CREATE TABLE IF NOT EXISTS public.certificates (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    student_id TEXT NOT NULL,
+    enrolment_id TEXT NOT NULL,
+    programme_id TEXT NOT NULL,
+    cohort_id TEXT NOT NULL,
+    certificate_number TEXT NOT NULL,
+    issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    completion_date DATE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('DRAFT', 'ISSUED', 'REVOKED')),
+    issued_by UUID REFERENCES auth.users(id),
+    verification_token TEXT NOT NULL,
+    student_name_snapshot TEXT NOT NULL,
+    programme_name_snapshot TEXT NOT NULL,
+    programme_code_snapshot TEXT NOT NULL,
+    cohort_name_snapshot TEXT NOT NULL,
+    cohort_code_snapshot TEXT NOT NULL,
+    attendance_pct_snapshot NUMERIC(5,2) CHECK (attendance_pct_snapshot IS NULL OR (attendance_pct_snapshot >= 0 AND attendance_pct_snapshot <= 100)),
+    revocation_reason TEXT,
+    revoked_by UUID REFERENCES auth.users(id),
+    revoked_at TIMESTAMPTZ,
+    reissued_from_certificate_id TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_certificates_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_certificates_tenant_number UNIQUE (tenant_id, certificate_number),
+    CONSTRAINT uq_certificates_tenant_token UNIQUE (tenant_id, verification_token),
+    CONSTRAINT fk_certificates_tenant_student FOREIGN KEY (tenant_id, student_id)
+        REFERENCES public.students(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_certificates_tenant_enrolment FOREIGN KEY (tenant_id, enrolment_id)
+        REFERENCES public.enrolments(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_certificates_tenant_programme FOREIGN KEY (tenant_id, programme_id)
+        REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_certificates_tenant_cohort FOREIGN KEY (tenant_id, cohort_id)
+        REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_certificates_tenant_enrolment_cohort FOREIGN KEY (tenant_id, enrolment_id, cohort_id)
+        REFERENCES public.enrolments(tenant_id, id, cohort_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_certificates_tenant_student ON public.certificates(tenant_id, student_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_tenant_enrolment ON public.certificates(tenant_id, enrolment_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_tenant_cohort ON public.certificates(tenant_id, cohort_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_tenant_status ON public.certificates(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_certificates_verification_token ON public.certificates(verification_token);
+
+-- Exactly one active ISSUED certificate per enrolment
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_certificate_per_enrolment
+    ON public.certificates(tenant_id, enrolment_id)
+    WHERE status = 'ISSUED';
 
 -- =============================================================================
 -- PHASE 6 — OPERATIONAL & ENGAGEMENT TABLES
@@ -1185,6 +1446,318 @@ CREATE TRIGGER trg_period_lock_bank_reconciliations
 BEFORE INSERT OR UPDATE OR DELETE ON public.bank_reconciliations
 FOR EACH ROW EXECUTE FUNCTION public.check_financial_period_lock();
 
+-- Cohort Capacity Concurrency Lock Enforcement
+CREATE OR REPLACE FUNCTION public.check_cohort_capacity_before_enrolment()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_capacity INTEGER;
+    v_enrolled_count INTEGER;
+BEGIN
+    -- Only enforce on active, confirmed, or completed enrolments
+    IF NEW.status IN ('PENDING_PAYMENT', 'CONFIRMED', 'ACTIVE', 'COMPLETED') THEN
+        -- Pessimistic row lock on the cohort to prevent race conditions
+        SELECT capacity INTO v_capacity
+        FROM public.cohorts
+        WHERE tenant_id = NEW.tenant_id AND id = NEW.cohort_id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'COHORT NOT FOUND: Cohort % does not exist in this tenant.', NEW.cohort_id;
+        END IF;
+
+        -- Count existing active enrolments in this cohort
+        SELECT COUNT(*) INTO v_enrolled_count
+        FROM public.enrolments
+        WHERE tenant_id = NEW.tenant_id 
+          AND cohort_id = NEW.cohort_id
+          AND status IN ('PENDING_PAYMENT', 'CONFIRMED', 'ACTIVE', 'COMPLETED')
+          AND id != COALESCE(NEW.id, '___NEW___');
+
+        IF v_enrolled_count >= v_capacity THEN
+            RAISE EXCEPTION 'COHORT CAPACITY EXCEEDED: Cohort % is at capacity (%/%). Enrolment rejected.',
+                NEW.cohort_id, v_enrolled_count, v_capacity;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Revoke direct RPC execution on trigger function
+REVOKE ALL ON FUNCTION public.check_cohort_capacity_before_enrolment() FROM PUBLIC, authenticated, anon;
+
+DROP TRIGGER IF EXISTS trg_check_cohort_capacity ON public.enrolments;
+CREATE TRIGGER trg_check_cohort_capacity
+BEFORE INSERT OR UPDATE OF cohort_id, status ON public.enrolments
+FOR EACH ROW
+EXECUTE FUNCTION public.check_cohort_capacity_before_enrolment();
+
+-- 3. Prevent attendance on cancelled training sessions
+CREATE OR REPLACE FUNCTION public.check_session_status_before_attendance()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_session_status TEXT;
+BEGIN
+    SELECT status INTO v_session_status
+    FROM public.training_sessions
+    WHERE tenant_id = NEW.tenant_id AND id = NEW.session_id;
+
+    IF v_session_status IS NULL THEN
+        RAISE EXCEPTION 'TRAINING_SESSION_NOT_FOUND: Referenced training session does not exist';
+    END IF;
+
+    IF v_session_status = 'CANCELLED' THEN
+        RAISE EXCEPTION 'INVALID_OPERATION: Cannot record attendance against a cancelled training session';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.check_session_status_before_attendance() FROM PUBLIC, authenticated, anon;
+
+DROP TRIGGER IF EXISTS trg_check_session_status_before_attendance ON public.attendance;
+CREATE TRIGGER trg_check_session_status_before_attendance
+BEFORE INSERT OR UPDATE OF session_id, attendance_status ON public.attendance
+FOR EACH ROW
+EXECUTE FUNCTION public.check_session_status_before_attendance();
+
+-- 4. Validate completion verifier tenant membership and role
+CREATE OR REPLACE FUNCTION public.validate_completion_verifier()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_is_authorized BOOLEAN;
+BEGIN
+    IF (NEW.completion_status = 'VERIFIED' AND (OLD.completion_status IS DISTINCT FROM 'VERIFIED' OR OLD.completion_verified_by IS DISTINCT FROM NEW.completion_verified_by)) THEN
+        v_user_id := auth.uid();
+
+        IF v_user_id IS NOT NULL THEN
+            IF public.is_super_admin() OR public.is_staff() THEN
+                v_is_authorized := TRUE;
+            ELSE
+                SELECT EXISTS (
+                    SELECT 1 FROM public.cohorts c
+                    JOIN public.personnel p ON p.id = c.lead_facilitator_id
+                    WHERE c.tenant_id = NEW.tenant_id 
+                      AND c.id = NEW.cohort_id 
+                      AND p.user_id = v_user_id
+                      AND p.tenant_id = NEW.tenant_id
+                ) INTO v_is_authorized;
+            END IF;
+
+            IF NOT COALESCE(v_is_authorized, FALSE) THEN
+                RAISE EXCEPTION 'UNAUTHORIZED: Only an authorized Administrator or the assigned Cohort Lead Facilitator can verify training completion';
+            END IF;
+
+            NEW.completion_verified_by := v_user_id;
+        END IF;
+
+        IF NEW.completion_verified_at IS NULL THEN
+            NEW.completion_verified_at := NOW();
+        END IF;
+        IF NEW.completion_date IS NULL THEN
+            NEW.completion_date := CURRENT_DATE;
+        END IF;
+        NEW.status := 'COMPLETED';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.validate_completion_verifier() FROM PUBLIC, authenticated, anon;
+
+DROP TRIGGER IF EXISTS trg_validate_completion_verifier ON public.enrolments;
+CREATE TRIGGER trg_validate_completion_verifier
+BEFORE UPDATE OF completion_status, completion_verified_by ON public.enrolments
+FOR EACH ROW
+EXECUTE FUNCTION public.validate_completion_verifier();
+
+-- 5. Validate certificate eligibility before issuance
+CREATE OR REPLACE FUNCTION public.validate_certificate_eligibility_before_insert()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_enrolment RECORD;
+    v_active_exists BOOLEAN;
+BEGIN
+    -- 1. Fetch referenced authoritative enrolment
+    SELECT * INTO v_enrolment
+    FROM public.enrolments
+    WHERE id = NEW.enrolment_id AND tenant_id = NEW.tenant_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'ENROLMENT_NOT_FOUND: Referenced enrolment % does not exist in tenant %', NEW.enrolment_id, NEW.tenant_id;
+    END IF;
+
+    -- 2. Verify completion requirement
+    IF v_enrolment.status != 'COMPLETED' OR v_enrolment.completion_status != 'VERIFIED' THEN
+        RAISE EXCEPTION 'INELIGIBLE_CERTIFICATE_ISSUANCE: Cannot issue certificate for enrolment that is not completed and verified (status: %, completion_status: %)', v_enrolment.status, v_enrolment.completion_status;
+    END IF;
+
+    -- 3. Verify integrity of student, programme, and cohort
+    IF NEW.student_id != v_enrolment.student_id THEN
+        RAISE EXCEPTION 'STUDENT_MISMATCH: Certificate student % does not match enrolment student %', NEW.student_id, v_enrolment.student_id;
+    END IF;
+
+    IF NEW.programme_id != v_enrolment.programme_id THEN
+        RAISE EXCEPTION 'PROGRAMME_MISMATCH: Certificate programme % does not match enrolment programme %', NEW.programme_id, v_enrolment.programme_id;
+    END IF;
+
+    IF NEW.cohort_id != v_enrolment.cohort_id THEN
+        RAISE EXCEPTION 'COHORT_MISMATCH: Certificate cohort % does not match enrolment cohort %', NEW.cohort_id, v_enrolment.cohort_id;
+    END IF;
+
+    -- 4. Duplicate active certificate check
+    IF NEW.status = 'ISSUED' THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.certificates
+            WHERE tenant_id = NEW.tenant_id
+              AND enrolment_id = NEW.enrolment_id
+              AND status = 'ISSUED'
+              AND id != NEW.id
+        ) INTO v_active_exists;
+
+        IF v_active_exists THEN
+            RAISE EXCEPTION 'DUPLICATE_ACTIVE_CERTIFICATE: An active certificate has already been issued for enrolment %', NEW.enrolment_id;
+        END IF;
+
+        -- 5. Synchronize denormalized summary fields on enrolments
+        UPDATE public.enrolments
+        SET certificate_issued = true,
+            certificate_number = NEW.certificate_number,
+            certificate_issued_at = NOW(),
+            updated_at = NOW()
+        WHERE id = NEW.enrolment_id AND tenant_id = NEW.tenant_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.validate_certificate_eligibility_before_insert() FROM PUBLIC, authenticated, anon;
+
+DROP TRIGGER IF EXISTS trg_validate_certificate_eligibility ON public.certificates;
+CREATE TRIGGER trg_validate_certificate_eligibility
+BEFORE INSERT ON public.certificates
+FOR EACH ROW
+EXECUTE FUNCTION public.validate_certificate_eligibility_before_insert();
+
+-- 6. Prevent mutation of issued certificates and enforce controlled revocation
+CREATE OR REPLACE FUNCTION public.prevent_certificate_mutation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    -- Cannot mutate revoked certificates
+    IF OLD.status = 'REVOKED' THEN
+        RAISE EXCEPTION 'CANNOT_MUTATE_REVOKED_CERTIFICATE: Revoked certificates cannot be modified or re-activated';
+    END IF;
+
+    -- Allow revocation transition from ISSUED -> REVOKED
+    IF OLD.status = 'ISSUED' AND NEW.status = 'REVOKED' THEN
+        IF NEW.revocation_reason IS NULL OR LENGTH(TRIM(NEW.revocation_reason)) = 0 THEN
+            RAISE EXCEPTION 'REVOCATION_REASON_REQUIRED: Certificate revocation strictly requires a documented justification reason';
+        END IF;
+
+        IF NEW.revoked_at IS NULL THEN
+            NEW.revoked_at := NOW();
+        END IF;
+
+        -- Synchronize denormalized summary field on enrolments
+        UPDATE public.enrolments
+        SET certificate_issued = false,
+            updated_at = NOW()
+        WHERE id = NEW.enrolment_id AND tenant_id = NEW.tenant_id;
+
+        RETURN NEW;
+    END IF;
+
+    -- If already issued, core credentials cannot be modified
+    IF OLD.status = 'ISSUED' THEN
+        IF NEW.certificate_number IS DISTINCT FROM OLD.certificate_number
+           OR NEW.student_id IS DISTINCT FROM OLD.student_id
+           OR NEW.enrolment_id IS DISTINCT FROM OLD.enrolment_id
+           OR NEW.programme_id IS DISTINCT FROM OLD.programme_id
+           OR NEW.cohort_id IS DISTINCT FROM OLD.cohort_id
+           OR NEW.issue_date IS DISTINCT FROM OLD.issue_date
+           OR NEW.completion_date IS DISTINCT FROM OLD.completion_date
+           OR NEW.verification_token IS DISTINCT FROM OLD.verification_token
+           OR NEW.student_name_snapshot IS DISTINCT FROM OLD.student_name_snapshot
+           OR NEW.programme_name_snapshot IS DISTINCT FROM OLD.programme_name_snapshot
+           OR NEW.cohort_name_snapshot IS DISTINCT FROM OLD.cohort_name_snapshot THEN
+            RAISE EXCEPTION 'CANNOT_MUTATE_ISSUED_CERTIFICATE: Core certificate credentials and historical snapshots are immutable';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.prevent_certificate_mutation() FROM PUBLIC, authenticated, anon;
+
+DROP TRIGGER IF EXISTS trg_prevent_certificate_mutation ON public.certificates;
+CREATE TRIGGER trg_prevent_certificate_mutation
+BEFORE UPDATE ON public.certificates
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_certificate_mutation();
+
+-- 7. Safe Public Certificate Verification RPC
+CREATE OR REPLACE FUNCTION public.verify_certificate_public(
+    p_cert_number TEXT,
+    p_token TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+    certificate_number TEXT,
+    student_name TEXT,
+    programme_name TEXT,
+    programme_code TEXT,
+    issue_date DATE,
+    completion_date DATE,
+    status TEXT,
+    is_valid BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        c.certificate_number,
+        c.student_name_snapshot AS student_name,
+        c.programme_name_snapshot AS programme_name,
+        c.programme_code_snapshot AS programme_code,
+        c.issue_date,
+        c.completion_date,
+        c.status,
+        (c.status = 'ISSUED') AS is_valid
+    FROM public.certificates c
+    WHERE (c.certificate_number = TRIM(p_cert_number) OR (p_token IS NOT NULL AND c.verification_token = TRIM(p_token)))
+    LIMIT 1;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT) TO anon, authenticated;
+
 -- =============================================================================
 -- PHASE 11 — SECURE RPC DATABASE FUNCTIONS
 -- =============================================================================
@@ -1767,6 +2340,12 @@ ALTER TABLE public.payment_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrolments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cohorts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.training_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.facilitator_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.facilitator_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customer_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schema_versions ENABLE ROW LEVEL SECURITY;
@@ -1812,10 +2391,34 @@ CREATE POLICY "income_cats_admin_write" ON public.income_categories FOR ALL TO a
 CREATE POLICY "expense_cats_tenant_select" ON public.expense_categories FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
 CREATE POLICY "expense_cats_admin_write" ON public.expense_categories FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
-CREATE POLICY "programmes_tenant_select" ON public.programmes FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "programmes_tenant_select" ON public.programmes FOR SELECT TO authenticated 
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR public.is_facilitator()
+        OR id IN (SELECT programme_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
 CREATE POLICY "programmes_admin_insert" ON public.programmes FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 CREATE POLICY "programmes_admin_update" ON public.programmes FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 CREATE POLICY "programmes_admin_delete" ON public.programmes FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Cohorts Policies
+CREATE POLICY "cohorts_tenant_select" ON public.cohorts FOR SELECT TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+        OR id IN (SELECT cohort_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
+CREATE POLICY "cohorts_admin_insert" ON public.cohorts FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "cohorts_admin_update" ON public.cohorts FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "cohorts_admin_delete" ON public.cohorts FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
 CREATE POLICY "settings_tenant_select" ON public.finance_approval_settings FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
 CREATE POLICY "settings_admin_write" ON public.finance_approval_settings FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
@@ -1888,15 +2491,153 @@ CREATE POLICY "enquiries_tenant_insert" ON public.enquiries FOR INSERT TO authen
 CREATE POLICY "enquiries_tenant_update" ON public.enquiries FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "enquiries_admin_delete" ON public.enquiries FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
 
-CREATE POLICY "enrolments_tenant_select" ON public.enrolments FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "enrolments_tenant_select" ON public.enrolments FOR SELECT TO authenticated 
+USING (
+    tenant_id = public.get_auth_tenant_id() 
+    AND (
+        public.is_staff() 
+        OR public.can_manage_finance()
+        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+    )
+);
 CREATE POLICY "enrolments_tenant_insert" ON public.enrolments FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "enrolments_tenant_update" ON public.enrolments FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "enrolments_admin_delete" ON public.enrolments FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Training Sessions RLS Policies
+CREATE POLICY "training_sessions_tenant_select" ON public.training_sessions FOR SELECT TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR cohort_id IN (SELECT cohort_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
+CREATE POLICY "training_sessions_staff_insert" ON public.training_sessions FOR INSERT TO authenticated
+WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_people()));
+CREATE POLICY "training_sessions_staff_update" ON public.training_sessions FOR UPDATE TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_people()
+        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+    )
+);
+CREATE POLICY "training_sessions_admin_delete" ON public.training_sessions FOR DELETE TO authenticated
+USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Attendance RLS Policies
+CREATE POLICY "attendance_tenant_select" ON public.attendance FOR SELECT TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR enrolment_id IN (SELECT id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
+CREATE POLICY "attendance_staff_insert" ON public.attendance FOR INSERT TO authenticated
+WITH CHECK (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
+CREATE POLICY "attendance_staff_update" ON public.attendance FOR UPDATE TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))
+    )
+);
+CREATE POLICY "attendance_admin_delete" ON public.attendance FOR DELETE TO authenticated
+USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Facilitator Reports RLS Policies
+CREATE POLICY "facilitator_reports_tenant_select" ON public.facilitator_reports FOR SELECT TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+    )
+);
+CREATE POLICY "facilitator_reports_facilitator_insert" ON public.facilitator_reports FOR INSERT TO authenticated
+WITH CHECK (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+    )
+);
+CREATE POLICY "facilitator_reports_facilitator_update" ON public.facilitator_reports FOR UPDATE TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR (facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()) AND status = 'DRAFT')
+    )
+);
+CREATE POLICY "facilitator_reports_admin_delete" ON public.facilitator_reports FOR DELETE TO authenticated
+USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Certificates Table RLS Policies
+CREATE POLICY "certificates_tenant_select" ON public.certificates FOR SELECT TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND (
+        public.is_staff()
+        OR public.can_manage_finance()
+        OR public.is_facilitator()
+        OR student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())
+    )
+);
+
+CREATE POLICY "certificates_admin_insert" ON public.certificates FOR INSERT TO authenticated
+WITH CHECK (
+    tenant_id = public.get_auth_tenant_id()
+    AND public.is_staff()
+);
+
+CREATE POLICY "certificates_admin_update" ON public.certificates FOR UPDATE TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND public.is_staff()
+)
+WITH CHECK (
+    tenant_id = public.get_auth_tenant_id()
+    AND public.is_staff()
+);
+
+CREATE POLICY "certificates_admin_delete" ON public.certificates FOR DELETE TO authenticated
+USING (
+    tenant_id = public.get_auth_tenant_id()
+    AND public.is_super_admin()
+);
 
 CREATE POLICY "customers_tenant_select" ON public.customers FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "customers_tenant_insert" ON public.customers FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "customers_tenant_update" ON public.customers FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "customers_admin_delete" ON public.customers FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Students Table RLS Policies
+CREATE POLICY "students_tenant_select" ON public.students FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance() OR public.is_facilitator()));
+CREATE POLICY "students_tenant_insert" ON public.students FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "students_tenant_update" ON public.students FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance())) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
+CREATE POLICY "students_admin_delete" ON public.students FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
 
 -- 6. Operations Policies
 CREATE POLICY "sessions_tenant_select" ON public.facilitator_sessions FOR SELECT TO authenticated 
@@ -2014,9 +2755,196 @@ CREATE INDEX IF NOT EXISTS idx_financial_control_period ON public.financial_cont
 -- =============================================================================
 
 INSERT INTO public.schema_versions (version, description, compatible)
-VALUES ('13.0.1', 'Phase 13.0.1 Production Hardened, Dependency-Safe, Multi-Tenant Architecture', TRUE)
+VALUES ('14.0.0', 'Phase 14.0.0 Programme, Cohort & Authoritative Enrolment Architecture with Closed Composite Tenant Perimeter', TRUE)
 ON CONFLICT (version) DO UPDATE SET applied_at = NOW(), compatible = TRUE;
 
 -- =============================================================================
--- END OF CLASPTEK PRODUCTION SCHEMA VERSION 13.0.1
+-- PHASE 5.1 — PROFESSIONAL CRM INTAKE & APPLICANT MANAGEMENT
 -- =============================================================================
+
+-- 39. CRM Intake Counters Table (Concurrency-Safe Atomic Application Numbering)
+CREATE TABLE IF NOT EXISTS public.crm_intake_counters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    application_seq INT NOT NULL DEFAULT 1,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_crm_intake_counters_tenant ON public.crm_intake_counters(tenant_id);
+
+-- 40. Authoritative CRM Intake Applications
+CREATE TABLE IF NOT EXISTS public.crm_intake_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    application_number TEXT NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('WEB_INTAKE', 'GOOGLE_FORM', 'STAFF_ENTRY', 'PORTAL')),
+    source_submission_id TEXT NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'REVIEW_REQUIRED', 'MATCHED', 'QUALIFIED', 'CONVERTED', 'REJECTED', 'CANCELLED')),
+    
+    -- Core Relational Applicant Fields
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    date_of_birth DATE,
+    gender TEXT,
+    marital_status TEXT,
+    state_of_origin TEXT,
+    nationality TEXT DEFAULT 'Nigerian',
+    address TEXT,
+    
+    -- Relational Training Interest
+    programme_id TEXT REFERENCES public.programmes(id) ON DELETE RESTRICT,
+    expertise_level TEXT,
+    preferred_schedule TEXT,
+    preferred_start_date DATE,
+    preferred_duration TEXT,
+    delivery_mode TEXT NOT NULL DEFAULT 'IN_PERSON' CHECK (delivery_mode IN ('IN_PERSON', 'ONLINE', 'HYBRID')),
+    
+    -- Relational Sponsorship
+    sponsor_type TEXT DEFAULT 'Self-sponsored',
+    sponsor_name TEXT,
+    sponsor_phone TEXT,
+    sponsor_email TEXT,
+    
+    -- Claimed Existing Identifier & Additional Info
+    claimed_student_number TEXT,
+    employment_status TEXT,
+    referral_source TEXT,
+    notes TEXT,
+    agreed_tuition_fee NUMERIC(14,2) DEFAULT 0 CHECK (agreed_tuition_fee >= 0),
+    consent_acknowledged BOOLEAN NOT NULL DEFAULT true,
+    
+    -- Governed Identity & CRM Linkages
+    matched_student_id TEXT REFERENCES public.students(id) ON DELETE SET NULL,
+    enquiry_id TEXT REFERENCES public.enquiries(id) ON DELETE SET NULL,
+    enrolment_id TEXT REFERENCES public.enrolments(id) ON DELETE SET NULL,
+    identity_confidence TEXT CHECK (identity_confidence IN ('HIGH', 'AMBIGUOUS', 'NONE')),
+    match_notes TEXT,
+    review_reason TEXT,
+    
+    -- Immutable Raw Submission Snapshot
+    applicant_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT uq_intake_apps_tenant_number UNIQUE (tenant_id, application_number),
+    CONSTRAINT uq_intake_apps_idempotency UNIQUE (tenant_id, source, source_submission_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_intake_apps_tenant_status ON public.crm_intake_applications(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_intake_apps_tenant_prog ON public.crm_intake_applications(tenant_id, programme_id);
+CREATE INDEX IF NOT EXISTS idx_intake_apps_tenant_student ON public.crm_intake_applications(tenant_id, matched_student_id);
+CREATE INDEX IF NOT EXISTS idx_intake_apps_tenant_submitted ON public.crm_intake_applications(tenant_id, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_intake_apps_email ON public.crm_intake_applications(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_intake_apps_phone ON public.crm_intake_applications(tenant_id, phone);
+
+-- Concurrency-Safe Atomic Application Numbering
+CREATE OR REPLACE FUNCTION public.get_next_application_number(p_tenant_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_seq INT;
+    v_year TEXT;
+BEGIN
+    IF p_tenant_id IS NULL THEN
+        RAISE EXCEPTION 'p_tenant_id is required to allocate application number';
+    END IF;
+
+    v_year := TO_CHAR(CURRENT_DATE, 'YYYY');
+    
+    INSERT INTO public.crm_intake_counters (tenant_id, application_seq, updated_at)
+    VALUES (p_tenant_id, 2, NOW())
+    ON CONFLICT (tenant_id)
+    DO UPDATE SET 
+        application_seq = public.crm_intake_counters.application_seq + 1,
+        updated_at = NOW()
+    RETURNING application_seq - 1 INTO v_seq;
+
+    RETURN 'APP-' || v_year || '-' || LPAD(v_seq::TEXT, 6, '0');
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.get_next_application_number(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_next_application_number(UUID) TO authenticated, anon;
+
+-- RLS for Phase 5.1 Intake
+ALTER TABLE public.crm_intake_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_intake_counters ENABLE ROW LEVEL SECURITY;
+
+REVOKE INSERT, UPDATE, DELETE ON public.crm_intake_applications FROM anon, public;
+REVOKE INSERT, UPDATE, DELETE ON public.crm_intake_counters FROM anon, public;
+
+CREATE POLICY intake_apps_select_admin_staff ON public.crm_intake_applications
+    FOR SELECT
+    TO authenticated
+    USING (
+        tenant_id = public.get_auth_tenant_id() AND
+        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('admin', 'staff', 'super admin'))
+    );
+
+CREATE POLICY intake_apps_select_student ON public.crm_intake_applications
+    FOR SELECT
+    TO authenticated
+    USING (
+        tenant_id = public.get_auth_tenant_id() AND
+        matched_student_id IN (
+            SELECT id FROM public.students 
+            WHERE user_id = auth.uid() AND tenant_id = public.crm_intake_applications.tenant_id
+        )
+    );
+
+CREATE POLICY intake_apps_modify_admin ON public.crm_intake_applications
+    FOR UPDATE
+    TO authenticated
+    USING (
+        tenant_id = public.get_auth_tenant_id() AND
+        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('admin', 'staff', 'super admin'))
+    )
+    WITH CHECK (
+        tenant_id = public.get_auth_tenant_id() AND
+        (public.is_staff() OR public.is_super_admin() OR public.get_auth_user_role() IN ('admin', 'staff', 'super admin'))
+    );
+
+-- =============================================================================
+-- HARDENED RPC PRIVILEGE CONTROL (FAIL-CLOSED SECURITY DEFINER EXECUTE MODEL)
+-- =============================================================================
+
+-- 1. Explicitly Revoke Unintended PUBLIC / Anon Execution on Privileged RPCs
+REVOKE EXECUTE ON FUNCTION public.create_invoice_with_items(JSONB, JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_invoice_with_items(JSONB, JSONB) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.execute_payment_transaction(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.execute_payment_transaction(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.record_payment(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_payment(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.record_expense(NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_expense(NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.approve_expense(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.approve_expense(TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.void_financial_record(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.void_financial_record(TEXT, TEXT, TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.reopen_financial_period(TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reopen_financial_period(TEXT, TEXT) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.complete_reconciliation(TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.complete_reconciliation(TEXT, NUMERIC, TEXT) TO authenticated;
+
+-- 2. Strictly Governed Public Verification Endpoint (Only verify_certificate_public is granted to anon)
+REVOKE EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT, UUID) TO authenticated, anon;
+
+-- =============================================================================
+-- END OF CLASPTEK PRODUCTION SCHEMA VERSION 14.0.0
+-- =============================================================================
+

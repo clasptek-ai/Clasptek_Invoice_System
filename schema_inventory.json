@@ -1,16 +1,16 @@
 {
   "sourceFile": "supabase_schema.sql",
-  "inspectedAt": "2026-09-01T20:34:32.554Z",
+  "inspectedAt": "2026-09-06T17:54:23.692Z",
   "targetProjectRef": "logaawoigfxnisimfatf",
   "targetUrl": "https://logaawoigfxnisimfatf.supabase.co",
   "summary": {
-    "totalTablesDefined": 55,
+    "totalTablesDefined": 61,
     "canonical27PresentInSql": 27,
     "canonical27MissingInSql": [],
-    "totalRlsEnabled": 55,
-    "totalPoliciesDefined": 105,
-    "totalFunctionsDefined": 21,
-    "totalIndexesDefined": 37
+    "totalRlsEnabled": 61,
+    "totalPoliciesDefined": 129,
+    "totalFunctionsDefined": 27,
+    "totalIndexesDefined": 66
   },
   "canonical27Tables": [
     {
@@ -38,7 +38,7 @@
       "hasTenantId": true,
       "rlsEnabled": true,
       "policyCount": 4,
-      "columnCount": 12
+      "columnCount": 16
     },
     {
       "table": "personnel",
@@ -74,7 +74,7 @@
       "hasTenantId": true,
       "rlsEnabled": true,
       "policyCount": 4,
-      "columnCount": 11
+      "columnCount": 33
     },
     {
       "table": "invoices",
@@ -508,7 +508,7 @@
       "isCanonical27": true,
       "primaryKey": "id",
       "hasTenantId": true,
-      "columnCount": 12,
+      "columnCount": 16,
       "columns": [
         {
           "name": "id",
@@ -521,19 +521,34 @@
           "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
         },
         {
-          "name": "name",
-          "type": "TEXT",
-          "raw": "name TEXT NOT NULL,"
-        },
-        {
           "name": "code",
           "type": "TEXT",
           "raw": "code TEXT NOT NULL,"
         },
         {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "description",
+          "type": "TEXT,",
+          "raw": "description TEXT,"
+        },
+        {
+          "name": "duration_weeks",
+          "type": "INT",
+          "raw": "duration_weeks INT NOT NULL DEFAULT 8 CHECK (duration_weeks > 0),"
+        },
+        {
+          "name": "session_count",
+          "type": "INT",
+          "raw": "session_count INT NOT NULL DEFAULT 16 CHECK (session_count > 0),"
+        },
+        {
           "name": "tuition_fee",
           "type": "NUMERIC(14,2)",
-          "raw": "tuition_fee NUMERIC(14,2) NOT NULL CHECK (tuition_fee >= 0),"
+          "raw": "tuition_fee NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (tuition_fee >= 0),"
         },
         {
           "name": "max_discount_pct",
@@ -558,7 +573,12 @@
         {
           "name": "status",
           "type": "TEXT",
-          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),"
+          "raw": "status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft')),"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
         },
         {
           "name": "created_at",
@@ -568,10 +588,14 @@
         {
           "name": "updated_at",
           "type": "TIMESTAMPTZ",
-          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
         }
       ],
-      "constraints": [],
+      "constraints": [
+        "CONSTRAINT chk_programme_installments CHECK (NOT allow_installments OR (installment_first_pct + installment_second_pct = 100)),",
+        "CONSTRAINT uq_programmes_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_programmes_tenant_code UNIQUE (tenant_id, code)"
+      ],
       "rlsEnabled": true,
       "policies": [
         "programmes_tenant_select",
@@ -923,7 +947,8 @@
         }
       ],
       "constraints": [
-        "UNIQUE(tenant_id, invoice_no)"
+        "UNIQUE(tenant_id, invoice_no),",
+        "CONSTRAINT uq_invoices_tenant_id UNIQUE (tenant_id, id)"
       ],
       "rlsEnabled": true,
       "policies": [
@@ -1893,7 +1918,8 @@
         }
       ],
       "constraints": [
-        "UNIQUE(tenant_id, employee_id)"
+        "UNIQUE(tenant_id, employee_id),",
+        "CONSTRAINT uq_personnel_tenant_id UNIQUE (tenant_id, id)"
       ],
       "rlsEnabled": true,
       "policies": [
@@ -2337,88 +2363,18 @@
         {
           "name": "updated_at",
           "type": "TIMESTAMPTZ",
-          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
         }
       ],
-      "constraints": [],
+      "constraints": [
+        "CONSTRAINT uq_enquiries_tenant_id UNIQUE (tenant_id, id)"
+      ],
       "rlsEnabled": true,
       "policies": [
         "enquiries_tenant_select",
         "enquiries_tenant_insert",
         "enquiries_tenant_update",
         "enquiries_admin_delete"
-      ]
-    },
-    "enrolments": {
-      "name": "enrolments",
-      "isCanonical27": true,
-      "primaryKey": "id",
-      "hasTenantId": true,
-      "columnCount": 11,
-      "columns": [
-        {
-          "name": "id",
-          "type": "TEXT",
-          "raw": "id TEXT PRIMARY KEY,"
-        },
-        {
-          "name": "tenant_id",
-          "type": "UUID",
-          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
-        },
-        {
-          "name": "enquiry_id",
-          "type": "TEXT",
-          "raw": "enquiry_id TEXT REFERENCES public.enquiries(id),"
-        },
-        {
-          "name": "student_name",
-          "type": "TEXT",
-          "raw": "student_name TEXT NOT NULL,"
-        },
-        {
-          "name": "student_email",
-          "type": "TEXT,",
-          "raw": "student_email TEXT,"
-        },
-        {
-          "name": "student_phone",
-          "type": "TEXT,",
-          "raw": "student_phone TEXT,"
-        },
-        {
-          "name": "programme_id",
-          "type": "TEXT",
-          "raw": "programme_id TEXT NOT NULL REFERENCES public.programmes(id),"
-        },
-        {
-          "name": "cohort",
-          "type": "TEXT,",
-          "raw": "cohort TEXT,"
-        },
-        {
-          "name": "status",
-          "type": "TEXT",
-          "raw": "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN')),"
-        },
-        {
-          "name": "enrolment_date",
-          "type": "DATE",
-          "raw": "enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,"
-        },
-        {
-          "name": "created_at",
-          "type": "TIMESTAMPTZ",
-          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
-        }
-      ],
-      "constraints": [],
-      "rlsEnabled": true,
-      "policies": [
-        "enrolments_tenant_select",
-        "enrolments_tenant_insert",
-        "enrolments_tenant_update",
-        "enrolments_admin_delete"
       ]
     },
     "customers": {
@@ -2481,16 +2437,947 @@
         {
           "name": "updated_at",
           "type": "TIMESTAMPTZ",
-          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
         }
       ],
-      "constraints": [],
+      "constraints": [
+        "CONSTRAINT uq_customers_tenant_id UNIQUE (tenant_id, id)"
+      ],
       "rlsEnabled": true,
       "policies": [
         "customers_tenant_select",
         "customers_tenant_insert",
         "customers_tenant_update",
         "customers_admin_delete"
+      ]
+    },
+    "students": {
+      "name": "students",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 18,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT,",
+          "raw": "customer_id TEXT,"
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "raw": "user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "student_number",
+          "type": "TEXT",
+          "raw": "student_number TEXT NOT NULL,"
+        },
+        {
+          "name": "first_name",
+          "type": "TEXT",
+          "raw": "first_name TEXT NOT NULL,"
+        },
+        {
+          "name": "last_name",
+          "type": "TEXT",
+          "raw": "last_name TEXT NOT NULL,"
+        },
+        {
+          "name": "email",
+          "type": "TEXT,",
+          "raw": "email TEXT,"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT,",
+          "raw": "phone TEXT,"
+        },
+        {
+          "name": "gender",
+          "type": "TEXT,",
+          "raw": "gender TEXT,"
+        },
+        {
+          "name": "address",
+          "type": "TEXT,",
+          "raw": "address TEXT,"
+        },
+        {
+          "name": "emergency_contact_name",
+          "type": "TEXT,",
+          "raw": "emergency_contact_name TEXT,"
+        },
+        {
+          "name": "emergency_contact_phone",
+          "type": "TEXT,",
+          "raw": "emergency_contact_phone TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'SUSPENDED', 'WITHDRAWN')),"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.customers(tenant_id,",
+          "raw": "REFERENCES public.customers(tenant_id, id) ON DELETE SET NULL"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(tenant_id, student_number),",
+        "UNIQUE(tenant_id, email),",
+        "CONSTRAINT uq_students_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT fk_students_customer_tenant FOREIGN KEY (tenant_id, customer_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "students_tenant_select",
+        "students_tenant_insert",
+        "students_tenant_update",
+        "students_admin_delete"
+      ]
+    },
+    "cohorts": {
+      "name": "cohorts",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 15,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL,"
+        },
+        {
+          "name": "lead_facilitator_id",
+          "type": "TEXT,",
+          "raw": "lead_facilitator_id TEXT,"
+        },
+        {
+          "name": "cohort_code",
+          "type": "TEXT",
+          "raw": "cohort_code TEXT NOT NULL,"
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "raw": "name TEXT NOT NULL,"
+        },
+        {
+          "name": "start_date",
+          "type": "DATE",
+          "raw": "start_date DATE NOT NULL,"
+        },
+        {
+          "name": "end_date",
+          "type": "DATE",
+          "raw": "end_date DATE NOT NULL,"
+        },
+        {
+          "name": "delivery_mode",
+          "type": "TEXT",
+          "raw": "delivery_mode TEXT NOT NULL DEFAULT 'IN_PERSON' CHECK (delivery_mode IN ('IN_PERSON', 'ONLINE', 'HYBRID')),"
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "raw": "capacity INTEGER NOT NULL CHECK (capacity > 0),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'UPCOMING' CHECK (status IN ('PLANNING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.programmes(tenant_id,",
+          "raw": "REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.personnel(tenant_id,",
+          "raw": "REFERENCES public.personnel(tenant_id, id) ON DELETE SET NULL"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT chk_cohort_dates CHECK (end_date >= start_date),",
+        "CONSTRAINT uq_cohorts_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_cohorts_tenant_code UNIQUE (tenant_id, cohort_code),",
+        "CONSTRAINT uq_cohorts_tenant_prog UNIQUE (tenant_id, id, programme_id),",
+        "CONSTRAINT fk_cohorts_programme_tenant FOREIGN KEY (tenant_id, programme_id)",
+        "CONSTRAINT fk_cohorts_facilitator_tenant FOREIGN KEY (tenant_id, lead_facilitator_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "cohorts_tenant_select",
+        "cohorts_admin_insert",
+        "cohorts_admin_update",
+        "cohorts_admin_delete"
+      ]
+    },
+    "enrolments": {
+      "name": "enrolments",
+      "isCanonical27": true,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 33,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "student_id",
+          "type": "TEXT",
+          "raw": "student_id TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL,"
+        },
+        {
+          "name": "cohort_id",
+          "type": "TEXT",
+          "raw": "cohort_id TEXT NOT NULL,"
+        },
+        {
+          "name": "invoice_id",
+          "type": "TEXT,",
+          "raw": "invoice_id TEXT,"
+        },
+        {
+          "name": "customer_id",
+          "type": "TEXT,",
+          "raw": "customer_id TEXT,"
+        },
+        {
+          "name": "enquiry_id",
+          "type": "TEXT,",
+          "raw": "enquiry_id TEXT,"
+        },
+        {
+          "name": "enrolment_number",
+          "type": "TEXT",
+          "raw": "enrolment_number TEXT NOT NULL,"
+        },
+        {
+          "name": "enrolment_date",
+          "type": "DATE",
+          "raw": "enrolment_date DATE NOT NULL DEFAULT CURRENT_DATE,"
+        },
+        {
+          "name": "agreed_tuition_fee",
+          "type": "NUMERIC(14,2)",
+          "raw": "agreed_tuition_fee NUMERIC(14,2) NOT NULL CHECK (agreed_tuition_fee >= 0),"
+        },
+        {
+          "name": "discount_amount",
+          "type": "NUMERIC(14,2)",
+          "raw": "discount_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),"
+        },
+        {
+          "name": "discount_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (discount_pct >= 0 AND discount_pct <= 100),"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING_PAYMENT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'DEFERRED', 'WITHDRAWN', 'CANCELLED')),"
+        },
+        {
+          "name": "completion_date",
+          "type": "DATE,",
+          "raw": "completion_date DATE,"
+        },
+        {
+          "name": "completion_status",
+          "type": "TEXT",
+          "raw": "completion_status TEXT NOT NULL DEFAULT 'NOT_ELIGIBLE' CHECK (completion_status IN ('NOT_ELIGIBLE', 'ELIGIBLE', 'VERIFIED')),"
+        },
+        {
+          "name": "completion_verified_by",
+          "type": "UUID",
+          "raw": "completion_verified_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "completion_verified_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "completion_verified_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "completion_notes",
+          "type": "TEXT,",
+          "raw": "completion_notes TEXT,"
+        },
+        {
+          "name": "completion_attendance_pct",
+          "type": "NUMERIC(5,2)",
+          "raw": "completion_attendance_pct NUMERIC(5,2) CHECK (completion_attendance_pct IS NULL OR (completion_attendance_pct >= 0 AND completion_attendance_pct <= 100)),"
+        },
+        {
+          "name": "certificate_issued",
+          "type": "BOOLEAN",
+          "raw": "certificate_issued BOOLEAN NOT NULL DEFAULT false,"
+        },
+        {
+          "name": "certificate_number",
+          "type": "TEXT,",
+          "raw": "certificate_number TEXT,"
+        },
+        {
+          "name": "certificate_issued_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "certificate_issued_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.students(tenant_id,",
+          "raw": "REFERENCES public.students(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.programmes(tenant_id,",
+          "raw": "REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.cohorts(tenant_id,",
+          "raw": "REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.cohorts(tenant_id,",
+          "raw": "REFERENCES public.cohorts(tenant_id, id, programme_id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.invoices(tenant_id,",
+          "raw": "REFERENCES public.invoices(tenant_id, id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.customers(tenant_id,",
+          "raw": "REFERENCES public.customers(tenant_id, id) ON DELETE SET NULL,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.enquiries(tenant_id,",
+          "raw": "REFERENCES public.enquiries(tenant_id, id) ON DELETE SET NULL"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_enrolments_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_enrolments_tenant_number UNIQUE (tenant_id, enrolment_number),",
+        "CONSTRAINT uq_enrolments_student_cohort UNIQUE (tenant_id, student_id, cohort_id),",
+        "CONSTRAINT uq_enrolments_tenant_cohort UNIQUE (tenant_id, id, cohort_id),",
+        "CONSTRAINT fk_enrolments_student_tenant FOREIGN KEY (tenant_id, student_id)",
+        "CONSTRAINT fk_enrolments_programme_tenant FOREIGN KEY (tenant_id, programme_id)",
+        "CONSTRAINT fk_enrolments_cohort_tenant FOREIGN KEY (tenant_id, cohort_id)",
+        "CONSTRAINT fk_enrolments_cohort_prog_tenant FOREIGN KEY (tenant_id, cohort_id, programme_id)",
+        "CONSTRAINT fk_enrolments_invoice_tenant FOREIGN KEY (tenant_id, invoice_id)",
+        "CONSTRAINT fk_enrolments_customer_tenant FOREIGN KEY (tenant_id, customer_id)",
+        "CONSTRAINT fk_enrolments_enquiry_tenant FOREIGN KEY (tenant_id, enquiry_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "enrolments_tenant_select",
+        "enrolments_tenant_insert",
+        "enrolments_tenant_update",
+        "enrolments_admin_delete"
+      ]
+    },
+    "training_sessions": {
+      "name": "training_sessions",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "cohort_id",
+          "type": "TEXT",
+          "raw": "cohort_id TEXT NOT NULL,"
+        },
+        {
+          "name": "facilitator_id",
+          "type": "TEXT",
+          "raw": "facilitator_id TEXT NOT NULL,"
+        },
+        {
+          "name": "session_number",
+          "type": "INT",
+          "raw": "session_number INT NOT NULL CHECK (session_number > 0),"
+        },
+        {
+          "name": "session_title",
+          "type": "TEXT",
+          "raw": "session_title TEXT NOT NULL,"
+        },
+        {
+          "name": "session_date",
+          "type": "DATE",
+          "raw": "session_date DATE NOT NULL,"
+        },
+        {
+          "name": "start_time",
+          "type": "TIME,",
+          "raw": "start_time TIME,"
+        },
+        {
+          "name": "end_time",
+          "type": "TIME,",
+          "raw": "end_time TIME,"
+        },
+        {
+          "name": "delivery_mode",
+          "type": "TEXT",
+          "raw": "delivery_mode TEXT NOT NULL DEFAULT 'IN_PERSON' CHECK (delivery_mode IN ('IN_PERSON', 'ONLINE', 'HYBRID')),"
+        },
+        {
+          "name": "location",
+          "type": "TEXT,",
+          "raw": "location TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'COMPLETED', 'CANCELLED', 'RESCHEDULED')),"
+        },
+        {
+          "name": "notes",
+          "type": "TEXT,",
+          "raw": "notes TEXT,"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.cohorts(tenant_id,",
+          "raw": "REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.personnel(tenant_id,",
+          "raw": "REFERENCES public.personnel(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "end_time",
+          "type": "IS",
+          "raw": "end_time IS NULL OR start_time IS NULL OR end_time > start_time"
+        },
+        {
+          "name": ")",
+          "type": "",
+          "raw": ")"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_training_sessions_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_training_sessions_tenant_number UNIQUE (tenant_id, cohort_id, session_number),",
+        "CONSTRAINT uq_training_sessions_tenant_cohort UNIQUE (tenant_id, id, cohort_id),",
+        "CONSTRAINT fk_training_sessions_tenant_cohort FOREIGN KEY (tenant_id, cohort_id)",
+        "CONSTRAINT fk_training_sessions_tenant_facilitator FOREIGN KEY (tenant_id, facilitator_id)",
+        "CONSTRAINT chk_training_session_times CHECK ("
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "training_sessions_tenant_select",
+        "training_sessions_staff_insert",
+        "training_sessions_staff_update",
+        "training_sessions_admin_delete"
+      ]
+    },
+    "attendance": {
+      "name": "attendance",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 15,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "cohort_id",
+          "type": "TEXT",
+          "raw": "cohort_id TEXT NOT NULL,"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT",
+          "raw": "session_id TEXT NOT NULL,"
+        },
+        {
+          "name": "enrolment_id",
+          "type": "TEXT",
+          "raw": "enrolment_id TEXT NOT NULL,"
+        },
+        {
+          "name": "attendance_status",
+          "type": "TEXT",
+          "raw": "attendance_status TEXT NOT NULL CHECK (attendance_status IN ('PRESENT', 'ABSENT', 'LATE', 'EXCUSED')),"
+        },
+        {
+          "name": "check_in_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "check_in_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "check_out_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "check_out_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "facilitator_note",
+          "type": "TEXT,",
+          "raw": "facilitator_note TEXT,"
+        },
+        {
+          "name": "recorded_by",
+          "type": "UUID",
+          "raw": "recorded_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "recorded_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.training_sessions(tenant_id,",
+          "raw": "REFERENCES public.training_sessions(tenant_id, id, cohort_id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.enrolments(tenant_id,",
+          "raw": "REFERENCES public.enrolments(tenant_id, id, cohort_id) ON DELETE RESTRICT"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_attendance_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_attendance_session_enrolment UNIQUE (tenant_id, session_id, enrolment_id),",
+        "CONSTRAINT fk_attendance_session_cohort FOREIGN KEY (tenant_id, session_id, cohort_id)",
+        "CONSTRAINT fk_attendance_enrolment_cohort FOREIGN KEY (tenant_id, enrolment_id, cohort_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "attendance_tenant_select",
+        "attendance_staff_insert",
+        "attendance_staff_update",
+        "attendance_admin_delete"
+      ]
+    },
+    "facilitator_reports": {
+      "name": "facilitator_reports",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 21,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "cohort_id",
+          "type": "TEXT",
+          "raw": "cohort_id TEXT NOT NULL,"
+        },
+        {
+          "name": "session_id",
+          "type": "TEXT,",
+          "raw": "session_id TEXT,"
+        },
+        {
+          "name": "facilitator_id",
+          "type": "TEXT",
+          "raw": "facilitator_id TEXT NOT NULL,"
+        },
+        {
+          "name": "report_date",
+          "type": "DATE",
+          "raw": "report_date DATE NOT NULL DEFAULT CURRENT_DATE,"
+        },
+        {
+          "name": "session_summary",
+          "type": "TEXT",
+          "raw": "session_summary TEXT NOT NULL,"
+        },
+        {
+          "name": "topics_covered",
+          "type": "TEXT",
+          "raw": "topics_covered TEXT NOT NULL,"
+        },
+        {
+          "name": "attendance_observations",
+          "type": "TEXT,",
+          "raw": "attendance_observations TEXT,"
+        },
+        {
+          "name": "student_participation_notes",
+          "type": "TEXT,",
+          "raw": "student_participation_notes TEXT,"
+        },
+        {
+          "name": "issues_encountered",
+          "type": "TEXT,",
+          "raw": "issues_encountered TEXT,"
+        },
+        {
+          "name": "follow_up_recommendations",
+          "type": "TEXT,",
+          "raw": "follow_up_recommendations TEXT,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'SUBMITTED' CHECK (status IN ('DRAFT', 'SUBMITTED', 'REVIEWED')),"
+        },
+        {
+          "name": "reviewed_by",
+          "type": "UUID",
+          "raw": "reviewed_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "reviewed_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "reviewed_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.cohorts(tenant_id,",
+          "raw": "REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.personnel(tenant_id,",
+          "raw": "REFERENCES public.personnel(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.training_sessions(tenant_id,",
+          "raw": "REFERENCES public.training_sessions(tenant_id, id, cohort_id) ON DELETE SET NULL"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_facilitator_reports_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT fk_facilitator_reports_cohort FOREIGN KEY (tenant_id, cohort_id)",
+        "CONSTRAINT fk_facilitator_reports_facilitator FOREIGN KEY (tenant_id, facilitator_id)",
+        "CONSTRAINT fk_facilitator_reports_session_cohort FOREIGN KEY (tenant_id, session_id, cohort_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "facilitator_reports_tenant_select",
+        "facilitator_reports_facilitator_insert",
+        "facilitator_reports_facilitator_update",
+        "facilitator_reports_admin_delete"
+      ]
+    },
+    "certificates": {
+      "name": "certificates",
+      "isCanonical27": false,
+      "primaryKey": "id",
+      "hasTenantId": true,
+      "columnCount": 30,
+      "columns": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "raw": "id TEXT PRIMARY KEY,"
+        },
+        {
+          "name": "tenant_id",
+          "type": "UUID",
+          "raw": "tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "student_id",
+          "type": "TEXT",
+          "raw": "student_id TEXT NOT NULL,"
+        },
+        {
+          "name": "enrolment_id",
+          "type": "TEXT",
+          "raw": "enrolment_id TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_id",
+          "type": "TEXT",
+          "raw": "programme_id TEXT NOT NULL,"
+        },
+        {
+          "name": "cohort_id",
+          "type": "TEXT",
+          "raw": "cohort_id TEXT NOT NULL,"
+        },
+        {
+          "name": "certificate_number",
+          "type": "TEXT",
+          "raw": "certificate_number TEXT NOT NULL,"
+        },
+        {
+          "name": "issue_date",
+          "type": "DATE",
+          "raw": "issue_date DATE NOT NULL DEFAULT CURRENT_DATE,"
+        },
+        {
+          "name": "completion_date",
+          "type": "DATE",
+          "raw": "completion_date DATE NOT NULL,"
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "raw": "status TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('DRAFT', 'ISSUED', 'REVOKED')),"
+        },
+        {
+          "name": "issued_by",
+          "type": "UUID",
+          "raw": "issued_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "verification_token",
+          "type": "TEXT",
+          "raw": "verification_token TEXT NOT NULL,"
+        },
+        {
+          "name": "student_name_snapshot",
+          "type": "TEXT",
+          "raw": "student_name_snapshot TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_name_snapshot",
+          "type": "TEXT",
+          "raw": "programme_name_snapshot TEXT NOT NULL,"
+        },
+        {
+          "name": "programme_code_snapshot",
+          "type": "TEXT",
+          "raw": "programme_code_snapshot TEXT NOT NULL,"
+        },
+        {
+          "name": "cohort_name_snapshot",
+          "type": "TEXT",
+          "raw": "cohort_name_snapshot TEXT NOT NULL,"
+        },
+        {
+          "name": "cohort_code_snapshot",
+          "type": "TEXT",
+          "raw": "cohort_code_snapshot TEXT NOT NULL,"
+        },
+        {
+          "name": "attendance_pct_snapshot",
+          "type": "NUMERIC(5,2)",
+          "raw": "attendance_pct_snapshot NUMERIC(5,2) CHECK (attendance_pct_snapshot IS NULL OR (attendance_pct_snapshot >= 0 AND attendance_pct_snapshot <= 100)),"
+        },
+        {
+          "name": "revocation_reason",
+          "type": "TEXT,",
+          "raw": "revocation_reason TEXT,"
+        },
+        {
+          "name": "revoked_by",
+          "type": "UUID",
+          "raw": "revoked_by UUID REFERENCES auth.users(id),"
+        },
+        {
+          "name": "revoked_at",
+          "type": "TIMESTAMPTZ,",
+          "raw": "revoked_at TIMESTAMPTZ,"
+        },
+        {
+          "name": "reissued_from_certificate_id",
+          "type": "TEXT,",
+          "raw": "reissued_from_certificate_id TEXT,"
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "raw": "metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "raw": "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.students(tenant_id,",
+          "raw": "REFERENCES public.students(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.enrolments(tenant_id,",
+          "raw": "REFERENCES public.enrolments(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.programmes(tenant_id,",
+          "raw": "REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.cohorts(tenant_id,",
+          "raw": "REFERENCES public.cohorts(tenant_id, id) ON DELETE RESTRICT,"
+        },
+        {
+          "name": "REFERENCES",
+          "type": "public.enrolments(tenant_id,",
+          "raw": "REFERENCES public.enrolments(tenant_id, id, cohort_id) ON DELETE RESTRICT"
+        }
+      ],
+      "constraints": [
+        "CONSTRAINT uq_certificates_tenant_id UNIQUE (tenant_id, id),",
+        "CONSTRAINT uq_certificates_tenant_number UNIQUE (tenant_id, certificate_number),",
+        "CONSTRAINT uq_certificates_tenant_token UNIQUE (tenant_id, verification_token),",
+        "CONSTRAINT fk_certificates_tenant_student FOREIGN KEY (tenant_id, student_id)",
+        "CONSTRAINT fk_certificates_tenant_enrolment FOREIGN KEY (tenant_id, enrolment_id)",
+        "CONSTRAINT fk_certificates_tenant_programme FOREIGN KEY (tenant_id, programme_id)",
+        "CONSTRAINT fk_certificates_tenant_cohort FOREIGN KEY (tenant_id, cohort_id)",
+        "CONSTRAINT fk_certificates_tenant_enrolment_cohort FOREIGN KEY (tenant_id, enrolment_id, cohort_id)"
+      ],
+      "rlsEnabled": true,
+      "policies": [
+        "certificates_tenant_select",
+        "certificates_admin_insert",
+        "certificates_admin_update",
+        "certificates_admin_delete"
       ]
     },
     "facilitator_sessions": {
@@ -4358,7 +5245,7 @@
     {
       "name": "programmes_tenant_select",
       "table": "programmes",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id())"
+      "body": "FOR SELECT TO authenticated \nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR public.is_facilitator()\n        OR id IN (SELECT programme_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
     },
     {
       "name": "programmes_admin_insert",
@@ -4373,6 +5260,26 @@
     {
       "name": "programmes_admin_delete",
       "table": "programmes",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "cohorts_tenant_select",
+      "table": "cohorts",
+      "body": "FOR SELECT TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n        OR id IN (SELECT cohort_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
+    },
+    {
+      "name": "cohorts_admin_insert",
+      "table": "cohorts",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "cohorts_admin_update",
+      "table": "cohorts",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance())"
+    },
+    {
+      "name": "cohorts_admin_delete",
+      "table": "cohorts",
       "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
     },
     {
@@ -4598,7 +5505,7 @@
     {
       "name": "enrolments_tenant_select",
       "table": "enrolments",
-      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+      "body": "FOR SELECT TO authenticated \nUSING (\n    tenant_id = public.get_auth_tenant_id() \n    AND (\n        public.is_staff() \n        OR public.can_manage_finance()\n        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n    )\n)"
     },
     {
       "name": "enrolments_tenant_insert",
@@ -4614,6 +5521,86 @@
       "name": "enrolments_admin_delete",
       "table": "enrolments",
       "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "training_sessions_tenant_select",
+      "table": "training_sessions",
+      "body": "FOR SELECT TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR cohort_id IN (SELECT cohort_id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
+    },
+    {
+      "name": "training_sessions_staff_insert",
+      "table": "training_sessions",
+      "body": "FOR INSERT TO authenticated\nWITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_people()))"
+    },
+    {
+      "name": "training_sessions_staff_update",
+      "table": "training_sessions",
+      "body": "FOR UPDATE TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_people()\n        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n    )\n)"
+    },
+    {
+      "name": "training_sessions_admin_delete",
+      "table": "training_sessions",
+      "body": "FOR DELETE TO authenticated\nUSING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "attendance_tenant_select",
+      "table": "attendance",
+      "body": "FOR SELECT TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR enrolment_id IN (SELECT id FROM public.enrolments WHERE student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
+    },
+    {
+      "name": "attendance_staff_insert",
+      "table": "attendance",
+      "body": "FOR INSERT TO authenticated\nWITH CHECK (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
+    },
+    {
+      "name": "attendance_staff_update",
+      "table": "attendance",
+      "body": "FOR UPDATE TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR session_id IN (SELECT id FROM public.training_sessions WHERE facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n        OR cohort_id IN (SELECT id FROM public.cohorts WHERE lead_facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()))\n    )\n)"
+    },
+    {
+      "name": "attendance_admin_delete",
+      "table": "attendance",
+      "body": "FOR DELETE TO authenticated\nUSING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "facilitator_reports_tenant_select",
+      "table": "facilitator_reports",
+      "body": "FOR SELECT TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n    )\n)"
+    },
+    {
+      "name": "facilitator_reports_facilitator_insert",
+      "table": "facilitator_reports",
+      "body": "FOR INSERT TO authenticated\nWITH CHECK (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n    )\n)"
+    },
+    {
+      "name": "facilitator_reports_facilitator_update",
+      "table": "facilitator_reports",
+      "body": "FOR UPDATE TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR (facilitator_id IN (SELECT id FROM public.personnel WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id()) AND status = 'DRAFT')\n    )\n)"
+    },
+    {
+      "name": "facilitator_reports_admin_delete",
+      "table": "facilitator_reports",
+      "body": "FOR DELETE TO authenticated\nUSING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "certificates_tenant_select",
+      "table": "certificates",
+      "body": "FOR SELECT TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND (\n        public.is_staff()\n        OR public.can_manage_finance()\n        OR public.is_facilitator()\n        OR student_id IN (SELECT id FROM public.students WHERE user_id = auth.uid() AND tenant_id = public.get_auth_tenant_id())\n    )\n)"
+    },
+    {
+      "name": "certificates_admin_insert",
+      "table": "certificates",
+      "body": "FOR INSERT TO authenticated\nWITH CHECK (\n    tenant_id = public.get_auth_tenant_id()\n    AND public.is_staff()\n)"
+    },
+    {
+      "name": "certificates_admin_update",
+      "table": "certificates",
+      "body": "FOR UPDATE TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND public.is_staff()\n)\nWITH CHECK (\n    tenant_id = public.get_auth_tenant_id()\n    AND public.is_staff()\n)"
+    },
+    {
+      "name": "certificates_admin_delete",
+      "table": "certificates",
+      "body": "FOR DELETE TO authenticated\nUSING (\n    tenant_id = public.get_auth_tenant_id()\n    AND public.is_super_admin()\n)"
     },
     {
       "name": "customers_tenant_select",
@@ -4633,6 +5620,26 @@
     {
       "name": "customers_admin_delete",
       "table": "customers",
+      "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
+    },
+    {
+      "name": "students_tenant_select",
+      "table": "students",
+      "body": "FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance() OR public.is_facilitator()))"
+    },
+    {
+      "name": "students_tenant_insert",
+      "table": "students",
+      "body": "FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "students_tenant_update",
+      "table": "students",
+      "body": "FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance())) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()))"
+    },
+    {
+      "name": "students_admin_delete",
+      "table": "students",
       "body": "FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin())"
     },
     {
@@ -4908,6 +5915,36 @@
       "returns": "TRIGGER"
     },
     {
+      "name": "check_cohort_capacity_before_enrolment",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "check_session_status_before_attendance",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "validate_completion_verifier",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "validate_certificate_eligibility_before_insert",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "prevent_certificate_mutation",
+      "params": "",
+      "returns": "TRIGGER"
+    },
+    {
+      "name": "verify_certificate_public",
+      "params": "p_cert_number TEXT,\n    p_token TEXT DEFAULT NULL",
+      "returns": "TABLE"
+    },
+    {
       "name": "create_invoice_with_items",
       "params": "p_invoice JSONB,\n    p_items JSONB DEFAULT '[]'::JSONB",
       "returns": "JSONB"
@@ -4950,12 +5987,157 @@
   ],
   "indexes": [
     {
+      "name": "idx_programmes_tenant",
+      "table": "programmes",
+      "columns": "tenant_id"
+    },
+    {
+      "name": "idx_programmes_status",
+      "table": "programmes",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_students_tenant_status",
+      "table": "students",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_students_tenant_email",
+      "table": "students",
+      "columns": "tenant_id, email"
+    },
+    {
+      "name": "idx_students_customer_id",
+      "table": "students",
+      "columns": "customer_id"
+    },
+    {
+      "name": "idx_cohorts_tenant_status",
+      "table": "cohorts",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_cohorts_tenant_prog",
+      "table": "cohorts",
+      "columns": "tenant_id, programme_id"
+    },
+    {
+      "name": "idx_cohorts_tenant_dates",
+      "table": "cohorts",
+      "columns": "tenant_id, start_date, end_date"
+    },
+    {
+      "name": "idx_enrolments_tenant_status",
+      "table": "enrolments",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_enrolments_tenant_student",
+      "table": "enrolments",
+      "columns": "tenant_id, student_id"
+    },
+    {
+      "name": "idx_enrolments_tenant_cohort",
+      "table": "enrolments",
+      "columns": "tenant_id, cohort_id"
+    },
+    {
+      "name": "idx_enrolments_tenant_programme",
+      "table": "enrolments",
+      "columns": "tenant_id, programme_id"
+    },
+    {
+      "name": "idx_enrolments_invoice_id",
+      "table": "enrolments",
+      "columns": "invoice_id"
+    },
+    {
+      "name": "idx_training_sessions_tenant_cohort",
+      "table": "training_sessions",
+      "columns": "tenant_id, cohort_id"
+    },
+    {
+      "name": "idx_training_sessions_tenant_facilitator",
+      "table": "training_sessions",
+      "columns": "tenant_id, facilitator_id"
+    },
+    {
+      "name": "idx_training_sessions_tenant_date",
+      "table": "training_sessions",
+      "columns": "tenant_id, session_date"
+    },
+    {
+      "name": "idx_training_sessions_tenant_status",
+      "table": "training_sessions",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_attendance_tenant_cohort",
+      "table": "attendance",
+      "columns": "tenant_id, cohort_id"
+    },
+    {
+      "name": "idx_attendance_tenant_session",
+      "table": "attendance",
+      "columns": "tenant_id, session_id"
+    },
+    {
+      "name": "idx_attendance_tenant_enrolment",
+      "table": "attendance",
+      "columns": "tenant_id, enrolment_id"
+    },
+    {
+      "name": "idx_attendance_tenant_status",
+      "table": "attendance",
+      "columns": "tenant_id, attendance_status"
+    },
+    {
+      "name": "idx_facilitator_reports_tenant_cohort",
+      "table": "facilitator_reports",
+      "columns": "tenant_id, cohort_id"
+    },
+    {
+      "name": "idx_facilitator_reports_tenant_facilitator",
+      "table": "facilitator_reports",
+      "columns": "tenant_id, facilitator_id"
+    },
+    {
+      "name": "idx_facilitator_reports_tenant_session",
+      "table": "facilitator_reports",
+      "columns": "tenant_id, session_id"
+    },
+    {
+      "name": "idx_certificates_tenant_student",
+      "table": "certificates",
+      "columns": "tenant_id, student_id"
+    },
+    {
+      "name": "idx_certificates_tenant_enrolment",
+      "table": "certificates",
+      "columns": "tenant_id, enrolment_id"
+    },
+    {
+      "name": "idx_certificates_tenant_cohort",
+      "table": "certificates",
+      "columns": "tenant_id, cohort_id"
+    },
+    {
+      "name": "idx_certificates_tenant_status",
+      "table": "certificates",
+      "columns": "tenant_id, status"
+    },
+    {
+      "name": "idx_certificates_verification_token",
+      "table": "certificates",
+      "columns": "verification_token"
+    },
+    {
       "name": "idx_invoices_tenant_date",
       "table": "invoices",
       "columns": "tenant_id, invoice_date"
     },
     {
-      "name": "idx_invoices_status",
+      "name": "idx_invoices_tenant_status",
       "table": "invoices",
       "columns": "tenant_id, status"
     },

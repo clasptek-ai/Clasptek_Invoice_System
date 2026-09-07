@@ -177,6 +177,9 @@ window.__CLASPTEK_ENV__ = {
   fs.writeFileSync(rootOut, fileContent, 'utf8');
   console.log(`✔ Generated: ${rootOut}`);
 
+  // Mirror index.html to clasptek_invoice_system.html to maintain 100% synchronization
+  fs.copyFileSync(path.join(process.cwd(), 'index.html'), path.join(process.cwd(), 'clasptek_invoice_system.html'));
+
   // Inject into index.html and clasptek_invoice_system.html
   updateHtmlMetaTags(path.join(process.cwd(), 'index.html'), url, key);
   updateHtmlMetaTags(path.join(process.cwd(), 'clasptek_invoice_system.html'), url, key);
