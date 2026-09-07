@@ -16400,11 +16400,28 @@ function renderLoginScreen(root) {
       btn.disabled = true;
       btn.textContent = 'Sending...';
 
+      let success = true;
       try {
         if (supabaseClient.isConfigured()) {
-          await supabaseClient.auth.resetPasswordForEmail(email);
+          const res = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: (typeof window !== 'undefined' && window.location ? window.location.origin : 'https://app.clasptek.org')
+          });
+          if (res && (!res.success || res.error)) {
+            success = false;
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        success = false;
+      }
+
+      if (!success) {
+        btn.disabled = false;
+        btn.textContent = 'Send Reset Link';
+        authViewState.alertMsg = "We couldn't send the password reset email right now. Please try again in a few moments.";
+        authViewState.alertType = 'error';
+        render();
+        return;
+      }
 
       await logAudit('PASSWORD_RESET_REQUESTED', 'auth', 'none', `Password reset instructions requested for email: ${email}`);
 
@@ -16427,6 +16444,8 @@ function renderLoginScreen(root) {
             <div class="cp-auth-title">Check your email</div>
             <div class="cp-auth-sub">We've sent password reset instructions if an account exists for this email address.</div>
           </div>
+
+          <div id="resendAlertMsg" style="display:none; padding:10px 12px; border-radius:var(--radius-sm); font-size:12px; line-height:1.4; margin-bottom:14px; background:#FEE2E2; color:#991B1B;"></div>
 
           <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:18px; font-size:12.5px; line-height:1.5; color:var(--text-primary);">
             Please check your inbox and spam/junk folder for <strong>${escapeHtml(authViewState.email)}</strong>.
@@ -16477,13 +16496,35 @@ function renderLoginScreen(root) {
 
     resendBtn.addEventListener('click', async () => {
       if (resendBtn.disabled) return;
+      const resendAlert = document.getElementById('resendAlertMsg');
+      if (resendAlert) resendAlert.style.display = 'none';
       resendBtn.disabled = true;
       resendBtn.textContent = 'Sending...';
+
+      let success = true;
       try {
         if (supabaseClient.isConfigured()) {
-          await supabaseClient.auth.resetPasswordForEmail(authViewState.email);
+          const res = await supabaseClient.auth.resetPasswordForEmail(authViewState.email, {
+            redirectTo: (typeof window !== 'undefined' && window.location ? window.location.origin : 'https://app.clasptek.org')
+          });
+          if (res && (!res.success || res.error)) {
+            success = false;
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        success = false;
+      }
+
+      if (!success) {
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend email';
+        if (resendAlert) {
+          resendAlert.textContent = "We couldn't send the password reset email right now. Please try again in a few moments.";
+          resendAlert.style.display = 'block';
+        }
+        return;
+      }
+
       authViewState.cooldown = 30;
       remaining = 30;
       resendBtn.innerHTML = 'Resend available in <span id="cooldownTimer">30</span>s';
@@ -30748,13 +30789,16 @@ function renderResetPasswordModal(container, user) {
 
     try {
       if (supabaseClient.isConfigured()) {
-        await supabaseClient.auth.resetPasswordForEmail(user.email);
+        const res = await supabaseClient.auth.resetPasswordForEmail(user.email);
+        if (res && (!res.success || res.error)) {
+          throw new Error("We couldn't send the password reset email right now. Please verify Supabase SMTP configuration.");
+        }
       }
       await logAudit('RESET_USER_PASSWORD_REQUESTED', 'user', user.id, `Password reset email requested for ${user.email}`);
       alert(`Password reset instructions have been requested for ${user.email}. Please advise the user to check their inbox and spam/junk folder.`);
       closeModal();
     } catch (err) {
-      alertEl.textContent = err.message || 'Error requesting password reset';
+      alertEl.textContent = err.message || "We couldn't send the password reset email right now. Please try again in a few moments.";
       alertEl.style.background = '#FEE2E2';
       alertEl.style.color = '#991B1B';
       alertEl.style.display = 'block';
