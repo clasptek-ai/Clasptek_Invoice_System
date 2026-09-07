@@ -2300,47 +2300,256 @@ const supabaseClient = {
     return headers;
   },
   auth: {
-    async signInWithPassword({ email, password }) {
+    async signInWithPassword(arg1, arg2) {
+      const email = (typeof arg1 === 'object' && arg1 !== null) ? arg1.email : arg1;
+      const password = (typeof arg1 === 'object' && arg1 !== null) ? arg1.password : arg2;
       const base = supabaseClient.getBaseUrl();
-      if (!base) throw new Error('Supabase URL not configured');
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
       const key = supabaseClient.getAnonKey();
-      if (!key) throw new Error('Supabase public key not configured');
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
 
-      const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': key
-        },
-        body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password })
-      });
+      try {
+        const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password })
+        });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error_description || data.msg || data.message || 'Authentication failed');
-      }
-
-      if (data && data.access_token) {
-        state.auth = state.auth || {};
-        state.auth.supabaseSession = data;
-        state.auth.supabaseJwt = data.access_token;
-        state.auth.supabaseUser = data.user;
-        state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
-        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
-        if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
-          state.authoritativeTenantId = tId;
-          state.auth.tenant_id = tId;
-          state.auth.tenantId = tId;
-          if (state.auth.user) {
-            state.auth.user.tenant_id = tId;
-            state.auth.user.tenantId = tId;
-          }
+        const data = await res.json();
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Authentication failed', ...data };
+          return { data: null, error: err, success: false, status: res.status };
         }
-        await safeSet('clasptek:supabase_session', data);
-        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      }
 
-      return { data, error: null };
+        if (data && data.access_token) {
+          state.auth = state.auth || {};
+          state.auth.supabaseSession = data;
+          state.auth.supabaseJwt = data.access_token;
+          state.auth.supabaseUser = data.user;
+          state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+          const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
+          if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+            state.authoritativeTenantId = tId;
+            state.auth.tenant_id = tId;
+            state.auth.tenantId = tId;
+            if (state.auth.user) {
+              state.auth.user.tenant_id = tId;
+              state.auth.user.tenantId = tId;
+            }
+          }
+          await safeSet('clasptek:supabase_session', data);
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+        }
+
+        return { data: { user: data.user, session: data, access_token: data.access_token }, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error during authentication' }, success: false, status: 0 };
+      }
+    },
+    async resetPasswordForEmail(email, options = {}) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      try {
+        const payload = {
+          email: String(email || '').trim().toLowerCase(),
+          ...options
+        };
+        const res = await fetch(`${base}/auth/v1/recover`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Password reset request failed', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        return { data, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error during password recovery' }, success: false, status: 0 };
+      }
+    },
+    async updateUser(attributes, options = {}) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      const activeToken = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token || key;
+      try {
+        const res = await fetch(`${base}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key,
+            'Authorization': `Bearer ${activeToken}`
+          },
+          body: JSON.stringify(attributes)
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Failed to update user profile', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        if (data && data.id) {
+          state.auth = state.auth || {};
+          state.auth.supabaseUser = data;
+          if (state.auth.supabaseSession) {
+            state.auth.supabaseSession.user = data;
+          }
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+        }
+        return { data: { user: data }, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error updating user' }, success: false, status: 0 };
+      }
+    },
+    async resend(params = {}) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      try {
+        const payload = {
+          type: params.type || 'signup',
+          email: String(params.email || '').trim().toLowerCase(),
+          ...(params.options || {})
+        };
+        const res = await fetch(`${base}/auth/v1/resend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Failed to resend instructions', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        return { data, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error resending email' }, success: false, status: 0 };
+      }
+    },
+    async signUp(arg1, arg2) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      const email = (typeof arg1 === 'object' && arg1 !== null) ? arg1.email : arg1;
+      const password = (typeof arg1 === 'object' && arg1 !== null) ? arg1.password : arg2;
+      const options = (typeof arg1 === 'object' && arg1 !== null) ? (arg1.options || {}) : {};
+
+      try {
+        const res = await fetch(`${base}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password, ...options })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Signup failed', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        return { data, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error during signup' }, success: false, status: 0 };
+      }
+    },
+    async verifyOtp(params = {}) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      try {
+        const res = await fetch(`${base}/auth/v1/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify(params)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'OTP verification failed', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        if (data && data.access_token) {
+          await this.setSession(data);
+        }
+        return { data, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error during OTP verification' }, success: false, status: 0 };
+      }
+    },
+    async exchangeCodeForSession(code) {
+      const base = supabaseClient.getBaseUrl();
+      if (!base) return { data: null, error: { message: 'Supabase URL not configured' }, success: false };
+      const key = supabaseClient.getAnonKey();
+      if (!key) return { data: null, error: { message: 'Supabase public key not configured' }, success: false };
+
+      try {
+        const res = await fetch(`${base}/auth/v1/token?grant_type=pkce`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key
+          },
+          body: JSON.stringify({ auth_code: code })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = { message: data.error_description || data.msg || data.message || 'Code exchange failed', ...data };
+          return { data: null, error: err, success: false, status: res.status };
+        }
+        if (data && data.access_token) {
+          await this.setSession(data);
+        }
+        return { data, error: null, success: true, status: res.status };
+      } catch (err) {
+        return { data: null, error: { message: err.message || 'Network error exchanging code' }, success: false, status: 0 };
+      }
+    },
+    async setSession(sessionData) {
+      if (!sessionData || !sessionData.access_token) return { data: { session: null }, error: new Error('Invalid session data') };
+      state.auth = state.auth || {};
+      state.auth.supabaseSession = sessionData;
+      state.auth.supabaseJwt = sessionData.access_token;
+      state.auth.supabaseUser = sessionData.user || state.auth.supabaseUser || null;
+      state.auth.tokenExpiresAt = Date.now() + (sessionData.expires_in ? sessionData.expires_in * 1000 : 3600000);
+      const tId = sessionData.user?.app_metadata?.tenant_id || sessionData.user?.user_metadata?.tenant_id || sessionData.user?.tenant_id;
+      if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+        state.authoritativeTenantId = tId;
+        state.auth.tenant_id = tId;
+        state.auth.tenantId = tId;
+        if (state.auth.user) {
+          state.auth.user.tenant_id = tId;
+          state.auth.user.tenantId = tId;
+        }
+      }
+      await safeSet('clasptek:supabase_session', sessionData);
+      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+      return { data: { session: sessionData, user: sessionData.user }, error: null };
     },
     async getSession() {
       if (state.auth && state.auth.supabaseSession) {
@@ -2402,21 +2611,40 @@ const supabaseClient = {
       state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
       await safeSet('clasptek:supabase_session', data);
       await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      return { data: { session: data }, error: null };
+      return { data: { session: data }, error: null, success: true };
     },
     async getUser() {
       const sess = await this.getSession();
       return { data: { user: sess.data?.session?.user || null }, error: null };
     },
     async signOut() {
-      state.auth = state.auth || {};
-      state.auth.supabaseSession = null;
-      state.auth.supabaseJwt = null;
-      state.auth.supabaseUser = null;
-      state.auth.tokenExpiresAt = null;
+      if (supabaseClient.isConfigured()) {
+        const base = supabaseClient.getBaseUrl();
+        const key = supabaseClient.getAnonKey();
+        const token = state.auth && state.auth.supabaseJwt ? state.auth.supabaseJwt : key;
+        try {
+          await fetch(`${base}/auth/v1/logout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': key,
+              'Authorization': `Bearer ${token}`
+            }
+          });
+        } catch (_) {}
+      }
+      state.authoritativeTenantId = null;
+      if (state.auth) {
+        delete state.auth.supabaseJwt;
+        delete state.auth.supabaseSession;
+        delete state.auth.supabaseUser;
+        delete state.auth.tokenExpiresAt;
+        delete state.auth.tenant_id;
+        delete state.auth.tenantId;
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+      }
       await safeSet('clasptek:supabase_session', null);
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      return { error: null };
+      return { error: null, success: true };
     }
   },
   async executeWithAuth(requestFn) {
@@ -2663,83 +2891,8 @@ async function preserveLegacyData() {
   };
 }
 
-const supabaseAuth = {
-  async signInWithPassword(email, password) {
-    if (!supabaseClient.isConfigured()) {
-      return { success: false, error: { message: 'Supabase unconfigured' } };
-    }
-    const authUrl = `${supabaseClient.getAuthEndpoint()}token?grant_type=password`;
-    try {
-      const res = await fetch(authUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseClient.getAnonKey()
-        },
-        body: JSON.stringify({ email: String(email || '').trim().toLowerCase(), password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data, status: res.status };
-      }
-      if (data.access_token) {
-        state.auth = state.auth || {};
-        state.auth.supabaseJwt = data.access_token;
-        state.auth.supabaseSession = data;
-        state.auth.supabaseUser = data.user;
-        state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
-        const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
-        if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
-          state.authoritativeTenantId = tId;
-          state.auth.tenant_id = tId;
-          state.auth.tenantId = tId;
-          if (state.auth.user) {
-            state.auth.user.tenant_id = tId;
-            state.auth.user.tenantId = tId;
-          }
-        }
-        await safeSet('clasptek:supabase_session', data);
-        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      }
-      return { success: true, data, status: res.status };
-    } catch (err) {
-      return { success: false, error: { message: err.message || 'Network error' }, status: 0 };
-    }
-  },
-  async refreshSession() {
-    return await supabaseClient.auth.refreshSession();
-  },
-  async signOut() {
-    if (!supabaseClient.isConfigured()) return { success: true };
-    const authUrl = `${supabaseClient.getAuthEndpoint()}logout`;
-    try {
-      const token = state.auth && state.auth.supabaseJwt ? state.auth.supabaseJwt : supabaseClient.getAnonKey();
-      await fetch(authUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseClient.getAnonKey(),
-          'Authorization': `Bearer ${token}`
-        }
-      });
-    } catch (_) {}
-    state.authoritativeTenantId = null;
-    if (state.auth) {
-      delete state.auth.supabaseJwt;
-      delete state.auth.supabaseSession;
-      delete state.auth.supabaseUser;
-      delete state.auth.tokenExpiresAt;
-      delete state.auth.tenant_id;
-      delete state.auth.tenantId;
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-    }
-    await safeSet('clasptek:supabase_session', null);
-    return { success: true };
-  },
-  async getSession() {
-    return await supabaseClient.auth.getSession();
-  }
-};
+// Single authoritative Supabase Auth client — alias to official client methods
+const supabaseAuth = supabaseClient.auth;
 
 // ----------------------------------------------------
 // EXPLICIT SUPABASE CONFIGURATION, CREDENTIAL VALIDATION & CONNECTIVITY PROBE ENGINE
@@ -15889,20 +16042,68 @@ function printCanonicalDocument(docHtml) {
 // AUTHENTICATION & LOGIN ENGINE (CLASPTEK BRANDING)
 // ----------------------------------------------------
 let authViewState = {
-  mode: 'login', // 'login' | 'forgot' | 'force_reset' | 'invitation'
+  mode: 'login', // 'login' | 'forgot' | 'forgot_sent' | 'reset_password' | 'reset_success' | 'expired_recovery' | 'invitation'
   email: '',
   targetUser: null,
   inviteToken: '',
-  resetToken: '',
   alertMsg: '',
-  alertType: 'error'
+  alertType: 'error',
+  cooldown: 0
 };
 
+let resendCooldownInterval = null;
+
 function checkUrlAuthParams() {
-  if (typeof window !== 'undefined' && window.location && window.location.search) {
+  if (typeof window === 'undefined' || !window.location) return;
+
+  // 1. Process Supabase Auth Hash Fragment (Recovery Session / Auth Errors)
+  if (window.location.hash) {
+    const rawHash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const hashParams = new URLSearchParams(rawHash);
+
+    const errorCode = hashParams.get('error_code');
+    const errorDesc = hashParams.get('error_description');
+    const type = hashParams.get('type');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const expiresIn = hashParams.get('expires_in');
+
+    // SECURITY MANDATE: Immediately sanitize the URL — strip hash without page reload
+    // NEVER console.log the raw URL or hash. NEVER render the hash. NEVER expose in error messages.
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    } catch (_) {}
+
+    if (errorCode === 'otp_expired' || errorCode === 'access_denied' || (errorDesc && errorDesc.toLowerCase().includes('expired'))) {
+      authViewState.mode = 'expired_recovery';
+      authViewState.alertMsg = 'This password reset link has expired or is invalid. Please request a new reset link.';
+      authViewState.alertType = 'error';
+      return;
+    }
+
+    if (type === 'recovery' && accessToken) {
+      state.auth = state.auth || {};
+      state.auth.supabaseJwt = accessToken;
+      state.auth.supabaseSession = {
+        access_token: accessToken,
+        refresh_token: refreshToken || null,
+        expires_in: expiresIn ? Number(expiresIn) : 3600,
+        token_type: 'bearer',
+        type: 'recovery'
+      };
+      state.auth.tokenExpiresAt = Date.now() + (expiresIn ? Number(expiresIn) * 1000 : 3600000);
+      authViewState.mode = 'reset_password';
+      authViewState.alertMsg = '';
+      return;
+    }
+  }
+
+  // 2. Process Query Parameters (Invitations)
+  if (window.location.search) {
     const params = new URLSearchParams(window.location.search);
     const invite = params.get('invite');
-    const reset = params.get('reset');
     if (invite) {
       const u = state.users.find(user => user.invitationToken === invite);
       if (u) {
@@ -15920,23 +16121,7 @@ function checkUrlAuthParams() {
           authViewState.targetUser = u;
         }
       } else {
-        authViewState.alertMsg = 'Invalid invitation token.';
-        authViewState.alertType = 'error';
-      }
-    } else if (reset) {
-      const u = state.users.find(user => user.resetToken === reset);
-      if (u) {
-        if (u.resetExpiresAt && u.resetExpiresAt < Date.now()) {
-          authViewState.alertMsg = 'This password reset link has expired. Please request a new reset.';
-          authViewState.alertType = 'error';
-          authViewState.mode = 'login';
-        } else {
-          authViewState.mode = 'force_reset';
-          authViewState.resetToken = reset;
-          authViewState.targetUser = u;
-        }
-      } else {
-        authViewState.alertMsg = 'Invalid password reset token.';
+        authViewState.alertMsg = 'Invalid invitation link.';
         authViewState.alertType = 'error';
       }
     }
@@ -16028,156 +16213,332 @@ function renderLoginScreen(root) {
           return;
         }
 
-        const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
-        if (!user) {
-          alertEl.textContent = 'Invalid email address or password.';
-          alertEl.style.display = 'block';
-          await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for email: ${email}`);
-          return;
-        }
+        const btn = document.getElementById('btnSignIn');
+        btn.disabled = true;
+        btn.textContent = 'Authenticating...';
 
-        if (user.status === 'deactivated') {
-          alertEl.textContent = 'This account has been deactivated. Please contact your Super Administrator.';
-          alertEl.style.display = 'block';
-          await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Deactivated user ${user.email} attempted login`);
-          return;
-        }
-
-        if (user.status === 'suspended') {
-          alertEl.textContent = 'This account is currently suspended. Please contact your Super Administrator.';
-          alertEl.style.display = 'block';
-          await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Suspended user ${user.email} attempted login`);
-          return;
-        }
-
-        if (user.status === 'invited') {
-          alertEl.textContent = 'Your account invitation is pending setup. Please use the invitation link sent by your administrator.';
-          alertEl.style.display = 'block';
-          return;
-        }
-
-        // Verify password hash
-        const computedHash = await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default');
-        if (computedHash !== user.passwordHash) {
-          alertEl.textContent = 'Invalid email address or password.';
-          alertEl.style.display = 'block';
-          await logAudit('USER_LOGIN_FAILED', 'user', user.id, `Invalid password entered for ${user.email}`);
-          return;
-        }
-
-        // Check if forced password reset is required
-        if (user.mustChangePassword || user.forcePasswordReset) {
-          authViewState.mode = 'force_reset';
-          authViewState.targetUser = user;
-          authViewState.alertMsg = 'You are required to set a new private password before accessing your workspace.';
-          authViewState.alertType = 'warning';
-          render();
-          return;
-        }
-
-        // Successful authentication
-        const sessionToken = generateRandomToken('sess_');
-        const sessionExpiry = Date.now() + 24 * 3600 * 1000; // 24-hour session
-        user.lastLoginAt = new Date().toISOString();
-        await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-
-        // Synchronize Supabase authentication if configured
         try {
-          if (supabaseClient.isConfigured()) {
-            await supabaseAuth.signInWithPassword(email, pwd);
+          const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+
+          if (user) {
+            if (user.status === 'deactivated') {
+              alertEl.textContent = 'This account has been deactivated. Please contact your Super Administrator.';
+              alertEl.style.display = 'block';
+              await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Deactivated user ${user.email} attempted login`);
+              btn.disabled = false;
+              btn.textContent = 'Sign In';
+              return;
+            }
+
+            if (user.status === 'suspended') {
+              alertEl.textContent = 'This account is currently suspended. Please contact your Super Administrator.';
+              alertEl.style.display = 'block';
+              await logAudit('USER_LOGIN_REJECTED', 'user', user.id, `Suspended user ${user.email} attempted login`);
+              btn.disabled = false;
+              btn.textContent = 'Sign In';
+              return;
+            }
+
+            if (user.status === 'invited') {
+              alertEl.textContent = 'Your account invitation is pending setup. Please use the invitation link sent by your administrator.';
+              alertEl.style.display = 'block';
+              btn.disabled = false;
+              btn.textContent = 'Sign In';
+              return;
+            }
           }
-        } catch (_) {}
 
-        const authoritativeTenant = resolveAuthoritativeTenantId();
-        if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
-          state.authoritativeTenantId = authoritativeTenant;
-          user.tenant_id = authoritativeTenant;
-          user.tenantId = authoritativeTenant;
-        }
+          // Authoritative Supabase Auth authentication if configured
+          if (supabaseClient.isConfigured()) {
+            const authRes = await supabaseClient.auth.signInWithPassword(email, pwd);
+            if (authRes && authRes.error) {
+              const computedHash = user ? await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default') : null;
+              if (!user || computedHash !== user.passwordHash) {
+                alertEl.textContent = authRes.error.message || 'Invalid email address or password.';
+                alertEl.style.display = 'block';
+                await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for ${email}`);
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+                return;
+              }
+            }
+          } else {
+            if (!user) {
+              alertEl.textContent = 'Invalid email address or password.';
+              alertEl.style.display = 'block';
+              await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for ${email}`);
+              btn.disabled = false;
+              btn.textContent = 'Sign In';
+              return;
+            }
+            const computedHash = await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default');
+            if (computedHash !== user.passwordHash) {
+              alertEl.textContent = 'Invalid email address or password.';
+              alertEl.style.display = 'block';
+              await logAudit('USER_LOGIN_FAILED', 'user', user.id, `Invalid password entered for ${user.email}`);
+              btn.disabled = false;
+              btn.textContent = 'Sign In';
+              return;
+            }
+          }
 
-        const supaUser = state.auth?.supabaseUser || null;
-        const mergedUser = {
-          ...user,
-          ...(supaUser || {}),
-          name: user.name || supaUser?.user_metadata?.name || email,
-          role: user.role || supaUser?.user_metadata?.role || 'Super Admin',
-          tenant_id: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(user.tenant_id) && user.tenant_id !== 'clasptek_main') ? user.tenant_id : null),
-          tenantId: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(user.tenantId) && user.tenantId !== 'clasptek_main') ? user.tenantId : null),
-          localUser: user
-        };
+          // RESOLVE LOGGED IN USER
+          const resolvedUser = user || {
+            id: state.auth?.supabaseUser?.id || 'usr_' + Date.now(),
+            email: email,
+            name: state.auth?.supabaseUser?.user_metadata?.name || email.split('@')[0],
+            role: state.auth?.supabaseUser?.user_metadata?.role || 'Super Admin',
+            status: 'active',
+            tenant_id: DEFAULT_TENANT_ID
+          };
 
-        state.auth = {
-          ...state.auth,
-          isAuthenticated: true,
-          user: mergedUser,
-          localUser: user,
-          token: sessionToken,
-          expiresAt: sessionExpiry,
-          tenant_id: state.authoritativeTenantId || null,
-          tenantId: state.authoritativeTenantId || null,
-          supabaseJwt: state.auth?.supabaseJwt || null,
-          supabaseSession: state.auth?.supabaseSession || null,
-          supabaseUser: supaUser
-        };
-        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+          const sessionToken = generateRandomToken('sess_');
+          const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+          resolvedUser.lastLoginAt = new Date().toISOString();
+          await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
 
-        // Role-based workspace routing
-        state.tab = getDefaultTabForRole(user.role);
+          const authoritativeTenant = resolveAuthoritativeTenantId();
+          if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
+            state.authoritativeTenantId = authoritativeTenant;
+            resolvedUser.tenant_id = authoritativeTenant;
+            resolvedUser.tenantId = authoritativeTenant;
+          }
 
-        await logAudit('USER_LOGIN', 'user', user.id, `User logged in with role: ${user.role}`);
-        authViewState.alertMsg = '';
+          const supaUser = state.auth?.supabaseUser || null;
+          const mergedUser = {
+            ...resolvedUser,
+            ...(supaUser || {}),
+            name: resolvedUser.name || supaUser?.user_metadata?.name || email,
+            role: resolvedUser.role || supaUser?.user_metadata?.role || 'Super Admin',
+            tenant_id: state.authoritativeTenantId || resolvedUser.tenant_id || DEFAULT_TENANT_ID,
+            tenantId: state.authoritativeTenantId || resolvedUser.tenantId || DEFAULT_TENANT_ID,
+            localUser: resolvedUser
+          };
 
-        // Re-hydrate data from PostgreSQL now that Supabase authentication is active
-        if (supabaseClient.isConfigured() && state.auth?.supabaseJwt) {
-          await loadAll();
-        } else {
-          render();
+          state.auth = {
+            ...state.auth,
+            isAuthenticated: true,
+            user: mergedUser,
+            localUser: resolvedUser,
+            token: sessionToken,
+            expiresAt: sessionExpiry,
+            tenant_id: state.authoritativeTenantId || null,
+            tenantId: state.authoritativeTenantId || null,
+            supabaseJwt: state.auth?.supabaseJwt || null,
+            supabaseSession: state.auth?.supabaseSession || null,
+            supabaseUser: supaUser
+          };
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+
+          state.tab = getDefaultTabForRole(mergedUser.role);
+          await logAudit('USER_LOGIN', 'user', resolvedUser.id, `User logged in with role: ${mergedUser.role}`);
+          authViewState.alertMsg = '';
+
+          if (supabaseClient.isConfigured() && state.auth?.supabaseJwt) {
+            await loadAll();
+          } else {
+            render();
+          }
+        } catch (err) {
+          alertEl.textContent = err.message || 'An unexpected error occurred during sign in.';
+          alertEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Sign In';
         }
       });
     }
     return;
   }
 
-  // VIEW 2: Force Password Reset (First Login / Admin Enforced)
-  if (authViewState.mode === 'force_reset') {
-    const user = authViewState.targetUser || state.users[0];
+  // VIEW 2: Forgot Password Request Screen
+  if (authViewState.mode === 'forgot') {
     root.innerHTML = `
       <div class="cp-auth-wrap">
         <div class="cp-auth-card">
           <div class="cp-auth-header">
             ${brandLogoHtml}
-            <div class="cp-auth-title">Set Private Password</div>
-            <div class="cp-auth-sub">Create your confidential password to secure your account</div>
+            <div class="cp-auth-title">Reset your password</div>
+            <div class="cp-auth-sub">Enter your registered work email address and we'll send you a secure password reset link.</div>
+          </div>
+
+          <div id="forgotAuthAlert" class="cp-auth-alert error"></div>
+
+          <form id="formForgot" onsubmit="return false;">
+            <div class="cp-field">
+              <label for="forgotEmail">Work Email Address</label>
+              <input type="email" id="forgotEmail" placeholder="admin@clasptek.org" required autocomplete="email" value="${escapeHtml(authViewState.email || '')}" />
+            </div>
+
+            <button type="submit" class="cp-btn accent" id="btnSubmitForgot" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Send Reset Link
+            </button>
+          </form>
+
+          <div class="cp-auth-footer-links" style="justify-content:center; margin-top:18px;">
+            <button type="button" class="cp-auth-link" id="btnBackFromForgot">&larr; Back to Sign In</button>
+          </div>
+
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btnBackFromForgot').addEventListener('click', () => {
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+
+    document.getElementById('formForgot').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (document.getElementById('forgotEmail').value || '').trim().toLowerCase();
+      if (!email) return;
+
+      const btn = document.getElementById('btnSubmitForgot');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        if (supabaseClient.isConfigured()) {
+          await supabaseClient.auth.resetPasswordForEmail(email);
+        }
+      } catch (_) {}
+
+      await logAudit('PASSWORD_RESET_REQUESTED', 'auth', 'none', `Password reset instructions requested for email: ${email}`);
+
+      authViewState.email = email;
+      authViewState.mode = 'forgot_sent';
+      authViewState.cooldown = 30;
+      authViewState.alertMsg = '';
+      render();
+    });
+    return;
+  }
+
+  // VIEW 3: Check Your Email (Sent Confirmation & 30s Cooldown)
+  if (authViewState.mode === 'forgot_sent') {
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Check your email</div>
+            <div class="cp-auth-sub">We've sent password reset instructions if an account exists for this email address.</div>
+          </div>
+
+          <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:18px; font-size:12.5px; line-height:1.5; color:var(--text-primary);">
+            Please check your inbox and spam/junk folder for <strong>${escapeHtml(authViewState.email)}</strong>.
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <button type="button" class="cp-btn secondary" id="btnResendReset" style="width:100%; padding:11px; font-size:13px; font-weight:600;" disabled>
+              Resend available in <span id="cooldownTimer">${authViewState.cooldown || 30}</span>s
+            </button>
+            <button type="button" class="cp-btn outline" id="btnBackToLoginFromSent" style="width:100%; padding:11px; font-size:13px;">
+              &larr; Back to Sign In
+            </button>
+          </div>
+
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (resendCooldownInterval) clearInterval(resendCooldownInterval);
+
+    let remaining = authViewState.cooldown || 30;
+    const resendBtn = document.getElementById('btnResendReset');
+    const timerSpan = document.getElementById('cooldownTimer');
+
+    const updateTimer = () => {
+      if (remaining > 0) {
+        remaining--;
+        authViewState.cooldown = remaining;
+        if (timerSpan) timerSpan.textContent = remaining;
+      } else {
+        if (resendCooldownInterval) clearInterval(resendCooldownInterval);
+        if (resendBtn) {
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend email';
+        }
+      }
+    };
+
+    if (remaining > 0) {
+      resendCooldownInterval = setInterval(updateTimer, 1000);
+    } else if (resendBtn) {
+      resendBtn.disabled = false;
+      resendBtn.textContent = 'Resend email';
+    }
+
+    resendBtn.addEventListener('click', async () => {
+      if (resendBtn.disabled) return;
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending...';
+      try {
+        if (supabaseClient.isConfigured()) {
+          await supabaseClient.auth.resetPasswordForEmail(authViewState.email);
+        }
+      } catch (_) {}
+      authViewState.cooldown = 30;
+      remaining = 30;
+      resendBtn.innerHTML = 'Resend available in <span id="cooldownTimer">30</span>s';
+      if (resendCooldownInterval) clearInterval(resendCooldownInterval);
+      resendCooldownInterval = setInterval(updateTimer, 1000);
+    });
+
+    document.getElementById('btnBackToLoginFromSent').addEventListener('click', () => {
+      if (resendCooldownInterval) clearInterval(resendCooldownInterval);
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
+    });
+    return;
+  }
+
+  // VIEW 4: Set New Password (Authenticated Recovery Session)
+  if (authViewState.mode === 'reset_password') {
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Set a New Password</div>
+            <div class="cp-auth-sub">Please choose a new, secure password for your account.</div>
           </div>
 
           ${authViewState.alertMsg ? `<div class="cp-auth-alert ${authViewState.alertType}">${escapeHtml(authViewState.alertMsg)}</div>` : ''}
           <div id="resetAuthAlert" class="cp-auth-alert error"></div>
 
-          <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:16px; font-size:12px;">
-            Account: <strong>${escapeHtml(user.name)}</strong> (${escapeHtml(user.email)}) &middot; Role: <span class="cp-pill ${user.role === 'Super Admin' ? 'category-pill' : 'paid'}">${escapeHtml(user.role)}</span>
-          </div>
-
-          <form id="formForceReset" onsubmit="return false;">
+          <form id="formResetPassword" onsubmit="return false;">
             <div class="cp-field">
               <label for="newPassword">New Password (min 8 chars, letters &amp; numbers) *</label>
               <div class="cp-password-wrap">
-                <input type="password" id="newPassword" placeholder="Enter new password" required autocomplete="new-password" />
-                <button type="button" class="cp-password-toggle" id="btnToggleNewPwd">&#x1F441;</button>
+                <input type="password" id="newPassword" placeholder="Enter new password" required autocomplete="new-password" minlength="8" />
+                <button type="button" class="cp-password-toggle" id="btnToggleNewPwd" title="Toggle password visibility">&#x1F441;</button>
               </div>
             </div>
 
             <div class="cp-field">
               <label for="confirmPassword">Confirm New Password *</label>
-              <input type="password" id="confirmPassword" placeholder="Re-enter new password" required autocomplete="new-password" />
+              <input type="password" id="confirmPassword" placeholder="Re-enter new password" required autocomplete="new-password" minlength="8" />
             </div>
 
-            <button type="submit" class="cp-btn accent" id="btnSaveNewPassword" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
-              Update Password &amp; Enter Workspace
+            <button type="submit" class="cp-btn accent" id="btnSetNewPassword" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
+              Set New Password
             </button>
           </form>
 
-          <div class="cp-auth-footer-links" style="justify-content:center;">
-            <button type="button" class="cp-auth-link" id="btnBackToLogin">&larr; Back to Sign In</button>
+          <div class="cp-auth-footer-links" style="justify-content:center; margin-top:18px;">
+            <button type="button" class="cp-auth-link" id="btnBackToLoginFromReset">&larr; Back to Sign In</button>
+          </div>
+
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
           </div>
         </div>
       </div>
@@ -16192,13 +16553,13 @@ function renderLoginScreen(root) {
       });
     }
 
-    document.getElementById('btnBackToLogin').addEventListener('click', () => {
+    document.getElementById('btnBackToLoginFromReset').addEventListener('click', () => {
       authViewState.mode = 'login';
       authViewState.alertMsg = '';
       render();
     });
 
-    document.getElementById('formForceReset').addEventListener('submit', async (e) => {
+    document.getElementById('formResetPassword').addEventListener('submit', async (e) => {
       e.preventDefault();
       alertEl.style.display = 'none';
       const newPwd = document.getElementById('newPassword').value;
@@ -16217,138 +16578,143 @@ function renderLoginScreen(root) {
         return;
       }
 
-      const salt = generateRandomToken('salt_');
-      const hash = await hashPasswordWithSalt(newPwd, salt);
+      const btn = document.getElementById('btnSetNewPassword');
+      btn.disabled = true;
+      btn.textContent = 'Updating Password...';
 
-      user.passwordSalt = salt;
-      user.passwordHash = hash;
-      user.mustChangePassword = false;
-      user.forcePasswordReset = false;
-      user.resetToken = null;
-      user.resetExpiresAt = null;
-      user.lastLoginAt = new Date().toISOString();
+      try {
+        if (supabaseClient.isConfigured()) {
+          const res = await supabaseClient.auth.updateUser({ password: newPwd });
+          if (res && res.error) {
+            alertEl.textContent = res.error.message || 'Failed to update password in Supabase Auth.';
+            alertEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Set New Password';
+            return;
+          }
+        }
 
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+        // Update local user hash if known
+        const userEmail = state.auth?.supabaseUser?.email || authViewState.email;
+        const localUser = state.users.find(u => u.email && u.email.toLowerCase() === (userEmail || '').toLowerCase());
+        if (localUser) {
+          const salt = generateRandomToken('salt_');
+          localUser.passwordSalt = salt;
+          localUser.passwordHash = await hashPasswordWithSalt(newPwd, salt);
+          localUser.mustChangePassword = false;
+          localUser.forcePasswordReset = false;
+          localUser.resetToken = null;
+          localUser.resetExpiresAt = null;
+          await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+          await logAudit('PASSWORD_RESET_COMPLETED', 'user', localUser.id, `Password successfully reset for ${localUser.email}`);
+        } else {
+          await logAudit('PASSWORD_RESET_COMPLETED', 'auth', 'none', `Password successfully reset via recovery link`);
+        }
 
-      const sessionToken = generateRandomToken('sess_');
-      const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+        // Clear recovery session tokens
+        if (state.auth) {
+          state.auth.supabaseJwt = null;
+          state.auth.supabaseSession = null;
+        }
 
-      const authoritativeTenant = resolveAuthoritativeTenantId();
-      if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
-        state.authoritativeTenantId = authoritativeTenant;
-        user.tenant_id = authoritativeTenant;
-        user.tenantId = authoritativeTenant;
+        authViewState.mode = 'reset_success';
+        authViewState.alertMsg = '';
+        render();
+      } catch (err) {
+        alertEl.textContent = err.message || 'An error occurred while updating your password.';
+        alertEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Set New Password';
       }
-      state.auth = {
-        ...state.auth,
-        isAuthenticated: true,
-        user: user,
-        token: sessionToken,
-        expiresAt: sessionExpiry,
-        tenant_id: state.authoritativeTenantId || null,
-        tenantId: state.authoritativeTenantId || null
-      };
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-
-      state.tab = getDefaultTabForRole(user.role);
-
-      await logAudit('PASSWORD_RESET_COMPLETED', 'user', user.id, `Private password successfully set for ${user.email}`);
-      authViewState.mode = 'login';
-      authViewState.alertMsg = '';
-      render();
     });
     return;
   }
 
-  // VIEW 3: Forgot Password Request
-  if (authViewState.mode === 'forgot') {
+  // VIEW 5: Password Updated Successfully
+  if (authViewState.mode === 'reset_success') {
     root.innerHTML = `
       <div class="cp-auth-wrap">
         <div class="cp-auth-card">
           <div class="cp-auth-header">
             ${brandLogoHtml}
-            <div class="cp-auth-title">Reset Password</div>
-            <div class="cp-auth-sub">Enter your registered work email to receive password reset instructions</div>
+            <div class="cp-auth-title">Password Updated Successfully</div>
+            <div class="cp-auth-sub">Your account password has been updated. You can now sign in with your new credentials.</div>
           </div>
 
-          <div id="forgotAuthAlert" class="cp-auth-alert"></div>
-
-          <form id="formForgot" onsubmit="return false;">
-            <div class="cp-field">
-              <label for="forgotEmail">Work Email Address</label>
-              <input type="email" id="forgotEmail" placeholder="e.g. yourname@clasptek.org" required />
+          <div style="text-align:center; margin:24px 0 28px;">
+            <div style="font-size:44px; margin-bottom:12px;">&#x2705;</div>
+            <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">
+              Your confidential password has been updated in Supabase Auth. You may now sign in to access your workspace.
             </div>
-
-            <button type="submit" class="cp-btn accent" id="btnSubmitForgot" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
-              Request Password Reset
-            </button>
-          </form>
-
-          <div id="resetLinkContainer" style="display:none; margin-top:16px; background:#F0FDF4; border:1px solid #86EFAC; border-radius:var(--radius-sm); padding:12px; font-size:12px; color:#166534;">
-            <div style="font-weight:700; margin-bottom:4px;">&#x2705; Reset Instructions Generated:</div>
-            <div style="margin-bottom:8px;">Use the secure link below to reset your password:</div>
-            <div id="resetLinkBox" style="font-family:var(--font-mono); word-break:break-all; background:#FFFFFF; padding:8px; border:1px solid #CBD5E1; border-radius:4px; font-size:11px;"></div>
-            <button class="cp-btn sm accent" id="btnGoToResetLink" style="margin-top:8px; width:100%;">Proceed to Set New Password</button>
           </div>
 
-          <div class="cp-auth-footer-links" style="justify-content:center; margin-top:18px;">
-            <button type="button" class="cp-auth-link" id="btnBackFromForgot">&larr; Back to Sign In</button>
+          <button type="button" class="cp-btn accent" id="btnContinueToSignIn" style="width:100%; padding:11px; font-size:14px; font-weight:700;">
+            Continue to Sign In
+          </button>
+
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
           </div>
         </div>
       </div>
     `;
 
-    const alertEl = document.getElementById('forgotAuthAlert');
-    document.getElementById('btnBackFromForgot').addEventListener('click', () => {
+    document.getElementById('btnContinueToSignIn').addEventListener('click', () => {
       authViewState.mode = 'login';
       authViewState.alertMsg = '';
       render();
     });
+    return;
+  }
 
-    document.getElementById('formForgot').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = (document.getElementById('forgotEmail').value || '').trim().toLowerCase();
-      const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+  // VIEW 6: Reset Link Expired
+  if (authViewState.mode === 'expired_recovery') {
+    root.innerHTML = `
+      <div class="cp-auth-wrap">
+        <div class="cp-auth-card">
+          <div class="cp-auth-header">
+            ${brandLogoHtml}
+            <div class="cp-auth-title">Reset Link Expired</div>
+            <div class="cp-auth-sub">This password reset link has expired or has already been used.</div>
+          </div>
 
-      if (!user) {
-        alertEl.textContent = 'If an active account exists for this email, reset instructions have been generated.';
-        alertEl.className = 'cp-auth-alert success';
-        alertEl.style.display = 'block';
-        return;
-      }
+          <div style="text-align:center; margin:24px 0 28px;">
+            <div style="font-size:44px; margin-bottom:12px;">&#x26A0;&#xFE0F;</div>
+            <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">
+              For security reasons, password reset links can only be used once and expire after a limited period. Please request a new reset link.
+            </div>
+          </div>
 
-      if (user.status === 'deactivated' || user.status === 'suspended') {
-        alertEl.textContent = 'This account cannot be reset online. Please contact your Super Administrator.';
-        alertEl.className = 'cp-auth-alert error';
-        alertEl.style.display = 'block';
-        return;
-      }
+          <button type="button" class="cp-btn accent" id="btnRequestNewReset" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-bottom:12px;">
+            Request a New Reset Link
+          </button>
 
-      const resetTok = generateRandomToken('rst_');
-      user.resetToken = resetTok;
-      user.resetExpiresAt = Date.now() + 3600 * 1000; // 1 hour
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('PASSWORD_RESET_REQUESTED', 'user', user.id, `Password reset requested for ${user.email}`);
+          <div style="text-align:center;">
+            <button type="button" class="cp-auth-link" id="btnBackToLoginFromExpired">&larr; Back to Sign In</button>
+          </div>
 
-      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
-      const resetUrl = `${currentUrl}?reset=${resetTok}`;
+          <div class="cp-auth-footer">
+            &copy; ${new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
+          </div>
+        </div>
+      </div>
+    `;
 
-      document.getElementById('resetLinkBox').textContent = resetUrl;
-      document.getElementById('resetLinkContainer').style.display = 'block';
-      document.getElementById('btnSubmitForgot').style.display = 'none';
+    document.getElementById('btnRequestNewReset').addEventListener('click', () => {
+      authViewState.mode = 'forgot';
+      authViewState.alertMsg = '';
+      render();
+    });
 
-      document.getElementById('btnGoToResetLink').addEventListener('click', () => {
-        authViewState.mode = 'force_reset';
-        authViewState.targetUser = user;
-        authViewState.resetToken = resetTok;
-        authViewState.alertMsg = '';
-        render();
-      });
+    document.getElementById('btnBackToLoginFromExpired').addEventListener('click', () => {
+      authViewState.mode = 'login';
+      authViewState.alertMsg = '';
+      render();
     });
     return;
   }
 
-  // VIEW 4: Staff / Facilitator Invitation Setup Screen
+  // VIEW 7: Staff / Facilitator Invitation Setup Screen
   if (authViewState.mode === 'invitation') {
     const user = authViewState.targetUser;
     root.innerHTML = `
@@ -16372,14 +16738,14 @@ function renderLoginScreen(root) {
             <div class="cp-field">
               <label for="invitePassword">Create Password (min 8 chars, letters &amp; numbers) *</label>
               <div class="cp-password-wrap">
-                <input type="password" id="invitePassword" placeholder="Create your password" required autocomplete="new-password" />
+                <input type="password" id="invitePassword" placeholder="Create your password" required autocomplete="new-password" minlength="8" />
                 <button type="button" class="cp-password-toggle" id="btnToggleInvitePwd">&#x1F441;</button>
               </div>
             </div>
 
             <div class="cp-field">
               <label for="inviteConfirmPassword">Confirm Password *</label>
-              <input type="password" id="inviteConfirmPassword" placeholder="Confirm your password" required autocomplete="new-password" />
+              <input type="password" id="inviteConfirmPassword" placeholder="Confirm your password" required autocomplete="new-password" minlength="8" />
             </div>
 
             <button type="submit" class="cp-btn accent" id="btnActivateAccount" style="width:100%; padding:11px; font-size:14px; font-weight:700; margin-top:8px;">
@@ -16428,46 +16794,62 @@ function renderLoginScreen(root) {
         return;
       }
 
-      const salt = generateRandomToken('salt_');
-      const hash = await hashPasswordWithSalt(newPwd, salt);
+      const btn = document.getElementById('btnActivateAccount');
+      btn.disabled = true;
+      btn.textContent = 'Activating Account...';
 
-      user.passwordSalt = salt;
-      user.passwordHash = hash;
-      user.status = 'active';
-      user.mustChangePassword = false;
-      user.invitationToken = null;
-      user.invitationExpiresAt = null;
-      user.activatedAt = new Date().toISOString();
-      user.lastLoginAt = new Date().toISOString();
+      try {
+        if (supabaseClient.isConfigured()) {
+          await supabaseClient.auth.signUp({ email: user.email, password: newPwd }).catch(() => null);
+        }
 
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+        const salt = generateRandomToken('salt_');
+        const hash = await hashPasswordWithSalt(newPwd, salt);
 
-      const sessionToken = generateRandomToken('sess_');
-      const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+        user.passwordSalt = salt;
+        user.passwordHash = hash;
+        user.status = 'active';
+        user.mustChangePassword = false;
+        user.forcePasswordReset = false;
+        user.invitationToken = null;
+        user.invitationExpiresAt = null;
+        user.activatedAt = new Date().toISOString();
+        user.lastLoginAt = new Date().toISOString();
 
-      const authoritativeTenant = resolveAuthoritativeTenantId();
-      if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
-        state.authoritativeTenantId = authoritativeTenant;
-        user.tenant_id = authoritativeTenant;
-        user.tenantId = authoritativeTenant;
+        await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+
+        const sessionToken = generateRandomToken('sess_');
+        const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+
+        const authoritativeTenant = resolveAuthoritativeTenantId();
+        if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
+          state.authoritativeTenantId = authoritativeTenant;
+          user.tenant_id = authoritativeTenant;
+          user.tenantId = authoritativeTenant;
+        }
+        state.auth = {
+          ...state.auth,
+          isAuthenticated: true,
+          user: user,
+          token: sessionToken,
+          expiresAt: sessionExpiry,
+          tenant_id: state.authoritativeTenantId || null,
+          tenantId: state.authoritativeTenantId || null
+        };
+        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+
+        state.tab = getDefaultTabForRole(user.role);
+
+        await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted and account activated for ${user.email}`);
+        authViewState.mode = 'login';
+        authViewState.alertMsg = '';
+        render();
+      } catch (err) {
+        alertEl.textContent = err.message || 'An error occurred during account activation.';
+        alertEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Activate Account & Access Workspace';
       }
-      state.auth = {
-        ...state.auth,
-        isAuthenticated: true,
-        user: user,
-        token: sessionToken,
-        expiresAt: sessionExpiry,
-        tenant_id: state.authoritativeTenantId || null,
-        tenantId: state.authoritativeTenantId || null
-      };
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-
-      state.tab = getDefaultTabForRole(user.role);
-
-      await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted and account activated for ${user.email}`);
-      authViewState.mode = 'login';
-      authViewState.alertMsg = '';
-      render();
     });
     return;
   }
@@ -16561,8 +16943,8 @@ function render(container) {
     return;
   }
 
-  // Authoritative Mandatory Login Gate
-  if (!state.auth || !state.auth.isAuthenticated || !state.auth.user) {
+  // Authoritative Mandatory Login Gate & Recovery Screen Support
+  if (!state.auth || !state.auth.isAuthenticated || !state.auth.user || (authViewState && authViewState.mode !== 'login')) {
     renderLoginScreen(root);
     return;
   }
@@ -16574,14 +16956,6 @@ function render(container) {
     safeSet(STORE_KEY_AUTH_SESSION, null);
     authViewState.alertMsg = activeUser && activeUser.status === 'deactivated' ? 'Your account has been deactivated.' : 'Your session has expired or was revoked. Please sign in again.';
     authViewState.alertType = 'error';
-    renderLoginScreen(root);
-    return;
-  }
-
-  // Force Password Reset check
-  if (activeUser.mustChangePassword || activeUser.forcePasswordReset) {
-    authViewState.mode = 'force_reset';
-    authViewState.targetUser = activeUser;
     renderLoginScreen(root);
     return;
   }
@@ -18152,8 +18526,8 @@ function renderMySecurityTab(container) {
     const p2 = document.getElementById('confSecPwd').value;
     const msg = document.getElementById('secPwdMsg');
 
-    if (!p1 || p1.length < 6) {
-      msg.textContent = 'New password must be at least 6 characters.';
+    if (!p1 || p1.length < 8) {
+      msg.textContent = 'New password must be at least 8 characters.';
       msg.style.color = 'var(--danger)';
       msg.style.display = 'block';
       return;
@@ -18165,10 +18539,51 @@ function renderMySecurityTab(container) {
       return;
     }
 
-    await logAudit('PASSWORD_CHANGE', 'user', user.id, `User ${user.email} updated personal password`);
-    msg.textContent = '✔ Password successfully updated.';
-    msg.style.color = 'var(--success)';
-    msg.style.display = 'block';
+    const strCheck = validatePasswordStrength(p1);
+    if (!strCheck.valid) {
+      msg.textContent = strCheck.message;
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('btnUpdateMyPassword');
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+      if (supabaseClient.isConfigured()) {
+        const res = await supabaseClient.auth.updateUser({ password: p1 });
+        if (res && res.error) {
+          msg.textContent = res.error.message || 'Failed to update password in Supabase Auth.';
+          msg.style.color = 'var(--danger)';
+          msg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = '\u{1F512} Update Password';
+          return;
+        }
+      }
+
+      const salt = generateRandomToken('salt_');
+      const hash = await hashPasswordWithSalt(p1, salt);
+      user.passwordSalt = salt;
+      user.passwordHash = hash;
+      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+
+      await logAudit('PASSWORD_CHANGE', 'user', user.id, `User ${user.email} updated personal password via self-service`);
+      msg.textContent = '✔ Password successfully updated.';
+      msg.style.color = 'var(--success)';
+      msg.style.display = 'block';
+      document.getElementById('newSecPwd').value = '';
+      document.getElementById('confSecPwd').value = '';
+    } catch (err) {
+      msg.textContent = err.message || 'Error updating password';
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '\u{1F512} Update Password';
+    }
   });
 }
 
@@ -23338,7 +23753,7 @@ function renderUsersRolesTab(container) {
         role: userRole,
         title: pers.role || pers.designation,
         status: 'invited',
-        mustChangePassword: true,
+        mustChangePassword: false,
         invitationToken: invToken,
         invitationExpiresAt: invExpiry,
         personnelId: pers.id,
@@ -29916,7 +30331,7 @@ function renderAddStaffModal(container) {
         role: userRole,
         title: role,
         status: 'invited',
-        mustChangePassword: true,
+        mustChangePassword: false,
         invitationToken: invToken,
         invitationExpiresAt: invExpiry,
         personnelId: persId,
@@ -30088,7 +30503,7 @@ function renderAddFacilitatorModal(container) {
         role: 'Facilitator',
         title: designation || 'Facilitator',
         status: 'invited',
-        mustChangePassword: true,
+        mustChangePassword: false,
         invitationToken: invToken,
         invitationExpiresAt: invExpiry,
         personnelId: persId,
@@ -30296,9 +30711,6 @@ function renderDeactivateUserModal(container, user) {
 }
 
 function renderResetPasswordModal(container, user) {
-  const resetToken = 'rst_' + Math.random().toString(36).substring(2, 10);
-  const resetLink = `https://clasptek.org/auth/reset?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
-
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal">
@@ -30307,23 +30719,19 @@ function renderResetPasswordModal(container, user) {
           <button class="cp-modal-close" id="btnCloseRstMod">&times;</button>
         </div>
         <div class="cp-modal-body">
-          <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">
+          <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:14px;">
             Target Account: <strong>${escapeHtml(user.email)}</strong> &middot; Role: <span class="cp-pill active">${escapeHtml(user.role)}</span>
           </div>
 
-          <div class="cp-field">
-            <label>Secure Reset Link</label>
-            <input value="${resetLink}" readonly style="background:#F8FAFC; font-family:var(--font-mono); font-size:11.5px;" />
+          <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:14px; color:var(--text-primary);">
+            An authoritative password reset email will be dispatched to <strong>${escapeHtml(user.email)}</strong> via Supabase Auth. The user will receive instructions with a secure, single-use link to establish a new confidential password.
           </div>
 
-          <div class="cp-field" style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-            <input type="checkbox" id="chkForceReset" checked style="width:16px; height:16px;" />
-            <label for="chkForceReset" style="margin:0; font-size:12.5px; cursor:pointer;">Force Password Reset at Next Login</label>
-          </div>
+          <div id="rstModAlert" style="display:none; padding:10px 12px; border-radius:var(--radius-sm); font-size:12px; margin-bottom:10px;"></div>
         </div>
         <div class="cp-modal-footer">
-          <button class="cp-btn secondary" id="btnCancelRst">Close</button>
-          <button class="cp-btn accent" id="btnConfirmRst">&#x2714; Issue Reset Directive</button>
+          <button class="cp-btn secondary" id="btnCancelRst">Cancel</button>
+          <button class="cp-btn accent" id="btnConfirmRst">&#x2709;&#xFE0F; Send Password Reset Email</button>
         </div>
       </div>
     </div>
@@ -30333,11 +30741,26 @@ function renderResetPasswordModal(container, user) {
   document.getElementById('btnCancelRst').addEventListener('click', closeModal);
 
   document.getElementById('btnConfirmRst').addEventListener('click', async () => {
-    user.forcePasswordReset = document.getElementById('chkForceReset').checked;
-    await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-    await logAudit('RESET_USER_PASSWORD', 'user', user.id, `Password reset directive issued for ${user.email}`);
-    alert(`Password reset directive issued for ${user.email}.`);
-    closeModal();
+    const btn = document.getElementById('btnConfirmRst');
+    const alertEl = document.getElementById('rstModAlert');
+    btn.disabled = true;
+    btn.textContent = 'Sending Request...';
+
+    try {
+      if (supabaseClient.isConfigured()) {
+        await supabaseClient.auth.resetPasswordForEmail(user.email);
+      }
+      await logAudit('RESET_USER_PASSWORD_REQUESTED', 'user', user.id, `Password reset email requested for ${user.email}`);
+      alert(`Password reset instructions have been requested for ${user.email}. Please advise the user to check their inbox and spam/junk folder.`);
+      closeModal();
+    } catch (err) {
+      alertEl.textContent = err.message || 'Error requesting password reset';
+      alertEl.style.background = '#FEE2E2';
+      alertEl.style.color = '#991B1B';
+      alertEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '\u{2709}\u{FE0F} Send Password Reset Email';
+    }
   });
 }
 
