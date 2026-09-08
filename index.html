@@ -30459,6 +30459,21 @@ function renderAddStaffModal(container) {
               <label for="staffCreateLogin" style="margin:0; font-size:12.5px; cursor:pointer;">Provision Login Account Immediately</label>
             </div>
           </div>
+          <div class="cp-row2" id="staffPasswordRow" style="margin-top:10px;">
+            <div class="cp-field">
+              <label>Initial Login Password *</label>
+              <div style="position:relative;">
+                <input type="password" id="staffInitialPassword" placeholder="Min. 8 chars, 1 uppercase, 1 number" style="padding-right:36px;" />
+                <button type="button" id="btnToggleStaffPwd" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:14px; color:var(--text-muted);" title="Toggle visibility">&#x1F441;</button>
+              </div>
+            </div>
+            <div class="cp-field">
+              <label style="color:var(--text-muted); font-size:11px;">Password Policy</label>
+              <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4; padding-top:6px;">
+                Must be at least 8 characters with at least one uppercase letter and one numeric digit.
+              </div>
+            </div>
+          </div>
 
           <div id="staffFormErr" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;"></div>
         </div>
@@ -30472,6 +30487,16 @@ function renderAddStaffModal(container) {
 
   document.getElementById('btnCloseAddStaffMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelAddStaff').addEventListener('click', closeModal);
+
+  document.getElementById('staffCreateLogin').addEventListener('change', (e) => {
+    const pwdRow = document.getElementById('staffPasswordRow');
+    if (pwdRow) pwdRow.style.display = e.target.checked ? 'grid' : 'none';
+  });
+
+  document.getElementById('btnToggleStaffPwd').addEventListener('click', () => {
+    const inp = document.getElementById('staffInitialPassword');
+    if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
 
   document.getElementById('staffFname').addEventListener('input', () => {
     const fn = document.getElementById('staffFname').value.trim();
@@ -30502,7 +30527,9 @@ function renderAddStaffModal(container) {
     const nin = document.getElementById('staffNin').value.trim();
     const userRole = document.getElementById('staffUserRole').value;
     const createLogin = document.getElementById('staffCreateLogin').checked;
+    const initialPassword = document.getElementById('staffInitialPassword')?.value || '';
     const errEl = document.getElementById('staffFormErr');
+    const saveBtn = document.getElementById('btnSaveStaff');
 
     if (!fn || !ln || !phone || !email || !role || !accNo) {
       errEl.textContent = 'Please complete all required fields (Name, Phone, Email, Role, Account #).';
@@ -30510,81 +30537,98 @@ function renderAddStaffModal(container) {
       return;
     }
 
-    const fullName = `${fn} ${ln}${on ? ' ' + on : ''}`;
-    const nextEmpNo = state.personnel.filter(p => p.type === 'staff').length + 1;
-    const empIdStr = 'EMP-' + String(nextEmpNo).padStart(4, '0');
-    const persId = 'emp_' + Date.now();
-    const invToken = createLogin ? generateRandomToken('inv_') : null;
-    const invExpiry = createLogin ? Date.now() + 7 * 24 * 3600 * 1000 : null; // 7 days
-    const userId = createLogin ? 'usr_' + Date.now() : null;
+    if (createLogin) {
+      if (!initialPassword) {
+        errEl.textContent = 'Please provide an initial login password for this account.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (initialPassword.length < 8 || !/[A-Z]/.test(initialPassword) || !/[0-9]/.test(initialPassword)) {
+        errEl.textContent = 'Password must be at least 8 characters long and contain at least one uppercase letter and one number.';
+        errEl.style.display = 'block';
+        return;
+      }
+    }
 
-    const newPersonnel = {
-      id: persId,
-      employeeId: empIdStr,
-      name: fullName,
-      type: 'staff',
-      department: dept,
-      role,
-      designation: role,
-      email,
-      phone,
-      address,
-      dob,
-      dateOfJoining: joinDate,
-      employmentStatus: empStatus,
-      reportingManager: manager,
-      bankName: bank,
-      accountName: accName || fullName,
-      accountNumber: accNo,
-      taxNumber: tin,
-      nin,
-      payrollEligibility: true,
-      basicPay: salary,
-      status: 'active',
-      userId,
-      createdAt: new Date().toISOString()
-    };
+    await supabaseClient.ensureValidSession();
+    let userToken = null;
+    const candidates = [state.auth?.supabaseJwt, state.auth?.supabaseSession?.access_token, state.auth?.token];
+    for (const cand of candidates) {
+      if (typeof cand === 'string' && cand.startsWith('eyJ') && cand.split('.').length === 3 && cand !== supabaseClient.getAnonKey()) {
+        userToken = cand.trim();
+        break;
+      }
+    }
 
-    try {
-      await dbRepo.saveRecord(STORE_KEY_PERSONNEL, newPersonnel);
-    } catch (dbErr) {
-      alert(dbErr.message);
+    if (!userToken) {
+      errEl.textContent = 'Administrative session expired or invalid. Please re-authenticate to provision personnel.';
+      errEl.style.display = 'block';
       return;
     }
 
-    state.personnel.push(newPersonnel);
-    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+    const fullName = `${fn} ${ln}${on ? ' ' + on : ''}`;
+    const nextEmpNo = state.personnel.filter(p => p.type === 'staff').length + 1;
+    const empIdStr = 'EMP-' + String(nextEmpNo).padStart(4, '0');
 
-    if (createLogin) {
-      const newUser = {
-        id: userId,
-        email,
-        name: fullName,
-        role: userRole,
-        title: role,
-        status: 'invited',
-        mustChangePassword: false,
-        invitationToken: invToken,
-        invitationExpiresAt: invExpiry,
-        personnelId: persId,
-        tenant_id: DEFAULT_TENANT_ID,
-        createdAt: new Date().toISOString()
-      };
-      state.users.push(newUser);
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('USER_INVITED', 'user', userId, `Invited staff ${fullName} (${email}) with role ${userRole}`);
-    }
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '&#x23F3; Provisioning Staff Account...';
+    errEl.style.display = 'none';
 
-    await logAudit('CREATE_STAFF_PERSONNEL', 'personnel', persId, `Created staff record ${fullName} (${empIdStr})`);
-    
-    if (createLogin && invToken) {
-      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
-      const invLink = `${currentUrl}?invite=${invToken}`;
-      alert(`Staff member ${fullName} created.\n\nInvitation Link (Active for 7 days):\n${invLink}`);
-    } else {
-      alert(`Staff member ${fullName} (${empIdStr}) created successfully.`);
+    try {
+      const res = await fetch('/api/admin/provision-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          employee_type: 'staff',
+          full_name: fullName,
+          first_name: fn,
+          last_name: ln,
+          email,
+          phone,
+          department: dept,
+          job_title: role,
+          employee_id: empIdStr,
+          employment_status: empStatus,
+          date_joined: joinDate,
+          bank_name: bank,
+          account_name: accName || fullName,
+          account_number: accNo,
+          compensation_type: 'salaried',
+          basic_pay: salary,
+          user_role: userRole,
+          create_login: createLogin,
+          password: createLogin ? initialPassword : null,
+          notes: `Manager: ${manager}, Address: ${address}, DOB: ${dob}, TIN: ${tin}, NIN: ${nin}`
+        })
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '&#x2714; Create Staff Profile';
+        errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      await logAudit('CREATE_STAFF_PERSONNEL', 'personnel', result.personnel.id, `Provisioned staff ${fullName} (${result.personnel.employee_id})`);
+      await loadAll();
+
+      if (createLogin && result.user) {
+        alert(`Staff member ${fullName} (${result.personnel.employee_id}) provisioned successfully with official Supabase Auth account.\n\nThe employee may now log in with email: ${email}`);
+      } else {
+        alert(`Staff member ${fullName} (${result.personnel.employee_id}) created successfully.`);
+      }
+      closeModal();
+    } catch (networkErr) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '&#x2714; Create Staff Profile';
+      errEl.textContent = 'Network error connecting to provisioning endpoint: ' + (networkErr.message || 'Please check your connection.');
+      errEl.style.display = 'block';
     }
-    closeModal();
   });
 }
 
@@ -30643,6 +30687,21 @@ function renderAddFacilitatorModal(container) {
             <input type="checkbox" id="facCreateLogin" checked style="width:16px; height:16px;" />
             <label for="facCreateLogin" style="margin:0; font-size:12.5px; cursor:pointer;">Provision Facilitator Self-Service Portal Access</label>
           </div>
+          <div class="cp-row2" id="facPasswordRow" style="margin-top:10px;">
+            <div class="cp-field">
+              <label>Initial Login Password *</label>
+              <div style="position:relative;">
+                <input type="password" id="facInitialPassword" placeholder="Min. 8 chars, 1 uppercase, 1 number" style="padding-right:36px;" />
+                <button type="button" id="btnToggleFacPwd" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:14px; color:var(--text-muted);" title="Toggle visibility">&#x1F441;</button>
+              </div>
+            </div>
+            <div class="cp-field">
+              <label style="color:var(--text-muted); font-size:11px;">Password Policy</label>
+              <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4; padding-top:6px;">
+                Must be at least 8 characters with at least one uppercase letter and one numeric digit.
+              </div>
+            </div>
+          </div>
 
           <div id="facFormErr" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;"></div>
         </div>
@@ -30656,6 +30715,16 @@ function renderAddFacilitatorModal(container) {
 
   document.getElementById('btnCloseAddFacMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelAddFac').addEventListener('click', closeModal);
+
+  document.getElementById('facCreateLogin').addEventListener('change', (e) => {
+    const pwdRow = document.getElementById('facPasswordRow');
+    if (pwdRow) pwdRow.style.display = e.target.checked ? 'grid' : 'none';
+  });
+
+  document.getElementById('btnToggleFacPwd').addEventListener('click', () => {
+    const inp = document.getElementById('facInitialPassword');
+    if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
 
   document.getElementById('facName').addEventListener('input', () => {
     const fn = document.getElementById('facName').value.trim();
@@ -30678,7 +30747,9 @@ function renderAddFacilitatorModal(container) {
     const accName = document.getElementById('facAccName').value.trim();
     const accNo = document.getElementById('facAccNo').value.trim();
     const createLogin = document.getElementById('facCreateLogin').checked;
+    const initialPassword = document.getElementById('facInitialPassword')?.value || '';
     const errEl = document.getElementById('facFormErr');
+    const saveBtn = document.getElementById('btnSaveFac');
 
     if (!name || !phone || !email || !accNo) {
       errEl.textContent = 'Please provide full name, phone, email, and bank account number.';
@@ -30686,79 +30757,100 @@ function renderAddFacilitatorModal(container) {
       return;
     }
 
-    const nextFacNo = state.personnel.filter(p => p.type === 'facilitator').length + 1;
-    const facIdStr = 'FAC-' + String(nextFacNo).padStart(4, '0');
-    const persId = 'emp_' + Date.now();
-    const invToken = createLogin ? generateRandomToken('inv_') : null;
-    const invExpiry = createLogin ? Date.now() + 7 * 24 * 3600 * 1000 : null; // 7 days
-    const userId = createLogin ? 'usr_' + Date.now() : null;
+    if (createLogin) {
+      if (!initialPassword) {
+        errEl.textContent = 'Please provide an initial login password for this account.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (initialPassword.length < 8 || !/[A-Z]/.test(initialPassword) || !/[0-9]/.test(initialPassword)) {
+        errEl.textContent = 'Password must be at least 8 characters long and contain at least one uppercase letter and one number.';
+        errEl.style.display = 'block';
+        return;
+      }
+    }
 
-    const newPersonnel = {
-      id: persId,
-      employeeId: facIdStr,
-      name,
-      type: 'facilitator',
-      department: 'Academics',
-      role: designation || 'Facilitator',
-      designation: designation || 'Facilitator',
-      subject: subject || 'Academic Training',
-      engagementType: engageType,
-      email,
-      phone,
-      dateEngaged,
-      bankName: bank,
-      accountName: accName || name,
-      accountNumber: accNo,
-      payrollEligibility: true,
-      basicPay: basePay,
-      feeStructure: feeStructure || (basePay > 0 ? `₦${basePay.toLocaleString()} Base Retainer` : 'Per-session based'),
-      status: 'active',
-      userId,
-      createdAt: new Date().toISOString()
-    };
+    await supabaseClient.ensureValidSession();
+    let userToken = null;
+    const candidates = [state.auth?.supabaseJwt, state.auth?.supabaseSession?.access_token, state.auth?.token];
+    for (const cand of candidates) {
+      if (typeof cand === 'string' && cand.startsWith('eyJ') && cand.split('.').length === 3 && cand !== supabaseClient.getAnonKey()) {
+        userToken = cand.trim();
+        break;
+      }
+    }
 
-    try {
-      await dbRepo.saveRecord(STORE_KEY_PERSONNEL, newPersonnel);
-    } catch (dbErr) {
-      alert(dbErr.message);
+    if (!userToken) {
+      errEl.textContent = 'Administrative session expired or invalid. Please re-authenticate to provision personnel.';
+      errEl.style.display = 'block';
       return;
     }
 
-    state.personnel.push(newPersonnel);
-    await safeSet(STORE_KEY_PERSONNEL, state.personnel);
+    const nextFacNo = state.personnel.filter(p => p.type === 'facilitator').length + 1;
+    const facIdStr = 'FAC-' + String(nextFacNo).padStart(4, '0');
 
-    if (createLogin) {
-      const newUser = {
-        id: userId,
-        email,
-        name,
-        role: 'Facilitator',
-        title: designation || 'Facilitator',
-        status: 'invited',
-        mustChangePassword: false,
-        invitationToken: invToken,
-        invitationExpiresAt: invExpiry,
-        personnelId: persId,
-        tenant_id: DEFAULT_TENANT_ID,
-        createdAt: new Date().toISOString()
-      };
-      state.users.push(newUser);
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-      await logAudit('USER_INVITED', 'user', userId, `Invited facilitator ${name} (${email})`);
-    }
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '&#x23F3; Provisioning Facilitator Account...';
+    errEl.style.display = 'none';
 
-    await logAudit('CREATE_FACILITATOR_PERSONNEL', 'personnel', persId, `Created facilitator record ${name} (${facIdStr})`);
-    
-    if (createLogin && invToken) {
-      const currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href.split('?')[0] : 'file:///clasptek_invoice_system.html');
-      const invLink = `${currentUrl}?invite=${invToken}`;
-      alert(`Facilitator ${name} created.\n\nInvitation Link (Active for 7 days):\n${invLink}`);
-    } else {
-      alert(`Facilitator ${name} (${facIdStr}) created successfully.`);
+    try {
+      const res = await fetch('/api/admin/provision-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          employee_type: 'facilitator',
+          full_name: name,
+          email,
+          phone,
+          department: 'Academics',
+          job_title: designation || 'Facilitator',
+          employee_id: facIdStr,
+          employment_status: 'active',
+          date_joined: dateEngaged,
+          bank_name: bank,
+          account_name: accName || name,
+          account_number: accNo,
+          compensation_type: 'per_session',
+          basic_pay: basePay,
+          facilitator_rate: basePay,
+          rate_type: 'session',
+          user_role: 'Facilitator',
+          create_login: createLogin,
+          password: createLogin ? initialPassword : null,
+          notes: `Programme/Subject: ${subject || 'Academic Training'}, Engagement: ${engageType}, Fee Structure: ${feeStructure}`
+        })
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '&#x2714; Create Facilitator Profile';
+        errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      await logAudit('CREATE_FACILITATOR_PERSONNEL', 'personnel', result.personnel.id, `Provisioned facilitator ${name} (${result.personnel.employee_id})`);
+      await loadAll();
+
+      if (createLogin && result.user) {
+        alert(`Facilitator ${name} (${result.personnel.employee_id}) provisioned successfully with official Supabase Auth account.\n\nThe facilitator may now log in with email: ${email}`);
+      } else {
+        alert(`Facilitator ${name} (${result.personnel.employee_id}) created successfully.`);
+      }
+      closeModal();
+    } catch (networkErr) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '&#x2714; Create Facilitator Profile';
+      errEl.textContent = 'Network error connecting to provisioning endpoint: ' + (networkErr.message || 'Please check your connection.');
+      errEl.style.display = 'block';
     }
-    closeModal();
   });
 }
+
 
 function renderEditPersonnelModal(container, pers) {
   container.innerHTML = `
