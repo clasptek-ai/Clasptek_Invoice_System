@@ -5608,7 +5608,6 @@ const DB_TABLE_MAPPING = {
   [STORE_KEY_PAYMENT_ACCOUNTS]: 'payment_accounts',
   [STORE_KEY_PAYSLIPS]: 'payslips',
   [STORE_KEY_PERSONNEL]: 'personnel',
-  [STORE_KEY_SYSTEM_USERS]: 'system_users',
   [STORE_KEY_ENQUIRIES]: 'enquiries',
   [STORE_KEY_INTAKE_APPLICATIONS]: 'crm_intake_applications',
   [STORE_KEY_ENROLMENTS]: 'enrolments',
@@ -5693,8 +5692,13 @@ const dbRepo = {
       const { data, error } = saveRes;
       if (error) {
         console.error(`PostgreSQL save error on table ${tableName}:`, error);
-        state.supabase.lastError = `Save failed on ${tableName}: ${error.message || JSON.stringify(error)}`;
-        state.connectionError = `Unable to connect to the database. Please check your connection. No financial data has been changed. (${error.message || 'Database write error'})`;
+        const httpStatus = saveRes.status || saveRes.httpStatus || 0;
+        state.supabase.lastError = `Save failed on ${tableName} (HTTP ${httpStatus}): ${error.message || JSON.stringify(error)}`;
+        if (httpStatus === 0) {
+          state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
+        } else {
+          state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${error.message || 'Payload or schema error'}. No financial data has been changed.`;
+        }
         throw new Error(state.connectionError);
       }
       state.supabase.lastSuccessfulWrite = new Date().toISOString();
@@ -5810,10 +5814,16 @@ async function safeSet(key, value) {
           payload = typeof transformEntityForPostgres === 'function'
             ? value.map(item => transformEntityForPostgres(tableName, item, tenantId))
             : value;
-          const { error } = await supabaseClient.from(tableName).upsert(payload);
-          if (error) {
-            state.supabase.lastError = `Write failed on ${tableName}: ${error.message}`;
-            state.connectionError = `Unable to connect to the database. Please check your connection. No financial data has been changed. (${error.message || 'Database write error'})`;
+          const res = await supabaseClient.from(tableName).upsert(payload);
+          if (res && res.error) {
+            const err = res.error;
+            const httpStatus = res.status || res.httpStatus || 0;
+            state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Unknown error'}`;
+            if (httpStatus === 0) {
+              state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${err.message || 'Network error'})`;
+            } else {
+              state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Payload or schema error'}. No financial data has been changed.`;
+            }
             throw new Error(state.connectionError);
           }
           state.supabase.lastSuccessfulWrite = new Date().toISOString();
@@ -5823,10 +5833,16 @@ async function safeSet(key, value) {
         payload = typeof transformEntityForPostgres === 'function'
           ? transformEntityForPostgres(tableName, value, tenantId)
           : value;
-        const { error } = await supabaseClient.from(tableName).upsert(payload);
-        if (error) {
-          state.supabase.lastError = `Write failed on ${tableName}: ${error.message}`;
-          state.connectionError = `Unable to connect to the database. Please check your connection. No financial data has been changed. (${error.message || 'Database write error'})`;
+        const res = await supabaseClient.from(tableName).upsert(payload);
+        if (res && res.error) {
+          const err = res.error;
+          const httpStatus = res.status || res.httpStatus || 0;
+          state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Unknown error'}`;
+          if (httpStatus === 0) {
+            state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${err.message || 'Network error'})`;
+          } else {
+            state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Payload or schema error'}. No financial data has been changed.`;
+          }
           throw new Error(state.connectionError);
         }
         state.supabase.lastSuccessfulWrite = new Date().toISOString();
@@ -5914,6 +5930,12 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
         ? state.authoritativeTenantId
         : DEFAULT_TENANT_ID);
 
+  const authUserId = (state.auth?.supabaseUser?.id && typeof isValidUuid === 'function' && isValidUuid(state.auth.supabaseUser.id))
+    ? state.auth.supabaseUser.id
+    : ((state.auth?.supabaseSession?.user?.id && typeof isValidUuid === 'function' && isValidUuid(state.auth.supabaseSession.user.id))
+        ? state.auth.supabaseSession.user.id
+        : null);
+
   const entry = {
     id: 'audit_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
     tenant_id: auditTenantId,
@@ -5925,13 +5947,32 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
     newValue: sanitizeAuditPayload(newValue),
     reason: reason || 'Standard operation',
     performedBy: actorName,
+    actor_id: authUserId,
+    actorId: authUserId,
     role: actorRole,
     source: 'app_ledger',
     performedAt: new Date().toISOString()
   };
   state.auditLog.unshift(entry);
+
+  // 1. Maintain local history cache (keep up to 200 recent entries in localStorage)
   try {
-    await safeSet(STORE_KEY_AUDIT_LOG, state.auditLog);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORE_KEY_AUDIT_LOG, JSON.stringify(state.auditLog.slice(0, 200)));
+    }
+  } catch (_) {}
+
+  // 2. Authoritative PostgreSQL persistence: persist ONLY the newly created single audit entry
+  try {
+    if (supabaseClient.isConfigured() && state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
+      const transformedRow = typeof transformEntityForPostgres === 'function'
+        ? transformEntityForPostgres('finance_audit_log', entry, auditTenantId)
+        : entry;
+      const { error } = await supabaseClient.from('finance_audit_log').insert([transformedRow]);
+      if (error) {
+        console.warn('Notice: Remote audit log insert notice:', error.message);
+      }
+    }
   } catch (auditErr) {
     console.warn('Notice: Audit log persistence deferred:', auditErr.message);
   }
@@ -6757,7 +6798,9 @@ function transformEntityForPostgres(entity, item, tenantId) {
         created_at: item.createdAt || item.created_at || item.actionDate || item.action_date || new Date().toISOString()
       };
 
-    case 'finance_audit_log':
+    case 'finance_audit_log': {
+      const candidateActorId = item.actor_id || item.actorId || state.auth?.supabaseUser?.id || state.auth?.supabaseSession?.user?.id;
+      const validActorUuid = (typeof isValidUuid === 'function' && isValidUuid(candidateActorId)) ? candidateActorId : null;
       return {
         id: item.id,
         tenant_id: tenantId,
@@ -6768,11 +6811,12 @@ function transformEntityForPostgres(entity, item, tenantId) {
         old_state: item.oldState !== undefined ? item.oldState : (item.old_state !== undefined ? item.old_state : (item.previousValue !== undefined ? item.previousValue : (item.previous_value !== undefined ? item.previous_value : null))),
         new_state: item.newState !== undefined ? item.newState : (item.new_state !== undefined ? item.new_state : (item.newValue !== undefined ? item.newValue : (item.new_value !== undefined ? item.new_value : null))),
         reason: item.reason || null,
-        actor_id: item.actorId || item.actor_id || item.performedBy || item.performed_by || 'System',
+        actor_id: validActorUuid,
         actor_role: item.actorRole || item.actor_role || item.role || 'Super Admin',
         source: item.source || 'APP',
         created_at: item.createdAt || item.created_at || item.performedAt || item.performed_at || new Date().toISOString()
       };
+    }
 
     case 'management_alerts':
       return {
