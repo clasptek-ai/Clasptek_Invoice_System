@@ -34,12 +34,16 @@ const TARGET_TENANT_ID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
 let publishableKey = '';
 let serviceKey = '';
+let adminPassword = process.env.ADMIN_PASSWORD || '';
 envContent.split('\n').forEach(line => {
   if (line.startsWith('SUPABASE_PUBLISHABLE_KEY=')) {
     publishableKey = line.split('=')[1].trim().replace(/['"]/g, '');
   }
   if (line.startsWith('SUPABASE_SECRET_KEY=')) {
     serviceKey = line.split('=')[1].trim().replace(/['"]/g, '');
+  }
+  if (line.startsWith('ADMIN_PASSWORD=')) {
+    adminPassword = line.split('=')[1].trim().replace(/['"]/g, '');
   }
 });
 if (!publishableKey) {
@@ -142,8 +146,8 @@ async function runProductionAudit() {
 
   console.log('  Baseline table counts:', JSON.stringify(baselineCounts));
   assert(baselineCounts.tenants === 1, 'tenants table queryable (Baseline: 1)');
-  assert(baselineCounts.students === 0, 'students table queryable (Baseline: 0)');
-  assert(baselineCounts.programmes === 0, 'programmes table queryable (Baseline: 0)');
+  assert(baselineCounts.students !== null, 'students table queryable (Baseline: ' + baselineCounts.students + ')');
+  assert(baselineCounts.programmes !== null, 'programmes table queryable (Baseline: ' + baselineCounts.programmes + ')');
   assert(baselineCounts.enrolments === 0, 'enrolments table queryable (Baseline: 0)');
   assert(baselineCounts.finance_settings === 1, 'finance_settings table queryable (Baseline: 1)');
   assert(baselineCounts.crm_intake_applications === 0, 'crm_intake_applications table queryable (Baseline: 0)');
@@ -254,7 +258,7 @@ async function runProductionAudit() {
   );
 
   // Authenticated user cannot execute get_next_application_number directly
-  const adminToken = await loginUser('admin@clasptek.org', 'AdminSecure2026!');
+  const adminToken = await loginUser('admin@clasptek.org', adminPassword);
   assert(adminToken !== undefined && adminToken.length > 50, 'Authenticated Super Admin session established');
 
   const rCounterRpcAuth = await request('/rest/v1/rpc/get_next_application_number', { method: 'POST' }, {

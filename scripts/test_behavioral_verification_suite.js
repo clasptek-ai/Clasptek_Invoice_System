@@ -29,12 +29,16 @@ const TARGET_TENANT_ID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
 let publishableKey = '';
 let serviceKey = '';
+let adminPassword = process.env.ADMIN_PASSWORD || '';
 envContent.split('\n').forEach(line => {
   if (line.startsWith('SUPABASE_PUBLISHABLE_KEY=')) {
     publishableKey = line.split('=')[1].trim().replace(/['"]/g, '');
   }
   if (line.startsWith('SUPABASE_SECRET_KEY=')) {
     serviceKey = line.split('=')[1].trim().replace(/['"]/g, '');
+  }
+  if (line.startsWith('ADMIN_PASSWORD=')) {
+    adminPassword = line.split('=')[1].trim().replace(/['"]/g, '');
   }
 });
 if (!publishableKey) {
@@ -143,7 +147,7 @@ async function runBehavioralVerification() {
   console.log('--- Establishing Privileged Admin Token ---');
   const authLoginRes = await request('/auth/v1/token?grant_type=password', { method: 'POST' }, {
     email: 'admin@clasptek.org',
-    password: 'AdminSecure2026!'
+    password: adminPassword
   }, null, false);
   const adminToken = authLoginRes.body?.access_token;
   assert(adminToken && adminToken.length > 50, 'Admin session token established');

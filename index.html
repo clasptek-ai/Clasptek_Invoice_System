@@ -1478,6 +1478,10 @@ const DIAGNOSTIC_AUTH_STATE = {
   UNAUTHENTICATED: 'AUTH_UNAUTHENTICATED'
 };
 
+// Canonical Invoice Status Architecture
+const CANONICAL_INVOICE_STATUSES = Object.freeze(['unpaid', 'partial', 'paid', 'voided', 'cancelled']);
+const COMPUTED_INVOICE_DISPLAY_STATUSES = Object.freeze(['overdue']);
+
 const DIAGNOSTIC_POSTGREST_STATE = {
   CONNECTED: 'POSTGREST_CONNECTED',
   UNCONFIGURED: 'POSTGREST_UNCONFIGURED',
@@ -2216,6 +2220,14 @@ const supabaseClient = {
     return this.ensureFreshSession();
   },
   async ensureFreshSession() {
+    // 0. Guard against terminal failure and rate limit cooldown
+    if (this.auth && typeof this.auth.isTerminalFailure === 'function' && this.auth.isTerminalFailure()) {
+      return null;
+    }
+    if (this.auth && typeof this.auth.isRateLimited === 'function' && this.auth.isRateLimited()) {
+      return null;
+    }
+
     // 1. If in-memory token is missing, attempt restore from persisted storage
     if (!state.auth?.supabaseJwt && !state.auth?.supabaseSession) {
       let stored = await safeGet('clasptek:supabase_session', null);
@@ -2241,7 +2253,13 @@ const supabaseClient = {
         state.auth.supabaseSession = stored;
         state.auth.supabaseJwt = stored.access_token;
         state.auth.supabaseUser = stored.user || state.auth.supabaseUser;
-        state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+        // Derive tokenExpiresAt from authoritative JWT exp claim
+        const jwtPayloadRestore = decodeJwtPayload(stored.access_token);
+        if (jwtPayloadRestore && jwtPayloadRestore.exp) {
+          state.auth.tokenExpiresAt = jwtPayloadRestore.exp * 1000;
+        } else {
+          state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+        }
         const tId = stored.user?.app_metadata?.tenant_id || stored.user?.user_metadata?.tenant_id || stored.user?.tenant_id;
         if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
           state.authoritativeTenantId = tId;
@@ -2250,14 +2268,20 @@ const supabaseClient = {
     }
 
     // 2. If token is present and nearing or past expiration, proactively refresh
+    const currentSession = state.auth?.supabaseSession;
+    if (currentSession && currentSession.type === 'recovery') {
+      return state.auth?.supabaseJwt || null;
+    }
+
     const currentJwt = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
     if (currentJwt && isJwtExpiredOrExpiring(currentJwt, 60)) {
       try {
         await this.auth.refreshSession();
       } catch (_) {
-        // Warning captured without breaking current invocation
+        // Warning captured without breaking invocation; failure state recorded in auth client
       }
     }
+    return state.auth?.supabaseJwt || null;
   },
   getHeaders(customHeaders = {}) {
     const key = this.getAnonKey();
@@ -2305,6 +2329,111 @@ const supabaseClient = {
     return headers;
   },
   auth: {
+    _inFlightRefreshPromise: null,
+    _refreshFailureTerminal: false,
+    _terminalFailureReason: null,
+    _rateLimitedUntil: 0,
+    _authStateListeners: [],
+
+    onAuthStateChange(listener) {
+      if (typeof listener === 'function') {
+        this._authStateListeners.push(listener);
+      }
+      return {
+        data: {
+          subscription: {
+            unsubscribe: () => {
+              this._authStateListeners = this._authStateListeners.filter(l => l !== listener);
+            }
+          }
+        }
+      };
+    },
+
+    _notifyAuthStateChange(event, session) {
+      this._authStateListeners.forEach(listener => {
+        try {
+          listener(event, session);
+        } catch (_) {}
+      });
+    },
+
+    isTerminalFailure() {
+      return this._refreshFailureTerminal === true;
+    },
+
+    isRateLimited() {
+      return Date.now() < this._rateLimitedUntil;
+    },
+
+    getRateLimitRemainingMs() {
+      return Math.max(0, this._rateLimitedUntil - Date.now());
+    },
+
+    resetAuthFailureState() {
+      this._inFlightRefreshPromise = null;
+      this._refreshFailureTerminal = false;
+      this._terminalFailureReason = null;
+      this._rateLimitedUntil = 0;
+    },
+
+    async handleTerminalAuthFailure(error, context = 'auth') {
+      this._refreshFailureTerminal = true;
+      this._terminalFailureReason = error?.message || (typeof error === 'string' ? error : 'Session expired');
+      this._inFlightRefreshPromise = null;
+
+      // 1. Clear in-memory Supabase session & app auth state
+      if (state.auth) {
+        state.auth.supabaseJwt = null;
+        state.auth.supabaseSession = null;
+        state.auth.supabaseUser = null;
+        state.auth.tokenExpiresAt = null;
+        state.auth.tenant_id = null;
+        state.auth.tenantId = null;
+        state.auth.token = null;
+        state.auth.expiresAt = null;
+        state.auth.isAuthenticated = false;
+        state.auth.user = null;
+      }
+      state.authoritativeTenantId = null;
+
+      // 2. Clear persisted application authentication state
+      try {
+        await safeSet(STORE_KEY_AUTH_SESSION, null);
+      } catch (_) {}
+
+      // 3. Clear clasptek:supabase_session
+      try {
+        await safeSet('clasptek:supabase_session', null);
+      } catch (_) {}
+
+      // 4. Safely enumerate and remove ONLY Supabase Auth browser-storage entries (NO wildcard)
+      if (typeof localStorage !== 'undefined') {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && (/^sb-.*-auth-token$/i.test(k) || k === 'clasptek:supabase_session' || k === 'supabase.auth.token')) {
+              localStorage.removeItem(k);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 5. Notify listeners of SIGNED_OUT
+      this._notifyAuthStateChange('SIGNED_OUT', null);
+
+      // 6. Transition to the login screen exactly once
+      if (typeof authViewState !== 'undefined') {
+        authViewState.mode = 'login';
+        authViewState.alertMsg = 'Your session has expired. Please sign in again.';
+        authViewState.alertType = 'error';
+      }
+
+      if (typeof render === 'function') {
+        render();
+      }
+    },
+
     async signInWithPassword(arg1, arg2) {
       const email = (typeof arg1 === 'object' && arg1 !== null) ? arg1.email : arg1;
       const password = (typeof arg1 === 'object' && arg1 !== null) ? arg1.password : arg2;
@@ -2330,6 +2459,9 @@ const supabaseClient = {
         }
 
         if (data && data.access_token) {
+          // Reset terminal failure and rate limit state upon successful credential login
+          supabaseClient.auth.resetAuthFailureState();
+
           state.auth = state.auth || {};
           state.auth.supabaseSession = data;
           state.auth.supabaseJwt = data.access_token;
@@ -2347,6 +2479,7 @@ const supabaseClient = {
           }
           await safeSet('clasptek:supabase_session', data);
           await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+          supabaseClient.auth._notifyAuthStateChange('SIGNED_IN', data);
         }
 
         return { data: { user: data.user, session: data, access_token: data.access_token }, error: null, success: true, status: res.status };
@@ -2557,8 +2690,13 @@ const supabaseClient = {
       return { data: { session: sessionData, user: sessionData.user }, error: null };
     },
     async getSession() {
+      if (this.isTerminalFailure()) {
+        return { data: { session: null }, error: new Error(this._terminalFailureReason || 'Authentication session expired') };
+      }
       if (state.auth && state.auth.supabaseSession) {
-        if (state.auth.tokenExpiresAt && state.auth.tokenExpiresAt - Date.now() < 60000) {
+        // Use authoritative JWT exp claim for expiry, not wall-clock tokenExpiresAt
+        const jwt = state.auth.supabaseJwt || state.auth.supabaseSession.access_token;
+        if (jwt && isJwtExpiredOrExpiring(jwt, 60)) {
           try {
             await this.refreshSession();
           } catch (_) {}
@@ -2571,8 +2709,14 @@ const supabaseClient = {
         state.auth.supabaseSession = stored;
         state.auth.supabaseJwt = stored.access_token;
         state.auth.supabaseUser = stored.user;
-        state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
-        if (state.auth.tokenExpiresAt - Date.now() < 60000) {
+        // Derive tokenExpiresAt from authoritative JWT exp claim, not Date.now() + expires_in
+        const jwtPayload = decodeJwtPayload(stored.access_token);
+        if (jwtPayload && jwtPayload.exp) {
+          state.auth.tokenExpiresAt = jwtPayload.exp * 1000;
+        } else {
+          state.auth.tokenExpiresAt = Date.now() + (stored.expires_in ? stored.expires_in * 1000 : 3600000);
+        }
+        if (isJwtExpiredOrExpiring(stored.access_token, 60)) {
           try {
             await this.refreshSession();
           } catch (_) {}
@@ -2582,8 +2726,22 @@ const supabaseClient = {
       return { data: { session: null }, error: null };
     },
     async refreshSession() {
-      const base = supabaseClient.getBaseUrl();
-      const key = supabaseClient.getAnonKey();
+      // 1. Guard against terminal failure (0 network requests)
+      if (this.isTerminalFailure()) {
+        throw new Error(this._terminalFailureReason || 'Session expired. Please sign in again.');
+      }
+
+      // 2. Guard against rate limiting (429 cooldown active, 0 network requests)
+      if (this.isRateLimited()) {
+        const remainingSec = Math.ceil(this.getRateLimitRemainingMs() / 1000);
+        throw new Error(`Authentication rate limit active. Please wait ${remainingSec}s before retrying.`);
+      }
+
+      // 3. Single authoritative refresh operation: all concurrent callers share same Promise
+      if (this._inFlightRefreshPromise) {
+        return this._inFlightRefreshPromise;
+      }
+
       let currentSession = state.auth?.supabaseSession;
       if (!currentSession || !currentSession.refresh_token) {
         const stored = await safeGet('clasptek:supabase_session', null);
@@ -2591,38 +2749,119 @@ const supabaseClient = {
           currentSession = stored;
         }
       }
+      if (!currentSession && typeof localStorage !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && /^sb-.*-auth-token$/i.test(k)) {
+              const val = localStorage.getItem(k);
+              if (val) {
+                const parsed = JSON.parse(val);
+                if (parsed && (parsed.refresh_token || parsed.session?.refresh_token)) {
+                  currentSession = parsed.session || parsed;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (!currentSession || !currentSession.refresh_token) {
         throw new Error('No refresh token available');
       }
 
-      const res = await fetch(`${base}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': key
-        },
-        body: JSON.stringify({ refresh_token: currentSession.refresh_token })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error_description || data.msg || data.message || 'Session refresh failed');
+      // If recovery session, do not attempt token refresh
+      if (currentSession.type === 'recovery') {
+        return { data: { session: currentSession }, error: null, success: true };
       }
 
-      state.auth = state.auth || {};
-      state.auth.supabaseSession = data;
-      state.auth.supabaseJwt = data.access_token;
-      state.auth.supabaseUser = data.user;
-      state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
-      await safeSet('clasptek:supabase_session', data);
-      await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
-      return { data: { session: data }, error: null, success: true };
+      const authLayer = this;
+      this._inFlightRefreshPromise = (async () => {
+        try {
+          const base = supabaseClient.getBaseUrl();
+          const key = supabaseClient.getAnonKey();
+          if (!base || !key) {
+            throw new Error('Supabase configuration missing');
+          }
+
+          const res = await fetch(`${base}/auth/v1/token?grant_type=refresh_token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': key
+            },
+            body: JSON.stringify({ refresh_token: currentSession.refresh_token })
+          });
+
+          // Check HTTP 429: TEMPORARY_RATE_LIMIT (30-second cooldown, no storm)
+          if (res.status === 429) {
+            authLayer._rateLimitedUntil = Date.now() + 30000;
+            const errData = await res.json().catch(() => ({}));
+            const msg = errData.error_description || errData.msg || errData.message || 'Too many refresh requests (429). 30-second cooldown active.';
+            throw new Error(msg);
+          }
+
+          const data = await res.json().catch(() => ({}));
+
+          // Check for Terminal Authentication Failure
+          if (!res.ok) {
+            const errDesc = String(data.error_description || data.msg || data.message || data.error || '').toLowerCase();
+            const isTerminal = res.status === 400 || res.status === 401 || res.status === 403 ||
+              errDesc.includes('invalid refresh token') ||
+              errDesc.includes('already used') ||
+              errDesc.includes('revoked') ||
+              errDesc.includes('not found') ||
+              errDesc.includes('invalid_grant');
+
+            if (isTerminal) {
+              const terminalErr = {
+                message: data.error_description || data.msg || data.message || 'Invalid or expired refresh token',
+                status: res.status,
+                ...data
+              };
+              await authLayer.handleTerminalAuthFailure(terminalErr, 'refreshSession');
+              throw new Error(terminalErr.message);
+            }
+
+            // Other non-200 responses (e.g. 500, 502, 503)
+            throw new Error(data.error_description || data.msg || data.message || `Session refresh failed with status ${res.status}`);
+          }
+
+          // Successful refresh: reset failure latches and store new authoritative session
+          authLayer.resetAuthFailureState();
+          state.auth = state.auth || {};
+          state.auth.supabaseSession = data;
+          state.auth.supabaseJwt = data.access_token;
+          state.auth.supabaseUser = data.user;
+          state.auth.tokenExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000);
+          const tId = data.user?.app_metadata?.tenant_id || data.user?.user_metadata?.tenant_id || data.user?.tenant_id;
+          if (typeof isValidUuid === 'function' && isValidUuid(tId) && tId !== 'clasptek_main') {
+            state.authoritativeTenantId = tId;
+            state.auth.tenant_id = tId;
+            state.auth.tenantId = tId;
+            if (state.auth.user) {
+              state.auth.user.tenant_id = tId;
+              state.auth.user.tenantId = tId;
+            }
+          }
+          await safeSet('clasptek:supabase_session', data);
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+          authLayer._notifyAuthStateChange('TOKEN_REFRESHED', data);
+          return { data: { session: data }, error: null, success: true };
+        } finally {
+          authLayer._inFlightRefreshPromise = null;
+        }
+      })();
+
+      return this._inFlightRefreshPromise;
     },
     async getUser() {
       const sess = await this.getSession();
       return { data: { user: sess.data?.session?.user || null }, error: null };
     },
     async signOut() {
+      this.resetAuthFailureState();
       if (supabaseClient.isConfigured()) {
         const base = supabaseClient.getBaseUrl();
         const key = supabaseClient.getAnonKey();
@@ -2646,9 +2885,31 @@ const supabaseClient = {
         delete state.auth.tokenExpiresAt;
         delete state.auth.tenant_id;
         delete state.auth.tenantId;
-        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+        delete state.auth.token;
+        delete state.auth.expiresAt;
+        state.auth.isAuthenticated = false;
+        state.auth.user = null;
+        try {
+          await safeSet(STORE_KEY_AUTH_SESSION, null);
+        } catch (_) {}
       }
-      await safeSet('clasptek:supabase_session', null);
+      try {
+        await safeSet('clasptek:supabase_session', null);
+      } catch (_) {}
+
+      // Enumerate and clear Supabase Auth storage entries without wildcard
+      if (typeof localStorage !== 'undefined') {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && (/^sb-.*-auth-token$/i.test(k) || k === 'clasptek:supabase_session' || k === 'supabase.auth.token')) {
+              localStorage.removeItem(k);
+            }
+          }
+        } catch (_) {}
+      }
+
+      this._notifyAuthStateChange('SIGNED_OUT', null);
       return { error: null, success: true };
     }
   },
@@ -2656,16 +2917,36 @@ const supabaseClient = {
     if (!this.isConfigured()) {
       return { ok: false, data: null, records: null, error: { message: 'Supabase unconfigured' }, errorClass: SUPABASE_ERROR_CLASS.NOT_CONFIGURED, status: 0, httpStatus: 0 };
     }
+    if (this.auth.isTerminalFailure()) {
+      return { ok: false, data: null, records: null, error: { message: 'Authentication session expired' }, errorClass: SUPABASE_ERROR_CLASS.AUTH_EXPIRED, status: 401, httpStatus: 401 };
+    }
+
+    const preRefreshJwt = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
     await this.ensureFreshSession();
+
+    if (this.auth.isTerminalFailure()) {
+      return { ok: false, data: null, records: null, error: { message: 'Authentication session expired' }, errorClass: SUPABASE_ERROR_CLASS.AUTH_EXPIRED, status: 401, httpStatus: 401 };
+    }
+
     let res = await requestFn();
     if (res && res.status === 401) {
-      // Controlled 401 -> refresh session -> retry-once mechanism
+      if (this.auth.isTerminalFailure() || this.auth.isRateLimited()) {
+        return res;
+      }
+      const postRequestJwt = state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token;
+      if (postRequestJwt && postRequestJwt !== preRefreshJwt && !isJwtExpiredOrExpiring(postRequestJwt, 0)) {
+        res = await requestFn();
+        return res;
+      }
+
       try {
         const refreshed = await this.auth.refreshSession();
         if (refreshed && refreshed.data && refreshed.data.session) {
           res = await requestFn();
         }
-      } catch (_) {}
+      } catch (_) {
+        // If refresh fails terminally or otherwise, do not retry the database request
+      }
     }
     return res;
   },
@@ -5307,7 +5588,12 @@ async function runSupabaseHealthCheck() {
   const ep = supabaseClient.getEndpoint();
 
   try {
-    await supabaseClient.ensureFreshSession();
+    // Only verify fresh session if user already has an active session and is not rate limited or in terminal failure
+    const hasUserSession = Boolean(state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token);
+    if (hasUserSession && !supabaseClient.auth.isTerminalFailure() && !supabaseClient.auth.isRateLimited()) {
+      await supabaseClient.ensureFreshSession();
+    }
+
     let res = await fetch(`${ep}programmes?select=id&limit=1`, {
       method: 'GET',
       headers: supabaseClient.getHeaders()
@@ -5324,8 +5610,8 @@ async function runSupabaseHealthCheck() {
       }
     }
 
-    // Controlled 401 retry-once with session refresh
-    if (res.status === 401) {
+    // Controlled 401 retry-once with session refresh ONLY if user session was active and not terminal/rate-limited
+    if (res.status === 401 && hasUserSession && !supabaseClient.auth.isTerminalFailure() && !supabaseClient.auth.isRateLimited()) {
       try {
         const refreshed = await supabaseClient.auth.refreshSession();
         if (refreshed && refreshed.data && refreshed.data.session) {
@@ -5376,42 +5662,83 @@ async function runSupabaseHealthCheck() {
       const isTokenErr = Boolean(errText && (errText.includes('JWT') || errText.includes('token') || errText.includes('PGRST301') || errText.includes('claim')));
       if (isTokenErr) {
         state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
-        safeMessage = 'Supabase user session expired or rejected. Please re-authenticate.';
-        state.connectionError = '❌ HTTP 401: SUPABASE USER AUTHENTICATION EXPIRED. Your session token has expired. Database credentials are valid. Existing business data has not been modified.';
+        safeMessage = 'PostgreSQL is reachable, but user session has expired or is invalid. Sign-in required.';
+        state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — USER AUTHENTICATION EXPIRED. Your session token has expired. Database credentials are valid. Existing business data has not been modified.';
       } else {
         state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.API_KEY_INVALID;
-        safeMessage = 'Supabase rejected the configured public API key. Verify that the current anon/publishable key belongs to the configured Supabase project (logaawoigfxnisimfatf).';
-        state.connectionError = '❌ HTTP 401: SUPABASE AUTHENTICATION / API KEY FAILURE. The configured Supabase API credential is invalid, missing, revoked, or mismatched. Existing business data has not been modified. No financial data has been changed.';
+        safeMessage = 'PostgreSQL is reachable, but Supabase public API key is invalid or rejected.';
+        state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — SUPABASE API KEY REJECTED. The configured Supabase API credential is invalid, missing, revoked, or mismatched.';
       }
+      state.supabase.status = 'connected'; // PostgREST endpoint is reachable!
+      state.supabase.lastError = safeMessage;
+      state.supabase.diagnosticStates = {
+        auth: configDiag.authStatus,
+        postgrest: stateEnum,
+        postgresQuery: DIAGNOSTIC_POSTGRES_STATE.FAILED,
+        postgresWrite: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE
+      };
+      return {
+        success: false,
+        status: 'auth_required',
+        failureClassification: failureClass,
+        postgrestState: stateEnum,
+        postgresState: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE,
+        httpStatus: res.status,
+        latencyMs,
+        diagnostic: configDiag,
+        message: safeMessage
+      };
     } else if (res.status === 403) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.FORBIDDEN;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED;
       state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED;
-      safeMessage = 'Supabase permission denied (RLS restriction). Verify tenant access permissions.';
-      state.connectionError = '❌ HTTP 403: SUPABASE RLS / AUTHORIZATION FAILURE. Authentication succeeded but PostgreSQL/RLS denied access. Existing business data has not been modified. No financial data has been changed.';
+      safeMessage = 'PostgreSQL is reachable, but permission was denied by Row-Level Security policy.';
+      state.connectionError = '❌ HTTP 403: POSTGRESQL REACHABLE — RLS RESTRICTION. Database is reachable, but PostgreSQL/RLS denied access.';
+      state.supabase.status = 'connected'; // PostgREST endpoint is reachable!
+      state.supabase.lastError = safeMessage;
+      state.supabase.diagnosticStates = {
+        auth: configDiag.authStatus,
+        postgrest: stateEnum,
+        postgresQuery: DIAGNOSTIC_POSTGRES_STATE.FAILED,
+        postgresWrite: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE
+      };
+      return {
+        success: false,
+        status: 'rls_denied',
+        failureClassification: failureClass,
+        postgrestState: stateEnum,
+        postgresState: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE,
+        httpStatus: res.status,
+        latencyMs,
+        diagnostic: configDiag,
+        message: safeMessage
+      };
     } else if (res.status === 404) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.NOT_FOUND;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_404_SCHEMA_OR_ENDPOINT;
-      safeMessage = 'Supabase endpoint or table was not found. Please verify schema deployment in Supabase SQL editor.';
+      safeMessage = 'PostgreSQL is reachable, but requested table was not found.';
       state.connectionError = 'Database table not found. No financial data has been changed.';
+      state.supabase.status = 'connected';
     } else if (res.status === 409) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.ERROR;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_409_CONFLICT;
       safeMessage = 'Supabase conflict or idempotency key replay.';
       state.connectionError = 'Database conflict detected. No financial data has been changed.';
+      state.supabase.status = 'connected';
     } else if (res.status >= 500) {
       stateEnum = DIAGNOSTIC_POSTGREST_STATE.ERROR;
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_500_DATABASE_ERROR;
       state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE;
       safeMessage = `Supabase PostgreSQL server error (HTTP ${res.status}).`;
-      state.connectionError = '❌ HTTP 500: POSTGRESQL / POSTGREST SERVER FAILURE. Supabase PostgreSQL server encountered an error. Existing business data has not been modified. No financial data has been changed.';
+      state.connectionError = '❌ HTTP 500: POSTGRESQL SERVER ERROR. Supabase PostgreSQL server encountered an error.';
+      state.supabase.status = 'error';
     } else {
       failureClass = DIAGNOSTIC_CLASSIFICATION.HTTP_500_DATABASE_ERROR;
       safeMessage = `HTTP ${res.status}: ${errText || res.statusText}`;
       state.connectionError = 'Database unavailable. No financial data has been changed.';
+      state.supabase.status = 'error';
     }
 
-    state.supabase.status = 'error';
     state.supabase.lastError = safeMessage;
     state.supabase.diagnosticStates = {
       auth: configDiag.authStatus,
@@ -5449,7 +5776,7 @@ async function runSupabaseHealthCheck() {
       postgresState: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE,
       postgresWrite: DIAGNOSTIC_POSTGRES_STATE.UNAVAILABLE
     };
-    state.connectionError = 'Unable to connect to the database. POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+    state.connectionError = 'Unable to connect to the database. POSTGRESQL: UNREACHABLE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
 
     return {
       success: false,
@@ -5659,6 +5986,12 @@ const DB_TABLE_MAPPING = {
 const dbRepo = {
   async saveRecord(storeKey, record, idField = 'id') {
     const tableName = DB_TABLE_MAPPING[storeKey];
+    if (tableName === 'invoices' || storeKey === STORE_KEY_INVOICES) {
+      const invStatus = record && record.status;
+      if (invStatus && !CANONICAL_INVOICE_STATUSES.includes(invStatus)) {
+        throw new Error(`Cannot save to PostgreSQL: Invalid invoice status '${invStatus}'. Must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}`);
+      }
+    }
     if (supabaseClient.isConfigured() && tableName) {
       let tenantId = resolveAuthoritativeTenantId(record);
       if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
@@ -5688,6 +6021,13 @@ const dbRepo = {
         throw new Error(`Cannot save to PostgreSQL: Invalid or non-authoritative tenant UUID ('${tenantId}')`);
       }
 
+      if (tableName === 'invoices') {
+        const checkStatus = payload && payload.status;
+        if (!CANONICAL_INVOICE_STATUSES.includes(checkStatus)) {
+          throw new Error(`Cannot save to PostgreSQL: Invalid invoice status '${checkStatus}'. Must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}`);
+        }
+      }
+
       let saveRes;
       if (tableName === 'crm_intake_applications') {
         saveRes = await supabaseClient.from(tableName).update(payload, { id: record.id });
@@ -5701,6 +6041,8 @@ const dbRepo = {
         state.supabase.lastError = `Save failed on ${tableName} (HTTP ${httpStatus}): ${error.message || JSON.stringify(error)}`;
         if (httpStatus === 0) {
           state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
+        } else if (error && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
+          state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else {
           state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${error.message || 'Payload or schema error'}. No financial data has been changed.`;
         }
@@ -6555,7 +6897,19 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
-    case 'invoices':
+    case 'invoices': {
+      let invStatus = item.status;
+      if (!invStatus) {
+        invStatus = 'unpaid';
+      }
+      if (invStatus === 'overdue') {
+        const paid = Number(item.amountPaid !== undefined ? item.amountPaid : (item.paid !== undefined ? item.paid : 0));
+        invStatus = paid > 0 ? 'partial' : 'unpaid';
+      }
+      if (!CANONICAL_INVOICE_STATUSES.includes(invStatus)) {
+        throw new Error(`Invalid invoice status '${invStatus}'. Must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}`);
+      }
+
       return {
         id: item.id,
         tenant_id: tenantId,
@@ -6575,13 +6929,14 @@ function transformEntityForPostgres(entity, item, tenantId) {
         discount_amount: Number(item.discountAmount !== undefined ? item.discountAmount : (item.discount_amount !== undefined ? item.discount_amount : (item.discount || 0))),
         total_amount: Number(item.totalAmount !== undefined ? item.totalAmount : (item.total_amount !== undefined ? item.total_amount : (item.total !== undefined ? item.total : 0))),
         income_category: item.incomeCategory || item.income_category || item.category || 'Student Tuition',
-        status: item.status || 'issued',
+        status: invStatus,
         installment_details: Array.isArray(item.installmentDetails || item.installment_details) ? (item.installmentDetails || item.installment_details) : [],
         source: item.source || 'APP',
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         created_by: (item.created_by && item.created_by.includes('-')) ? item.created_by : null,
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'invoice_items':
       return {
@@ -9535,43 +9890,101 @@ async function loadAll() {
     } catch (_) {}
   }
 
-  if (authSession && authSession.user && (authSession.token || effectiveSbSession?.access_token)) {
-    const supaUser = authSession.supabaseUser || effectiveSbSession?.user || null;
+  // 1c. Authoritative Session Validation & Controlled Refresh BEFORE Database Hydration
+  let isSessionAuthoritative = false;
+
+  if (supabaseClient.isConfigured()) {
+    if (effectiveSbSession && (effectiveSbSession.access_token || effectiveSbSession.refresh_token)) {
+      if (effectiveSbSession.type === 'recovery') {
+        isSessionAuthoritative = true;
+      } else if (effectiveSbSession.access_token && !isJwtExpiredOrExpiring(effectiveSbSession.access_token, 60)) {
+        isSessionAuthoritative = true;
+      } else if (effectiveSbSession.refresh_token) {
+        // Expired or expiring access token -> controlled single-flight refresh
+        if (!supabaseClient.auth.isTerminalFailure() && !supabaseClient.auth.isRateLimited()) {
+          try {
+            const refreshRes = await supabaseClient.auth.refreshSession();
+            if (refreshRes && refreshRes.data && refreshRes.data.session) {
+              effectiveSbSession = refreshRes.data.session;
+              isSessionAuthoritative = true;
+            }
+          } catch (_) {
+            isSessionAuthoritative = false;
+          }
+        }
+      }
+    }
+
+    // Check if terminal auth failure was triggered
+    if (supabaseClient.auth.isTerminalFailure()) {
+      state.auth = { isAuthenticated: false, user: null };
+      state.authoritativeTenantId = null;
+      state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+      state.diagnosticState = 'AUTHENTICATION_REQUIRED';
+      state.connectionError = 'Your session has expired. Please sign in again.';
+      state.loading = false;
+      if (typeof authViewState !== 'undefined') {
+        authViewState.mode = 'login';
+        authViewState.alertMsg = 'Your session has expired. Please sign in again.';
+        authViewState.alertType = 'error';
+      }
+      render();
+      return;
+    }
+
+    // If no valid authoritative Supabase session, abort and do NOT launch business table queries
+    if (!isSessionAuthoritative) {
+      state.auth = { isAuthenticated: false, user: null };
+      state.authoritativeTenantId = null;
+      state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
+      state.diagnosticState = 'NOT_AUTHENTICATED';
+      state.connectionError = null;
+      await safeSet(STORE_KEY_AUTH_SESSION, null);
+      state.loading = false;
+      render();
+      return;
+    }
+
+    // Valid Supabase session: establish state.auth and authoritative tenant ID
+    const supaUser = effectiveSbSession.user || (authSession && authSession.supabaseUser) || null;
     const restoredTenantId = supaUser?.app_metadata?.tenant_id ||
                              supaUser?.user_metadata?.tenant_id ||
                              effectiveSbSession?.user?.app_metadata?.tenant_id ||
                              effectiveSbSession?.user?.user_metadata?.tenant_id ||
-                             authSession.tenant_id ||
-                             authSession.tenantId;
+                             (authSession && (authSession.tenant_id || authSession.tenantId));
 
     if (typeof isValidUuid === 'function' && isValidUuid(restoredTenantId) && restoredTenantId !== 'clasptek_main') {
       state.authoritativeTenantId = restoredTenantId;
-      if (authSession.user) {
+      if (authSession && authSession.user) {
         authSession.user.tenant_id = restoredTenantId;
         authSession.user.tenantId = restoredTenantId;
       }
     }
 
     state.auth = {
-      ...authSession,
+      ...(authSession || {}),
+      isAuthenticated: true,
+      user: authSession?.user || supaUser,
       tenant_id: state.authoritativeTenantId || null,
       tenantId: state.authoritativeTenantId || null,
-      supabaseJwt: authSession.supabaseJwt || effectiveSbSession?.access_token || null,
-      supabaseSession: authSession.supabaseSession || effectiveSbSession || null,
+      supabaseJwt: effectiveSbSession.access_token,
+      supabaseSession: effectiveSbSession,
       supabaseUser: supaUser,
-      tokenExpiresAt: authSession.tokenExpiresAt || (effectiveSbSession?.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null)
+      tokenExpiresAt: effectiveSbSession.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null
     };
-  } else if (effectiveSbSession && effectiveSbSession.access_token) {
-    state.auth = state.auth || {};
-    state.auth.supabaseJwt = effectiveSbSession.access_token;
-    state.auth.supabaseSession = effectiveSbSession;
-    state.auth.supabaseUser = effectiveSbSession.user;
-    state.auth.tokenExpiresAt = effectiveSbSession.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null;
-    const restoredTenantId = effectiveSbSession.user?.app_metadata?.tenant_id || effectiveSbSession.user?.user_metadata?.tenant_id;
-    if (typeof isValidUuid === 'function' && isValidUuid(restoredTenantId) && restoredTenantId !== 'clasptek_main') {
-      state.authoritativeTenantId = restoredTenantId;
-      state.auth.tenant_id = restoredTenantId;
-      state.auth.tenantId = restoredTenantId;
+  } else {
+    // Supabase is unconfigured (offline / demo mode)
+    if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
+      isSessionAuthoritative = true;
+      state.auth = {
+        ...authSession,
+        isAuthenticated: true
+      };
+    } else {
+      state.auth = { isAuthenticated: false, user: null };
+      state.loading = false;
+      render();
+      return;
     }
   }
 
@@ -9632,7 +10045,24 @@ async function loadAll() {
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
           dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
         ];
-        const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.error.message)));
+        const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.status !== 401 && r.error.message)));
+        const hasAuthExpired = queryResults.some(r => r && r.status === 401);
+
+        if (hasAuthExpired) {
+          state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+          state.diagnosticState = 'AUTHENTICATION_REQUIRED';
+          state.supabase.status = 'connected';
+          state.supabase.persistenceMode = 'SECONDARY_FALLBACK';
+          state.connectionError = 'PostgreSQL is reachable, but user session expired during hydration. Please sign in again.';
+          isDbHydrated = false;
+          if (typeof authViewState !== 'undefined') {
+            authViewState.mode = 'login';
+            authViewState.alertMsg = 'Your session has expired. Please sign in again.';
+            authViewState.alertType = 'error';
+          }
+          render();
+          return;
+        }
 
         if (!hasDbErrors) {
           // Check total canonical records across all 32 queried business entities
@@ -9729,24 +10159,30 @@ async function loadAll() {
           state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
           state.supabase.status = 'error';
           state.supabase.persistenceMode = 'SECONDARY_FALLBACK';
-          state.connectionError = 'Unable to connect to the database. POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+          state.connectionError = 'Unable to reach the database. POSTGRESQL: UNREACHABLE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
         }
       } else {
         if (pingRes.httpStatus === 401 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED) {
-          state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.API_KEY_INVALID;
-          state.connectionError = '❌ HTTP 401: SUPABASE AUTHENTICATION / API KEY FAILURE. The configured Supabase API credential is invalid, missing, revoked, or mismatched. Existing business data has not been modified. No financial data has been changed.';
+          state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+          state.diagnosticState = 'AUTHENTICATION_REQUIRED';
+          state.supabase.status = 'connected';
+          state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — USER AUTHENTICATION REQUIRED. User session token is missing, expired, or invalid. PostgreSQL database is reachable.';
         } else if (pingRes.httpStatus === 403 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED) {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED;
-          state.connectionError = '❌ HTTP 403: SUPABASE RLS / AUTHORIZATION FAILURE. Authentication succeeded but PostgreSQL/RLS denied access. Existing business data has not been modified. No financial data has been changed.';
+          state.diagnosticState = 'RLS_RESTRICTED';
+          state.supabase.status = 'connected';
+          state.connectionError = '❌ HTTP 403: POSTGRESQL REACHABLE — RLS RESTRICTION. PostgreSQL database is reachable, but Row-Level Security denied access.';
         } else if (pingRes.httpStatus >= 500 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_500_DATABASE_ERROR) {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE;
-          state.connectionError = '❌ HTTP 500: POSTGRESQL / POSTGREST SERVER FAILURE. Supabase PostgreSQL server encountered an error. Existing business data has not been modified. No financial data has been changed.';
+          state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
+          state.supabase.status = 'error';
+          state.connectionError = '❌ HTTP 500: POSTGRESQL SERVER ERROR. Supabase PostgreSQL server encountered an error. Existing business data has not been modified.';
         } else {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
-          state.connectionError = 'Unable to connect to the database. POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+          state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
+          state.supabase.status = 'error';
+          state.connectionError = 'Unable to reach the database. POSTGRESQL: UNREACHABLE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
         }
-        state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
-        state.supabase.status = 'error';
         state.supabase.persistenceMode = 'SECONDARY_FALLBACK';
         state.supabase.lastError = pingRes.message;
       }
@@ -9757,7 +10193,7 @@ async function loadAll() {
       state.supabase.status = 'error';
       state.supabase.persistenceMode = 'SECONDARY_FALLBACK';
       state.supabase.lastError = err.message;
-      state.connectionError = 'Unable to connect to the database. POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+      state.connectionError = 'Unable to reach the database. POSTGRESQL: UNREACHABLE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
     }
   }
 
@@ -9900,10 +10336,10 @@ async function loadAll() {
       state.expenseCategories = state.expenseCategories && Object.keys(state.expenseCategories).length ? state.expenseCategories : DEFAULT_EXPENSE_CATEGORIES;
 
       if (!state.databaseAuthorityState || state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
-        state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+        state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
       }
       if (!state.connectionError) {
-        state.connectionError = 'POSTGRESQL: DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+        state.connectionError = 'PostgreSQL connection unverified. Running in local session mode. No financial data has been changed.';
       }
     }
   }
@@ -9946,51 +10382,79 @@ async function loadAll() {
   }
 
   // Authoritative Session Verification (MANDATORY LOGIN)
-  if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
-    const foundUser = state.users.find(u => u.id === authSession.user.id || (u.email && authSession.user.email && u.email.toLowerCase() === authSession.user.email.toLowerCase()));
-    if (foundUser && foundUser.status === 'active' && !(foundUser.revokedSessionTokens || []).includes(authSession.token)) {
-      const supaUser = authSession.supabaseUser || state.auth?.supabaseUser || null;
-      const authTenant = state.authoritativeTenantId ||
-                         authSession.tenant_id ||
-                         authSession.tenantId ||
-                         supaUser?.app_metadata?.tenant_id ||
-                         supaUser?.user_metadata?.tenant_id;
-      if (typeof isValidUuid === 'function' && isValidUuid(authTenant) && authTenant !== 'clasptek_main') {
-        state.authoritativeTenantId = authTenant;
-        foundUser.tenant_id = authTenant;
-        foundUser.tenantId = authTenant;
-      }
-      const mergedUser = {
-        ...foundUser,
-        ...(supaUser || {}),
-        name: foundUser.name || authSession.user.name,
-        role: foundUser.role || authSession.user.role,
-        tenant_id: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(foundUser.tenant_id) && foundUser.tenant_id !== 'clasptek_main') ? foundUser.tenant_id : null),
-        tenantId: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((typeof isValidUuid === 'function' && isValidUuid(foundUser.tenantId) && foundUser.tenantId !== 'clasptek_main') ? foundUser.tenantId : null),
-        localUser: foundUser
-      };
+  if (supabaseClient.isConfigured()) {
+    if (isSessionAuthoritative && effectiveSbSession) {
+      const supaUser = effectiveSbSession.user || (authSession && authSession.supabaseUser) || null;
+      const userEmail = supaUser?.email || authSession?.user?.email || '';
+      const foundUser = (state.users || []).find(u => (supaUser && u.id === supaUser.id) || (userEmail && u.email && u.email.toLowerCase() === userEmail.toLowerCase()));
 
-      state.auth = {
-        isAuthenticated: true,
-        user: mergedUser,
-        localUser: foundUser,
-        token: authSession.token,
-        expiresAt: authSession.expiresAt,
-        tenant_id: state.authoritativeTenantId || null,
-        tenantId: state.authoritativeTenantId || null,
-        supabaseJwt: authSession.supabaseJwt || state.auth?.supabaseJwt || null,
-        supabaseSession: authSession.supabaseSession || state.auth?.supabaseSession || null,
-        supabaseUser: supaUser,
-        tokenExpiresAt: authSession.tokenExpiresAt || state.auth?.tokenExpiresAt || null
-      };
+      if (foundUser && (foundUser.status === 'deactivated' || foundUser.status === 'suspended')) {
+        state.auth = { isAuthenticated: false, user: null };
+        await safeSet(STORE_KEY_AUTH_SESSION, null);
+      } else {
+        const authTenant = state.authoritativeTenantId ||
+                           supaUser?.app_metadata?.tenant_id ||
+                           supaUser?.user_metadata?.tenant_id ||
+                           (authSession && (authSession.tenant_id || authSession.tenantId));
+        if (typeof isValidUuid === 'function' && isValidUuid(authTenant) && authTenant !== 'clasptek_main') {
+          state.authoritativeTenantId = authTenant;
+          if (foundUser) {
+            foundUser.tenant_id = authTenant;
+            foundUser.tenantId = authTenant;
+          }
+        }
+        const mergedUser = {
+          ...(foundUser || {}),
+          ...(supaUser || {}),
+          id: supaUser?.id || (foundUser && foundUser.id) || (authSession && authSession.user && authSession.user.id),
+          name: (foundUser && foundUser.name) || supaUser?.user_metadata?.name || (authSession && authSession.user && authSession.user.name) || (userEmail ? userEmail.split('@')[0] : 'User'),
+          role: (foundUser && foundUser.role) || supaUser?.user_metadata?.role || (authSession && authSession.user && authSession.user.role) || 'Staff',
+          tenant_id: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((foundUser && typeof isValidUuid === 'function' && isValidUuid(foundUser.tenant_id) && foundUser.tenant_id !== 'clasptek_main') ? foundUser.tenant_id : null),
+          tenantId: (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main') ? state.authoritativeTenantId : ((foundUser && typeof isValidUuid === 'function' && isValidUuid(foundUser.tenantId) && foundUser.tenantId !== 'clasptek_main') ? foundUser.tenantId : null),
+          localUser: foundUser || null
+        };
+
+        state.auth = {
+          isAuthenticated: true,
+          user: mergedUser,
+          localUser: foundUser || null,
+          token: authSession?.token || effectiveSbSession.access_token,
+          expiresAt: authSession?.expiresAt || (Date.now() + 24 * 3600 * 1000),
+          tenant_id: state.authoritativeTenantId || null,
+          tenantId: state.authoritativeTenantId || null,
+          supabaseJwt: effectiveSbSession.access_token,
+          supabaseSession: effectiveSbSession,
+          supabaseUser: supaUser,
+          tokenExpiresAt: effectiveSbSession.expires_in ? Date.now() + effectiveSbSession.expires_in * 1000 : null
+        };
+      }
     } else {
       state.auth = { isAuthenticated: false, user: null };
       await safeSet(STORE_KEY_AUTH_SESSION, null);
     }
   } else {
-    state.auth = { isAuthenticated: false, user: null };
-    if (authSession) {
-      await safeSet(STORE_KEY_AUTH_SESSION, null);
+    // Supabase unconfigured: local session authority
+    if (authSession && authSession.user && authSession.token && authSession.expiresAt && authSession.expiresAt > Date.now()) {
+      const foundUser = (state.users || []).find(u => u.id === authSession.user.id || (u.email && authSession.user.email && u.email.toLowerCase() === authSession.user.email.toLowerCase()));
+      if (foundUser && foundUser.status === 'active' && !(foundUser.revokedSessionTokens || []).includes(authSession.token)) {
+        state.auth = {
+          isAuthenticated: true,
+          user: foundUser,
+          localUser: foundUser,
+          token: authSession.token,
+          expiresAt: authSession.expiresAt,
+          tenant_id: foundUser.tenant_id || null,
+          tenantId: foundUser.tenantId || null
+        };
+      } else {
+        state.auth = { isAuthenticated: false, user: null };
+        await safeSet(STORE_KEY_AUTH_SESSION, null);
+      }
+    } else {
+      state.auth = { isAuthenticated: false, user: null };
+      if (authSession) {
+        await safeSet(STORE_KEY_AUTH_SESSION, null);
+      }
     }
   }
 
@@ -16444,43 +16908,62 @@ function renderLoginScreen(root) {
             }
           }
 
-          // Authoritative Supabase Auth authentication if configured
-          if (supabaseClient.isConfigured()) {
-            const authRes = await supabaseClient.auth.signInWithPassword(email, pwd);
-            if (authRes && authRes.error) {
-              const computedHash = user ? await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default') : null;
-              if (!user || computedHash !== user.passwordHash) {
-                alertEl.textContent = authRes.error.message || 'Invalid email address or password.';
-                alertEl.style.display = 'block';
-                await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for ${email}`);
-                btn.disabled = false;
-                btn.textContent = 'Sign In';
-                return;
-              }
-            }
-          } else {
-            if (!user) {
-              alertEl.textContent = 'Invalid email address or password.';
-              alertEl.style.display = 'block';
-              await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login attempt for ${email}`);
-              btn.disabled = false;
-              btn.textContent = 'Sign In';
-              return;
-            }
-            const computedHash = await hashPasswordWithSalt(pwd, user.passwordSalt || 'salt_default');
-            if (computedHash !== user.passwordHash) {
-              alertEl.textContent = 'Invalid email address or password.';
-              alertEl.style.display = 'block';
-              await logAudit('USER_LOGIN_FAILED', 'user', user.id, `Invalid password entered for ${user.email}`);
-              btn.disabled = false;
-              btn.textContent = 'Sign In';
-              return;
-            }
+          // ══════════════════════════════════════════════════════════════
+          // SUPABASE AUTH = SOLE CREDENTIAL AUTHORITY (Fail-Closed)
+          // No local passwordHash/passwordSalt fallback. No degraded mode.
+          // ══════════════════════════════════════════════════════════════
+          if (!supabaseClient.isConfigured()) {
+            alertEl.textContent = 'Authentication service is not available. Please contact your administrator.';
+            alertEl.style.display = 'block';
+            await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Login rejected: Supabase Auth not configured for ${email}`);
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+            return;
           }
 
-          // RESOLVE LOGGED IN USER
+          const authRes = await supabaseClient.auth.signInWithPassword(email, pwd);
+
+          if (authRes && authRes.error) {
+            // Supabase Auth rejected credentials — categorize the error accurately
+            const errMsg = authRes.error.message || '';
+            const errLower = errMsg.toLowerCase();
+            const status = authRes.status || 0;
+            let displayMsg;
+            if (status === 429 || errLower.includes('rate limit') || errLower.includes('too many')) {
+              displayMsg = 'Too many login attempts. Please wait a moment before trying again.';
+            } else if (errLower.includes('invalid login') || errLower.includes('invalid email or password') || errLower.includes('invalid credentials')) {
+              displayMsg = 'Invalid email address or password.';
+            } else if (errLower.includes('email not confirmed')) {
+              displayMsg = 'Your email address has not been confirmed. Please check your inbox.';
+            } else if (errLower.includes('disabled') || errLower.includes('banned')) {
+              displayMsg = 'This account has been disabled. Please contact your administrator.';
+            } else if (status === 0 || errLower.includes('network') || errLower.includes('fetch') || errLower.includes('failed to fetch')) {
+              displayMsg = 'Unable to reach the authentication server. Please check your internet connection.';
+            } else {
+              displayMsg = 'Authentication failed. Please verify your credentials and try again.';
+            }
+            alertEl.textContent = displayMsg;
+            alertEl.style.display = 'block';
+            await logAudit('USER_LOGIN_FAILED', 'auth', 'none', `Failed login for ${email}: ${errMsg}`);
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+            return;
+          }
+
+          // ══════════════════════════════════════════════════════════════
+          // Supabase Auth SUCCESS — valid JWT/session obtained
+          // ══════════════════════════════════════════════════════════════
           const supaUser = state.auth?.supabaseUser || null;
           const supaAuthId = supaUser?.id || null;
+
+          // Verify we actually have a Supabase JWT (defense-in-depth)
+          if (!state.auth?.supabaseJwt) {
+            alertEl.textContent = 'Authentication succeeded but no session was established. Please try again.';
+            alertEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+            return;
+          }
 
           const linkedPersonnel = (state.personnel || []).find(p =>
             (supaAuthId && (p.user_id === supaAuthId || p.userId === supaAuthId)) ||
@@ -16504,8 +16987,7 @@ function renderLoginScreen(root) {
             resolvedUser.role = 'Facilitator';
           }
 
-          const sessionToken = generateRandomToken('sess_');
-          const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+          // No legacy sess_* token — Supabase JWT is the sole session authority
           resolvedUser.lastLoginAt = new Date().toISOString();
           await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
 
@@ -16533,8 +17015,6 @@ function renderLoginScreen(root) {
             isAuthenticated: true,
             user: mergedUser,
             localUser: resolvedUser,
-            token: sessionToken,
-            expiresAt: sessionExpiry,
             tenant_id: state.authoritativeTenantId || null,
             tenantId: state.authoritativeTenantId || null,
             supabaseJwt: state.auth?.supabaseJwt || null,
@@ -16544,14 +17024,10 @@ function renderLoginScreen(root) {
           await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
 
           state.tab = getDefaultTabForRole(mergedUser.role);
-          await logAudit('USER_LOGIN', 'user', resolvedUser.id, `User logged in with role: ${mergedUser.role}`);
+          await logAudit('USER_LOGIN', 'user', supaAuthId || resolvedUser.id, `User logged in via Supabase Auth with role: ${mergedUser.role}`);
           authViewState.alertMsg = '';
 
-          if (supabaseClient.isConfigured() && state.auth?.supabaseJwt) {
-            await loadAll();
-          } else {
-            render();
-          }
+          await loadAll();
         } catch (err) {
           alertEl.textContent = err.message || 'An unexpected error occurred during sign in.';
           alertEl.style.display = 'block';
@@ -16848,22 +17324,17 @@ function renderLoginScreen(root) {
           }
         }
 
-        // Update local user hash if known
+        // Supabase Auth is the sole password authority — no local hash storage
         const userEmail = state.auth?.supabaseUser?.email || authViewState.email;
         const localUser = state.users.find(u => u.email && u.email.toLowerCase() === (userEmail || '').toLowerCase());
         if (localUser) {
-          const salt = generateRandomToken('salt_');
-          localUser.passwordSalt = salt;
-          localUser.passwordHash = await hashPasswordWithSalt(newPwd, salt);
           localUser.mustChangePassword = false;
           localUser.forcePasswordReset = false;
           localUser.resetToken = null;
           localUser.resetExpiresAt = null;
           await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-          await logAudit('PASSWORD_RESET_COMPLETED', 'user', localUser.id, `Password successfully reset for ${localUser.email}`);
-        } else {
-          await logAudit('PASSWORD_RESET_COMPLETED', 'auth', 'none', `Password successfully reset via recovery link`);
         }
+        await logAudit('PASSWORD_RESET_COMPLETED', 'auth', localUser?.id || 'supabase', `Password reset via Supabase Auth for ${userEmail}`);
 
         // Clear recovery session tokens
         if (state.auth) {
@@ -17053,15 +17524,7 @@ function renderLoginScreen(root) {
       btn.textContent = 'Activating Account...';
 
       try {
-        if (supabaseClient.isConfigured()) {
-          await supabaseClient.auth.signUp({ email: user.email, password: newPwd }).catch(() => null);
-        }
-
-        const salt = generateRandomToken('salt_');
-        const hash = await hashPasswordWithSalt(newPwd, salt);
-
-        user.passwordSalt = salt;
-        user.passwordHash = hash;
+        // Supabase signUp is the sole credential authority — no local hash storage
         user.status = 'active';
         user.mustChangePassword = false;
         user.forcePasswordReset = false;
@@ -17070,10 +17533,15 @@ function renderLoginScreen(root) {
         user.activatedAt = new Date().toISOString();
         user.lastLoginAt = new Date().toISOString();
 
-        await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
-
-        const sessionToken = generateRandomToken('sess_');
-        const sessionExpiry = Date.now() + 24 * 3600 * 1000;
+        // Supabase Auth is the sole session and credential authority
+        let authEstablished = false;
+        if (supabaseClient.isConfigured()) {
+          const signUpRes = await supabaseClient.auth.signUp({ email: user.email, password: newPwd }).catch(() => null);
+          const signRes = await supabaseClient.auth.signInWithPassword(user.email, newPwd).catch(() => null);
+          if (signRes && signRes.data?.session) {
+            authEstablished = true;
+          }
+        }
 
         const authoritativeTenant = resolveAuthoritativeTenantId();
         if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
@@ -17081,23 +17549,30 @@ function renderLoginScreen(root) {
           user.tenant_id = authoritativeTenant;
           user.tenantId = authoritativeTenant;
         }
-        state.auth = {
-          ...state.auth,
-          isAuthenticated: true,
-          user: user,
-          token: sessionToken,
-          expiresAt: sessionExpiry,
-          tenant_id: state.authoritativeTenantId || null,
-          tenantId: state.authoritativeTenantId || null
-        };
-        await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
 
-        state.tab = getDefaultTabForRole(user.role);
-
-        await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted and account activated for ${user.email}`);
-        authViewState.mode = 'login';
-        authViewState.alertMsg = '';
-        render();
+        if (authEstablished) {
+          state.auth = {
+            ...state.auth,
+            isAuthenticated: true,
+            user: user,
+            tenant_id: state.authoritativeTenantId || null,
+            tenantId: state.authoritativeTenantId || null,
+            supabaseJwt: state.auth?.supabaseJwt || null,
+            supabaseUser: state.auth?.supabaseUser || null,
+            supabaseSession: state.auth?.supabaseSession || null
+          };
+          await safeSet(STORE_KEY_AUTH_SESSION, state.auth);
+          state.tab = getDefaultTabForRole(user.role);
+          await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted and account activated for ${user.email}`);
+          authViewState.mode = 'login';
+          authViewState.alertMsg = '';
+          await loadAll();
+        } else {
+          await logAudit('INVITATION_ACCEPTED', 'user', user.id, `Invitation accepted for ${user.email}. Sign-in required.`);
+          authViewState.mode = 'login';
+          authViewState.alertMsg = 'Account activated successfully! Please sign in with your password.';
+          render();
+        }
       } catch (err) {
         alertEl.textContent = err.message || 'An error occurred during account activation.';
         alertEl.style.display = 'block';
@@ -17119,8 +17594,8 @@ function renderDatabaseBannerHtml() {
     return `
       <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div><strong>🔴 POSTGRESQL AUTHENTICATION FAILED — AUTHORITATIVE MODE NOT ACTIVE.</strong> ${escapeHtml(state.connectionError || 'Supabase API credential invalid or unauthorized.')}</div>
-          <div style="font-size:11.5px; margin-top:3px; color:#7F1D1D;">HTTP Status: 401 | Cause: API credential or authenticated session failure | Authoritative Mode: NOT ACTIVE | Data Safety: PROTECTED | Migration: BLOCKED</div>
+          <div><strong>🔴 POSTGRESQL REACHABLE — AUTHENTICATION REQUIRED.</strong> ${escapeHtml(state.connectionError || 'Supabase user session expired or unauthorized. Please sign in again.')}</div>
+          <div style="font-size:11.5px; margin-top:3px; color:#7F1D1D;">Authentication: SESSION EXPIRED / SIGN-IN REQUIRED | PostgreSQL: REACHABLE | Authority: UNVERIFIED | Data Safety: PROTECTED</div>
         </div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
       </div>
@@ -17140,7 +17615,7 @@ function renderDatabaseBannerHtml() {
   if (st === 'CONNECTIVITY_FAILED' || st === 'DATABASE_UNAVAILABLE') {
     return `
       <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
-        <div><strong>🔴 POSTGRESQL DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
+        <div><strong>🔴 POSTGRESQL UNREACHABLE — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
       </div>
     `;
@@ -17437,9 +17912,9 @@ function render(container) {
         <div class="cp-sidebar-footer">
           <div class="cp-conn-pill" id="sidebarSupabaseStatus" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:6px;">
-              <span class="cp-conn-dot ${state.databaseAuthorityState === 'AUTHORITATIVE' ? 'connected' : (state.databaseAuthorityState === 'EMPTY_DATABASE' || state.databaseAuthorityState === 'MIGRATION_REQUIRED' ? 'warning' : 'fallback')}"></span>
+              <span class="cp-conn-dot ${state.databaseAuthorityState === 'AUTHORITATIVE' ? 'connected' : (state.databaseAuthorityState === 'EMPTY_DATABASE' || state.databaseAuthorityState === 'MIGRATION_REQUIRED' || state.databaseAuthorityState === 'AUTHENTICATION_FAILED' || state.databaseAuthorityState === 'API_KEY_INVALID' ? 'warning' : 'fallback')}"></span>
               <span class="cp-conn-text">
-                ${state.databaseAuthorityState === 'AUTHORITATIVE' ? '🟢 POSTGRESQL ACTIVE' : (state.databaseAuthorityState === 'EMPTY_DATABASE' || state.databaseAuthorityState === 'MIGRATION_REQUIRED' ? '🟡 MIGRATION REQUIRED' : '🔴 POSTGRESQL DISCONNECTED')}
+                ${state.databaseAuthorityState === 'AUTHORITATIVE' ? '🟢 POSTGRESQL ACTIVE' : (state.databaseAuthorityState === 'EMPTY_DATABASE' || state.databaseAuthorityState === 'MIGRATION_REQUIRED' ? '🟡 MIGRATION REQUIRED' : (state.databaseAuthorityState === 'AUTHENTICATION_FAILED' || state.databaseAuthorityState === 'API_KEY_INVALID' ? '🟡 AUTH REQUIRED' : (state.databaseAuthorityState === 'RLS_AUTHORIZATION_FAILED' ? '🟡 RLS RESTRICTED' : (state.databaseAuthorityState === 'UNVERIFIED' ? '⚪ DB UNVERIFIED' : '🔴 POSTGRESQL UNREACHABLE'))))}
               </span>
             </div>
             <span style="font-size:10px; font-family:var(--font-mono); opacity:0.8;">v15.0.0</span>
@@ -18831,11 +19306,7 @@ function renderMySecurityTab(container) {
         }
       }
 
-      const salt = generateRandomToken('salt_');
-      const hash = await hashPasswordWithSalt(p1, salt);
-      user.passwordSalt = salt;
-      user.passwordHash = hash;
-      await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+      // Supabase Auth is the sole password authority — no local hash update needed
 
       await logAudit('PASSWORD_CHANGE', 'user', user.id, `User ${user.email} updated personal password via self-service`);
       msg.textContent = '✔ Password successfully updated.';
@@ -19572,6 +20043,7 @@ function renderInvoicesTab(container) {
         enquiryId: state.pendingEnquiryForInvoice ? state.pendingEnquiryForInvoice.id : null,
         invoiceNo: state.counters.invoice,
         invoice_display_no: docNo,
+        status: 'unpaid',
         clientName: payload.client,
         parentName: payload.parentName,
         programmeId: payload.progId,
@@ -25669,6 +26141,25 @@ function renderRecordPaymentModal(container, inv) {
     }
 
     state.payments.push(payment);
+
+    // Update invoice status based on cumulative payments and total amount
+    const { paid: cumPaid, total: invTotal } = invoiceBalance(inv);
+    if (inv.status !== 'voided' && inv.status !== 'cancelled') {
+      if (cumPaid >= invTotal && invTotal > 0) {
+        inv.status = 'paid';
+      } else if (cumPaid > 0) {
+        inv.status = 'partial';
+      } else {
+        inv.status = 'unpaid';
+      }
+      try {
+        await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
+        await safeSet(STORE_KEY_INVOICES, state.invoices);
+      } catch (invSaveErr) {
+        console.warn('Warning: Invoice status sync after payment failed:', invSaveErr);
+      }
+    }
+
     await syncPaymentToEnrolmentAndCustomer(payment, inv);
     await safeSet(STORE_KEY_PAYMENTS, state.payments);
     await safeSet(STORE_KEY_COUNTERS, state.counters);
@@ -30225,12 +30716,12 @@ function renderSupabaseModal(container) {
   const isPostgrestOk = state.supabase.status === 'connected' && currentHttpStatus === 200;
   const isAuthoritative = state.databaseAuthorityState === 'AUTHORITATIVE';
 
-  const isMigrationLocked = state.databaseAuthorityState === 'API_KEY_INVALID' ||
-                            state.databaseAuthorityState === 'AUTHENTICATION_FAILED' ||
-                            state.databaseAuthorityState === 'DATABASE_UNAVAILABLE' ||
+  const isAuthFailure = state.databaseAuthorityState === 'API_KEY_INVALID' || state.databaseAuthorityState === 'AUTHENTICATION_FAILED' || !isAuth;
+  const isConnFailure = state.databaseAuthorityState === 'CONNECTIVITY_FAILED' || state.databaseAuthorityState === 'DATABASE_UNAVAILABLE';
+  const isMigrationLocked = isAuthFailure ||
+                            isConnFailure ||
                             state.databaseAuthorityState === 'RLS_AUTHORIZATION_FAILED' ||
                             state.databaseAuthorityState === 'CONFIGURATION_INVALID' ||
-                            state.databaseAuthorityState === 'CONNECTIVITY_FAILED' ||
                             state.databaseAuthorityState === 'UNVERIFIED' ||
                             !isPostgrestOk;
 
@@ -30356,7 +30847,7 @@ Action: Update the application's Supabase public API key in the field above and 
             
             ${isMigrationLocked ? `
               <div style="background:#FEF2F2; border:1px solid var(--danger); padding:8px 12px; border-radius:4px; font-size:12px; color:#991B1B; margin-bottom:10px;">
-                <strong>🔒 Migration Locked</strong> — PostgreSQL connection has not been successfully verified. No local data has been modified.
+                <strong>🔒 Migration Locked</strong> — ${isAuthFailure ? 'Authentication Required (Please sign in as an administrator to run database migrations).' : (isConnFailure ? 'PostgreSQL Unreachable (Database connection could not be established).' : 'PostgreSQL connection has not been successfully verified.')} No local data has been modified.
               </div>
             ` : `
               <div style="background:#F0FDF4; border:1px solid var(--success); padding:8px 12px; border-radius:4px; font-size:12px; color:#166534; margin-bottom:10px;">
@@ -31513,6 +32004,7 @@ function renderChangeRoleModal(container, user) {
       canAccessTab,
       supabaseClient,
       dbRepo,
+      CANONICAL_INVOICE_STATUSES,
       DB_TABLE_MAPPING,
       loadAll,
       safeGet,
@@ -31931,6 +32423,14 @@ function renderChangeRoleModal(container, user) {
     window.renderApplicationsTab = renderApplicationsTab;
     window.renderApplicationDetailModal = renderApplicationDetailModal;
     window.renderApplicantIntakePortal = renderApplicantIntakePortal;
+    // Runtime Diagnostics & Auth State Exports
+    window.supabaseClient = supabaseClient;
+    window.supabaseAuth = supabaseAuth;
+    window.state = state;
+    window.render = render;
+    window.renderInvoicesTab = renderInvoicesTab;
+    window.dbRepo = dbRepo;
+    window.CANONICAL_INVOICE_STATUSES = CANONICAL_INVOICE_STATUSES;
   }
 })();
 </script>
