@@ -16878,7 +16878,7 @@ function renderLoginScreen(root) {
         btn.textContent = 'Authenticating...';
 
         try {
-          const user = state.users.find(u => u.email && u.email.toLowerCase() === email);
+          const user = (state.users || []).find(u => u.email && u.email.toLowerCase() === email);
 
           if (user) {
             if (user.status === 'deactivated') {
@@ -16989,7 +16989,7 @@ function renderLoginScreen(root) {
 
           // No legacy sess_* token — Supabase JWT is the sole session authority
           resolvedUser.lastLoginAt = new Date().toISOString();
-          await safeSet(STORE_KEY_SYSTEM_USERS, state.users);
+          await safeSet(STORE_KEY_SYSTEM_USERS, state.users || []);
 
           const authoritativeTenant = resolveAuthoritativeTenantId();
           if (typeof isValidUuid === 'function' && isValidUuid(authoritativeTenant) && authoritativeTenant !== 'clasptek_main') {
