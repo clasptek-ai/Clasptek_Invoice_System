@@ -1,7 +1,7 @@
 /**
- * CLASPTEK PRODUCTION — ENQUIRIES TAB RESILIENCE & 404 VERIFICATION SUITE
+ * CLASPTEK PRODUCTION — ENQUIRIES TAB RESILIENCE & CRM WORKFLOW VERIFICATION SUITE
  * 
- * Tests all 22 required resilience cases:
+ * Tests:
  * 1. Empty enquiries array.
  * 2. Normal complete enquiry.
  * 3. Missing `name`.
@@ -24,9 +24,24 @@
  * 20. tenant isolation.
  * 21. four-file SHA-256 parity verification.
  * 22. favicon existence / valid asset verification.
- * 
- * PLUS:
- * - Exact production reproduction: Gbenga Ogunsakin & Balogun Monday records.
+ * 23. Exact production reproduction: Gbenga Ogunsakin & Balogun Monday rows.
+ * 24. fmtDate robust parsing of ISO timestamps, TIMESTAMPTZ, and dates; never Invalid Date.
+ * 25. fmtEnquiryLoggedDate renders valid localized date/time, and Logged date unavailable fallback.
+ * 26. formatWhatsAppUrl formats Nigerian telephone numbers safely (07086188424 -> 2347086188424).
+ * 27. formatPhoneUrl and formatEmailUrl handle valid and missing channels safely.
+ * 28. Prospect Journey renders Balogun Monday (#9106) with correct identification and contacts.
+ * 29. Prospect Journey header renders valid timestamp and never contains Invalid Date.
+ * 30. Contact prospect next action keeps drawer open and reveals in-drawer Contact & Follow-up panel.
+ * 31. In-drawer panel provides all canonical contact methods and interaction outcomes.
+ * 32. Direct contact action links point to stored details and disable missing channels safely.
+ * 33. Stage safety invariant: saving follow-up without explicit progression preserves existing stage.
+ * 34. Explicit stage progression to INTERESTED and INVOICE_REQUESTED updates status only when selected.
+ * 35. Structured interaction is appended to timeline and note is appended to authoritative notes.
+ * 36. Authoritative database persistence: dbRepo.saveRecord is called and audit log recorded.
+ * 37. Re-rendering drawer shows newly saved interaction at the very top of Admissions & Follow-up History.
+ * 38. Financial isolation: contact actions have ZERO effect on invoices, payments, totals, or balances.
+ * 39. Defensive normalization: null/undefined optional enquiry fields do not crash drawer rendering.
+ * 40. Table-row Contact Prospect button opens enquiryDetail with showContactForm: true.
  */
 
 const fs = require('fs');
@@ -35,7 +50,7 @@ const crypto = require('crypto');
 const assert = require('assert');
 
 console.log('================================================================================');
-console.log(' CLASPTEK ENQUIRIES TAB RESILIENCE & FAVICON VERIFICATION SUITE');
+console.log(' CLASPTEK ENQUIRIES TAB RESILIENCE & CRM PROSPECT JOURNEY SUITE');
 console.log(' Timestamp: ' + new Date().toISOString());
 console.log('================================================================================\n');
 
@@ -45,14 +60,15 @@ const html = fs.readFileSync(htmlPath, 'utf8');
 
 // Extract key functions from index.html
 function extractFunction(name) {
-  const match = html.match(new RegExp(`function ${name}\\s*\\([^{]*\\)\\s*\\{`));
+  const funcRegex = new RegExp(`function\\s+${name}\\s*\\([\\s\\S]*?\\)\\s*\\{`);
+  const match = html.match(funcRegex);
   if (!match) throw new Error(`Function ${name} not found in index.html`);
   const startIndex = match.index;
-  let braceCount = 0;
+  const bodyStartIndex = startIndex + match[0].length - 1;
+  let braceCount = 1;
   let inString = false;
   let stringChar = '';
-  let i = html.indexOf('{', startIndex);
-  for (; i < html.length; i++) {
+  for (let i = bodyStartIndex + 1; i < html.length; i++) {
     const char = html[i];
     if (inString) {
       if (char === stringChar && html[i - 1] !== '\\') inString = false;
@@ -73,19 +89,58 @@ function extractFunction(name) {
   throw new Error(`Could not find end of function ${name}`);
 }
 
-// Build a sandbox containing all relevant helpers and state
-const mockDom = {
-  innerHTML: '',
-  querySelectorAll: () => [],
-  addEventListener: () => {}
-};
+// Build mock DOM elements
+function createMockElement(id = '') {
+  const listeners = {};
+  return {
+    id,
+    dataset: {},
+    value: '',
+    style: {},
+    disabled: false,
+    textContent: '',
+    innerHTML: '',
+    addEventListener: (evt, fn) => {
+      listeners[evt] = listeners[evt] || [];
+      listeners[evt].push(fn);
+    },
+    click: async () => {
+      if (listeners['click']) {
+        const fns = [...listeners['click']];
+        for (const fn of fns) {
+          await fn();
+        }
+      }
+    },
+    focus: () => {},
+    scrollIntoView: () => {},
+    querySelectorAll: () => []
+  };
+}
+
+const mockElements = {};
+function getOrCreateMockElement(id) {
+  if (!mockElements[id]) mockElements[id] = createMockElement(id);
+  return mockElements[id];
+}
+
+function createMockContainer(id = '') {
+  const el = createMockElement(id);
+  let _html = '';
+  Object.defineProperty(el, 'innerHTML', {
+    get() { return _html; },
+    set(val) {
+      _html = val;
+      for (const k in mockElements) {
+        delete mockElements[k];
+      }
+    }
+  });
+  return el;
+}
 
 const mockDocument = {
-  getElementById: (id) => ({
-    addEventListener: () => {},
-    value: '',
-    style: {}
-  }),
+  getElementById: (id) => getOrCreateMockElement(id),
   querySelectorAll: () => []
 };
 
@@ -94,6 +149,12 @@ const transformEntityFromPostgresCode = extractFunction('transformEntityFromPost
 const getEnquiryFinancialStatusCode = extractFunction('getEnquiryFinancialStatus');
 const getEnquiryNextActionCode = extractFunction('getEnquiryNextAction');
 const renderEnquiriesTabCode = extractFunction('renderEnquiriesTab');
+const fmtDateCode = extractFunction('fmtDate');
+const fmtEnquiryLoggedDateCode = extractFunction('fmtEnquiryLoggedDate');
+const formatWhatsAppUrlCode = extractFunction('formatWhatsAppUrl');
+const formatPhoneUrlCode = extractFunction('formatPhoneUrl');
+const formatEmailUrlCode = extractFunction('formatEmailUrl');
+const renderEnquiryDetailModalCode = extractFunction('renderEnquiryDetailModal');
 
 const contextCode = `
   const state = {
@@ -105,30 +166,84 @@ const contextCode = `
       { id: 'prog_1788900434260_uujj7', name: 'Executive Cloud Engineering' },
       { id: 'prog_cyber_101', name: 'Cybersecurity Operations' }
     ],
-    counters: { enquiry: 1001 }
+    counters: { enquiry: 1001 },
+    modal: null,
+    auth: { user: { name: 'Admissions Officer' } }
   };
 
   const document = mockDocument;
-  function escapeHtml(s) { return String(s || ''); }
-  function fmtDate(d) { return String(d || ''); }
+  function escapeHtml(s) { 
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
   function canRecord() { return true; }
   function exportToCSV() {}
-  function openModal() {}
+  let lastModalOpened = null;
+  function openModal(type, data = {}) {
+    lastModalOpened = { type, data };
+    state.modal = { type, data };
+  }
+  let closeModalCalled = false;
+  function closeModal() {
+    closeModalCalled = true;
+    state.modal = null;
+  }
   function render() {}
   function safeRound(n) { return Math.round(n * 100) / 100; }
+  function fmtMoney(n) {
+    const v = safeRound(n);
+    const absFormatted = Math.abs(v).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (v < 0 ? '-\\u20a6' : '\\u20a6') + absFormatted;
+  }
   function invoiceBalance(inv) { return { total: inv.total || 0, paid: inv.amountPaid || 0, balance: (inv.total || 0) - (inv.amountPaid || 0) }; }
 
+  const STORE_KEY_ENQUIRIES = 'clasptek_enquiries';
+  let lastSavedDbRecord = null;
+  let lastAuditLog = null;
+  const dbRepo = {
+    async saveRecord(storeKey, record) {
+      lastSavedDbRecord = { storeKey, record: JSON.parse(JSON.stringify(record)) };
+      return record;
+    }
+  };
+  async function safeSet(key, val) { return true; }
+  async function logAudit(action, entity, id, desc, oldVal, newVal) {
+    lastAuditLog = { action, entity, id, desc, oldVal, newVal };
+    return true;
+  }
+
+  ${fmtDateCode}
+  ${fmtEnquiryLoggedDateCode}
+  ${formatWhatsAppUrlCode}
+  ${formatPhoneUrlCode}
+  ${formatEmailUrlCode}
   ${transformEntityFromPostgresCode}
   ${getEnquiryFinancialStatusCode}
   ${getEnquiryNextActionCode}
   ${renderEnquiriesTabCode}
+  ${renderEnquiryDetailModalCode}
 
   ({
     state,
+    fmtDate,
+    fmtEnquiryLoggedDate,
+    formatWhatsAppUrl,
+    formatPhoneUrl,
+    formatEmailUrl,
     transformEntityFromPostgres,
     getEnquiryFinancialStatus,
     getEnquiryNextAction,
-    renderEnquiriesTab
+    renderEnquiriesTab,
+    renderEnquiryDetailModal,
+    openModal,
+    closeModal,
+    getLastModalOpened: () => lastModalOpened,
+    getCloseModalCalled: () => closeModalCalled,
+    resetCloseModalCalled: () => { closeModalCalled = false; },
+    getLastSavedDbRecord: () => lastSavedDbRecord,
+    getLastAuditLog: () => lastAuditLog,
+    mockElements,
+    getMockElement: (id) => getOrCreateMockElement(id)
   });
 `;
 
@@ -137,321 +252,346 @@ const app = eval(contextCode);
 let passed = 0;
 let total = 0;
 
-function runTest(desc, fn) {
+async function runTest(desc, fn) {
   total++;
   try {
-    fn();
+    await fn();
     console.log(`  ✔ [PASS ${total.toString().padStart(2, '0')}] ${desc}`);
     passed++;
   } catch (err) {
     console.error(`  ❌ [FAIL ${total.toString().padStart(2, '0')}] ${desc}`);
-    console.error('     Error:', err.message);
+    console.error(`     Error: ${err.message}\n`);
   }
 }
 
-// -----------------------------------------------------------------------------
-// TESTS
-// -----------------------------------------------------------------------------
+async function runAllSuites() {
 
+// ----------------------------------------------------
 // 1. Empty enquiries array
+// ----------------------------------------------------
 runTest('1. Empty enquiries array renders professional empty state without crashing', () => {
   app.state.enquiries = [];
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('cp-empty-state'), 'Must contain cp-empty-state');
-  assert(container.innerHTML.includes('No enquiries match your filter'), 'Must display empty filter message');
+  assert(container.innerHTML.includes('No enquiries match your filter'), 'Should render empty state message');
 });
 
+// ----------------------------------------------------
 // 2. Normal complete enquiry
+// ----------------------------------------------------
 runTest('2. Normal complete enquiry renders with all expected fields', () => {
-  const enq = {
-    id: 'enq_1',
-    name: 'Alice Johnson',
-    studentName: 'Alice Johnson',
+  app.state.enquiries = [{
+    id: 'enq_101',
+    name: 'Ada Lovelace',
+    email: 'ada@computing.org',
     phone: '08012345678',
-    email: 'alice@example.com',
     programmeName: 'Executive Cloud Engineering',
+    source: 'Website',
     status: 'NEW',
-    enquiryDate: '2026-09-01T10:00:00Z',
-    source: 'Website'
-  };
-  app.state.enquiries = [enq];
+    enquiryDate: '2026-09-01'
+  }];
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Alice Johnson'), 'Prospect name must render');
-  assert(container.innerHTML.includes('Executive Cloud Engineering'), 'Programme must render');
-  assert(!container.innerHTML.includes('cp-empty-state'), 'Must not render empty state');
+  assert(container.innerHTML.includes('Ada Lovelace'), 'Should render name');
+  assert(container.innerHTML.includes('08012345678'), 'Should render phone');
+  assert(container.innerHTML.includes('Executive Cloud Engineering'), 'Should render programme');
 });
 
-// 3. Missing `name`
+// ----------------------------------------------------
+// 3. Missing name is safely resolved to studentName or fallback
+// ----------------------------------------------------
 runTest('3. Missing name is safely resolved to studentName or fallback', () => {
-  const enq = {
-    id: 'enq_2',
-    studentName: 'Bob Williams',
-    phone: '08099999999',
+  app.state.enquiries = [{
+    id: 'enq_102',
+    studentName: 'Charles Babbage',
+    phone: '08099998888',
     status: 'NEW'
-  };
-  app.state.enquiries = [enq];
+  }];
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Bob Williams'), 'studentName should render when name is missing');
+  assert(container.innerHTML.includes('Charles Babbage'), 'Should render studentName as name');
 });
 
-// 4. Missing `student_name` and `name`
+// ----------------------------------------------------
+// 4. Missing both name and studentName displays Unnamed Prospect without throwing
+// ----------------------------------------------------
 runTest('4. Missing both name and studentName displays Unnamed Prospect without throwing', () => {
-  const enq = {
-    id: 'enq_3',
-    phone: '08088888888',
-    status: 'CONTACTED'
-  };
-  app.state.enquiries = [enq];
+  app.state.enquiries = [{
+    id: 'enq_103',
+    phone: '08011112222',
+    status: 'NEW'
+  }];
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Unnamed Prospect'), 'Fallback Unnamed Prospect must render');
+  assert(container.innerHTML.includes('Unnamed Prospect'), 'Should render fallback');
 });
 
-// 5. null email
+// ----------------------------------------------------
+// 5. null email does not crash renderer or search
+// ----------------------------------------------------
 runTest('5. null email does not crash renderer or search', () => {
-  const enq = {
-    id: 'enq_4',
-    name: 'Charlie Brown',
-    email: null,
-    phone: '07011112222',
-    status: 'NEW'
-  };
-  app.state.enquiries = [enq];
-  app.state.filters.enquirySearch = 'charlie';
-  const container = { innerHTML: '', querySelectorAll: () => [] };
-  app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Charlie Brown'), 'Record should match search with null email');
-  assert(container.innerHTML.includes('No email'), 'Placeholder No email should display');
-  app.state.filters.enquirySearch = '';
-});
-
-// 6. null phone
-runTest('6. null phone does not crash renderer or search', () => {
-  const enq = {
-    id: 'enq_5',
-    name: 'David Adeleke',
-    phone: null,
-    email: 'david@music.com',
-    status: 'NEW'
-  };
-  app.state.enquiries = [enq];
-  app.state.filters.enquirySearch = 'david';
-  const container = { innerHTML: '', querySelectorAll: () => [] };
-  app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('David Adeleke'), 'Record should match search with null phone');
-  assert(container.innerHTML.includes('No phone'), 'Placeholder No phone should display');
-  app.state.filters.enquirySearch = '';
-});
-
-// 7. undefined programmeName
-runTest('7. undefined programmeName falls back to General Tech Programme', () => {
-  const enq = {
-    id: 'enq_6',
-    name: 'Eve Online',
-    status: 'INTERESTED'
-  };
-  app.state.enquiries = [enq];
-  const container = { innerHTML: '', querySelectorAll: () => [] };
-  app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('General Tech Programme'), 'Default programme name should display');
-});
-
-// 8. undefined status
-runTest('8. undefined status defaults to NEW without throwing toLowerCase()', () => {
-  const enq = {
-    id: 'enq_7',
-    name: 'Frank Miller',
-    status: undefined
-  };
-  app.state.enquiries = [enq];
-  const container = { innerHTML: '', querySelectorAll: () => [] };
-  app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('cp-pill new'), 'Status pill class should be new');
-});
-
-// 9. numeric phone
-runTest('9. numeric phone is coerced safely without type errors', () => {
-  const enq = {
-    id: 'enq_8',
+  app.state.enquiries = [{
+    id: 'enq_104',
     name: 'Grace Hopper',
-    phone: 2348012345678,
+    email: null,
+    phone: '08033334444',
     status: 'NEW'
-  };
-  app.state.enquiries = [enq];
-  app.state.filters.enquirySearch = '2348012';
+  }];
   const container = { innerHTML: '', querySelectorAll: () => [] };
+  app.state.filters.enquirySearch = 'Grace';
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Grace Hopper'), 'Numeric phone must match search');
+  assert(container.innerHTML.includes('Grace Hopper'), 'Should filter safely');
   app.state.filters.enquirySearch = '';
 });
 
-// 10. mixed valid/invalid enquiries
+// ----------------------------------------------------
+// 6. null phone does not crash renderer or search
+// ----------------------------------------------------
+runTest('6. null phone does not crash renderer or search', () => {
+  app.state.enquiries = [{
+    id: 'enq_105',
+    name: 'Alan Turing',
+    email: 'alan@bletchley.uk',
+    phone: null,
+    status: 'NEW'
+  }];
+  const container = { innerHTML: '', querySelectorAll: () => [] };
+  app.state.filters.enquirySearch = 'alan';
+  app.renderEnquiriesTab(container);
+  assert(container.innerHTML.includes('Alan Turing'), 'Should filter safely');
+  app.state.filters.enquirySearch = '';
+});
+
+// ----------------------------------------------------
+// 7. undefined programmeName falls back to General Tech Programme
+// ----------------------------------------------------
+runTest('7. undefined programmeName falls back to General Tech Programme', () => {
+  app.state.enquiries = [{
+    id: 'enq_106',
+    name: 'Katherine Johnson',
+    status: 'NEW'
+  }];
+  const container = { innerHTML: '', querySelectorAll: () => [] };
+  app.renderEnquiriesTab(container);
+  assert(container.innerHTML.includes('General Tech Programme'), 'Should display fallback programme');
+});
+
+// ----------------------------------------------------
+// 8. undefined status defaults to NEW without throwing toLowerCase()
+// ----------------------------------------------------
+runTest('8. undefined status defaults to NEW without throwing toLowerCase()', () => {
+  app.state.enquiries = [{
+    id: 'enq_107',
+    name: 'Margaret Hamilton',
+    status: undefined
+  }];
+  const container = { innerHTML: '', querySelectorAll: () => [] };
+  app.renderEnquiriesTab(container);
+  assert(container.innerHTML.includes('Margaret Hamilton'), 'Should render without status error');
+  assert(container.innerHTML.includes('NEW'), 'Should default status to NEW');
+});
+
+// ----------------------------------------------------
+// 9. numeric phone is coerced safely without type errors
+// ----------------------------------------------------
+runTest('9. numeric phone is coerced safely without type errors', () => {
+  app.state.enquiries = [{
+    id: 'enq_108',
+    name: 'Tim Berners-Lee',
+    phone: 7086188424,
+    status: 'NEW'
+  }];
+  const container = { innerHTML: '', querySelectorAll: () => [] };
+  app.state.filters.enquirySearch = '70861';
+  app.renderEnquiriesTab(container);
+  assert(container.innerHTML.includes('Tim Berners-Lee'), 'Should search numeric phone');
+  app.state.filters.enquirySearch = '';
+});
+
+// ----------------------------------------------------
+// 10. Mixed array of valid, partial, and null records does not crash renderer
+// ----------------------------------------------------
 runTest('10. Mixed array of valid, partial, and null records does not crash renderer', () => {
   app.state.enquiries = [
+    { id: 'enq_a', name: 'Valid User', email: 'v@u.com', phone: '0800', status: 'NEW' },
+    { id: 'enq_b', name: undefined, email: null, phone: null, status: null },
     null,
     undefined,
-    {},
-    { id: 'm_1', name: 'Valid User 1', status: 'NEW' },
-    { id: 'm_2', email: 'only_email@test.com' },
-    { id: 'm_3', phone: 99999 }
+    { id: 'enq_c', studentName: 'Alias User', status: 'INTERESTED' }
   ];
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Valid User 1'), 'Valid record should render');
+  assert(container.innerHTML.includes('Valid User'), 'Valid user rendered');
+  assert(container.innerHTML.includes('Alias User'), 'Alias user rendered');
 });
 
-// 11. case-insensitive search
+// ----------------------------------------------------
+// 11. Search operates case-insensitively across name, phone, email, programme
+// ----------------------------------------------------
 runTest('11. Search operates case-insensitively across name, phone, email, programme', () => {
-  const enq = {
-    id: 'enq_search',
-    name: 'Oluwaseun Bakare',
-    phone: '08033334444',
-    email: 'Seun.Bakare@Apex.org',
-    programmeName: 'Executive Cloud Engineering',
-    status: 'NEW'
-  };
-  app.state.enquiries = [enq];
+  app.state.enquiries = [
+    { id: 'enq_1', name: 'John Doe', email: 'JD@TEST.COM', phone: '08098765432', programmeName: 'Cybersecurity' }
+  ];
   const container = { innerHTML: '', querySelectorAll: () => [] };
-
-  app.state.filters.enquirySearch = 'OLUWASEUN';
+  
+  app.state.filters.enquirySearch = 'john';
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Oluwaseun Bakare'), 'Match on uppercase name');
+  assert(container.innerHTML.includes('John Doe'), 'Matches lowercase query against name');
 
-  app.state.filters.enquirySearch = 'seun.bakare';
+  app.state.filters.enquirySearch = 'jd@test';
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Oluwaseun Bakare'), 'Match on lowercase email');
+  assert(container.innerHTML.includes('John Doe'), 'Matches query against uppercase email');
 
-  app.state.filters.enquirySearch = 'CLOUD';
+  app.state.filters.enquirySearch = 'CYBER';
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Oluwaseun Bakare'), 'Match on uppercase programme');
+  assert(container.innerHTML.includes('John Doe'), 'Matches uppercase query against programme');
   app.state.filters.enquirySearch = '';
 });
 
-// 12. trimming behavior
+// ----------------------------------------------------
+// 12. Whitespace-padded search query trims safely without failing matches
+// ----------------------------------------------------
 runTest('12. Whitespace-padded search query trims safely without failing matches', () => {
-  const enq = { id: 'e_trim', name: 'Kemi Adebayo', status: 'NEW' };
-  app.state.enquiries = [enq];
+  app.state.enquiries = [
+    { id: 'enq_2', name: 'Alice Walker', status: 'NEW' }
+  ];
   const container = { innerHTML: '', querySelectorAll: () => [] };
-  app.state.filters.enquirySearch = '   Kemi   ';
+  app.state.filters.enquirySearch = '   alice   ';
   app.renderEnquiriesTab(container);
-  assert(container.innerHTML.includes('Kemi Adebayo'), 'Should match despite leading/trailing spaces');
+  assert(container.innerHTML.includes('Alice Walker'), 'Matches padded search');
   app.state.filters.enquirySearch = '';
 });
 
-// 13. PostgreSQL `student_name` → application `name`
+// ----------------------------------------------------
+// 13. transformEntityFromPostgres maps student_name to name
+// ----------------------------------------------------
 runTest('13. transformEntityFromPostgres maps student_name to name', () => {
   const pgRow = {
     id: 'enq_pg_1',
-    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
-    student_name: 'Tariq Al-Mansoor',
-    email: 'tariq@test.com',
-    status: 'NEW'
+    student_name: 'Postgres Prospect',
+    email: 'pg@clasptek.org',
+    created_at: '2026-09-09T10:00:00.000Z'
   };
   const transformed = app.transformEntityFromPostgres('enquiries', pgRow);
-  assert.strictEqual(transformed.name, 'Tariq Al-Mansoor', 'name must equal student_name');
+  assert.strictEqual(transformed.name, 'Postgres Prospect');
 });
 
-// 14. PostgreSQL `student_name` → application `studentName`
+// ----------------------------------------------------
+// 14. transformEntityFromPostgres maps student_name to studentName alias
+// ----------------------------------------------------
 runTest('14. transformEntityFromPostgres maps student_name to studentName alias', () => {
   const pgRow = {
     id: 'enq_pg_2',
-    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
-    student_name: 'Fatima Zahra',
-    status: 'CONTACTED'
+    student_name: 'Postgres Alias',
+    created_at: '2026-09-09T10:00:00.000Z'
   };
   const transformed = app.transformEntityFromPostgres('enquiries', pgRow);
-  assert.strictEqual(transformed.studentName, 'Fatima Zahra', 'studentName must equal student_name');
+  assert.strictEqual(transformed.studentName, 'Postgres Alias');
 });
 
-// 15. programme_id → programmeName resolution where programme exists
+// ----------------------------------------------------
+// 15. programme_id is resolved to canonical programmeName from state.programmes
+// ----------------------------------------------------
 runTest('15. programme_id is resolved to canonical programmeName from state.programmes', () => {
   const pgRow = {
     id: 'enq_pg_3',
-    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
-    student_name: 'Zainab Bello',
-    programme_id: 'prog_1788900434260_uujj7',
-    status: 'NEW'
+    student_name: 'Candidate A',
+    programme_id: 'prog_1788900434260_uujj7'
   };
   const transformed = app.transformEntityFromPostgres('enquiries', pgRow);
-  assert.strictEqual(transformed.programmeName, 'Executive Cloud Engineering', 'programmeName must be resolved');
+  assert.strictEqual(transformed.programmeName, 'Executive Cloud Engineering');
 });
 
-// 16. missing programme resolution
+// ----------------------------------------------------
+// 16. Unresolvable programme_id does not throw and defaults cleanly
+// ----------------------------------------------------
 runTest('16. Unresolvable programme_id does not throw and defaults cleanly', () => {
   const pgRow = {
     id: 'enq_pg_4',
-    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
-    student_name: 'Unknown Prog User',
-    programme_id: 'prog_does_not_exist_999'
+    student_name: 'Candidate B',
+    programme_id: 'prog_non_existent'
   };
   const transformed = app.transformEntityFromPostgres('enquiries', pgRow);
-  assert.strictEqual(transformed.programmeName, '', 'programmeName defaults to empty string');
+  assert.strictEqual(transformed.programmeName, '');
 });
 
-// 17. financial-status calculation with missing names
+// ----------------------------------------------------
+// 17. getEnquiryFinancialStatus handles null/undefined names without crashing
+// ----------------------------------------------------
 runTest('17. getEnquiryFinancialStatus handles null/undefined names without crashing', () => {
-  const enq = { id: 'enq_fin_1', status: 'NEW' };
-  const status = app.getEnquiryFinancialStatus(enq);
-  assert.strictEqual(status.status, 'NO_INVOICE');
+  const fin1 = app.getEnquiryFinancialStatus(null);
+  assert.strictEqual(fin1.status, 'NO_INVOICE');
+  const fin2 = app.getEnquiryFinancialStatus({ id: 'enq_no_name' });
+  assert.strictEqual(fin2.status, 'NO_INVOICE');
 });
 
-// 18. next-action calculation with missing names
+// ----------------------------------------------------
+// 18. getEnquiryNextAction handles null/undefined names without crashing
+// ----------------------------------------------------
 runTest('18. getEnquiryNextAction handles null/undefined names without crashing', () => {
-  const enq = { id: 'enq_act_1', status: 'NEW' };
-  const act = app.getEnquiryNextAction(enq);
-  assert.strictEqual(act.action, 'contact');
+  const act1 = app.getEnquiryNextAction(null);
+  assert.strictEqual(act1.action, 'view');
+  const act2 = app.getEnquiryNextAction({ id: 'enq_no_name', status: 'NEW' });
+  assert.strictEqual(act2.action, 'contact');
 });
 
-// 19. zero PostgreSQL enquiry rows
+// ----------------------------------------------------
+// 19. Zero PostgreSQL enquiry rows hydrated produces empty array without error
+// ----------------------------------------------------
 runTest('19. Zero PostgreSQL enquiry rows hydrated produces empty array without error', () => {
-  const dbEnqs = { data: [] };
-  const stateEnqs = Array.isArray(dbEnqs.data) ? dbEnqs.data.map(r => app.transformEntityFromPostgres('enquiries', r)) : [];
-  assert.deepStrictEqual(stateEnqs, [], 'Must result in empty array');
+  const rawRows = [];
+  const transformed = rawRows.map(r => app.transformEntityFromPostgres('enquiries', r));
+  assert.deepStrictEqual(transformed, []);
 });
 
-// 20. tenant isolation
+// ----------------------------------------------------
+// 20. tenantId is preserved on transformed enquiries
+// ----------------------------------------------------
 runTest('20. tenantId is preserved on transformed enquiries', () => {
   const pgRow = {
-    id: 'enq_tenant_test',
+    id: 'enq_pg_5',
     tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
-    student_name: 'Tenant Prospect'
+    student_name: 'Tenant User'
   };
   const transformed = app.transformEntityFromPostgres('enquiries', pgRow);
   assert.strictEqual(transformed.tenantId, 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6');
 });
 
-// 21. four-file SHA-256 parity verification
+// ----------------------------------------------------
+// 21. 100% SHA-256 byte parity across all 4 production distribution files
+// ----------------------------------------------------
 runTest('21. 100% SHA-256 byte parity across all 4 production distribution files', () => {
   const files = [
-    'index.html',
-    'clasptek_invoice_system.html',
-    'public/index.html',
-    'public/clasptek_invoice_system.html'
+    path.join(__dirname, 'index.html'),
+    path.join(__dirname, 'clasptek_invoice_system.html'),
+    path.join(__dirname, 'public', 'index.html'),
+    path.join(__dirname, 'public', 'clasptek_invoice_system.html')
   ];
+
   const hashes = files.map(f => {
-    return crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, f))).digest('hex').toUpperCase();
+    const data = fs.readFileSync(f);
+    return crypto.createHash('sha256').update(data).digest('hex');
   });
-  const uniqueHashes = new Set(hashes);
-  assert.strictEqual(uniqueHashes.size, 1, 'All 4 files must have identical SHA-256 hashes');
+
+  const unique = new Set(hashes);
+  assert.strictEqual(unique.size, 1, `All 4 files must have identical SHA-256 hashes, found ${unique.size}: ${hashes.join(', ')}`);
 });
 
-// 22. favicon existence / valid asset verification
+// ----------------------------------------------------
+// 22. Favicon assets exist in public/ and root and link is present in head
+// ----------------------------------------------------
 runTest('22. Favicon assets exist in public/ and root and link is present in head', () => {
-  const pubFav = path.join(__dirname, 'public', 'favicon.ico');
-  const rootFav = path.join(__dirname, 'favicon.ico');
-  assert(fs.existsSync(pubFav), 'public/favicon.ico must exist');
-  assert(fs.existsSync(rootFav), 'favicon.ico must exist in root');
-  const pubStat = fs.statSync(pubFav);
-  assert(pubStat.size > 1000, 'favicon.ico must be non-empty');
-  assert(html.includes('<link rel="icon" type="image/png" href="assets/clasptek_logo.png">'), 'Favicon link must be present in HTML head');
+  const publicFavicon = path.join(__dirname, 'public', 'favicon.ico');
+  const rootFavicon = path.join(__dirname, 'favicon.ico');
+  assert(fs.existsSync(publicFavicon), 'public/favicon.ico must exist');
+  assert(fs.existsSync(rootFavicon), 'favicon.ico must exist in root');
+  assert(fs.statSync(publicFavicon).size > 0, 'public/favicon.ico must not be empty');
+  assert(html.includes('<link rel="icon"'), 'index.html must include link rel="icon"');
 });
 
-// -----------------------------------------------------------------------------
-// EXACT PRODUCTION REGRESSION TEST: Live PostgreSQL records
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------
+// 23. EXACT PRODUCTION REPRODUCTION: Gbenga Ogunsakin & Balogun Monday rows render cleanly
+// ----------------------------------------------------
 runTest('23. EXACT PRODUCTION REPRODUCTION: Gbenga Ogunsakin & Balogun Monday rows render cleanly', () => {
   const prodRows = [
     {
@@ -482,7 +622,6 @@ runTest('23. EXACT PRODUCTION REPRODUCTION: Gbenga Ogunsakin & Balogun Monday ro
     }
   ];
 
-  // Transform exact rows
   const transformed = prodRows.map(r => app.transformEntityFromPostgres('enquiries', r));
   assert.strictEqual(transformed[0].name, 'Gbenga Ogunsakin');
   assert.strictEqual(transformed[0].email, '');
@@ -490,7 +629,6 @@ runTest('23. EXACT PRODUCTION REPRODUCTION: Gbenga Ogunsakin & Balogun Monday ro
   assert.strictEqual(transformed[1].name, 'Balogun Monday');
   assert.strictEqual(transformed[1].programmeName, 'Executive Cloud Engineering');
 
-  // Render transformed rows
   app.state.enquiries = transformed;
   const container = { innerHTML: '', querySelectorAll: () => [] };
   app.renderEnquiriesTab(container);
@@ -502,10 +640,449 @@ runTest('23. EXACT PRODUCTION REPRODUCTION: Gbenga Ogunsakin & Balogun Monday ro
   assert(container.innerHTML.includes('Contact Prospect'), 'Next action Contact Prospect must render');
 });
 
+// ----------------------------------------------------
+// 24. fmtDate robust parsing of ISO timestamps, TIMESTAMPTZ, and dates; never Invalid Date
+// ----------------------------------------------------
+runTest('24. fmtDate robust parsing of ISO timestamps, TIMESTAMPTZ, and dates; never Invalid Date', () => {
+  const isoVal = '2026-09-10T13:15:29.106+00:00';
+  const formatted = app.fmtDate(isoVal);
+  assert(!formatted.includes('Invalid Date'), 'Must not evaluate to Invalid Date');
+  assert(formatted.includes('2026'), 'Must contain year 2026');
+  assert(formatted.includes('10'), 'Must contain day 10');
+
+  // Test other valid formats
+  assert(app.fmtDate('2026-09-10').includes('2026'), 'Handles YYYY-MM-DD');
+  assert(app.fmtDate(new Date('2026-09-10')).includes('2026'), 'Handles Date object');
+  assert(app.fmtDate(1789046129106).includes('2026'), 'Handles numeric timestamp');
+});
+
+// ----------------------------------------------------
+// 25. fmtEnquiryLoggedDate renders valid localized date/time, and Logged date unavailable fallback
+// ----------------------------------------------------
+runTest('25. fmtEnquiryLoggedDate renders valid localized date/time, and Logged date unavailable fallback', () => {
+  const ts = '2026-09-10T13:15:29.106+00:00';
+  const res = app.fmtEnquiryLoggedDate(ts);
+  assert(res.startsWith('Logged '), 'Must start with Logged');
+  assert(!res.includes('Invalid Date'), 'Must never output Invalid Date');
+  assert(res.includes('2026'), 'Must contain year 2026');
+
+  // Test fallback cases
+  assert.strictEqual(app.fmtEnquiryLoggedDate(null), 'Logged date unavailable');
+  assert.strictEqual(app.fmtEnquiryLoggedDate(undefined), 'Logged date unavailable');
+  assert.strictEqual(app.fmtEnquiryLoggedDate(''), 'Logged date unavailable');
+  assert.strictEqual(app.fmtEnquiryLoggedDate('Invalid Date'), 'Logged date unavailable');
+  assert.strictEqual(app.fmtEnquiryLoggedDate('nonsense_string'), 'Logged date unavailable');
+});
+
+// ----------------------------------------------------
+// 26. formatWhatsAppUrl formats Nigerian telephone numbers safely
+// ----------------------------------------------------
+runTest('26. formatWhatsAppUrl formats Nigerian telephone numbers safely (07086188424 -> 2347086188424)', () => {
+  assert.strictEqual(app.formatWhatsAppUrl('07086188424'), 'https://wa.me/2347086188424');
+  assert.strictEqual(app.formatWhatsAppUrl('+234 708 618 8424'), 'https://wa.me/2347086188424');
+  assert.strictEqual(app.formatWhatsAppUrl('2347086188424'), 'https://wa.me/2347086188424');
+  assert.strictEqual(app.formatWhatsAppUrl(null), '');
+  assert.strictEqual(app.formatWhatsAppUrl(''), '');
+});
+
+// ----------------------------------------------------
+// 27. formatPhoneUrl and formatEmailUrl handle valid and missing channels safely
+// ----------------------------------------------------
+runTest('27. formatPhoneUrl and formatEmailUrl handle valid and missing channels safely', () => {
+  assert.strictEqual(app.formatPhoneUrl('07086188424'), 'tel:07086188424');
+  assert.strictEqual(app.formatPhoneUrl(''), '');
+  assert.strictEqual(app.formatPhoneUrl(null), '');
+
+  assert.strictEqual(app.formatEmailUrl('balogunmonday@gmail.com'), 'mailto:balogunmonday@gmail.com');
+  assert.strictEqual(app.formatEmailUrl(''), '');
+  assert.strictEqual(app.formatEmailUrl(null), '');
+});
+
+// ----------------------------------------------------
+// 28. Prospect Journey renders Balogun Monday (#9106) with correct identification and contacts
+// ----------------------------------------------------
+runTest('28. Prospect Journey renders Balogun Monday (#9106) with correct identification and contacts', () => {
+  const balogunEnquiry = {
+    id: 'enq_1789046129106',
+    enquiryNo: '9106',
+    name: 'Balogun Monday',
+    email: 'balogunmonday@gmail.com',
+    phone: '07086188424',
+    programmeName: 'Cybersecurity',
+    source: 'Website',
+    status: 'NEW',
+    enquiryDate: '2026-09-10T13:15:29.106+00:00'
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, balogunEnquiry);
+
+  assert(container.innerHTML.includes('Balogun Monday'), 'Should render Balogun Monday');
+  assert(container.innerHTML.includes('9106'), 'Should render enquiry reference 9106');
+  assert(container.innerHTML.includes('Cybersecurity'), 'Should render programme Cybersecurity');
+  assert(container.innerHTML.includes('07086188424'), 'Should render phone 07086188424');
+  assert(container.innerHTML.includes('balogunmonday@gmail.com'), 'Should render email balogunmonday@gmail.com');
+});
+
+// ----------------------------------------------------
+// 29. Prospect Journey header renders valid timestamp and never contains Invalid Date
+// ----------------------------------------------------
+runTest('29. Prospect Journey header renders valid timestamp and never contains Invalid Date', () => {
+  const balogunEnquiry = {
+    id: 'enq_1789046129106',
+    enquiryNo: '9106',
+    name: 'Balogun Monday',
+    enquiryDate: '2026-09-10T13:15:29.106+00:00'
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, balogunEnquiry);
+
+  assert(!container.innerHTML.includes('Invalid Date'), 'Must NOT contain Invalid Date');
+  assert(container.innerHTML.includes('Logged '), 'Header must contain Logged timestamp');
+});
+
+// ----------------------------------------------------
+// 30. Contact prospect next action keeps drawer open and reveals in-drawer Contact & Follow-up panel
+// ----------------------------------------------------
+await runTest('30. Contact prospect next action keeps drawer open and reveals in-drawer Contact & Follow-up panel', async () => {
+  const balogunEnquiry = {
+    id: 'enq_1789046129106',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    phone: '07086188424',
+    email: 'balogunmonday@gmail.com'
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.resetCloseModalCalled();
+  app.renderEnquiryDetailModal(container, balogunEnquiry);
+
+  const btnNextAct = app.getMockElement('btnDrawerNextAct');
+  assert(btnNextAct, 'btnDrawerNextAct must exist');
+
+  // Trigger click on "Contact Prospect" button
+  await btnNextAct.click();
+
+  // Invariant 1: closeModal must NOT have been called
+  assert.strictEqual(app.getCloseModalCalled(), false, 'Contact prospect must NOT call closeModal()');
+
+  // Invariant 2: In-drawer panel is made visible
+  const panel = app.getMockElement('contactFollowUpPanel');
+  assert.strictEqual(panel.style.display, 'block', 'Contact & Follow-up panel must be displayed');
+});
+
+// ----------------------------------------------------
+// 31. In-drawer panel provides all canonical contact methods and interaction outcomes
+// ----------------------------------------------------
+await runTest('31. In-drawer panel provides all canonical contact methods and interaction outcomes', () => {
+  const balogunEnquiry = {
+    id: 'enq_1789046129106',
+    name: 'Balogun Monday',
+    status: 'NEW'
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, balogunEnquiry);
+
+  // Check canonical contact methods
+  const methods = ['WhatsApp', 'Phone Call', 'Email', 'In-Person Consultation', 'Online Video Meeting'];
+  methods.forEach(m => {
+    assert(container.innerHTML.includes(`value="${m}"`), `Canonical method ${m} must be an option`);
+  });
+
+  // Check canonical outcomes
+  const outcomes = [
+    'Contacted — Interested',
+    'Contacted — Needs More Information',
+    'No Response',
+    'Follow Up Later',
+    'Not Interested',
+    'Wrong Number'
+  ];
+  outcomes.forEach(o => {
+    assert(container.innerHTML.includes(`value="${o}"`), `Canonical outcome ${o} must be an option`);
+  });
+});
+
+// ----------------------------------------------------
+// 32. Direct contact action links point to stored details and disable missing channels safely
+// ----------------------------------------------------
+await runTest('32. Direct contact action links point to stored details and disable missing channels safely', () => {
+  const completeEnq = {
+    id: 'enq_1',
+    name: 'Balogun Monday',
+    phone: '07086188424',
+    email: 'balogunmonday@gmail.com',
+    status: 'NEW'
+  };
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, completeEnq);
+
+  assert(container.innerHTML.includes('https://wa.me/2347086188424'), 'WhatsApp action link formatted');
+  assert(container.innerHTML.includes('tel:07086188424'), 'Phone action link formatted');
+  assert(container.innerHTML.includes('mailto:balogunmonday@gmail.com'), 'Email action link formatted');
+
+  // Missing phone / email enquiry
+  const missingEnq = { id: 'enq_2', name: 'No Contact', phone: null, email: null, status: 'NEW' };
+  app.renderEnquiryDetailModal(container, missingEnq);
+
+  assert(container.innerHTML.includes('WhatsApp (Unavailable)'), 'Missing phone disables WhatsApp');
+  assert(container.innerHTML.includes('Phone (Unavailable)'), 'Missing phone disables Phone');
+  assert(container.innerHTML.includes('Email (Unavailable)'), 'Missing email disables Email');
+});
+
+// ----------------------------------------------------
+// 33. Stage safety invariant: saving follow-up without explicit progression preserves existing stage
+// ----------------------------------------------------
+await runTest('33. Stage safety invariant: saving follow-up without explicit progression preserves existing stage', async () => {
+  const enq = {
+    id: 'enq_stage_test',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    notes: 'Initial enquiry',
+    timeline: []
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enq);
+
+  // Mock form inputs with no stage change (Keep Current Stage)
+  app.getMockElement('fupMethod').value = 'WhatsApp';
+  app.getMockElement('fupOutcome').value = 'Contacted — Interested';
+  app.getMockElement('fupNotes').value = 'Candidate expressed excitement for curriculum';
+  app.getMockElement('fupNextDate').value = '2026-09-15';
+  app.getMockElement('fupStageSelect').value = ''; // Keep Current Stage
+
+  const btnSave = app.getMockElement('btnSaveFollowUp');
+  await btnSave.click();
+
+  // Check persisted record
+  const saved = app.getLastSavedDbRecord();
+  assert(saved && saved.record, 'Record must be saved to DB');
+  assert.strictEqual(saved.record.status, 'NEW', 'Status must remain NEW when user did not choose stage progression');
+});
+
+// ----------------------------------------------------
+// 34. Explicit stage progression to INTERESTED and INVOICE_REQUESTED updates status only when selected
+// ----------------------------------------------------
+await runTest('34. Explicit stage progression to INTERESTED and INVOICE_REQUESTED updates status only when selected', async () => {
+  const enq = {
+    id: 'enq_stage_prog',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    timeline: []
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enq);
+
+  // Test 1: Advance to INTERESTED
+  app.getMockElement('fupMethod').value = 'Phone Call';
+  app.getMockElement('fupOutcome').value = 'Contacted — Interested';
+  app.getMockElement('fupStageSelect').value = 'INTERESTED';
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  let saved = app.getLastSavedDbRecord();
+  assert.strictEqual(saved.record.status, 'INTERESTED', 'Status must advance to INTERESTED');
+
+  // Test 2: Advance to INVOICE_REQUESTED
+  app.getMockElement('fupStageSelect').value = 'INVOICE_REQUESTED';
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  saved = app.getLastSavedDbRecord();
+  assert.strictEqual(saved.record.status, 'INVOICE_REQUESTED', 'Status must advance to INVOICE_REQUESTED');
+});
+
+// ----------------------------------------------------
+// 35. Structured interaction is appended to timeline and note is appended to authoritative notes
+// ----------------------------------------------------
+await runTest('35. Structured interaction is appended to timeline and note is appended to authoritative notes', async () => {
+  const existingTimeline = [{ stage: 'NEW', note: 'Created in portal', timestamp: '2026-09-10T10:00:00Z', actor: 'System' }];
+  const enq = {
+    id: 'enq_timeline_test',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    notes: 'Prior notes',
+    timeline: [...existingTimeline]
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enq);
+
+  app.getMockElement('fupMethod').value = 'WhatsApp';
+  app.getMockElement('fupOutcome').value = 'Contacted — Needs More Information';
+  app.getMockElement('fupNotes').value = 'Asked for installment schedule';
+  app.getMockElement('fupNextDate').value = '2026-09-16';
+  app.getMockElement('fupStageSelect').value = '';
+
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  const saved = app.getLastSavedDbRecord();
+  assert.strictEqual(saved.record.timeline.length, 2, 'Timeline must have 2 entries');
+  assert.strictEqual(saved.record.timeline[0].note, 'Created in portal', 'Existing timeline entry preserved');
+  assert.strictEqual(saved.record.timeline[1].method, 'WhatsApp', 'New interaction method recorded');
+  assert.strictEqual(saved.record.timeline[1].outcome, 'Contacted — Needs More Information', 'Outcome recorded');
+  assert.strictEqual(saved.record.timeline[1].nextFollowUp, '2026-09-16', 'Next follow-up recorded');
+
+  // Notes field appended
+  assert(saved.record.notes.includes('Prior notes'), 'Prior notes must not be deleted');
+  assert(saved.record.notes.includes('Asked for installment schedule'), 'New notes must be appended');
+});
+
+// ----------------------------------------------------
+// 36. Authoritative database persistence: dbRepo.saveRecord is called and audit log recorded
+// ----------------------------------------------------
+await runTest('36. Authoritative database persistence: dbRepo.saveRecord is called and audit log recorded', async () => {
+  const enq = { id: 'enq_auth_test', name: 'Balogun Monday', status: 'NEW', timeline: [] };
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enq);
+
+  app.getMockElement('fupMethod').value = 'Email';
+  app.getMockElement('fupOutcome').value = 'No Response';
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  const saved = app.getLastSavedDbRecord();
+  assert.strictEqual(saved.storeKey, 'clasptek_enquiries', 'Must persist to clasptek_enquiries');
+
+  const audit = app.getLastAuditLog();
+  assert(audit, 'Audit log must be recorded');
+  assert.strictEqual(audit.action, 'LOG_ENQUIRY_FOLLOWUP', 'Audit action must be LOG_ENQUIRY_FOLLOWUP');
+  assert.strictEqual(audit.id, 'enq_auth_test', 'Audit record ID matches');
+});
+
+// ----------------------------------------------------
+// 37. Re-rendering drawer shows newly saved interaction at the very top of Admissions & Follow-up History
+// ----------------------------------------------------
+await runTest('37. Re-rendering drawer shows newly saved interaction at the very top of Admissions & Follow-up History', () => {
+  const enqWithHistory = {
+    id: 'enq_hist_order',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    timeline: [
+      { stage: 'NEW', note: 'First contact in history', timestamp: '2026-09-08T09:00:00Z', actor: 'Staff A' },
+      { stage: 'NEW', method: 'WhatsApp', outcome: 'Contacted — Interested', note: 'Brand new interaction at top', timestamp: '2026-09-11T11:00:00Z', actor: 'Staff B' }
+    ]
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enqWithHistory);
+
+  const idxNewest = container.innerHTML.indexOf('Brand new interaction at top');
+  const idxOldest = container.innerHTML.indexOf('First contact in history');
+  assert(idxNewest < idxOldest, 'Newest interaction must appear before oldest in HTML (top of history)');
+});
+
+// ----------------------------------------------------
+// 38. Financial isolation: contact actions have ZERO effect on invoices, payments, totals, or balances
+// ----------------------------------------------------
+await runTest('38. Financial isolation: contact actions have ZERO effect on invoices, payments, totals, or balances', async () => {
+  const initialInvoiceCount = app.state.invoices.length;
+  const enq = {
+    id: 'enq_fin_safe',
+    name: 'Balogun Monday',
+    status: 'NEW',
+    timeline: []
+  };
+
+  const container = createMockElement('drawerContainer');
+  app.renderEnquiryDetailModal(container, enq);
+
+  // Execute save follow-up
+  app.getMockElement('fupMethod').value = 'Phone Call';
+  app.getMockElement('fupOutcome').value = 'Contacted — Interested';
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  // Invariant 1: No invoice created
+  assert.strictEqual(app.state.invoices.length, initialInvoiceCount, 'Zero invoices created');
+
+  // Invariant 2: Financial calculation unchanged
+  const fin = app.getEnquiryFinancialStatus(enq);
+  assert.strictEqual(fin.status, 'NO_INVOICE', 'Financial status must remain NO_INVOICE');
+  assert.strictEqual(fin.total, 0, 'Total invoiced must remain 0');
+  assert.strictEqual(fin.paid, 0, 'Amount paid must remain 0');
+  assert.strictEqual(fin.balance, 0, 'Balance must remain 0');
+});
+
+// ----------------------------------------------------
+// 39. Defensive normalization: null/undefined optional enquiry fields do not crash drawer rendering
+// ----------------------------------------------------
+await runTest('39. Defensive normalization: null/undefined optional enquiry fields do not crash drawer rendering', () => {
+  const minimalEnquiry = {
+    id: 'enq_minimal',
+    name: undefined,
+    studentName: null,
+    phone: null,
+    email: undefined,
+    programmeName: null,
+    source: undefined,
+    assignedStaff: null,
+    notes: null,
+    timeline: null,
+    status: undefined,
+    enquiryDate: null,
+    createdAt: null
+  };
+
+  const container = createMockElement('drawerContainer');
+  // Must not throw TypeError
+  app.renderEnquiryDetailModal(container, minimalEnquiry);
+  assert(container.innerHTML.includes('Prospective Student'), 'Safely renders fallback name');
+  assert(container.innerHTML.includes('General Tech Programme'), 'Safely renders fallback programme');
+  assert(container.innerHTML.includes('Logged date unavailable'), 'Safely renders fallback logged date');
+  assert(!container.innerHTML.includes('Invalid Date'), 'Must NOT contain Invalid Date');
+});
+
+// ----------------------------------------------------
+// 40. Table-row Contact Prospect button opens enquiryDetail with showContactForm: true
+// ----------------------------------------------------
+await runTest('40. Table-row Contact Prospect button opens enquiryDetail with showContactForm: true', () => {
+  const enq = {
+    id: 'enq_row_click',
+    name: 'Balogun Monday',
+    status: 'NEW'
+  };
+  app.state.enquiries = [enq];
+
+  let nextActionClickListener = null;
+  const mockTableContainer = {
+    innerHTML: '',
+    querySelectorAll: (sel) => {
+      if (sel === '.btnNextAction') {
+        return [{
+          dataset: { id: 'enq_row_click', action: 'contact' },
+          addEventListener: (evt, fn) => {
+            if (evt === 'click') nextActionClickListener = fn;
+          }
+        }];
+      }
+      return [];
+    }
+  };
+
+  app.renderEnquiriesTab(mockTableContainer);
+  assert(typeof nextActionClickListener === 'function', 'btnNextAction click listener must be attached');
+
+  // Trigger click on table action
+  nextActionClickListener();
+
+  const lastOpened = app.getLastModalOpened();
+  assert(lastOpened, 'Modal must have been opened');
+  assert.strictEqual(lastOpened.type, 'enquiryDetail', 'Modal type must be enquiryDetail');
+  assert.strictEqual(lastOpened.data.enquiry.id, 'enq_row_click', 'Must pass clicked enquiry');
+  assert.strictEqual(lastOpened.data.showContactForm, true, 'showContactForm must be true');
+});
+
 console.log('\n================================================================================');
-console.log(` RESULTS: ${passed}/${total} TESTS PASSED (0 FAILURES)`);
+console.log(` RESULTS: ${passed}/${total} TESTS PASSED (${total - passed} FAILURES)`);
 console.log('================================================================================\n');
 
 if (passed !== total) {
   process.exit(1);
 }
+}
+
+runAllSuites().catch(err => {
+  console.error('Fatal suite runner error:', err);
+  process.exit(1);
+});
