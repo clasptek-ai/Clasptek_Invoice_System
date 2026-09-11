@@ -6143,6 +6143,26 @@ const dbRepo = {
         }
       }
 
+      if (tableName === 'students') {
+        const candidateStuNo = String(payload.student_number || record.studentNumber || record.student_number || '').trim();
+        const candidateId = record.id;
+        if (tenantId && candidateStuNo) {
+          const checkRes = await supabaseClient
+            .from('students')
+            .select('id, student_number')
+            .eq('tenant_id', tenantId)
+            .eq('student_number', candidateStuNo);
+
+          if (checkRes && checkRes.data && checkRes.data.length > 0) {
+            const conflict = checkRes.data.find(row => row.id !== candidateId);
+            if (conflict) {
+              state.connectionError = `Student number ${candidateStuNo} is already in use for this tenant.`;
+              throw new Error(state.connectionError);
+            }
+          }
+        }
+      }
+
       if (tableName === 'enrolments') {
         const candidateCohortId = payload && (payload.cohort_id || payload.cohortId);
         if (!candidateCohortId || String(candidateCohortId).trim() === '') {
@@ -6185,6 +6205,9 @@ const dbRepo = {
         } else if (tableName === 'invoices' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('invoices_tenant_id_invoice_no_key')))) {
           const dispNo = (record && (record.invoice_display_no || record.invoiceDisplayNo || (record.invoiceNo ? `INV-${record.invoiceNo}` : ''))) || (payload && (payload.invoice_display_no || (payload.invoice_no ? `INV-${payload.invoice_no}` : ''))) || 'specified';
           state.connectionError = `Invoice number ${dispNo} is already in use for this tenant.`;
+        } else if (tableName === 'students' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('students_tenant_id_student_number_key')))) {
+          const dispNo = (record && (record.studentNumber || record.student_number)) || (payload && payload.student_number) || 'specified';
+          state.connectionError = `Student number ${dispNo} is already in use for this tenant.`;
         } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
@@ -6309,15 +6332,21 @@ async function safeSet(key, value) {
           payload = typeof transformEntityForPostgres === 'function'
             ? value.map(item => transformEntityForPostgres(tableName, item, tenantId))
             : value;
-          const res = await supabaseClient.from(tableName).upsert(payload);
+          const res = await supabaseClient.from(tableName).upsert(payload, { onConflict: 'id' });
           if (res && res.error) {
             const err = res.error;
             const httpStatus = res.status || res.httpStatus || 0;
-            state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Unknown error'}`;
-            if (httpStatus === 0) {
-              state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${err.message || 'Network error'})`;
+            const errCode = err.code || '';
+            const errMsg = err.message || '';
+            state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${errMsg || 'Unknown error'}`;
+            if (tableName === 'students' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('students_tenant_id_student_number_key'))) {
+              state.connectionError = `Database rejected update on students (HTTP 409): Student number is already in use for this tenant. No financial data has been changed.`;
+            } else if (tableName === 'invoices' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('invoices_tenant_id_invoice_no_key'))) {
+              state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
+            } else if (httpStatus === 0) {
+              state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
             } else {
-              state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Payload or schema error'}. No financial data has been changed.`;
+              state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${errMsg || 'Payload or schema error'}. No financial data has been changed.`;
             }
             throw new Error(state.connectionError);
           }
@@ -6328,15 +6357,21 @@ async function safeSet(key, value) {
         payload = typeof transformEntityForPostgres === 'function'
           ? transformEntityForPostgres(tableName, value, tenantId)
           : value;
-        const res = await supabaseClient.from(tableName).upsert(payload);
+        const res = await supabaseClient.from(tableName).upsert(payload, { onConflict: 'id' });
         if (res && res.error) {
           const err = res.error;
           const httpStatus = res.status || res.httpStatus || 0;
-          state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Unknown error'}`;
-          if (httpStatus === 0) {
-            state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${err.message || 'Network error'})`;
+          const errCode = err.code || '';
+          const errMsg = err.message || '';
+          state.supabase.lastError = `Write failed on ${tableName} (HTTP ${httpStatus}): ${errMsg || 'Unknown error'}`;
+          if (tableName === 'students' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('students_tenant_id_student_number_key'))) {
+            state.connectionError = `Database rejected update on students (HTTP 409): Student number is already in use for this tenant. No financial data has been changed.`;
+          } else if (tableName === 'invoices' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('invoices_tenant_id_invoice_no_key'))) {
+            state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
+          } else if (httpStatus === 0) {
+            state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
           } else {
-            state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${err.message || 'Payload or schema error'}. No financial data has been changed.`;
+            state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${errMsg || 'Payload or schema error'}. No financial data has been changed.`;
           }
           throw new Error(state.connectionError);
         }
@@ -10878,6 +10913,83 @@ function reconcileCountersFromDatabase() {
   } catch (_) {}
 }
 
+let _studentNumberGenerationLock = Promise.resolve();
+
+async function getAuthoritativeNextStudentNumber(yearStr = null, targetTenantId = null) {
+  const previousLock = _studentNumberGenerationLock;
+  let releaseLock;
+  _studentNumberGenerationLock = new Promise(resolve => { releaseLock = resolve; });
+
+  try {
+    await previousLock;
+  } catch (_) {}
+
+  try {
+    const yr = yearStr ? String(yearStr).slice(0, 4) : String(new Date().getFullYear());
+    const tenantId = targetTenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : DEFAULT_TENANT_ID);
+
+    let maxNum = 100;
+
+    // 1. Scan in-memory state for current tenant
+    if (Array.isArray(state.students)) {
+      state.students.forEach(s => {
+        if (s && matchesActiveTenant(s, tenantId)) {
+          const raw = s.studentNumber || s.student_number;
+          if (typeof raw === 'string') {
+            const match = raw.match(/(\d+)$/);
+            if (match) {
+              const val = parseInt(match[1], 10);
+              if (!isNaN(val) && val > maxNum) maxNum = val;
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Query PostgreSQL directly for the highest student_number in this tenant
+    if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId) && tenantId !== 'clasptek_main') {
+      try {
+        const { data, error } = await supabaseClient
+          .from('students')
+          .select('student_number')
+          .eq('tenant_id', tenantId)
+          .order('student_number', { ascending: false })
+          .limit(50);
+        if (!error && Array.isArray(data)) {
+          data.forEach(row => {
+            const raw = row.student_number;
+            if (typeof raw === 'string') {
+              const match = raw.match(/(\d+)$/);
+              if (match) {
+                const val = parseInt(match[1], 10);
+                if (!isNaN(val) && val > maxNum) maxNum = val;
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Notice: Could not query DB for max student number:', e.message);
+      }
+    }
+
+    // 3. Respect state.counters.student if higher
+    if (state.counters && Number(state.counters.student) > maxNum) {
+      maxNum = Number(state.counters.student);
+    }
+
+    const nextNum = maxNum + 1;
+    if (!state.counters) state.counters = {};
+    state.counters.student = nextNum;
+    try {
+      localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
+    } catch (_) {}
+
+    return `STU-${yr}-${String(nextNum).padStart(4, '0')}`;
+  } finally {
+    if (releaseLock) releaseLock();
+  }
+}
+
 function syncStudentsFromExistingData() {
   if (!Array.isArray(state.students)) state.students = [];
   if (!state.counters) state.counters = {};
@@ -11088,19 +11200,6 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
   }
 
   const email = studentData.email ? String(studentData.email).trim().toLowerCase() : '';
-  const isUpdate = Boolean(studentData.id && (state.students || []).some(s => s.id === studentData.id));
-
-  // Email deduplication check
-  if (email) {
-    const existingWithEmail = findStudentByEmail(email);
-    if (existingWithEmail && (!isUpdate || existingWithEmail.id !== studentData.id)) {
-      return {
-        success: false,
-        message: `A student with email '${email}' is already registered (${existingWithEmail.name} - ${existingWithEmail.studentNumber})`
-      };
-    }
-  }
-
   const tenantId = (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main')
     ? state.authoritativeTenantId
     : DEFAULT_TENANT_ID;
@@ -11115,12 +11214,143 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // 1. UPDATE VS INSERT IDENTIFICATION (BY AUTHORITATIVE PRIMARY KEY ID)
+  // ---------------------------------------------------------------------------
+  let isUpdate = false;
+  let targetIndex = -1;
+  let existingTarget = null;
+
+  if (studentData.id) {
+    targetIndex = (state.students || []).findIndex(s => s.id === studentData.id);
+    if (targetIndex !== -1) {
+      isUpdate = true;
+      existingTarget = state.students[targetIndex];
+    } else if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+      // Query PostgreSQL by primary key ID in current tenant
+      try {
+        const { data, error } = await supabaseClient
+          .from('students')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('id', studentData.id)
+          .limit(1);
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const dbStu = typeof transformEntityFromPostgres === 'function' ? transformEntityFromPostgres('students', data[0]) : data[0];
+          isUpdate = true;
+          existingTarget = dbStu;
+          if (!Array.isArray(state.students)) state.students = [];
+          state.students.push(dbStu);
+          targetIndex = state.students.length - 1;
+        }
+      } catch (_) {}
+    }
+  }
+
+  const requestedStudentNumber = String(studentData.studentNumber || studentData.student_number || '').trim();
+
+  // Edge case: If called without authoritative ID (or with a temporary synthesized ID), check if studentNumber exists in this tenant
+  if (!isUpdate && requestedStudentNumber) {
+    let foundByNum = (state.students || []).find(s =>
+      matchesActiveTenant(s, tenantId) &&
+      (s.studentNumber || s.student_number || '').trim().toLowerCase() === requestedStudentNumber.toLowerCase()
+    );
+
+    if (!foundByNum && supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('students')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('student_number', requestedStudentNumber)
+          .limit(1);
+        if (!error && Array.isArray(data) && data.length > 0) {
+          foundByNum = typeof transformEntityFromPostgres === 'function' ? transformEntityFromPostgres('students', data[0]) : data[0];
+          if (!Array.isArray(state.students)) state.students = [];
+          if (!state.students.some(s => s.id === foundByNum.id)) {
+            state.students.push(foundByNum);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (foundByNum) {
+      if (studentData.id && studentData.id !== foundByNum.id && !String(studentData.id).startsWith('stu_temp_')) {
+        return {
+          success: false,
+          message: `Student number ${requestedStudentNumber} is already assigned to another student.`
+        };
+      }
+      // Adopt authoritative ID and treat as update
+      isUpdate = true;
+      studentData.id = foundByNum.id;
+      existingTarget = foundByNum;
+      targetIndex = state.students.findIndex(s => s.id === foundByNum.id);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. EMAIL DEDUPLICATION CHECK (SCOPED TO CURRENT TENANT)
+  // ---------------------------------------------------------------------------
+  if (email) {
+    const existingWithEmail = findStudentByEmail(email, tenantId);
+    if (existingWithEmail && (!isUpdate || existingWithEmail.id !== studentData.id)) {
+      return {
+        success: false,
+        message: `A student with email '${email}' is already registered (${existingWithEmail.name} - ${existingWithEmail.studentNumber})`
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. STUDENT NUMBER UNIQUENESS VALIDATION (SCOPED TO CURRENT TENANT)
+  // ---------------------------------------------------------------------------
+  if (requestedStudentNumber) {
+    // In-memory check
+    const inMemConflict = (state.students || []).find(s =>
+      matchesActiveTenant(s, tenantId) &&
+      (s.studentNumber || s.student_number || '').trim().toLowerCase() === requestedStudentNumber.toLowerCase() &&
+      (!isUpdate || s.id !== studentData.id)
+    );
+    if (inMemConflict) {
+      return {
+        success: false,
+        message: isUpdate
+          ? `Student number ${requestedStudentNumber} is already assigned to another student.`
+          : `Student number ${requestedStudentNumber} is already in use for this tenant.`
+      };
+    }
+
+    // Database check
+    if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('students')
+          .select('id, student_number')
+          .eq('tenant_id', tenantId)
+          .eq('student_number', requestedStudentNumber);
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const dbConflict = data.find(row => !isUpdate || row.id !== studentData.id);
+          if (dbConflict) {
+            return {
+              success: false,
+              message: isUpdate
+                ? `Student number ${requestedStudentNumber} is already assigned to another student.`
+                : `Student number ${requestedStudentNumber} is already in use for this tenant.`
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Notice: Student number DB uniqueness check deferred:', e.message);
+      }
+    }
+  }
+
   let studentRecord = null;
   let previousValue = null;
 
   if (isUpdate) {
-    const index = state.students.findIndex(s => s.id === studentData.id);
-    const existingTarget = state.students[index];
     if (existingTarget && existingTarget.tenantId && existingTarget.tenantId !== tenantId) {
       throw new Error('Cross-tenant mutation rejected: Target student belongs to foreign tenant');
     }
@@ -11146,6 +11376,10 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
     };
     studentRecord = {
       ...previousValue,
+      id: studentData.id,
+      tenant_id: tenantId,
+      studentNumber: requestedStudentNumber || previousValue.studentNumber,
+      student_number: requestedStudentNumber || previousValue.studentNumber,
       firstName: firstName || previousValue.firstName,
       lastName: lastName !== undefined ? lastName : previousValue.lastName,
       name: fullName || `${firstName || previousValue.firstName} ${lastName !== undefined ? lastName : previousValue.lastName}`.trim(),
@@ -11176,21 +11410,18 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
       metadata: mergedMetadata,
       updatedAt: new Date().toISOString()
     };
-    state.students[index] = studentRecord;
-    await logAudit(
-      'STUDENT_UPDATED',
-      'students',
-      studentRecord.id,
-      studentRecord.studentNumber,
-      previousValue,
-      studentRecord,
-      actorReason || 'Student profile modified'
-    );
+    if (targetIndex !== -1) {
+      state.students[targetIndex] = studentRecord;
+    } else {
+      state.students.push(studentRecord);
+      targetIndex = state.students.length - 1;
+    }
   } else {
-    if (!state.counters) state.counters = {};
-    const count = Number(state.counters.student || 101);
-    state.counters.student = count + 1;
-    const studentNumber = studentData.studentNumber || studentData.student_number || formatDocNo('student', count);
+    // Generate an authoritative, concurrency-safe student number if none provided
+    let studentNumber = requestedStudentNumber;
+    if (!studentNumber) {
+      studentNumber = await getAuthoritativeNextStudentNumber(null, tenantId);
+    }
 
     const initialMetadata = {
       source: 'manual_entry',
@@ -11219,6 +11450,7 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
       customerId: studentData.customerId || null,
       userId: studentData.userId || null,
       studentNumber: studentNumber,
+      student_number: studentNumber,
       firstName: firstName || 'Student',
       lastName: lastName || '',
       name: fullName || `${firstName} ${lastName}`.trim(),
@@ -11251,30 +11483,49 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
 
     if (!Array.isArray(state.students)) state.students = [];
     state.students.push(studentRecord);
-    await safeSet(STORE_KEY_COUNTERS, state.counters);
-
-    await logAudit(
-      'STUDENT_CREATED',
-      'students',
-      studentRecord.id,
-      studentRecord.studentNumber,
-      null,
-      studentRecord,
-      actorReason || 'New authoritative student registered'
-    );
+    targetIndex = state.students.length - 1;
   }
 
-  await safeSet(STORE_KEY_STUDENTS, state.students);
-
+  // ---------------------------------------------------------------------------
+  // 4. ATOMIC SINGLE-RECORD DATABASE PERSISTENCE
+  // ---------------------------------------------------------------------------
   try {
     if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord && supabaseClient && supabaseClient.isConfigured()) {
       await dbRepo.saveRecord(STORE_KEY_STUDENTS, studentRecord);
     }
   } catch (dbErr) {
+    // Roll back in-memory mutation on persistence failure to prevent state divergence
+    if (isUpdate && targetIndex !== -1 && previousValue) {
+      state.students[targetIndex] = previousValue;
+    } else if (!isUpdate && targetIndex !== -1) {
+      state.students.splice(targetIndex, 1);
+    }
     if (state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
       throw dbErr;
     }
     console.warn('PostgreSQL student save notice (local state preserved):', dbErr.message);
+  }
+
+  // Cache locally
+  try {
+    localStorage.setItem(STORE_KEY_STUDENTS, JSON.stringify(state.students));
+  } catch (_) {}
+
+  // ---------------------------------------------------------------------------
+  // 5. IMMUTABLE SECURITY AUDIT LOGGING (NON-BLOCKING)
+  // ---------------------------------------------------------------------------
+  try {
+    await logAudit(
+      isUpdate ? 'STUDENT_UPDATED' : 'STUDENT_CREATED',
+      'students',
+      studentRecord.id,
+      studentRecord.studentNumber,
+      previousValue,
+      studentRecord,
+      actorReason || (isUpdate ? 'Student profile modified' : 'New authoritative student registered')
+    );
+  } catch (auditErr) {
+    console.warn('Notice: Student audit logging deferred:', auditErr.message);
   }
 
   return { success: true, student: studentRecord };
@@ -15138,8 +15389,7 @@ async function ensureStudentForInvoice(inv, targetTenantId) {
   const names = (inv.clientName || 'Student').trim().split(/\s+/);
   const firstName = names[0] || 'Student';
   const lastName = names.slice(1).join(' ') || '';
-  state.counters.student = (Number(state.counters.student) || 100) + 1;
-  const stuNo = `STU-2026-${String(state.counters.student).padStart(4, '0')}`;
+  const stuNo = await getAuthoritativeNextStudentNumber(null, tenantId);
 
   const newStudent = {
     id: 'stu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
@@ -29510,7 +29760,15 @@ function renderNewStudentModal(container) {
   document.getElementById('btnCloseNewStudentMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelNewStudent').addEventListener('click', closeModal);
 
-  document.getElementById('btnSaveNewStudent').addEventListener('click', async () => {
+  let isSubmittingNewStu = false;
+  const saveNewBtn = document.getElementById('btnSaveNewStudent');
+  saveNewBtn.addEventListener('click', async () => {
+    if (isSubmittingNewStu) return;
+    isSubmittingNewStu = true;
+    saveNewBtn.disabled = true;
+    const origText = saveNewBtn.innerHTML;
+    saveNewBtn.innerHTML = '⏳ Saving...';
+
     const firstName = document.getElementById('newStuFirstName').value.trim();
     const lastName = document.getElementById('newStuLastName').value.trim();
     const email = document.getElementById('newStuEmail').value.trim();
@@ -29522,33 +29780,42 @@ function renderNewStudentModal(container) {
     const emergencyContactPhone = document.getElementById('newStuEmergencyPhone').value.trim();
     const errEl = document.getElementById('newStuErr');
 
-    if (!firstName) {
-      errEl.textContent = 'Please provide the student’s first name.';
+    try {
+      if (!firstName) {
+        errEl.textContent = 'Please provide the student’s first name.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const res = await saveAuthoritativeStudent({
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        phone,
+        gender,
+        status,
+        address,
+        emergencyContactName,
+        emergencyContactPhone
+      }, 'Manual student addition from directory');
+
+      if (!res.success) {
+        errEl.textContent = res.message || 'Failed to save student.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      closeModal();
+      render();
+    } catch (saveErr) {
+      errEl.textContent = saveErr.message || 'Failed to save student.';
       errEl.style.display = 'block';
-      return;
+    } finally {
+      isSubmittingNewStu = false;
+      saveNewBtn.disabled = false;
+      saveNewBtn.innerHTML = origText;
     }
-
-    const res = await saveAuthoritativeStudent({
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`.trim(),
-      email,
-      phone,
-      gender,
-      status,
-      address,
-      emergencyContactName,
-      emergencyContactPhone
-    }, 'Manual student addition from directory');
-
-    if (!res.success) {
-      errEl.textContent = res.message || 'Failed to save student.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    closeModal();
-    render();
   });
 }
 
@@ -29654,7 +29921,15 @@ function renderEditStudentModal(container, student) {
   document.getElementById('btnCloseEditStudentMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelEditStudent').addEventListener('click', closeModal);
 
-  document.getElementById('btnSaveEditStudent').addEventListener('click', async () => {
+  let isSubmittingEditStu = false;
+  const saveEditBtn = document.getElementById('btnSaveEditStudent');
+  saveEditBtn.addEventListener('click', async () => {
+    if (isSubmittingEditStu) return;
+    isSubmittingEditStu = true;
+    saveEditBtn.disabled = true;
+    const origText = saveEditBtn.innerHTML;
+    saveEditBtn.innerHTML = '⏳ Saving...';
+
     const firstName = document.getElementById('editStuFirstName').value.trim();
     const lastName = document.getElementById('editStuLastName').value.trim();
     const email = document.getElementById('editStuEmail').value.trim();
@@ -29667,37 +29942,46 @@ function renderEditStudentModal(container, student) {
     const reason = document.getElementById('editStuReason').value.trim();
     const errEl = document.getElementById('editStuErr');
 
-    if (!firstName) {
-      errEl.textContent = 'Please provide the student’s first name.';
+    try {
+      if (!firstName) {
+        errEl.textContent = 'Please provide the student’s first name.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const res = await saveAuthoritativeStudent({
+        id: student.id,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        phone,
+        gender,
+        status,
+        address,
+        emergencyContactName,
+        emergencyContactPhone,
+        studentNumber: student.studentNumber,
+        customerId: student.customerId,
+        userId: student.userId
+      }, reason || 'Student profile updated');
+
+      if (!res.success) {
+        errEl.textContent = res.message || 'Failed to update student.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      closeModal();
+      render();
+    } catch (saveErr) {
+      errEl.textContent = saveErr.message || 'Failed to update student.';
       errEl.style.display = 'block';
-      return;
+    } finally {
+      isSubmittingEditStu = false;
+      saveEditBtn.disabled = false;
+      saveEditBtn.innerHTML = origText;
     }
-
-    const res = await saveAuthoritativeStudent({
-      id: student.id,
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`.trim(),
-      email,
-      phone,
-      gender,
-      status,
-      address,
-      emergencyContactName,
-      emergencyContactPhone,
-      studentNumber: student.studentNumber,
-      customerId: student.customerId,
-      userId: student.userId
-    }, reason || 'Student profile updated');
-
-    if (!res.success) {
-      errEl.textContent = res.message || 'Failed to update student.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    closeModal();
-    render();
   });
 }
 
@@ -33406,6 +33690,10 @@ function renderChangeRoleModal(container, user) {
     window.renderApplicationsTab = renderApplicationsTab;
     window.renderApplicationDetailModal = renderApplicationDetailModal;
     window.renderApplicantIntakePortal = renderApplicantIntakePortal;
+    // Student CRM Management Exports
+    window.getAuthoritativeNextStudentNumber = getAuthoritativeNextStudentNumber;
+    window.saveAuthoritativeStudent = saveAuthoritativeStudent;
+    window.deleteAuthoritativeStudent = deleteAuthoritativeStudent;
     // Runtime Diagnostics & Auth State Exports
     window.supabaseClient = supabaseClient;
     window.supabaseAuth = supabaseAuth;
