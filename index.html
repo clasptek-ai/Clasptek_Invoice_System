@@ -3086,6 +3086,15 @@ const supabaseClient = {
             filters.push(`${encodeURIComponent(column)}=eq.${encodeURIComponent(value)}`);
             return builder;
           },
+          order(column, options = {}) {
+            const dir = options.ascending === false ? 'desc' : 'asc';
+            filters.push(`order=${encodeURIComponent(column)}.${dir}`);
+            return builder;
+          },
+          limit(count) {
+            filters.push(`limit=${encodeURIComponent(count)}`);
+            return builder;
+          },
           then(onFulfilled, onRejected) {
             return execute().then(onFulfilled, onRejected);
           },
@@ -6109,6 +6118,29 @@ const dbRepo = {
         if (!CANONICAL_INVOICE_STATUSES.includes(checkStatus)) {
           throw new Error(`Cannot save to PostgreSQL: Invalid invoice status '${checkStatus}'. Must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}`);
         }
+
+        // Requirements 3, 4, 6: Before creating/updating invoice, check if same invoice_no exists for this tenant
+        // Distinguish INSERT vs UPDATE:
+        // - Allow existing invoice to retain its own invoice_no (row.id === record.id)
+        // - Reject if invoice_no belongs to a different invoice in same tenant (row.id !== record.id)
+        const candidateInvNo = String(payload.invoice_no || record.invoiceNo || record.id);
+        const candidateId = record.id;
+        if (tenantId && candidateInvNo) {
+          const checkRes = await supabaseClient
+            .from('invoices')
+            .select('id, invoice_no, invoice_display_no')
+            .eq('tenant_id', tenantId)
+            .eq('invoice_no', candidateInvNo);
+
+          if (checkRes && checkRes.data && checkRes.data.length > 0) {
+            const conflict = checkRes.data.find(row => row.id !== candidateId);
+            if (conflict) {
+              const dispNo = conflict.invoice_display_no || record.invoice_display_no || (record.invoiceNo ? `INV-${record.invoiceNo}` : `INV-${candidateInvNo}`);
+              state.connectionError = `Invoice number ${dispNo} is already in use for this tenant.`;
+              throw new Error(state.connectionError);
+            }
+          }
+        }
       }
 
       let saveRes;
@@ -6124,6 +6156,9 @@ const dbRepo = {
         state.supabase.lastError = `Save failed on ${tableName} (HTTP ${httpStatus}): ${error.message || JSON.stringify(error)}`;
         if (httpStatus === 0) {
           state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
+        } else if (tableName === 'invoices' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('invoices_tenant_id_invoice_no_key')))) {
+          const dispNo = (record && (record.invoice_display_no || record.invoiceDisplayNo || (record.invoiceNo ? `INV-${record.invoiceNo}` : ''))) || (payload && (payload.invoice_display_no || (payload.invoice_no ? `INV-${payload.invoice_no}` : ''))) || 'specified';
+          state.connectionError = `Invoice number ${dispNo} is already in use for this tenant.`;
         } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
@@ -20322,6 +20357,79 @@ function renderInvoicesTab(container) {
       openModal('previewInvoice', { invoice: tempInv });
     });
 
+    async function allocateNextInvoiceNumber(tenantId, dateStr) {
+      let highestNum = 11092041;
+
+      // 1. Authoritative DB Query: Fetch the latest highest invoice numbers directly from PostgreSQL
+      if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+        try {
+          const { data, error } = await supabaseClient
+            .from('invoices')
+            .select('invoice_no')
+            .eq('tenant_id', tenantId)
+            .order('invoice_no', { ascending: false })
+            .limit(30);
+
+          if (!error && Array.isArray(data) && data.length > 0) {
+            for (const row of data) {
+              const n = parseInt(row.invoice_no, 10);
+              if (!isNaN(n) && n > highestNum) {
+                highestNum = n;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('DB invoice number lookup warning:', e);
+        }
+      }
+
+      // 2. Cross-reference with in-memory state and counters
+      if (state.counters && Number(state.counters.invoice) > highestNum) {
+        highestNum = Number(state.counters.invoice);
+      }
+      if (Array.isArray(state.invoices)) {
+        for (const inv of state.invoices) {
+          const n = parseInt(inv.invoiceNo || inv.invoice_no, 10);
+          if (!isNaN(n) && n > highestNum) {
+            highestNum = n;
+          }
+        }
+      }
+
+      // 3. Concurrency reservation check: Find first unallocated number in PostgreSQL
+      let candidate = highestNum + 1;
+      if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+        let allocated = true;
+        let attempts = 0;
+        while (allocated && attempts < 15) {
+          attempts++;
+          try {
+            const checkRes = await supabaseClient
+              .from('invoices')
+              .select('id')
+              .eq('tenant_id', tenantId)
+              .eq('invoice_no', String(candidate));
+            if (checkRes && checkRes.data && checkRes.data.length > 0) {
+              candidate++;
+            } else {
+              allocated = false;
+            }
+          } catch (_) {
+            allocated = false;
+          }
+        }
+      }
+
+      if (!state.counters) state.counters = {};
+      state.counters.invoice = candidate;
+      try {
+        localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
+      } catch (_) {}
+
+      const displayNo = formatDocNo('invoice', candidate, dateStr || new Date().toISOString().slice(0, 10));
+      return { invoiceNo: candidate, invoiceDisplayNo: displayNo };
+    }
+
     const btnSaveInv = document.getElementById('btnSaveInvoice');
     let isSavingInvoice = false;
     btnSaveInv.addEventListener('click', async () => {
@@ -20350,18 +20458,15 @@ function renderInvoicesTab(container) {
       btnSaveInv.textContent = 'Issuing Official Invoice...';
 
       try {
-        if (typeof reconcileCountersFromDatabase === 'function') {
-          reconcileCountersFromDatabase();
-        }
-        state.counters.invoice = (Number(state.counters.invoice) || 11092041) + 1;
-        const docNo = formatDocNo('invoice', state.counters.invoice, payload.dateStr);
+        const tenantId = (typeof resolveAuthoritativeTenantId === 'function' && resolveAuthoritativeTenantId()) || DEFAULT_TENANT_ID;
+        const { invoiceNo, invoiceDisplayNo } = await allocateNextInvoiceNumber(tenantId, payload.dateStr);
 
         const inv = {
           id: 'inv_' + Date.now(),
-          tenant_id: DEFAULT_TENANT_ID,
+          tenant_id: tenantId,
           enquiryId: state.pendingEnquiryForInvoice ? state.pendingEnquiryForInvoice.id : null,
-          invoiceNo: state.counters.invoice,
-          invoice_display_no: docNo,
+          invoiceNo: invoiceNo,
+          invoice_display_no: invoiceDisplayNo,
           status: 'unpaid',
           clientName: payload.client,
           parentName: payload.parentName,
