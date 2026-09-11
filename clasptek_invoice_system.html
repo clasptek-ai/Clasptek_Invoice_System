@@ -6124,8 +6124,10 @@ const dbRepo = {
         state.supabase.lastError = `Save failed on ${tableName} (HTTP ${httpStatus}): ${error.message || JSON.stringify(error)}`;
         if (httpStatus === 0) {
           state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
-        } else if (error && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
+        } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
+        } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
+          state.connectionError = `Database rejected enquiry save: Invalid enquiry status constraint violation (23514). Status must be one of: NEW, CONTACTED, INTERESTED, APPLIED, OFFERED, ENROLLED, LOST.`;
         } else {
           state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${error.message || 'Payload or schema error'}. No financial data has been changed.`;
         }
@@ -6395,6 +6397,10 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
   // 2. Authoritative PostgreSQL persistence: persist ONLY the newly created single audit entry
   try {
     if (supabaseClient.isConfigured() && state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE) {
+      // finance_audit_log is exclusively for financial ledger records; enquiry interactions are tracked in enquiries.notes
+      if (entry && (entry.entityType === 'enquiry' || entry.entity_type === 'enquiry')) {
+        return;
+      }
       const transformedRow = typeof transformEntityForPostgres === 'function'
         ? transformEntityForPostgres('finance_audit_log', entry, auditTenantId)
         : entry;
@@ -6785,7 +6791,18 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
-    case 'enquiries':
+    case 'enquiries': {
+      const rawStatus = item && item.status ? String(item.status).trim().toUpperCase() : 'NEW';
+      let pgStatus = 'NEW';
+      if (rawStatus === 'INVOICE_REQUESTED' || rawStatus === 'APPLIED') {
+        pgStatus = 'APPLIED';
+      } else if (rawStatus === 'INVOICE_ISSUED' || rawStatus === 'OFFERED') {
+        pgStatus = 'OFFERED';
+      } else if (['NEW', 'CONTACTED', 'INTERESTED', 'ENROLLED', 'LOST'].includes(rawStatus)) {
+        pgStatus = rawStatus;
+      } else {
+        pgStatus = 'NEW';
+      }
       return {
         id: item.id,
         tenant_id: tenantId,
@@ -6794,11 +6811,12 @@ function transformEntityForPostgres(entity, item, tenantId) {
         phone: item.phone || null,
         programme_id: item.programmeId || item.programme_id || null,
         source: item.source || 'Direct',
-        status: item.status || 'open',
+        status: pgStatus,
         notes: item.notes || null,
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'crm_intake_applications':
       return {
@@ -7741,6 +7759,12 @@ function transformEntityFromPostgres(entity, row) {
           resolvedProgName = foundProg.name;
         }
       }
+      let canonicalStatus = (row.status || 'NEW').toUpperCase();
+      if (canonicalStatus === 'APPLIED') {
+        canonicalStatus = 'INVOICE_REQUESTED';
+      } else if (canonicalStatus === 'OFFERED') {
+        canonicalStatus = 'INVOICE_ISSUED';
+      }
       return {
         ...base,
         id: row.id,
@@ -7753,7 +7777,7 @@ function transformEntityFromPostgres(entity, row) {
         programmeName: resolvedProgName,
         programme: resolvedProgName,
         source: row.source || 'Website',
-        status: (row.status || 'NEW').toUpperCase(),
+        status: canonicalStatus,
         notes: row.notes || '',
         enquiryDate: row.created_at || row.createdAt || row.enquiryDate || new Date().toISOString(),
         assignedStaff: row.assigned_staff || row.assignedStaff || 'Admissions',
@@ -28130,20 +28154,6 @@ function renderEnquiryDetailModal(container, enquiry, options = {}) {
 
       try {
         await dbRepo.saveRecord(STORE_KEY_ENQUIRIES, updatedEnquiry);
-
-        // Update application state only after authoritative DB persistence succeeds
-        Object.assign(enquiry, updatedEnquiry);
-        if (Array.isArray(state.enquiries)) {
-          const idx = state.enquiries.findIndex(e => e.id === enquiry.id);
-          if (idx !== -1) {
-            state.enquiries[idx] = enquiry;
-          }
-        }
-        await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
-        await logAudit('LOG_ENQUIRY_FOLLOWUP', 'enquiry', enquiry.id, `Logged ${method} follow-up for ${enquiry.name || enquiry.studentName} (${outcome})`, null, updatedEnquiry);
-
-        // Keep drawer open and refresh UI with new interaction at top of history
-        renderEnquiryDetailModal(container, enquiry, { showContactForm: false, successMsg: 'Follow-up interaction logged and saved successfully.' });
       } catch (err) {
         console.error('Failed to save enquiry follow-up:', err);
         if (errEl) {
@@ -28152,7 +28162,32 @@ function renderEnquiryDetailModal(container, enquiry, options = {}) {
         }
         btnSaveFollowUp.disabled = false;
         btnSaveFollowUp.innerHTML = '&#x2714; Save Follow-up';
+        return;
       }
+
+      // Update application state only after authoritative DB persistence succeeds
+      Object.assign(enquiry, updatedEnquiry);
+      if (Array.isArray(state.enquiries)) {
+        const idx = state.enquiries.findIndex(e => e.id === enquiry.id);
+        if (idx !== -1) {
+          state.enquiries[idx] = enquiry;
+        }
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(STORE_KEY_ENQUIRIES, JSON.stringify(state.enquiries));
+        }
+      } catch (_) {}
+
+      // Non-blocking audit logging (audit notice must never claim business enquiry save failed)
+      try {
+        await logAudit('LOG_ENQUIRY_FOLLOWUP', 'enquiry', enquiry.id, `Logged ${method} follow-up for ${enquiry.name || enquiry.studentName} (${outcome})`, null, updatedEnquiry);
+      } catch (auditErr) {
+        console.warn('Notice: Follow-up audit logging deferred:', auditErr?.message || auditErr);
+      }
+
+      // Keep drawer open and refresh UI with new interaction at top of history
+      renderEnquiryDetailModal(container, enquiry, { showContactForm: false, successMsg: 'Follow-up interaction logged and saved successfully.' });
     });
   }
 }

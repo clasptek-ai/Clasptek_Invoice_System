@@ -146,6 +146,7 @@ const mockDocument = {
 
 // Evaluate environment in context
 const transformEntityFromPostgresCode = extractFunction('transformEntityFromPostgres');
+const transformEntityForPostgresCode = extractFunction('transformEntityForPostgres');
 const getEnquiryFinancialStatusCode = extractFunction('getEnquiryFinancialStatus');
 const getEnquiryNextActionCode = extractFunction('getEnquiryNextAction');
 const renderEnquiriesTabCode = extractFunction('renderEnquiriesTab');
@@ -161,6 +162,7 @@ const contextCode = `
     filters: { enquirySearch: '', enquiryStatus: 'all' },
     enquiries: [],
     invoices: [],
+    payments: [],
     enrolments: [],
     programmes: [
       { id: 'prog_1788900434260_uujj7', name: 'Executive Cloud Engineering' },
@@ -198,16 +200,25 @@ const contextCode = `
   function invoiceBalance(inv) { return { total: inv.total || 0, paid: inv.amountPaid || 0, balance: (inv.total || 0) - (inv.amountPaid || 0) }; }
 
   const STORE_KEY_ENQUIRIES = 'clasptek_enquiries';
+  const STORE_KEY_INVOICES = 'clasptek:invoices';
+  const STORE_KEY_PAYMENTS = 'clasptek:payments';
+  let allSavedDbRecords = [];
   let lastSavedDbRecord = null;
   let lastAuditLog = null;
+  let simulateAuditFailure = false;
   const dbRepo = {
     async saveRecord(storeKey, record) {
-      lastSavedDbRecord = { storeKey, record: JSON.parse(JSON.stringify(record)) };
+      const entry = { storeKey, record: JSON.parse(JSON.stringify(record)) };
+      lastSavedDbRecord = entry;
+      allSavedDbRecords.push(entry);
       return record;
     }
   };
   async function safeSet(key, val) { return true; }
   async function logAudit(action, entity, id, desc, oldVal, newVal) {
+    if (simulateAuditFailure) {
+      throw new Error('RLS 403: new row violates row-level security policy for table "finance_audit_log"');
+    }
     lastAuditLog = { action, entity, id, desc, oldVal, newVal };
     return true;
   }
@@ -218,6 +229,7 @@ const contextCode = `
   ${formatPhoneUrlCode}
   ${formatEmailUrlCode}
   ${transformEntityFromPostgresCode}
+  ${transformEntityForPostgresCode}
   ${getEnquiryFinancialStatusCode}
   ${getEnquiryNextActionCode}
   ${renderEnquiriesTabCode}
@@ -231,6 +243,7 @@ const contextCode = `
     formatPhoneUrl,
     formatEmailUrl,
     transformEntityFromPostgres,
+    transformEntityForPostgres,
     getEnquiryFinancialStatus,
     getEnquiryNextAction,
     renderEnquiriesTab,
@@ -241,7 +254,10 @@ const contextCode = `
     getCloseModalCalled: () => closeModalCalled,
     resetCloseModalCalled: () => { closeModalCalled = false; },
     getLastSavedDbRecord: () => lastSavedDbRecord,
+    getAllSavedDbRecords: () => allSavedDbRecords,
+    clearSavedDbRecords: () => { allSavedDbRecords = []; lastSavedDbRecord = null; },
     getLastAuditLog: () => lastAuditLog,
+    setSimulateAuditFailure: (val) => { simulateAuditFailure = Boolean(val); },
     mockElements,
     getMockElement: (id) => getOrCreateMockElement(id)
   });
@@ -1071,6 +1087,158 @@ await runTest('40. Table-row Contact Prospect button opens enquiryDetail with sh
   assert.strictEqual(lastOpened.type, 'enquiryDetail', 'Modal type must be enquiryDetail');
   assert.strictEqual(lastOpened.data.enquiry.id, 'enq_row_click', 'Must pass clicked enquiry');
   assert.strictEqual(lastOpened.data.showContactForm, true, 'showContactForm must be true');
+});
+
+await runTest('41. Contact follow-up save dispatches ZERO calls to invoices repository and zero invoice mutations', async () => {
+  app.clearSavedDbRecords();
+  const enq = {
+    id: 'enq_fin_iso_test',
+    studentName: 'Balogun Monday',
+    status: 'NEW',
+    notes: 'Existing notes',
+    timeline: []
+  };
+  app.state.enquiries = [enq];
+  const invoicesCountBefore = app.state.invoices.length;
+
+  const container = createMockContainer('modalContainer');
+  app.renderEnquiryDetailModal(container, enq, { showContactForm: true });
+
+  const btnSave = app.getMockElement('btnSaveFollowUp');
+  app.getMockElement('fupMethod').value = 'WhatsApp';
+  app.getMockElement('fupOutcome').value = 'Contacted — Interested';
+  app.getMockElement('fupNotes').value = 'Discussed syllabus';
+
+  await btnSave.click();
+
+  const allSaved = app.getAllSavedDbRecords();
+  const invoiceSaves = allSaved.filter(s => s.storeKey === 'clasptek:invoices' || s.storeKey === 'invoices');
+  assert.strictEqual(invoiceSaves.length, 0, 'Zero invoice saves must occur during Contact Follow-up');
+  assert.strictEqual(app.state.invoices.length, invoicesCountBefore, 'Invoices count in state must not change');
+  assert.strictEqual(allSaved.length, 1, 'Exactly one saveRecord call must occur');
+  assert.strictEqual(allSaved[0].storeKey, 'clasptek_enquiries', 'Save call must be on STORE_KEY_ENQUIRIES only');
+});
+
+await runTest('42. Contact follow-up save dispatches ZERO calls to payments repository and zero payment mutations', async () => {
+  app.clearSavedDbRecords();
+  const enq = {
+    id: 'enq_fin_iso_test_2',
+    studentName: 'Balogun Monday',
+    status: 'NEW',
+    notes: 'Existing notes',
+    timeline: []
+  };
+  app.state.enquiries = [enq];
+  const paymentsCountBefore = app.state.payments.length;
+
+  const container = createMockContainer('modalContainer');
+  app.renderEnquiryDetailModal(container, enq, { showContactForm: true });
+
+  const btnSave = app.getMockElement('btnSaveFollowUp');
+  await btnSave.click();
+
+  const allSaved = app.getAllSavedDbRecords();
+  const paymentSaves = allSaved.filter(s => s.storeKey === 'clasptek:payments' || s.storeKey === 'payments');
+  assert.strictEqual(paymentSaves.length, 0, 'Zero payment saves must occur during Contact Follow-up');
+  assert.strictEqual(app.state.payments.length, paymentsCountBefore, 'Payments count in state must not change');
+});
+
+await runTest('43. Financial state for Balogun Monday remains bit-identical (Billing Status: No Invoice, Total: ₦0.00, Paid: ₦0.00, Balance: ₦0.00)', async () => {
+  const enq = {
+    id: 'enq_1789046129106',
+    name: 'Balogun Monday',
+    studentName: 'Balogun Monday',
+    phone: '08023456789',
+    programme: 'Cybersecurity Operations',
+    status: 'NEW'
+  };
+  const finBefore = app.getEnquiryFinancialStatus(enq);
+  assert.strictEqual(finBefore.label, 'No Invoice');
+  assert.strictEqual(finBefore.total, 0);
+  assert.strictEqual(finBefore.paid, 0);
+  assert.strictEqual(finBefore.balance, 0);
+
+  const container = createMockContainer('modalContainer');
+  app.renderEnquiryDetailModal(container, enq, { showContactForm: true });
+  await app.getMockElement('btnSaveFollowUp').click();
+
+  const finAfter = app.getEnquiryFinancialStatus(enq);
+  assert.deepStrictEqual(finAfter, finBefore, 'Financial status must remain exactly identical');
+});
+
+await runTest('44. transformEntityForPostgres maps INVOICE_REQUESTED to APPLIED and INVOICE_ISSUED to OFFERED for enquiries_status_check', async () => {
+  const tenantId = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
+
+  const enqInvReq = { id: 'enq_1', status: 'INVOICE_REQUESTED', studentName: 'Alice' };
+  const pgInvReq = app.transformEntityForPostgres('enquiries', enqInvReq, tenantId);
+  assert.strictEqual(pgInvReq.status, 'APPLIED', 'INVOICE_REQUESTED must map to APPLIED for PostgreSQL');
+
+  const enqInvIss = { id: 'enq_2', status: 'INVOICE_ISSUED', studentName: 'Bob' };
+  const pgInvIss = app.transformEntityForPostgres('enquiries', enqInvIss, tenantId);
+  assert.strictEqual(pgInvIss.status, 'OFFERED', 'INVOICE_ISSUED must map to OFFERED for PostgreSQL');
+
+  const enqUnknown = { id: 'enq_3', status: 'bogus_status', studentName: 'Charlie' };
+  const pgUnknown = app.transformEntityForPostgres('enquiries', enqUnknown, tenantId);
+  assert.strictEqual(pgUnknown.status, 'NEW', 'Unrecognized status must safely default to NEW');
+
+  const enqStandard = { id: 'enq_4', status: 'INTERESTED', studentName: 'David' };
+  const pgStandard = app.transformEntityForPostgres('enquiries', enqStandard, tenantId);
+  assert.strictEqual(pgStandard.status, 'INTERESTED', 'Valid status must be preserved');
+});
+
+await runTest('45. transformEntityFromPostgres maps APPLIED to INVOICE_REQUESTED and OFFERED to INVOICE_ISSUED', async () => {
+  const rowApplied = { id: 'enq_row_1', status: 'APPLIED', student_name: 'Alice' };
+  const appApplied = app.transformEntityFromPostgres('enquiries', rowApplied);
+  assert.strictEqual(appApplied.status, 'INVOICE_REQUESTED', 'APPLIED in DB must map to INVOICE_REQUESTED in app');
+
+  const rowOffered = { id: 'enq_row_2', status: 'OFFERED', student_name: 'Bob' };
+  const appOffered = app.transformEntityFromPostgres('enquiries', rowOffered);
+  assert.strictEqual(appOffered.status, 'INVOICE_ISSUED', 'OFFERED in DB must map to INVOICE_ISSUED in app');
+});
+
+await runTest('46. dbRepo.saveRecord disambiguates error 23514: enquiries reports enquiry status and NEVER invoice save error', async () => {
+  // Inspect index.html implementation directly to verify constraint error scoping
+  const saveRecordMatch = html.match(/async saveRecord\s*\([\s\S]*?\}\s*\},/);
+  assert(saveRecordMatch, 'Must find dbRepo.saveRecord in index.html');
+  const code = saveRecordMatch[0];
+
+  assert(code.includes("tableName === 'invoices' && (error.code === '23514'"), 'Invoice constraint must be guarded by tableName === invoices');
+  assert(code.includes("tableName === 'enquiries' && (error.code === '23514'"), 'Enquiry constraint must be guarded by tableName === enquiries');
+  assert(!code.includes("} else if (error && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check'))))"), 'Global unguarded 23514 matching must NOT exist');
+});
+
+await runTest('47. Non-blocking audit failure: when enquiry DB save succeeds and audit fails, follow-up persists successfully', async () => {
+  app.setSimulateAuditFailure(true);
+  const enq = {
+    id: 'enq_audit_resilience_test',
+    studentName: 'Balogun Monday',
+    status: 'NEW',
+    notes: 'Existing notes',
+    timeline: []
+  };
+  app.state.enquiries = [enq];
+
+  const container = createMockContainer('modalContainer');
+  app.renderEnquiryDetailModal(container, enq, { showContactForm: true });
+
+  const btnSave = app.getMockElement('btnSaveFollowUp');
+  app.getMockElement('fupMethod').value = 'Phone Call';
+  app.getMockElement('fupOutcome').value = 'Contacted — Interested';
+  app.getMockElement('fupNotes').value = 'Prospect confirmed interest';
+
+  // Should succeed without throwing and without claiming failure
+  await btnSave.click();
+
+  const lastSaved = app.getLastSavedDbRecord();
+  assert(lastSaved, 'Enquiry record must have been saved to dbRepo');
+  assert.strictEqual(lastSaved.storeKey, 'clasptek_enquiries');
+  assert(lastSaved.record.notes.includes('Prospect confirmed interest'), 'Saved enquiry notes must include follow-up note');
+
+  // Verify drawer re-rendered with success message and no persistence error
+  assert(container.innerHTML.includes('Follow-up interaction logged and saved successfully.'), 'Re-rendered drawer must display success message');
+  assert(!container.innerHTML.includes('Failed to persist follow-up'), 'Error banner must not be present');
+
+  app.setSimulateAuditFailure(false);
 });
 
 console.log('\n================================================================================');
