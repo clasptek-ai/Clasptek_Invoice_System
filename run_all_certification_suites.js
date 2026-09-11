@@ -44,7 +44,8 @@ const suites = [
   { name: 'Phase 4: Authoritative Certificate of Completion Model', file: 'scripts/test_phase4_certificates.js' },
   { name: 'Phase 5: Admin CRM & Training Operations Model', file: 'scripts/test_phase5_admin_crm_training_ops.js' },
   { name: 'Phase 5.1: Professional CRM Intake & Applicant Management', file: 'scripts/test_phase5_1_crm_intake.js' },
-  { name: 'Supabase Authentication & Password Remediation Certification', file: 'scripts/verify_supabase_authentication.js' }
+  { name: 'Supabase Authentication & Password Remediation Certification', file: 'scripts/verify_supabase_authentication.js' },
+  { name: 'Enquiries Tab Resilience & Favicon Verification', file: 'test_enquiries_tab_resilience.js' }
 ];
 
 let totalPassed = 0;

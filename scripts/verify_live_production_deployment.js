@@ -328,10 +328,10 @@ async function runLiveVerification() {
       if (btn) btn.click();
       else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
-      // Wait for authentication and hydration to complete
-      for (let i = 0; i < 40; i++) {
+      // Wait for authentication, database hydration, and dashboard rendering to complete
+      for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 250));
-        if (window.state && window.state.auth && window.state.auth.isAuthenticated) {
+        if (window.state && window.state.auth && window.state.auth.isAuthenticated && !window.state.loading && window.state.databaseAuthorityState === 'AUTHORITATIVE') {
           break;
         }
       }

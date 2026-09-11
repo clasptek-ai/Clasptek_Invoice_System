@@ -8,6 +8,7 @@
   <meta name="supabase-publishable-key" content="sb_publishable_VbAnvwhA28SV_PmLcEiTdg_12cc7Or9" />
   <meta name="supabase-anon-key" content="sb_publishable_VbAnvwhA28SV_PmLcEiTdg_12cc7Or9" />
   <title>Clasptek Portal</title>
+  <link rel="icon" type="image/png" href="assets/clasptek_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7648,6 +7649,38 @@ function transformEntityFromPostgres(entity, row) {
         paymentTerms: row.payment_terms || row.paymentTerms || ''
       };
 
+    case 'enquiries': {
+      const canonicalName = row.student_name || row.studentName || row.name || '';
+      const resolvedProgId = row.programme_id || row.programmeId || null;
+      let resolvedProgName = row.programme_name || row.programmeName || row.programme || '';
+      if (!resolvedProgName && resolvedProgId && typeof state !== 'undefined' && Array.isArray(state.programmes)) {
+        const foundProg = state.programmes.find(p => p && p.id === resolvedProgId);
+        if (foundProg && foundProg.name) {
+          resolvedProgName = foundProg.name;
+        }
+      }
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id || row.tenantId,
+        studentName: canonicalName,
+        name: canonicalName,
+        email: (row.email !== undefined && row.email !== null) ? String(row.email) : '',
+        phone: (row.phone !== undefined && row.phone !== null) ? String(row.phone) : '',
+        programmeId: resolvedProgId,
+        programmeName: resolvedProgName,
+        programme: resolvedProgName,
+        source: row.source || 'Website',
+        status: (row.status || 'NEW').toUpperCase(),
+        notes: row.notes || '',
+        enquiryDate: row.created_at || row.createdAt || row.enquiryDate || new Date().toISOString(),
+        assignedStaff: row.assigned_staff || row.assignedStaff || 'Admissions',
+        enquiryNo: row.enquiry_no || row.enquiryNo || (row.id ? String(row.id).replace(/\D/g, '').slice(-4) : '1001'),
+        createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+        updatedAt: row.updated_at || row.updatedAt || new Date().toISOString()
+      };
+    }
+
     default:
       return base;
   }
@@ -14456,7 +14489,19 @@ function getTrainingOperationsKpis() {
 }
 
 function getEnquiryFinancialStatus(enquiry) {
-  const linkedInvoices = state.invoices.filter(i => (enquiry.id && i.enquiryId === enquiry.id) || (enquiry.name && i.clientName.trim().toLowerCase() === enquiry.name.trim().toLowerCase()));
+  if (!enquiry || typeof enquiry !== 'object') {
+    return { status: 'NO_INVOICE', label: 'No Invoice', pillClass: 'new', total: 0, paid: 0, balance: 0 };
+  }
+  const enqId = typeof enquiry.id === 'string' ? enquiry.id : '';
+  const rawName = typeof enquiry.name === 'string' ? enquiry.name : (typeof enquiry.studentName === 'string' ? enquiry.studentName : '');
+  const enqName = rawName.trim().toLowerCase();
+
+  const linkedInvoices = (Array.isArray(state.invoices) ? state.invoices : []).filter(i => {
+    if (!i || typeof i !== 'object') return false;
+    const invEnqId = typeof i.enquiryId === 'string' ? i.enquiryId : '';
+    const invClient = typeof i.clientName === 'string' ? i.clientName.trim().toLowerCase() : '';
+    return (enqId && invEnqId === enqId) || (enqName && invClient === enqName);
+  });
   if (linkedInvoices.length === 0) return { status: 'NO_INVOICE', label: 'No Invoice', pillClass: 'new', total: 0, paid: 0, balance: 0 };
 
   let totalInv = 0;
@@ -14481,12 +14526,26 @@ function getEnquiryFinancialStatus(enquiry) {
 }
 
 function getEnquiryNextAction(enquiry) {
+  if (!enquiry || typeof enquiry !== 'object') {
+    return { label: 'View Details', action: 'view', btnClass: 'secondary' };
+  }
   const fin = getEnquiryFinancialStatus(enquiry);
-  const isEnrolled = state.enrolments.some(en => en.enquiryId === enquiry.id || (enquiry.name && en.studentName.trim().toLowerCase() === enquiry.name.trim().toLowerCase()));
+  const enqId = typeof enquiry.id === 'string' ? enquiry.id : '';
+  const rawName = typeof enquiry.name === 'string' ? enquiry.name : (typeof enquiry.studentName === 'string' ? enquiry.studentName : '');
+  const enqName = rawName.trim().toLowerCase();
 
-  if (enquiry.status === 'NEW') return { label: 'Contact Prospect', action: 'contact', btnClass: 'accent' };
-  if (enquiry.status === 'CONTACTED' || enquiry.status === 'INTERESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
-  if (enquiry.status === 'INVOICE_REQUESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
+  const isEnrolled = (Array.isArray(state.enrolments) ? state.enrolments : []).some(en => {
+    if (!en || typeof en !== 'object') return false;
+    const enrEnqId = typeof en.enquiryId === 'string' ? en.enquiryId : '';
+    const enrStudent = typeof en.studentName === 'string' ? en.studentName.trim().toLowerCase() : (typeof en.name === 'string' ? en.name.trim().toLowerCase() : '');
+    return (enqId && enrEnqId === enqId) || (enqName && enrStudent === enqName);
+  });
+
+  const status = (typeof enquiry.status === 'string' ? enquiry.status : 'NEW').toUpperCase();
+
+  if (status === 'NEW') return { label: 'Contact Prospect', action: 'contact', btnClass: 'accent' };
+  if (status === 'CONTACTED' || status === 'INTERESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
+  if (status === 'INVOICE_REQUESTED') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'accent' };
   if (fin.status === 'NO_INVOICE') return { label: 'Create Invoice', action: 'create_invoice', btnClass: 'secondary' };
   if (fin.status === 'FULLY_PAID' && !isEnrolled) return { label: 'Enrol Student', action: 'enrol', btnClass: 'success' };
   if (fin.status === 'PARTIALLY_PAID' && !isEnrolled) return { label: 'Enrol / Pay Balance', action: 'enrol_or_pay', btnClass: 'accent' };
@@ -19329,20 +19388,42 @@ function renderMySecurityTab(container) {
 // TAB 2: ENQUIRIES & ADMISSIONS WORKSPACE
 // ----------------------------------------------------
 function renderEnquiriesTab(container) {
-  const q = (state.filters.enquirySearch || '').toLowerCase();
-  const stFilter = state.filters.enquiryStatus || 'all';
+  const asSafeString = val => (typeof val === 'string' ? val : (val != null ? String(val) : ''));
 
-  const filtered = state.enquiries.filter(e => {
-    const matchesQ = e.name.toLowerCase().includes(q) || (e.phone && e.phone.includes(q)) || (e.email && e.email.toLowerCase().includes(q)) || (e.programmeName && e.programmeName.toLowerCase().includes(q));
-    const matchesSt = stFilter === 'all' || e.status === stFilter;
+  const q = asSafeString(state.filters?.enquirySearch).trim().toLowerCase();
+  const stFilter = asSafeString(state.filters?.enquiryStatus) || 'all';
+
+  const enquiriesList = Array.isArray(state.enquiries) ? state.enquiries.filter(e => e && typeof e === 'object') : [];
+
+  const filtered = enquiriesList.filter(e => {
+    const rawName = asSafeString(e.name || e.studentName);
+    const rawPhone = asSafeString(e.phone);
+    const rawEmail = asSafeString(e.email);
+    let rawProg = asSafeString(e.programmeName || e.programme);
+    if (!rawProg && e.programmeId && Array.isArray(state.programmes)) {
+      const p = state.programmes.find(pr => pr && pr.id === e.programmeId);
+      if (p && p.name) rawProg = p.name;
+    }
+    const rawStatus = (asSafeString(e.status) || 'NEW').toUpperCase();
+
+    const matchesQ = !q || (
+      rawName.toLowerCase().includes(q) ||
+      rawPhone.includes(q) ||
+      rawEmail.toLowerCase().includes(q) ||
+      rawProg.toLowerCase().includes(q)
+    );
+    const matchesSt = stFilter === 'all' || rawStatus === stFilter.toUpperCase();
     return matchesQ && matchesSt;
   });
 
-  const countNew = state.enquiries.filter(e => e.status === 'NEW').length;
-  const countInterest = state.enquiries.filter(e => e.status === 'CONTACTED' || e.status === 'INTERESTED').length;
-  const countInvReq = state.enquiries.filter(e => e.status === 'INVOICE_REQUESTED').length;
-  const countInvIss = state.enquiries.filter(e => e.status === 'INVOICE_ISSUED').length;
-  const countEnrolled = state.enquiries.filter(e => e.status === 'ENROLLED').length;
+  const countNew = enquiriesList.filter(e => (asSafeString(e.status) || 'NEW').toUpperCase() === 'NEW').length;
+  const countInterest = enquiriesList.filter(e => {
+    const s = (asSafeString(e.status) || 'NEW').toUpperCase();
+    return s === 'CONTACTED' || s === 'INTERESTED';
+  }).length;
+  const countInvReq = enquiriesList.filter(e => (asSafeString(e.status) || 'NEW').toUpperCase() === 'INVOICE_REQUESTED').length;
+  const countInvIss = enquiriesList.filter(e => (asSafeString(e.status) || 'NEW').toUpperCase() === 'INVOICE_ISSUED').length;
+  const countEnrolled = enquiriesList.filter(e => (asSafeString(e.status) || 'NEW').toUpperCase() === 'ENROLLED').length;
 
   container.innerHTML = `
     <!-- Summary Header Cards -->
@@ -19384,7 +19465,7 @@ function renderEnquiriesTab(container) {
       <!-- Filters -->
       <div style="display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
         <div class="cp-field" style="margin:0; flex:1; max-width:320px;">
-          <input type="text" id="enquirySearchInput" placeholder="Filter by prospect name, phone, email, programme..." value="${escapeHtml(state.filters.enquirySearch)}" />
+          <input type="text" id="enquirySearchInput" placeholder="Filter by prospect name, phone, email, programme..." value="${escapeHtml(asSafeString(state.filters?.enquirySearch))}" />
         </div>
         <div class="cp-field" style="margin:0; width:180px;">
           <select id="enquiryStatusSelect">
@@ -19419,22 +19500,36 @@ function renderEnquiriesTab(container) {
             </thead>
             <tbody>
               ${filtered.slice().reverse().map(e => {
+                const displayName = asSafeString(e.name || e.studentName) || 'Unnamed Prospect';
+                const displayPhone = asSafeString(e.phone) || 'No phone';
+                const displayEmail = asSafeString(e.email) || 'No email';
+                let displayProg = asSafeString(e.programmeName || e.programme);
+                if (!displayProg && e.programmeId && Array.isArray(state.programmes)) {
+                  const p = state.programmes.find(pr => pr && pr.id === e.programmeId);
+                  if (p && p.name) displayProg = p.name;
+                }
+                if (!displayProg) displayProg = 'General Tech Programme';
+                const displaySource = asSafeString(e.source) || 'Direct';
+                const displayStatus = (asSafeString(e.status) || 'NEW').toUpperCase();
+                const displayDate = e.enquiryDate || e.createdAt || e.created_at || '';
+                const displayStaff = asSafeString(e.assignedStaff) || 'Admissions';
+
                 const fin = getEnquiryFinancialStatus(e);
                 const nextAct = getEnquiryNextAction(e);
                 return `
                   <tr>
-                    <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenEnquiryDetail" data-id="${e.id}">
-                      ${escapeHtml(e.name)}
-                      <div style="font-size:11px; font-weight:400; color:var(--text-muted);">${escapeHtml(e.phone || 'No phone')} &middot; ${escapeHtml(e.email || 'No email')}</div>
+                    <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenEnquiryDetail" data-id="${escapeHtml(asSafeString(e.id))}">
+                      ${escapeHtml(displayName)}
+                      <div style="font-size:11px; font-weight:400; color:var(--text-muted);">${escapeHtml(displayPhone)} &middot; ${escapeHtml(displayEmail)}</div>
                     </td>
-                    <td style="font-weight:600;">${escapeHtml(e.programmeName || 'General Tech Programme')}</td>
-                    <td><span class="cp-pill category-pill">${escapeHtml(e.source || 'Direct')}</span></td>
-                    <td>${fmtDate(e.enquiryDate)}</td>
-                    <td>${escapeHtml(e.assignedStaff || 'Admissions')}</td>
-                    <td><span class="cp-pill ${e.status.toLowerCase()}">${escapeHtml(e.status)}</span></td>
+                    <td style="font-weight:600;">${escapeHtml(displayProg)}</td>
+                    <td><span class="cp-pill category-pill">${escapeHtml(displaySource)}</span></td>
+                    <td>${fmtDate(displayDate)}</td>
+                    <td>${escapeHtml(displayStaff)}</td>
+                    <td><span class="cp-pill ${escapeHtml(displayStatus.toLowerCase())}">${escapeHtml(displayStatus)}</span></td>
                     <td><span class="cp-pill ${fin.pillClass}">${fin.label}</span></td>
                     <td style="text-align:center;">
-                      <button class="cp-btn sm ${nextAct.btnClass} btnNextAction" data-id="${e.id}" data-action="${nextAct.action}">
+                      <button class="cp-btn sm ${nextAct.btnClass} btnNextAction" data-id="${escapeHtml(asSafeString(e.id))}" data-action="${nextAct.action}">
                         ${nextAct.label}
                       </button>
                     </td>
@@ -19449,19 +19544,28 @@ function renderEnquiriesTab(container) {
   `;
 
   document.getElementById('enquirySearchInput').addEventListener('input', (e) => {
+    if (!state.filters) state.filters = {};
     state.filters.enquirySearch = e.target.value;
     render();
   });
 
   document.getElementById('enquiryStatusSelect').addEventListener('change', (e) => {
+    if (!state.filters) state.filters = {};
     state.filters.enquiryStatus = e.target.value;
     render();
   });
 
   document.getElementById('btnExportEnquiries').addEventListener('click', () => {
     exportToCSV('Enquiries_Directory', filtered.map(e => ({
-      ID: e.id, Name: e.name, Phone: e.phone, Email: e.email, Programme: e.programmeName,
-      Source: e.source, Date: e.enquiryDate, Assigned: e.assignedStaff, Status: e.status
+      ID: asSafeString(e.id),
+      Name: asSafeString(e.name || e.studentName),
+      Phone: asSafeString(e.phone),
+      Email: asSafeString(e.email),
+      Programme: asSafeString(e.programmeName || e.programme),
+      Source: asSafeString(e.source) || 'Direct',
+      Date: e.enquiryDate || e.createdAt || e.created_at || '',
+      Assigned: asSafeString(e.assignedStaff) || 'Admissions',
+      Status: (asSafeString(e.status) || 'NEW').toUpperCase()
     })));
   });
 
@@ -19470,16 +19574,17 @@ function renderEnquiriesTab(container) {
 
   container.querySelectorAll('.btnOpenEnquiryDetail').forEach(el => {
     el.addEventListener('click', () => {
-      const enq = state.enquiries.find(e => e.id === el.dataset.id);
+      const enq = enquiriesList.find(e => asSafeString(e.id) === el.dataset.id);
       if (enq) openModal('enquiryDetail', { enquiry: enq });
     });
   });
 
   container.querySelectorAll('.btnNextAction').forEach(btn => {
     btn.addEventListener('click', () => {
-      const enq = state.enquiries.find(e => e.id === btn.dataset.id);
+      const enq = enquiriesList.find(e => asSafeString(e.id) === btn.dataset.id);
       if (!enq) return;
       const act = btn.dataset.action;
+      const enqName = asSafeString(enq.name || enq.studentName).trim().toLowerCase();
 
       if (act === 'contact') {
         openModal('enquiryDetail', { enquiry: enq });
@@ -19489,18 +19594,18 @@ function renderEnquiriesTab(container) {
         state.pendingEnquiryForInvoice = enq;
         render();
       } else if (act === 'record_payment') {
-        const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enq.id) || i.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+        const inv = (Array.isArray(state.invoices) ? state.invoices : []).find(i => (i && i.enquiryId && i.enquiryId === enq.id) || (enqName && i && asSafeString(i.clientName).trim().toLowerCase() === enqName));
         if (inv) openModal('recordPayment', { invoice: inv });
         else alert('No invoice found for this prospect.');
       } else if (act === 'enrol' || act === 'enrol_or_pay') {
         openModal('enrolStudent', { enquiry: enq });
       } else if (act === 'follow_up') {
-        const inv = state.invoices.find(i => (i.enquiryId && i.enquiryId === enq.id) || i.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+        const inv = (Array.isArray(state.invoices) ? state.invoices : []).find(i => (i && i.enquiryId && i.enquiryId === enq.id) || (enqName && i && asSafeString(i.clientName).trim().toLowerCase() === enqName));
         if (inv) openModal('collectionNotes', { invoice: inv });
         else alert('No invoice found for this student.');
       } else if (act === 'view_profile') {
-        const accs = getStudentAccountSummaries();
-        const acc = accs.find(a => a.clientName.trim().toLowerCase() === enq.name.trim().toLowerCase());
+        const accs = typeof getStudentAccountSummaries === 'function' ? getStudentAccountSummaries() : [];
+        const acc = accs.find(a => enqName && a && asSafeString(a.clientName).trim().toLowerCase() === enqName);
         if (acc) openModal('studentProfile', { account: acc });
         else openModal('enquiryDetail', { enquiry: enq });
       } else {
@@ -27562,7 +27667,8 @@ function renderNewEnquiryModal(container) {
 function renderEnquiryDetailModal(container, enquiry) {
   const fin = getEnquiryFinancialStatus(enquiry);
   const nextAct = getEnquiryNextAction(enquiry);
-  const isEnrolled = state.enrolments.some(e => e.enquiryId === enquiry.id || e.studentName.trim().toLowerCase() === enquiry.name.trim().toLowerCase());
+  const enqName = (enquiry && (enquiry.name || enquiry.studentName) || '').trim().toLowerCase();
+  const isEnrolled = (Array.isArray(state.enrolments) ? state.enrolments : []).some(e => (enquiry && enquiry.id && e.enquiryId === enquiry.id) || (enqName && (e.studentName || e.name || '').trim().toLowerCase() === enqName));
 
   const stages = ['NEW', 'CONTACTED', 'INTERESTED', 'INVOICE_REQUESTED', 'INVOICE_ISSUED', 'ENROLLED'];
   const curIdx = stages.indexOf(enquiry.status);
