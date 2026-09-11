@@ -10276,6 +10276,11 @@ async function loadAll() {
             // Purge prohibited local business data cache while preserving UI/session keys
             purgeProhibitedLocalBusinessData();
 
+            // Reconcile document sequence counters against authoritative database records
+            if (typeof reconcileCountersFromDatabase === 'function') {
+              reconcileCountersFromDatabase();
+            }
+
             // Establish authoritative tenant context from database-derived records securely scoped by RLS
             let candidateHydrated = null;
             if (Array.isArray(dbFSet.data) && dbFSet.data.length > 0) {
@@ -10520,6 +10525,15 @@ async function loadAll() {
     console.warn('Notice: Student sync deferred:', syncErr.message);
   }
 
+  // Reconcile document sequence counters from existing business records
+  try {
+    if (typeof reconcileCountersFromDatabase === 'function') {
+      reconcileCountersFromDatabase();
+    }
+  } catch (cntErr) {
+    console.warn('Notice: Counter reconciliation deferred:', cntErr.message);
+  }
+
   // Authoritative Session Verification (MANDATORY LOGIN)
   if (supabaseClient.isConfigured()) {
     if (isSessionAuthoritative && effectiveSbSession) {
@@ -10716,6 +10730,79 @@ function isRecordForCurrentTenant(rec) {
     return recTenant === authoritativeTenant;
   }
   return true;
+}
+
+function reconcileCountersFromDatabase() {
+  if (!state.counters || typeof state.counters !== 'object') {
+    state.counters = { invoice: 11092041, receipt: 20001, enquiry: 1001, student: 101, payslip: 30001, session: 5001, customer: 1001, enrolment: 1001 };
+  }
+
+  // 1. Authoritative Invoice Counter Reconciliation
+  if (Array.isArray(state.invoices) && state.invoices.length > 0) {
+    const maxInv = state.invoices.reduce((max, inv) => {
+      const raw = inv.invoiceNo || inv.invoice_no;
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && n > max) ? n : max;
+    }, 11092041);
+    state.counters.invoice = Math.max(Number(state.counters.invoice) || 0, maxInv);
+  }
+
+  // 2. Authoritative Receipt / Payment Counter Reconciliation
+  if (Array.isArray(state.payments) && state.payments.length > 0) {
+    const maxRct = state.payments.reduce((max, pay) => {
+      const raw = pay.receiptNo || pay.receipt_no;
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && n > max) ? n : max;
+    }, 20000);
+    state.counters.receipt = Math.max(Number(state.counters.receipt) || 0, maxRct);
+  }
+
+  // 3. Authoritative Enquiry Counter Reconciliation
+  if (Array.isArray(state.enquiries) && state.enquiries.length > 0) {
+    const maxEnq = state.enquiries.reduce((max, enq) => {
+      const raw = enq.enquiryNo || enq.enquiry_no;
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && n > max && n < 1000000) ? n : max;
+    }, 1000);
+    state.counters.enquiry = Math.max(Number(state.counters.enquiry) || 0, maxEnq);
+  }
+
+  // 4. Authoritative Student Counter Reconciliation
+  if (Array.isArray(state.students) && state.students.length > 0) {
+    const maxStu = state.students.reduce((max, stu) => {
+      const raw = stu.studentNumber || stu.student_number;
+      if (typeof raw === 'string') {
+        const match = raw.match(/(\d+)$/);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          return (!isNaN(n) && n > max) ? n : max;
+        }
+      }
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && n > max) ? n : max;
+    }, 100);
+    state.counters.student = Math.max(Number(state.counters.student) || 0, maxStu);
+  }
+
+  // 5. Authoritative Enrolment Counter Reconciliation
+  if (Array.isArray(state.enrolments) && state.enrolments.length > 0) {
+    const maxEnr = state.enrolments.reduce((max, enr) => {
+      const raw = enr.enrolmentNo || enr.enrolmentNumber;
+      if (typeof raw === 'string') {
+        const match = raw.match(/(\d+)$/);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          return (!isNaN(n) && n > max) ? n : max;
+        }
+      }
+      return max;
+    }, 1000);
+    state.counters.enrolment = Math.max(Number(state.counters.enrolment) || 0, maxEnr);
+  }
+
+  try {
+    localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
+  } catch (_) {}
 }
 
 function syncStudentsFromExistingData() {
@@ -14920,17 +15007,26 @@ async function createEnrolmentFromInvoice(invoiceId, options = {}) {
   state.enrolments.push(enrolment);
   inv.enrolmentId = enrolment.id;
 
-  await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, enrolment);
-  await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
-  await safeSet(STORE_KEY_ENROLMENTS, state.enrolments);
-  await safeSet(STORE_KEY_INVOICES, state.invoices);
-  await safeSet(STORE_KEY_COUNTERS, state.counters);
+  try {
+    await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, enrolment);
+  } catch (enrErr) {
+    console.warn('Notice: Auto-enrolment persistence deferred:', enrErr.message);
+  }
+  try {
+    localStorage.setItem(STORE_KEY_ENROLMENTS, JSON.stringify(state.enrolments));
+    localStorage.setItem(STORE_KEY_INVOICES, JSON.stringify(state.invoices));
+    localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
+  } catch (_) {}
 
   if (enrolment.customerId) {
-    await logCustomerActivity(enrolment.customerId, 'ENROLMENT_ACTIVATED', `Enrolled in ${enrolment.programmeNameSnapshot} (${enrolment.cohort})`, `Enrolment number ${enrNo}`, { referenceId: enrolment.id });
+    try {
+      await logCustomerActivity(enrolment.customerId, 'ENROLMENT_ACTIVATED', `Enrolled in ${enrolment.programmeNameSnapshot} (${enrolment.cohort})`, `Enrolment number ${enrNo}`, { referenceId: enrolment.id });
+    } catch (_) {}
   }
 
-  await logAudit('ENROLMENT_CREATED', 'enrolment', enrolment.id, `Enrolled ${enrolment.studentName} in ${enrolment.programmeNameSnapshot}`);
+  try {
+    await logAudit('ENROLMENT_CREATED', 'enrolment', enrolment.id, `Enrolled ${enrolment.studentName} in ${enrolment.programmeNameSnapshot}`);
+  } catch (_) {}
   return enrolment;
 }
 
@@ -20226,7 +20322,10 @@ function renderInvoicesTab(container) {
       openModal('previewInvoice', { invoice: tempInv });
     });
 
-    document.getElementById('btnSaveInvoice').addEventListener('click', async () => {
+    const btnSaveInv = document.getElementById('btnSaveInvoice');
+    let isSavingInvoice = false;
+    btnSaveInv.addEventListener('click', async () => {
+      if (isSavingInvoice) return;
       const payload = buildInvoicePayloadFromForm();
       const errEl = document.getElementById('invFormError');
 
@@ -20246,71 +20345,96 @@ function renderInvoicesTab(container) {
         return;
       }
 
-      state.counters.invoice += 1;
-      const docNo = formatDocNo('invoice', state.counters.invoice, payload.dateStr);
-
-      const inv = {
-        id: 'inv_' + Date.now(),
-        tenant_id: DEFAULT_TENANT_ID,
-        enquiryId: state.pendingEnquiryForInvoice ? state.pendingEnquiryForInvoice.id : null,
-        invoiceNo: state.counters.invoice,
-        invoice_display_no: docNo,
-        status: 'unpaid',
-        clientName: payload.client,
-        parentName: payload.parentName,
-        programmeId: payload.progId,
-        programmeName: payload.progName,
-        phone: payload.phone,
-        email: payload.email,
-        category: payload.category,
-        date: payload.dateStr,
-        dueDate: payload.dueStr,
-        plan: payload.plan,
-        trainingMode: payload.trainingMode,
-        duration: payload.duration,
-        schedule: payload.schedule,
-        paymentAccountId: payload.paymentAccountId,
-        paymentAccountSnapshot: payload.paymentAccountSnapshot,
-        notes: payload.notes,
-        comments: payload.comments,
-        termsAndConditions: payload.termsAndConditions,
-        items: payload.items,
-        subtotal: payload.subtotal,
-        discount: payload.discount,
-        total: payload.total,
-        createdAt: new Date().toISOString(),
-        createdBy: state.auth.user ? state.auth.user.name : 'Super Admin'
-      };
+      isSavingInvoice = true;
+      btnSaveInv.disabled = true;
+      btnSaveInv.textContent = 'Issuing Official Invoice...';
 
       try {
-        await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
-      } catch (dbErr) {
-        errEl.textContent = dbErr.message;
-        errEl.style.display = 'block';
-        return;
-      }
-
-      state.invoices.push(inv);
-      await createEnrolmentFromInvoice(inv.id);
-
-      // Advance linked enquiry status
-      if (state.pendingEnquiryForInvoice) {
-        const enq = state.enquiries.find(e => e.id === state.pendingEnquiryForInvoice.id);
-        if (enq) {
-          enq.status = 'INVOICE_ISSUED';
-          enq.updatedAt = new Date().toISOString();
-          await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+        if (typeof reconcileCountersFromDatabase === 'function') {
+          reconcileCountersFromDatabase();
         }
-        state.pendingEnquiryForInvoice = null;
+        state.counters.invoice = (Number(state.counters.invoice) || 11092041) + 1;
+        const docNo = formatDocNo('invoice', state.counters.invoice, payload.dateStr);
+
+        const inv = {
+          id: 'inv_' + Date.now(),
+          tenant_id: DEFAULT_TENANT_ID,
+          enquiryId: state.pendingEnquiryForInvoice ? state.pendingEnquiryForInvoice.id : null,
+          invoiceNo: state.counters.invoice,
+          invoice_display_no: docNo,
+          status: 'unpaid',
+          clientName: payload.client,
+          parentName: payload.parentName,
+          programmeId: payload.progId,
+          programmeName: payload.progName,
+          phone: payload.phone,
+          email: payload.email,
+          category: payload.category,
+          date: payload.dateStr,
+          dueDate: payload.dueStr,
+          plan: payload.plan,
+          trainingMode: payload.trainingMode,
+          duration: payload.duration,
+          schedule: payload.schedule,
+          paymentAccountId: payload.paymentAccountId,
+          paymentAccountSnapshot: payload.paymentAccountSnapshot,
+          notes: payload.notes,
+          comments: payload.comments,
+          termsAndConditions: payload.termsAndConditions,
+          items: payload.items,
+          subtotal: payload.subtotal,
+          discount: payload.discount,
+          total: payload.total,
+          createdAt: new Date().toISOString(),
+          createdBy: state.auth.user ? state.auth.user.name : 'Super Admin'
+        };
+
+        try {
+          await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
+        } catch (dbErr) {
+          errEl.textContent = dbErr.message;
+          errEl.style.display = 'block';
+          return;
+        }
+
+        state.invoices.push(inv);
+        try {
+          localStorage.setItem(STORE_KEY_INVOICES, JSON.stringify(state.invoices));
+          localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
+        } catch (_) {}
+
+        await createEnrolmentFromInvoice(inv.id);
+
+        // Advance linked enquiry status
+        if (state.pendingEnquiryForInvoice) {
+          const enq = state.enquiries.find(e => e.id === state.pendingEnquiryForInvoice.id);
+          if (enq) {
+            enq.status = 'INVOICE_ISSUED';
+            enq.updatedAt = new Date().toISOString();
+            try {
+              await dbRepo.saveRecord(STORE_KEY_ENQUIRIES, enq);
+              localStorage.setItem(STORE_KEY_ENQUIRIES, JSON.stringify(state.enquiries));
+            } catch (enqErr) {
+              console.warn('Notice: Linked enquiry stage sync deferred:', enqErr.message);
+            }
+          }
+          state.pendingEnquiryForInvoice = null;
+        }
+
+        try {
+          await logAudit('CREATE_INVOICE', 'invoice', inv.id, `Invoice #${inv.invoiceNo} (${inv.clientName})`, null, inv);
+        } catch (_) {}
+
+        state.invoiceSubTab = 'list';
+        openModal('viewInvoice', { invoice: inv });
+        render();
+      } finally {
+        isSavingInvoice = false;
+        if (btnSaveInv) {
+          btnSaveInv.disabled = false;
+          btnSaveInv.innerHTML = '&#x2714; Issue Official Invoice';
+        }
       }
-
-      await safeSet(STORE_KEY_INVOICES, state.invoices);
-      await safeSet(STORE_KEY_COUNTERS, state.counters);
-      await logAudit('CREATE_INVOICE', 'invoice', inv.id, `Invoice #${inv.invoiceNo} (${inv.clientName})`, null, inv);
-
-      state.invoiceSubTab = 'list';
-      openModal('viewInvoice', { invoice: inv });
-      render();
     });
   } else {
     const q = (state.filters.invoiceSearch || '').toLowerCase();
@@ -26366,7 +26490,9 @@ function renderRecordPaymentModal(container, inv) {
       }
       try {
         await dbRepo.saveRecord(STORE_KEY_INVOICES, inv);
-        await safeSet(STORE_KEY_INVOICES, state.invoices);
+        try {
+          localStorage.setItem(STORE_KEY_INVOICES, JSON.stringify(state.invoices));
+        } catch (_) {}
       } catch (invSaveErr) {
         console.warn('Warning: Invoice status sync after payment failed:', invSaveErr);
       }
