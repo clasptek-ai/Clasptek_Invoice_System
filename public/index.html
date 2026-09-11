@@ -6143,6 +6143,32 @@ const dbRepo = {
         }
       }
 
+      if (tableName === 'enrolments') {
+        const candidateCohortId = payload && (payload.cohort_id || payload.cohortId);
+        if (!candidateCohortId || String(candidateCohortId).trim() === '') {
+          // Attempt resolution from cohort code or name in current tenant
+          const candidateCode = record && (record.cohort || record.cohortCode);
+          let resolved = null;
+          if (candidateCode && typeof findCohortByCode === 'function') {
+            resolved = findCohortByCode(candidateCode);
+          }
+          if (resolved && isRecordForCurrentTenant(resolved)) {
+            payload.cohort_id = resolved.id;
+            record.cohortId = resolved.id;
+          } else {
+            state.connectionError = 'Cannot save enrolment: please select a valid cohort.';
+            throw new Error(state.connectionError);
+          }
+        } else {
+          // Validate cohort belongs to current tenant
+          const checkCohort = typeof findCohortById === 'function' ? findCohortById(candidateCohortId) : null;
+          if (checkCohort && checkCohort.tenant_id && checkCohort.tenant_id !== 'clasptek_main' && tenantId && checkCohort.tenant_id !== tenantId) {
+            state.connectionError = `Cross-tenant mutation rejected: Cohort belongs to foreign tenant '${checkCohort.tenant_id}'.`;
+            throw new Error(state.connectionError);
+          }
+        }
+      }
+
       let saveRes;
       if (tableName === 'crm_intake_applications') {
         saveRes = await supabaseClient.from(tableName).update(payload, { id: record.id });
@@ -6163,6 +6189,8 @@ const dbRepo = {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
           state.connectionError = `Database rejected enquiry save: Invalid enquiry status constraint violation (23514). Status must be one of: NEW, CONTACTED, INTERESTED, APPLIED, OFFERED, ENROLLED, LOST.`;
+        } else if (tableName === 'enrolments' && (error.code === 'P0001' || (error.message && error.message.includes('does not exist in tenant')))) {
+          state.connectionError = `Cannot save enrolment: please select a valid cohort. ${error.message || ''}`.trim();
         } else {
           state.connectionError = `Database rejected update on ${tableName} (HTTP ${httpStatus}): ${error.message || 'Payload or schema error'}. No financial data has been changed.`;
         }
@@ -6898,7 +6926,12 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: new Date().toISOString()
       };
 
-    case 'cohorts':
+    case 'cohorts': {
+      let rawStatus = (item.status || 'UPCOMING').toUpperCase();
+      if (rawStatus === 'ACTIVE') rawStatus = 'IN_PROGRESS';
+      if (!['PLANNING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(rawStatus)) {
+        rawStatus = 'UPCOMING';
+      }
       return {
         id: item.id || ('coh_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
         tenant_id: tenantId || item.tenant_id || item.tenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : DEFAULT_TENANT_ID),
@@ -6910,18 +6943,23 @@ function transformEntityForPostgres(entity, item, tenantId) {
         end_date: item.endDate || item.end_date || new Date().toISOString().split('T')[0],
         delivery_mode: item.deliveryMode || item.delivery_mode || 'IN_PERSON',
         capacity: Number(item.capacity || 25),
-        status: (item.status || 'UPCOMING').toUpperCase(),
+        status: rawStatus,
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'enrolments':
       return {
         id: item.id || ('enr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
         tenant_id: tenantId || item.tenant_id || item.tenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : DEFAULT_TENANT_ID),
-        student_id: item.studentId || item.student_id || '',
-        programme_id: item.programmeId || item.programme_id || '',
-        cohort_id: item.cohortId || item.cohort_id || '',
+        student_name: item.studentName || item.student_name || item.name || 'Student',
+        student_email: item.studentEmail || item.student_email || item.email || null,
+        student_phone: item.studentPhone || item.student_phone || item.phone || null,
+        cohort: item.cohort || item.cohortCode || item.cohort_code || null,
+        student_id: item.studentId || item.student_id || null,
+        programme_id: item.programmeId || item.programme_id || null,
+        cohort_id: (item.cohortId || item.cohort_id) ? (item.cohortId || item.cohort_id) : null,
         invoice_id: item.invoiceId || item.invoice_id || null,
         customer_id: item.customerId || item.customer_id || null,
         enquiry_id: item.enquiryId || item.enquiry_id || null,
@@ -14993,28 +15031,195 @@ async function convertEnquiryToCustomer(enquiryId, customData = {}) {
   return customer;
 }
 
+async function ensureDefaultCohortForProgramme(programmeId, programmeName, targetTenantId) {
+  const tenantId = targetTenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : DEFAULT_TENANT_ID);
+  if (!programmeId) return null;
+
+  // 1. Search in-memory state for current tenant
+  let existing = (state.cohorts || []).find(c =>
+    (c.programmeId === programmeId || c.programme_id === programmeId) &&
+    (c.tenant_id === tenantId || c.tenantId === tenantId || (!c.tenant_id && isRecordForCurrentTenant(c))) &&
+    c.status !== 'CANCELLED'
+  );
+  if (existing) return existing;
+
+  // 2. Search database for current tenant
+  if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('cohorts')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('programme_id', programmeId);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const dbCohort = typeof transformEntityFromPostgres === 'function' ? transformEntityFromPostgres('cohorts', data[0]) : data[0];
+        if (!state.cohorts.some(c => c.id === dbCohort.id)) {
+          state.cohorts.push(dbCohort);
+        }
+        return dbCohort;
+      }
+    } catch (_) {}
+  }
+
+  // 3. Create default cohort scoped to tenant and programme
+  const year = new Date().getFullYear();
+  const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+  const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const cohortCode = `COH-${year}-Q${quarter}-${randSuffix}`;
+  const newCohort = {
+    id: 'coh_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    tenant_id: tenantId,
+    programme_id: programmeId,
+    programmeId: programmeId,
+    name: `${programmeName || 'Programme'} - Cohort ${year}-Q${quarter}`,
+    cohort_code: cohortCode,
+    cohortCode: cohortCode,
+    start_date: new Date().toISOString().slice(0, 10),
+    startDate: new Date().toISOString().slice(0, 10),
+    end_date: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
+    endDate: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
+    delivery_mode: 'IN_PERSON',
+    deliveryMode: 'IN_PERSON',
+    capacity: 30,
+    status: 'IN_PROGRESS',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!Array.isArray(state.cohorts)) state.cohorts = [];
+  state.cohorts.push(newCohort);
+  try {
+    await dbRepo.saveRecord(STORE_KEY_COHORTS, newCohort);
+    try {
+      localStorage.setItem(STORE_KEY_COHORTS, JSON.stringify(state.cohorts));
+    } catch (_) {}
+  } catch (e) {
+    console.warn('Notice: Default cohort persistence deferred:', e.message);
+  }
+  return newCohort;
+}
+
+async function ensureStudentForInvoice(inv, targetTenantId) {
+  if (!inv || !inv.clientName) return null;
+  const tenantId = targetTenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId(inv) : DEFAULT_TENANT_ID);
+  const normName = inv.clientName.trim().toLowerCase();
+
+  // 1. Search in-memory state
+  let student = (state.students || []).find(s =>
+    (s.tenant_id === tenantId || s.tenantId === tenantId || (!s.tenant_id && isRecordForCurrentTenant(s))) &&
+    ((inv.customerId && (s.customerId === inv.customerId || s.id === inv.customerId)) ||
+     (s.name && s.name.trim().toLowerCase() === normName) ||
+     (`${s.firstName || ''} ${s.lastName || ''}`.trim().toLowerCase() === normName))
+  );
+  if (student) return student;
+
+  // 2. Search database
+  if (supabaseClient && supabaseClient.isConfigured && supabaseClient.isConfigured() && tenantId && isValidUuid(tenantId)) {
+    try {
+      const { data } = await supabaseClient
+        .from('students')
+        .select('*')
+        .eq('tenant_id', tenantId);
+      if (Array.isArray(data) && data.length > 0) {
+        const found = data.find(d =>
+          (d.customer_id && d.customer_id === inv.customerId) ||
+          (`${d.first_name || ''} ${d.last_name || ''}`.trim().toLowerCase() === normName)
+        );
+        if (found) {
+          const s = typeof transformEntityFromPostgres === 'function' ? transformEntityFromPostgres('students', found) : found;
+          if (!state.students.some(st => st.id === s.id)) state.students.push(s);
+          return s;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Create default student record
+  const names = (inv.clientName || 'Student').trim().split(/\s+/);
+  const firstName = names[0] || 'Student';
+  const lastName = names.slice(1).join(' ') || '';
+  state.counters.student = (Number(state.counters.student) || 100) + 1;
+  const stuNo = `STU-2026-${String(state.counters.student).padStart(4, '0')}`;
+
+  const newStudent = {
+    id: 'stu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    tenant_id: tenantId,
+    studentNumber: stuNo,
+    student_number: stuNo,
+    name: inv.clientName,
+    firstName: firstName,
+    first_name: firstName,
+    lastName: lastName,
+    last_name: lastName,
+    email: inv.email || null,
+    phone: inv.phone || null,
+    customerId: inv.customerId || null,
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!Array.isArray(state.students)) state.students = [];
+  state.students.push(newStudent);
+  try {
+    await dbRepo.saveRecord(STORE_KEY_STUDENTS, newStudent);
+    try {
+      localStorage.setItem(STORE_KEY_STUDENTS, JSON.stringify(state.students));
+    } catch (_) {}
+  } catch (e) {
+    console.warn('Notice: Student persistence notice:', e.message);
+  }
+  return newStudent;
+}
+
 async function createEnrolmentFromInvoice(invoiceId, options = {}) {
   const inv = state.invoices.find(i => i.id === invoiceId);
   if (!inv) throw new Error('Invoice not found');
 
   const { paid, balance } = invoiceBalance(inv);
   const prog = state.programmes.find(p => p.id === inv.programmeId) || { name: inv.programmeName || 'General Tech Programme' };
+  const tenantId = (typeof resolveAuthoritativeTenantId === 'function' && resolveAuthoritativeTenantId(inv)) || DEFAULT_TENANT_ID;
 
   state.counters.enrolment = (state.counters.enrolment || 0) + 1;
   const enrNo = `ENR-2026-${String(state.counters.enrolment).padStart(4, '0')}`;
 
+  // Resolve target cohort for current tenant
+  let targetCohort = null;
+  if (options.cohortId) {
+    targetCohort = typeof findCohortById === 'function' ? findCohortById(options.cohortId) : null;
+  }
+  if (!targetCohort && (options.cohort || options.cohortCode)) {
+    targetCohort = typeof findCohortByCode === 'function' ? findCohortByCode(options.cohort || options.cohortCode) : null;
+  }
+  if (!targetCohort && inv.programmeId) {
+    const progCohorts = typeof getCohortsByProgramme === 'function' ? getCohortsByProgramme(inv.programmeId) : [];
+    if (progCohorts.length > 0) {
+      targetCohort = progCohorts.find(c => c.status === 'ACTIVE' || c.status === 'UPCOMING') || progCohorts[0];
+    }
+  }
+  if (!targetCohort && inv.programmeId) {
+    targetCohort = await ensureDefaultCohortForProgramme(inv.programmeId, inv.programmeName || prog.name, tenantId);
+  }
+
+  // Resolve target student for current tenant
+  const student = await ensureStudentForInvoice(inv, tenantId);
+
   const enrolment = {
     id: 'enr_' + Date.now(),
-    tenant_id: DEFAULT_TENANT_ID,
+    tenant_id: tenantId,
     enrolmentNo: enrNo,
     enrolmentNumber: enrNo,
     customerId: inv.customerId || null,
+    studentId: student ? student.id : null,
     studentName: inv.clientName,
     studentEmail: inv.email || inv.clientEmail || '',
     studentPhone: inv.phone || inv.clientPhone || '',
-    programmeId: inv.programmeId || null,
+    programmeId: inv.programmeId || (targetCohort ? targetCohort.programmeId : null),
     programmeName: inv.programmeName || prog.name,
     programmeNameSnapshot: inv.programmeName || prog.name,
+    cohortId: targetCohort ? targetCohort.id : null,
+    cohort: targetCohort ? targetCohort.cohortCode : (options.cohort || options.cohortCode || 'General'),
+    cohortCode: targetCohort ? targetCohort.cohortCode : (options.cohortCode || options.cohort || 'General'),
     agreedFee: Number(inv.total) || 0,
     fee: Number(inv.total) || 0,
     discount: inv.discount || 0,
@@ -15022,8 +15227,6 @@ async function createEnrolmentFromInvoice(invoiceId, options = {}) {
     paymentTerms: inv.plan || options.paymentPlan || 'Full Payment',
     paymentPlan: inv.plan || options.paymentPlan || 'Full Payment',
     deliveryMode: options.deliveryMode || inv.trainingMode || 'Physical Weekend',
-    cohort: options.cohort || options.cohortCode || `Cohort ${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
-    cohortCode: options.cohortCode || options.cohort || `Cohort ${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`,
     startDate: options.startDate || new Date().toISOString().slice(0, 10),
     expectedEndDate: options.expectedEndDate || '',
     invoiceId: inv.id,
@@ -15084,8 +15287,35 @@ async function syncPaymentToEnrolmentAndCustomer(payment, invoice) {
     linkedEnrolment.financialStatus = balance <= 0 ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
     linkedEnrolment.paymentStatus = linkedEnrolment.financialStatus;
     linkedEnrolment.updatedAt = new Date().toISOString();
-    await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, linkedEnrolment);
-    await safeSet(STORE_KEY_ENROLMENTS, state.enrolments);
+
+    const tenantId = (typeof resolveAuthoritativeTenantId === 'function' && resolveAuthoritativeTenantId(linkedEnrolment)) || DEFAULT_TENANT_ID;
+
+    // Ensure cohort is resolved before database persistence
+    if (!linkedEnrolment.cohortId && (linkedEnrolment.cohort || linkedEnrolment.cohortCode)) {
+      const c = typeof findCohortByCode === 'function' ? findCohortByCode(linkedEnrolment.cohort || linkedEnrolment.cohortCode) : null;
+      if (c && isRecordForCurrentTenant(c)) linkedEnrolment.cohortId = c.id;
+    }
+    if (!linkedEnrolment.cohortId && (invoice.programmeId || linkedEnrolment.programmeId)) {
+      const progId = invoice.programmeId || linkedEnrolment.programmeId;
+      const c = await ensureDefaultCohortForProgramme(progId, invoice.programmeName || linkedEnrolment.programmeName, tenantId);
+      if (c) {
+        linkedEnrolment.cohortId = c.id;
+        linkedEnrolment.cohort = c.cohortCode;
+      }
+    }
+    if (!linkedEnrolment.studentId) {
+      const s = await ensureStudentForInvoice(invoice, tenantId);
+      if (s) linkedEnrolment.studentId = s.id;
+    }
+
+    try {
+      await dbRepo.saveRecord(STORE_KEY_ENROLMENTS, linkedEnrolment);
+      try {
+        localStorage.setItem(STORE_KEY_ENROLMENTS, JSON.stringify(state.enrolments));
+      } catch (_) {}
+    } catch (enrErr) {
+      console.warn('Notice: Enrolment payment sync deferred:', enrErr.message);
+    }
   }
 
   // 2. Sync linked customer master record
@@ -26603,7 +26833,11 @@ function renderRecordPaymentModal(container, inv) {
       }
     }
 
-    await syncPaymentToEnrolmentAndCustomer(payment, inv);
+    try {
+      await syncPaymentToEnrolmentAndCustomer(payment, inv);
+    } catch (syncErr) {
+      console.warn('Warning: Payment recorded but enrolment sync deferred:', syncErr.message);
+    }
     await safeSet(STORE_KEY_PAYMENTS, state.payments);
     await safeSet(STORE_KEY_COUNTERS, state.counters);
     await logAudit('RECORD_PAYMENT', 'payment', payment.id, `Payment #${payment.receiptNo} of ₦${payment.amount} for Invoice #${inv.invoiceNo}`, null, payment);
@@ -33180,6 +33414,9 @@ function renderChangeRoleModal(container, user) {
     window.renderInvoicesTab = renderInvoicesTab;
     window.dbRepo = dbRepo;
     window.CANONICAL_INVOICE_STATUSES = CANONICAL_INVOICE_STATUSES;
+    window.createEnrolmentFromInvoice = createEnrolmentFromInvoice;
+    window.syncPaymentToEnrolmentAndCustomer = syncPaymentToEnrolmentAndCustomer;
+    window.ensureDefaultCohortForProgramme = ensureDefaultCohortForProgramme;
   }
 })();
 </script>
