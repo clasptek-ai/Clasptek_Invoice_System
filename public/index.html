@@ -1438,6 +1438,24 @@ const STORE_KEY_CUSTOMERS = 'clasptek:customers';
 const STORE_KEY_STUDENTS = 'clasptek:students';
 const STORE_KEY_INTAKE_APPLICATIONS = 'clasptek:crm_intake_applications';
 
+// Authoritative Academic Programme Categories
+const PROGRAMME_CATEGORIES = [
+  'Technology & Digital Skills',
+  'Data, AI & Automation',
+  'Cybersecurity & IT',
+  'Web & Software Development',
+  'Digital Marketing & Business Technology',
+  'Business Management & Leadership',
+  'Project & Operations Management',
+  'Professional Development',
+  'Language & Communication',
+  'Exam Preparation & Test Training',
+  'Study Abroad & International Education',
+  'Short Courses & Executive Programmes',
+  'Youth & Teen Programmes',
+  'Other / Specialized Programmes'
+];
+
 // Phase 8 Store Keys
 const STORE_KEY_FINANCE_SETTINGS = 'clasptek:finance_settings';
 const STORE_KEY_PAYMENT_ACCOUNTS = 'clasptek:payment_accounts';
@@ -2252,6 +2270,47 @@ function isJwtExpiredOrExpiring(token, thresholdSec = 60) {
   return (payload.exp - nowSec) <= thresholdSec;
 }
 
+const SUPABASE_QUERY_CONCURRENCY = 5;
+
+/**
+ * Concurrency-controlled asynchronous task worker pool.
+ * Executes task factories with a concurrency limit while preserving original array order.
+ *
+ * @param {Array<() => Promise<any>>} tasks Array of async zero-argument task factories
+ * @param {number} [limit=SUPABASE_QUERY_CONCURRENCY] Maximum concurrent in-flight tasks
+ * @returns {Promise<Array<any>>} Results array matching the input tasks order
+ */
+async function runConcurrentBatch(tasks, limit = SUPABASE_QUERY_CONCURRENCY) {
+  if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    return [];
+  }
+  const taskList = [...tasks];
+  const results = new Array(taskList.length);
+  let currentIndex = 0;
+  let rejectedError = null;
+
+  const workerCount = Math.min(Math.max(1, limit), taskList.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (currentIndex < taskList.length && !rejectedError) {
+      const idx = currentIndex++;
+      try {
+        const taskFn = taskList[idx];
+        if (typeof taskFn === 'function') {
+          results[idx] = await taskFn();
+        } else {
+          results[idx] = await taskFn;
+        }
+      } catch (err) {
+        rejectedError = err;
+        throw err;
+      }
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 const supabaseClient = {
   getEndpoint() {
     let ep = (state.supabase && state.supabase.endpoint) ? state.supabase.endpoint.trim() : '';
@@ -3054,10 +3113,20 @@ const supabaseClient = {
                 const joinChar = url.includes('?') ? '&' : '?';
                 url += `${joinChar}${filters.join('&')}`;
               }
-              const res = await fetch(url, {
-                method: 'GET',
-                headers: client.getHeaders()
-              });
+              let res;
+              try {
+                res = await fetch(url, {
+                  method: 'GET',
+                  headers: client.getHeaders()
+                });
+              } catch (initialNetworkErr) {
+                // Transient network exception retry: wait 200ms and retry once
+                await new Promise(r => setTimeout(r, 200));
+                res = await fetch(url, {
+                  method: 'GET',
+                  headers: client.getHeaders()
+                });
+              }
               if (!res.ok) {
                 const errBody = await res.json().catch(() => ({ message: res.statusText }));
                 let errClass = SUPABASE_ERROR_CLASS.POSTGRES_ERROR;
@@ -4805,7 +4874,7 @@ async function verifyProductionSchema() {
   const existing = [];
   const missing = [];
 
-  await Promise.all(REQUIRED_PRODUCTION_TABLES.map(async (table) => {
+  const checkSchemaTasks = REQUIRED_PRODUCTION_TABLES.map(table => async () => {
     try {
       const res = await supabaseClient.from(table).select('*');
       if (res && (res.status === 200 || res.ok)) {
@@ -4816,7 +4885,8 @@ async function verifyProductionSchema() {
     } catch (_) {
       missing.push(table);
     }
-  }));
+  });
+  await runConcurrentBatch(checkSchemaTasks, SUPABASE_QUERY_CONCURRENCY);
 
   const compatible = missing.length === 0;
 
@@ -6839,7 +6909,9 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
-    case 'programmes':
+    case 'programmes': {
+      const metadata = typeof item.metadata === 'object' && item.metadata !== null ? { ...item.metadata } : {};
+      if (item.category) metadata.category = item.category;
       return {
         id: item.id,
         tenant_id: tenantId,
@@ -6854,10 +6926,11 @@ function transformEntityForPostgres(entity, item, tenantId) {
         installment_first_pct: Number(item.installmentFirstPct !== undefined ? item.installmentFirstPct : (item.installment_first_pct !== undefined ? item.installment_first_pct : 50)),
         installment_second_pct: Number(item.installmentSecondPct !== undefined ? item.installmentSecondPct : (item.installment_second_pct !== undefined ? item.installment_second_pct : 50)),
         status: item.status || (item.isActive === false || item.is_active === false ? 'archived' : 'active'),
-        metadata: typeof item.metadata === 'object' && item.metadata !== null ? item.metadata : {},
+        metadata,
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'personnel':
       return {
@@ -7688,6 +7761,7 @@ function transformEntityFromPostgres(entity, row) {
         name: row.name || '',
         code: row.code || '',
         description: row.description || '',
+        category: row.metadata?.category || row.category || 'Technology & Digital Skills',
         durationWeeks: row.duration_weeks ? Number(row.duration_weeks) : (row.durationWeeks ? Number(row.durationWeeks) : null),
         sessionCount: row.session_count ? Number(row.session_count) : (row.sessionCount ? Number(row.sessionCount) : null),
         tuitionFee: Number(row.tuition_fee !== undefined ? row.tuition_fee : (row.tuitionFee !== undefined ? row.tuitionFee : 0)),
@@ -7970,7 +8044,7 @@ async function inspectProductionDatabase({ liveOnly = false } = {}) {
   let totalConfirmedRemoteRecords = 0;
   let failedQueries = 0;
 
-  await Promise.all(REQUIRED_PRODUCTION_TABLES.map(async (table) => {
+  const forensicAuditTasks = REQUIRED_PRODUCTION_TABLES.map(table => async () => {
     try {
       const res = await supabaseClient.from(table).select('*');
       const status = res ? (res.status || (res.ok ? 200 : (res.httpStatus || 0))) : 0;
@@ -8022,7 +8096,8 @@ async function inspectProductionDatabase({ liveOnly = false } = {}) {
       tables[table] = tableEntry;
       inaccessibleTables.push(tableEntry);
     }
-  }));
+  });
+  await runConcurrentBatch(forensicAuditTasks, SUPABASE_QUERY_CONCURRENCY);
 
   const allTablesAccessible = failedQueries === 0 && tablesFound.length === REQUIRED_PRODUCTION_TABLES.length;
   const databaseEmpty = allTablesAccessible && totalConfirmedRemoteRecords === 0;
@@ -10276,6 +10351,42 @@ async function loadAll() {
     try {
       const pingRes = await supabaseClient.ping();
       if (pingRes.success) {
+        const queryTasks = [
+          () => supabaseClient.from('programmes').select('*'),
+          () => supabaseClient.from('invoices').select('*'),
+          () => supabaseClient.from('payments').select('*'),
+          () => supabaseClient.from('expenses').select('*'),
+          () => supabaseClient.from('direct_income').select('*'),
+          () => supabaseClient.from('income_categories').select('*'),
+          () => supabaseClient.from('expense_categories').select('*'),
+          () => supabaseClient.from('budgets').select('*'),
+          () => supabaseClient.from('finance_audit_log').select('*'),
+          () => supabaseClient.from('finance_periods').select('*'),
+          () => supabaseClient.from('finance_settings').select('*'),
+          () => supabaseClient.from('payment_accounts').select('*'),
+          () => supabaseClient.from('payslips').select('*'),
+          () => supabaseClient.from('personnel').select('*'),
+          () => supabaseClient.from('enquiries').select('*'),
+          () => supabaseClient.from('enrolments').select('*'),
+          () => supabaseClient.from('cohorts').select('*'),
+          () => supabaseClient.from('customers').select('*'),
+          () => supabaseClient.from('students').select('*'),
+          () => supabaseClient.from('collection_notes').select('*'),
+          () => supabaseClient.from('payment_reminders').select('*'),
+          () => supabaseClient.from('recurring_expenses').select('*'),
+          () => supabaseClient.from('recurring_invoices').select('*'),
+          () => supabaseClient.from('reconciliations').select('*'),
+          () => supabaseClient.from('facilitator_sessions').select('*'),
+          () => supabaseClient.from('customer_timeline').select('*'),
+          () => supabaseClient.from('crm_intake_applications').select('*'),
+          () => supabaseClient.from('training_sessions').select('*'),
+          () => supabaseClient.from('attendance').select('*'),
+          () => supabaseClient.from('facilitator_reports').select('*'),
+          () => supabaseClient.from('certificates').select('*')
+        ];
+
+        const queryResults = await runConcurrentBatch(queryTasks, SUPABASE_QUERY_CONCURRENCY);
+
         const [
           dbProgs, dbInvs, dbPays, dbExps, dbDirInc,
           dbIncCats, dbExpCats, dbBdgs, dbAudits, dbFPeriods,
@@ -10283,49 +10394,7 @@ async function loadAll() {
           dbEnqs, dbEnrls, dbCohorts, dbCusts, dbStudents, dbCNotes, dbPRems,
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
           dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
-        ] = await Promise.all([
-          supabaseClient.from('programmes').select('*'),
-          supabaseClient.from('invoices').select('*'),
-          supabaseClient.from('payments').select('*'),
-          supabaseClient.from('expenses').select('*'),
-          supabaseClient.from('direct_income').select('*'),
-          supabaseClient.from('income_categories').select('*'),
-          supabaseClient.from('expense_categories').select('*'),
-          supabaseClient.from('budgets').select('*'),
-          supabaseClient.from('finance_audit_log').select('*'),
-          supabaseClient.from('finance_periods').select('*'),
-          supabaseClient.from('finance_settings').select('*'),
-          supabaseClient.from('payment_accounts').select('*'),
-          supabaseClient.from('payslips').select('*'),
-          supabaseClient.from('personnel').select('*'),
-          supabaseClient.from('enquiries').select('*'),
-          supabaseClient.from('enrolments').select('*'),
-          supabaseClient.from('cohorts').select('*'),
-          supabaseClient.from('customers').select('*'),
-          supabaseClient.from('students').select('*'),
-          supabaseClient.from('collection_notes').select('*'),
-          supabaseClient.from('payment_reminders').select('*'),
-          supabaseClient.from('recurring_expenses').select('*'),
-          supabaseClient.from('recurring_invoices').select('*'),
-          supabaseClient.from('reconciliations').select('*'),
-          supabaseClient.from('facilitator_sessions').select('*'),
-          supabaseClient.from('customer_timeline').select('*'),
-          supabaseClient.from('crm_intake_applications').select('*'),
-          supabaseClient.from('training_sessions').select('*'),
-          supabaseClient.from('attendance').select('*'),
-          supabaseClient.from('facilitator_reports').select('*'),
-          supabaseClient.from('certificates').select('*')
-        ]);
-
-        // Check if query had critical errors (excluding optional table 404s)
-        const queryResults = [
-          dbProgs, dbInvs, dbPays, dbExps, dbDirInc,
-          dbIncCats, dbExpCats, dbBdgs, dbAudits, dbFPeriods,
-          dbFSet, dbPAccs, dbPSlips, dbPers,
-          dbEnqs, dbEnrls, dbCohorts, dbCusts, dbStudents, dbCNotes, dbPRems,
-          dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
-          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
-        ];
+        ] = queryResults;
         const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.status !== 401 && r.error.message)));
         const hasAuthExpired = queryResults.some(r => r && r.status === 401);
 
@@ -11638,6 +11707,12 @@ async function saveAuthoritativeProgramme(progData, actorReason = '') {
   if (!name) return { success: false, message: 'Programme name is required' };
   if (!code) return { success: false, message: 'Programme code is required' };
 
+  const rawCat = typeof progData.category === 'string' ? progData.category.trim() : '';
+  if (rawCat === '-- Select Programme Category --') {
+    return { success: false, message: 'Programme category is required' };
+  }
+  const category = rawCat || 'Technology & Digital Skills';
+
   const tuitionFee = Number(progData.tuitionFee !== undefined ? progData.tuitionFee : (progData.tuition_fee !== undefined ? progData.tuition_fee : (progData.price !== undefined ? progData.price : 0)));
   if (isNaN(tuitionFee) || tuitionFee < 0) {
     return { success: false, message: 'Programme tuition fee must be a non-negative number' };
@@ -11700,14 +11775,14 @@ async function saveAuthoritativeProgramme(progData, actorReason = '') {
       sessionCount: sessionCount !== null ? sessionCount : previousValue.sessionCount,
       tuitionFee,
       price: tuitionFee,
-      category: progData.category || previousValue.category || 'Academic',
+      category: category || previousValue.category || 'Technology & Digital Skills',
       maxDiscountPct,
       allowInstallments,
       installmentFirstPct,
       installmentSecondPct,
       status: progData.status || previousValue.status || 'active',
       isActive: (progData.status || previousValue.status || 'active') === 'active',
-      metadata: { ...(previousValue.metadata || {}), ...(progData.metadata || {}) },
+      metadata: { ...(previousValue.metadata || {}), ...(progData.metadata || {}), category },
       updatedAt: new Date().toISOString()
     };
     state.programmes[index] = progRecord;
@@ -11723,14 +11798,14 @@ async function saveAuthoritativeProgramme(progData, actorReason = '') {
       sessionCount,
       tuitionFee,
       price: tuitionFee,
-      category: progData.category || 'Academic',
+      category: category || 'Technology & Digital Skills',
       maxDiscountPct,
       allowInstallments,
       installmentFirstPct,
       installmentSecondPct,
       status: progData.status || 'active',
       isActive: (progData.status || 'active') === 'active',
-      metadata: progData.metadata || {},
+      metadata: { ...(progData.metadata || {}), category },
       createdAt: progData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -14332,7 +14407,10 @@ async function submitAuthoritativeApplication(payload, source = 'WEB_INTAKE', so
       status = 'REVIEW_REQUIRED';
       reviewReason = 'PROGRAMME_NOT_FOUND_OR_RETIRED';
       matchNotes = `Requested programme '${normalized.programmeId}' could not be resolved in active catalogue.`;
-    } else if (resolvedProgramme.status && resolvedProgramme.status !== 'ACTIVE') {
+    } else if (
+      resolvedProgramme.status &&
+      String(resolvedProgramme.status).toLowerCase() !== 'active'
+    ) {
       status = 'REVIEW_REQUIRED';
       reviewReason = 'PROGRAMME_NOT_FOUND_OR_RETIRED';
       matchNotes = `Requested programme '${resolvedProgramme.name}' (${resolvedProgramme.code}) is retired/inactive.`;
@@ -23823,7 +23901,11 @@ function renderApplicationDetailModal(container, app) {
 // NATIVE APPLICANT-FACING INTAKE PORTAL (SECTION A, B, C, D)
 // -----------------------------------------------------------------------------
 function renderApplicantIntakePortal(container) {
-  const activeProgrammes = (state.programmes || []).filter(p => isRecordForCurrentTenant(p) && (p.status === 'ACTIVE' || !p.status));
+  const activeProgrammes = (state.programmes || []).filter(
+    p =>
+      isRecordForCurrentTenant(p) &&
+      (!p.status || String(p.status).toLowerCase() === 'active')
+  );
   const isStaff = (typeof isStaffUser === 'function' && isStaffUser()) || (state.auth?.user?.role && ['super admin', 'admin', 'staff'].includes(state.auth.user.role.toLowerCase()));
 
   container.innerHTML = `
@@ -30534,7 +30616,10 @@ function renderAddProgrammeModal(container) {
         <div class="cp-modal-body">
           <div class="cp-row2">
             <div class="cp-field"><label>Programme Code *</label><input id="progCode" placeholder="e.g. CLP-IEL" style="text-transform:uppercase;" /></div>
-            <div class="cp-field"><label>Category *</label><select id="progCat">${(state.incomeCategories || ['Tuition Fees', 'Corporate Training']).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+            <div class="cp-field"><label>Category *</label><select id="progCat">
+              <option value="">-- Select Programme Category --</option>
+              ${PROGRAMME_CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+            </select></div>
           </div>
           <div class="cp-field"><label>Programme Name *</label><input id="progName" placeholder="e.g. IELTS Masterclass Intensive" /></div>
           <div class="cp-field"><label>Description</label><textarea id="progDesc" rows="2" placeholder="Curriculum summary and learning outcomes..."></textarea></div>
@@ -30578,8 +30663,15 @@ function renderAddProgrammeModal(container) {
   document.getElementById('btnSaveProg').addEventListener('click', async () => {
     const code = document.getElementById('progCode').value.trim().toUpperCase();
     const name = document.getElementById('progName').value.trim();
-    const category = document.getElementById('progCat').value;
+    const category = document.getElementById('progCat').value.trim();
     const description = document.getElementById('progDesc').value.trim();
+
+    const errBox = document.getElementById('progFormErr');
+    if (!category || category === '-- Select Programme Category --') {
+      errBox.textContent = 'Programme category is required';
+      errBox.style.display = 'block';
+      return;
+    }
     const price = Number(document.getElementById('progPrice').value || 0);
     const maxDiscountPct = Number(document.getElementById('progMaxDisc').value || 0);
     const durationWeeks = document.getElementById('progDuration').value ? Number(document.getElementById('progDuration').value) : null;
@@ -30587,8 +30679,6 @@ function renderAddProgrammeModal(container) {
     const allowInstallments = chkInst.checked;
     const installmentFirstPct = Number(document.getElementById('progInst1').value || 50);
     const installmentSecondPct = Number(document.getElementById('progInst2').value || 50);
-
-    const errBox = document.getElementById('progFormErr');
 
     const res = await saveAuthoritativeProgramme({
       code,
@@ -30628,7 +30718,10 @@ function renderEditProgrammeModal(container, prog) {
         <div class="cp-modal-body">
           <div class="cp-row2">
             <div class="cp-field"><label>Programme Code *</label><input id="editProgCode" value="${escapeHtml(prog.code || prog.id)}" style="text-transform:uppercase;" /></div>
-            <div class="cp-field"><label>Category *</label><select id="editProgCat">${(state.incomeCategories || ['Tuition Fees', 'Corporate Training']).map(c => `<option value="${escapeHtml(c)}" ${c === prog.category ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select></div>
+            <div class="cp-field"><label>Category *</label><select id="editProgCat">
+              <option value="">-- Select Programme Category --</option>
+              ${PROGRAMME_CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${c === prog.category ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            </select></div>
           </div>
           <div class="cp-field"><label>Programme Name *</label><input id="editProgName" value="${escapeHtml(prog.name)}" /></div>
           <div class="cp-field"><label>Description</label><textarea id="editProgDesc" rows="2">${escapeHtml(prog.description || '')}</textarea></div>
@@ -30679,8 +30772,15 @@ function renderEditProgrammeModal(container, prog) {
   document.getElementById('btnSaveEditProg').addEventListener('click', async () => {
     const code = document.getElementById('editProgCode').value.trim().toUpperCase();
     const name = document.getElementById('editProgName').value.trim();
-    const category = document.getElementById('editProgCat').value;
+    const category = document.getElementById('editProgCat').value.trim();
     const description = document.getElementById('editProgDesc').value.trim();
+
+    const errBox = document.getElementById('editProgFormErr');
+    if (!category || category === '-- Select Programme Category --') {
+      errBox.textContent = 'Programme category is required';
+      errBox.style.display = 'block';
+      return;
+    }
     const price = Number(document.getElementById('editProgPrice').value || 0);
     const maxDiscountPct = Number(document.getElementById('editProgMaxDisc').value || 0);
     const durationWeeks = document.getElementById('editProgDuration').value ? Number(document.getElementById('editProgDuration').value) : null;
@@ -30689,8 +30789,6 @@ function renderEditProgrammeModal(container, prog) {
     const installmentFirstPct = Number(document.getElementById('editProgInst1').value || 50);
     const installmentSecondPct = Number(document.getElementById('editProgInst2').value || 50);
     const status = document.getElementById('editProgStatus').value;
-
-    const errBox = document.getElementById('editProgFormErr');
 
     const res = await saveAuthoritativeProgramme({
       id: prog.id,
@@ -33746,6 +33844,7 @@ function renderChangeRoleModal(container, user) {
       findStudentDuplicate,
       syncStudentsFromExistingData,
       // Phase 2 Authoritative Programme, Cohort & Enrolment Exports
+      PROGRAMME_CATEGORIES,
       STORE_KEY_COHORTS,
       findProgrammeById,
       findProgrammeByCode,
@@ -34053,6 +34152,9 @@ function renderChangeRoleModal(container, user) {
     window.syncStudentsFromExistingData = syncStudentsFromExistingData;
     window.STORE_KEY_STUDENTS = STORE_KEY_STUDENTS;
     // Phase 2 Authoritative Programme, Cohort & Enrolment Exports
+    window.PROGRAMME_CATEGORIES = PROGRAMME_CATEGORIES;
+    window.renderAddProgrammeModal = renderAddProgrammeModal;
+    window.renderEditProgrammeModal = renderEditProgrammeModal;
     window.STORE_KEY_COHORTS = STORE_KEY_COHORTS;
     window.findProgrammeById = findProgrammeById;
     window.findProgrammeByCode = findProgrammeByCode;
