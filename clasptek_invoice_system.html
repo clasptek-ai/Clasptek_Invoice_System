@@ -3130,11 +3130,24 @@ const supabaseClient = {
           }
         });
       },
-      async upsert(rows, onConflict = 'id') {
+      async upsert(rows, options = 'id') {
         return await client.executeWithAuth(async () => {
           try {
             const body = Array.isArray(rows) ? rows : [rows];
-            const url = onConflict ? `${tableUrl}?on_conflict=${encodeURIComponent(onConflict)}` : tableUrl;
+            let onConflictStr = 'id';
+            if (typeof options === 'string') {
+              onConflictStr = options.trim();
+            } else if (options && typeof options === 'object') {
+              if (typeof options.onConflict === 'string') {
+                onConflictStr = options.onConflict.trim();
+              } else if (typeof options.on_conflict === 'string') {
+                onConflictStr = options.on_conflict.trim();
+              }
+            }
+            if (!onConflictStr || onConflictStr === '[object Object]') {
+              onConflictStr = (tableName === 'payments' || tableName === 'receipts') ? 'tenant_id,receipt_no' : 'id';
+            }
+            const url = onConflictStr ? `${tableUrl}?on_conflict=${encodeURIComponent(onConflictStr)}` : tableUrl;
             const res = await fetch(url, {
               method: 'POST',
               headers: client.getHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
@@ -6193,7 +6206,10 @@ const dbRepo = {
       if (tableName === 'crm_intake_applications') {
         saveRes = await supabaseClient.from(tableName).update(payload, { id: record.id });
       } else {
-        saveRes = await supabaseClient.from(tableName).upsert(payload, idField);
+        const conflictCol = (tableName === 'payments' || tableName === 'receipts') && idField === 'id'
+          ? 'tenant_id,receipt_no'
+          : idField;
+        saveRes = await supabaseClient.from(tableName).upsert(payload, { onConflict: conflictCol });
       }
       const { data, error } = saveRes;
       if (error) {
@@ -6208,6 +6224,9 @@ const dbRepo = {
         } else if (tableName === 'students' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('students_tenant_id_student_number_key')))) {
           const dispNo = (record && (record.studentNumber || record.student_number)) || (payload && payload.student_number) || 'specified';
           state.connectionError = `Student number ${dispNo} is already in use for this tenant.`;
+        } else if (tableName === 'payments' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('payments_tenant_id_receipt_no_key')))) {
+          const dispNo = (record && (record.receipt_display_no || record.receiptDisplayNo || (record.receiptNo ? `RCT-${record.receiptNo}` : ''))) || (payload && (payload.receipt_display_no || payload.receipt_no)) || 'specified';
+          state.connectionError = `Database rejected payment save: Receipt number ${dispNo} is already in use for this tenant (23505). No financial data has been changed.`;
         } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
@@ -6332,7 +6351,12 @@ async function safeSet(key, value) {
           payload = typeof transformEntityForPostgres === 'function'
             ? value.map(item => transformEntityForPostgres(tableName, item, tenantId))
             : value;
-          const res = await supabaseClient.from(tableName).upsert(payload, { onConflict: 'id' });
+          const conflictCol = (tableName === 'payments' || tableName === 'receipts') ? 'tenant_id,receipt_no' : 'id';
+          let upsertOptions = { onConflict: 'id' };
+          if (conflictCol !== 'id') {
+            upsertOptions = { onConflict: conflictCol };
+          }
+          const res = await supabaseClient.from(tableName).upsert(payload, upsertOptions);
           if (res && res.error) {
             const err = res.error;
             const httpStatus = res.status || res.httpStatus || 0;
@@ -6343,6 +6367,8 @@ async function safeSet(key, value) {
               state.connectionError = `Database rejected update on students (HTTP 409): Student number is already in use for this tenant. No financial data has been changed.`;
             } else if (tableName === 'invoices' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('invoices_tenant_id_invoice_no_key'))) {
               state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
+            } else if (tableName === 'payments' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('payments_tenant_id_receipt_no_key'))) {
+              state.connectionError = `Database rejected update on payments (HTTP 409): Receipt number is already in use for this tenant. No financial data has been changed.`;
             } else if (httpStatus === 0) {
               state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
             } else {
@@ -6357,7 +6383,12 @@ async function safeSet(key, value) {
         payload = typeof transformEntityForPostgres === 'function'
           ? transformEntityForPostgres(tableName, value, tenantId)
           : value;
-        const res = await supabaseClient.from(tableName).upsert(payload, { onConflict: 'id' });
+        const conflictCol = (tableName === 'payments' || tableName === 'receipts') ? 'tenant_id,receipt_no' : 'id';
+        let upsertOptions = { onConflict: 'id' };
+        if (conflictCol !== 'id') {
+          upsertOptions = { onConflict: conflictCol };
+        }
+        const res = await supabaseClient.from(tableName).upsert(payload, upsertOptions);
         if (res && res.error) {
           const err = res.error;
           const httpStatus = res.status || res.httpStatus || 0;
@@ -6368,6 +6399,8 @@ async function safeSet(key, value) {
             state.connectionError = `Database rejected update on students (HTTP 409): Student number is already in use for this tenant. No financial data has been changed.`;
           } else if (tableName === 'invoices' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('invoices_tenant_id_invoice_no_key'))) {
             state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
+          } else if (tableName === 'payments' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('payments_tenant_id_receipt_no_key'))) {
+            state.connectionError = `Database rejected update on payments (HTTP 409): Receipt number is already in use for this tenant. No financial data has been changed.`;
           } else if (httpStatus === 0) {
             state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
           } else {
@@ -6398,14 +6431,15 @@ async function safeSet(key, value) {
   try {
     const authoritativeTenantId = resolveAuthoritativeTenantId();
     if (isValidUuid(authoritativeTenantId) && supabaseClient.isConfigured() && tableName && value !== null && typeof value !== 'undefined') {
+      const conflictCol = (tableName === 'payments' || tableName === 'receipts') ? 'tenant_id,receipt_no' : 'id';
       if (Array.isArray(value)) {
         if (value.length > 0) {
-          await supabaseClient.from(tableName).upsert(value);
+          await supabaseClient.from(tableName).upsert(value, { onConflict: conflictCol });
           state.supabase.lastSuccessfulWrite = new Date().toISOString();
           state.supabase.status = 'connected';
         }
       } else if (typeof value === 'object') {
-        await supabaseClient.from(tableName).upsert(value);
+        await supabaseClient.from(tableName).upsert(value, { onConflict: conflictCol });
         state.supabase.lastSuccessfulWrite = new Date().toISOString();
         state.supabase.status = 'connected';
       }
