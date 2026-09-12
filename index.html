@@ -1746,18 +1746,268 @@ const DEFAULT_INCOME_CATEGORIES = [
   'Consulting', 'Registration Fee', 'Application/Processing Fee', 'Other Income'
 ];
 
-const DEFAULT_EXPENSE_CATEGORIES = {
-  'Staff & People': ['Salaries', 'Facilitator Fees', 'Staff Welfare', 'Training & Development', 'Recruitment'],
-  'Marketing': ['Advertising', 'Social Media', 'Design & Content', 'Printing', 'Promotional Materials'],
-  'Technology': ['Software Subscriptions', 'Hosting', 'Domains', 'Internet', 'Hardware', 'IT Services'],
-  'Operations': ['Rent', 'Utilities', 'Transport', 'Repairs & Maintenance', 'Facility & Welfare', 'Office Supplies'],
-  'Academic': ['Learning Materials', 'Instructional Resources', 'Teaching Resources', 'Academic Services'],
-  'Administration': ['Bank Charges', 'Professional Services', 'Legal', 'Accounting', 'Office Administration'],
-  'Other': ['Miscellaneous']
+const AUTHORITATIVE_EXPENSE_TAXONOMY = {
+  'Personnel & Payroll': [
+    'Salaries',
+    'Wages',
+    'Staff Allowances',
+    'Bonuses',
+    'Overtime',
+    'Facilitator Fees',
+    'Contractor Payments',
+    'Staff Welfare',
+    'Recruitment',
+    'Training & Development'
+  ],
+  'Facilities & Utilities': [
+    'Office Rent',
+    'Electricity',
+    'Water',
+    'Internet',
+    'Telephone',
+    'Waste Management',
+    'Cleaning',
+    'Security',
+    'Repairs & Maintenance',
+    'Facility Supplies'
+  ],
+  'Technology & Software': [
+    'Software Subscriptions',
+    'Cloud Services',
+    'Hosting',
+    'Domain & SSL',
+    'IT Equipment',
+    'Computer Accessories',
+    'Software Licences',
+    'Technical Support',
+    'Cybersecurity',
+    'Data & Connectivity'
+  ],
+  'Academic & Training Operations': [
+    'Training Materials',
+    'Learning Resources',
+    'Course Materials',
+    'Practical Equipment',
+    'Facilitator Resources',
+    'Student Resources',
+    'Certification Materials',
+    'Academic Events',
+    'Workshops',
+    'Training Venue'
+  ],
+  'Marketing & Business Development': [
+    'Advertising',
+    'Social Media',
+    'Digital Marketing',
+    'Printing & Branding',
+    'Promotional Materials',
+    'Events & Campaigns',
+    'Lead Generation',
+    'Public Relations',
+    'Website Marketing'
+  ],
+  'Administration & Office': [
+    'Office Supplies',
+    'Printing',
+    'Stationery',
+    'Postage & Courier',
+    'Bank Charges',
+    'Professional Services',
+    'Legal Services',
+    'Accounting Services',
+    'Insurance',
+    'Licences & Permits',
+    'General Administration'
+  ],
+  'Travel & Logistics': [
+    'Local Transport',
+    'Fuel',
+    'Vehicle Maintenance',
+    'Accommodation',
+    'Flights',
+    'Meals & Travel Allowance',
+    'Delivery & Logistics',
+    'Parking & Tolls'
+  ],
+  'Finance & Banking': [
+    'Bank Charges',
+    'Payment Processing Fees',
+    'Transaction Fees',
+    'Interest & Finance Costs',
+    'Foreign Exchange Charges'
+  ],
+  'Management & Corporate': [
+    'Management Expenses',
+    'Meetings',
+    'Corporate Events',
+    'Executive Travel',
+    'Strategic Consulting',
+    'Corporate Memberships'
+  ],
+  'Other / Miscellaneous': [
+    'Miscellaneous Operating Expense',
+    'Other Approved Expense'
+  ]
 };
 
-const PAYMENT_METHODS = ['Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Other'];
-const DEPARTMENTS = ['Operations', 'Academics', 'Marketing', 'Administration', 'Technology', 'Management', 'Finance'];
+const DEFAULT_EXPENSE_CATEGORIES = AUTHORITATIVE_EXPENSE_TAXONOMY;
+
+function getAuthoritativeExpenseGroups() {
+  return Object.keys(AUTHORITATIVE_EXPENSE_TAXONOMY);
+}
+
+function getAuthoritativeExpenseCategories(groupName) {
+  if (!groupName || typeof groupName !== 'string') return [];
+  return AUTHORITATIVE_EXPENSE_TAXONOMY[groupName] ? [...AUTHORITATIVE_EXPENSE_TAXONOMY[groupName]] : [];
+}
+
+function isValidExpenseClassification(group, category) {
+  if (!group || !category) return false;
+  const cats = AUTHORITATIVE_EXPENSE_TAXONOMY[group];
+  if (!cats || !Array.isArray(cats)) return false;
+  return cats.includes(category);
+}
+
+function validateExpenseRecord(exp) {
+  if (!exp || typeof exp !== 'object') {
+    return { valid: false, error: 'Expense record must be an object.' };
+  }
+  const group = (exp.categoryGroup || exp.category_group || exp.expenseGroup || '').trim();
+  if (!group) {
+    return { valid: false, error: 'Expense Group is required.' };
+  }
+  if (!getAuthoritativeExpenseGroups().includes(group)) {
+    return { valid: false, error: `Invalid Expense Group: "${group}". Must be one of the 10 approved accounting groups.` };
+  }
+
+  const category = (exp.category || exp.subCategory || exp.sub_category || '').trim();
+  if (!category) {
+    return { valid: false, error: 'Expense Category is required.' };
+  }
+  if (!isValidExpenseClassification(group, category)) {
+    return { valid: false, error: `Invalid classification: Category "${category}" does not belong to Expense Group "${group}".` };
+  }
+
+  const desc = (exp.description || '').trim();
+  if (!desc) {
+    return { valid: false, error: 'Description / Purpose is required.' };
+  }
+
+  const amt = Number(exp.amount);
+  if (isNaN(amt) || !isFinite(amt) || amt <= 0) {
+    return { valid: false, error: 'Amount must be a valid positive number greater than ₦0.' };
+  }
+
+  const dateStr = (exp.date || exp.expenseDate || exp.expense_date || '').trim();
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(Date.parse(dateStr))) {
+    return { valid: false, error: 'A valid Expense Date (YYYY-MM-DD) is required.' };
+  }
+
+  const dept = (exp.department || '').trim();
+  if (dept && !DEPARTMENTS.includes(dept)) {
+    return { valid: false, error: `Invalid Department: "${dept}". Must be one of: ${DEPARTMENTS.join(', ')}.` };
+  }
+
+  const method = (exp.paymentMethod || exp.payment_method || '').trim();
+  if (method && !PAYMENT_METHODS.includes(method)) {
+    return { valid: false, error: `Invalid Payment Method: "${method}". Must be one of: ${PAYMENT_METHODS.join(', ')}.` };
+  }
+
+  return { valid: true };
+}
+
+function calculateExpenseAggregations(expenses, filterScope = {}) {
+  const list = Array.isArray(expenses) ? expenses : (state.expenses || []);
+
+  let filtered = list.filter(e => {
+    if (!e) return false;
+    const st = (e.status || 'recorded').toLowerCase();
+    if (filterScope.includeCancelled) return true;
+    return st === 'recorded' || st === 'approved' || st === 'paid';
+  });
+
+  if (filterScope.startDate) {
+    filtered = filtered.filter(e => (e.date || e.expenseDate || '').slice(0, 10) >= filterScope.startDate);
+  }
+  if (filterScope.endDate) {
+    filtered = filtered.filter(e => (e.date || e.expenseDate || '').slice(0, 10) <= filterScope.endDate);
+  }
+  if (filterScope.periodKey) {
+    filtered = filtered.filter(e => (e.date || e.expenseDate || '').startsWith(filterScope.periodKey));
+  }
+  if (filterScope.group) {
+    filtered = filtered.filter(e => (e.categoryGroup || e.category_group) === filterScope.group);
+  }
+  if (filterScope.category) {
+    filtered = filtered.filter(e => (e.category || e.subCategory) === filterScope.category);
+  }
+  if (filterScope.department) {
+    filtered = filtered.filter(e => (e.department || 'Operations') === filterScope.department);
+  }
+  if (filterScope.paymentMethod) {
+    filtered = filtered.filter(e => (e.paymentMethod || e.payment_method) === filterScope.paymentMethod);
+  }
+
+  let totalAmount = 0;
+  const byGroup = {};
+  const byCategory = {};
+  const byDepartment = {};
+  const byPaymentMethod = {};
+  const byPeriod = {};
+
+  filtered.forEach(e => {
+    const amt = safeRound(Number(e.amount || 0));
+    totalAmount = safeRound(totalAmount + amt);
+
+    const grp = e.categoryGroup || e.category_group || 'Unclassified';
+    byGroup[grp] = safeRound((byGroup[grp] || 0) + amt);
+
+    const cat = e.category || e.subCategory || 'Unclassified';
+    byCategory[cat] = safeRound((byCategory[cat] || 0) + amt);
+
+    const dept = e.department || 'Operations';
+    byDepartment[dept] = safeRound((byDepartment[dept] || 0) + amt);
+
+    const meth = e.paymentMethod || e.payment_method || 'Other';
+    byPaymentMethod[meth] = safeRound((byPaymentMethod[meth] || 0) + amt);
+
+    const per = (e.date || e.expenseDate || '').slice(0, 7) || 'Unknown';
+    byPeriod[per] = safeRound((byPeriod[per] || 0) + amt);
+  });
+
+  const sumGroups = safeRound(Object.values(byGroup).reduce((s, v) => s + v, 0));
+  const sumCategories = safeRound(Object.values(byCategory).reduce((s, v) => s + v, 0));
+  const sumDepartments = safeRound(Object.values(byDepartment).reduce((s, v) => s + v, 0));
+  const sumPaymentMethods = safeRound(Object.values(byPaymentMethod).reduce((s, v) => s + v, 0));
+
+  const isReconciled = (
+    Math.abs(totalAmount - sumGroups) < 0.01 &&
+    Math.abs(totalAmount - sumCategories) < 0.01 &&
+    Math.abs(totalAmount - sumDepartments) < 0.01 &&
+    Math.abs(totalAmount - sumPaymentMethods) < 0.01
+  );
+
+  return {
+    count: filtered.length,
+    totalAmount,
+    byGroup,
+    byCategory,
+    byDepartment,
+    byPaymentMethod,
+    byPeriod,
+    reconciliation: {
+      totalAmount,
+      sumGroups,
+      sumCategories,
+      sumDepartments,
+      sumPaymentMethods,
+      isReconciled
+    }
+  };
+}
+
+const PAYMENT_METHODS = ['Bank Transfer', 'POS', 'Card', 'Online Payment', 'Payment Gateway', 'Cash', 'Other'];
+const DEPARTMENTS = ['Operations', 'Academics', 'Marketing', 'Administration', 'Technology', 'Management', 'Finance', 'General / Shared'];
 const ENQUIRY_SOURCES = ['Website', 'WhatsApp', 'Referral / Word of Mouth', 'Social Media (Instagram/LinkedIn)', 'Walk-in', 'Corporate Partner', 'Other'];
 
 const DEFAULT_FINANCE_SETTINGS = {
@@ -6286,6 +6536,19 @@ const dbRepo = {
         console.error(`PostgreSQL save error on table ${tableName}:`, error);
         const httpStatus = saveRes.status || saveRes.httpStatus || 0;
         state.supabase.lastError = `Save failed on ${tableName} (HTTP ${httpStatus}): ${error.message || JSON.stringify(error)}`;
+        if (tableName === 'expenses' && (error.code === '42703' || (error.message && error.message.includes('department'))) && payload.department) {
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.department;
+          const retryRes = await supabaseClient.from(tableName).upsert(fallbackPayload, { onConflict: conflictCol });
+          if (!retryRes.error) {
+            console.warn('DATABASE SCHEMA PREREQUISITE: Column public.expenses.department does not yet exist in PostgreSQL. Run migration 20260913_operational_expense_department.sql in Supabase SQL editor.');
+            state.schemaMigrationPrerequisite = 'MIGRATION PREREQUISITE: Run 20260913_operational_expense_department.sql in Supabase SQL editor to enable native departmental column persistence.';
+            state.supabase.lastSuccessfulWrite = new Date().toISOString();
+            state.supabase.status = 'connected';
+            state.connectionError = null;
+            return;
+          }
+        }
         if (httpStatus === 0) {
           state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
         } else if (tableName === 'invoices' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('invoices_tenant_id_invoice_no_key')))) {
@@ -7300,18 +7563,23 @@ function transformEntityForPostgres(entity, item, tenantId) {
         created_by: (item.created_by && item.created_by.includes('-')) ? item.created_by : null
       };
 
-    case 'expenses':
-      return {
+    case 'expenses': {
+      const resolvedGroup = item.categoryGroup || item.category_group || item.expenseGroup || 'Operations';
+      const resolvedCat = item.category || item.subCategory || item.sub_category || '';
+      const resolvedDate = item.expenseDate || item.expense_date || item.date || new Date().toISOString().split('T')[0];
+      const resolvedVendor = item.beneficiary || item.vendor || item.payee || '';
+
+      const expPayload = {
         id: item.id,
         tenant_id: tenantId,
-        category_group: item.categoryGroup || item.category_group || item.category || 'Operations',
-        sub_category: item.subCategory || item.sub_category || item.description || 'General',
+        category_group: resolvedGroup,
+        sub_category: resolvedCat,
         amount: Number(item.amount || 0),
-        expense_date: item.expenseDate || item.expense_date || item.date || new Date().toISOString().split('T')[0],
+        expense_date: resolvedDate,
         description: item.description || item.expenseNo || item.expense_no || '',
-        beneficiary: item.beneficiary || item.vendor || 'Vendor',
+        beneficiary: resolvedVendor,
         payment_method: item.paymentMethod || item.payment_method || 'Bank Transfer',
-        reference: item.reference || item.expenseNo || item.expense_no || null,
+        reference: item.reference || null,
         programme_id: item.programmeId || item.programme_id || null,
         status: item.status || 'recorded',
         approved_by: item.approvedBy || item.approved_by || null,
@@ -7324,6 +7592,13 @@ function transformEntityForPostgres(entity, item, tenantId) {
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         created_by: (item.created_by && item.created_by.includes('-')) ? item.created_by : null
       };
+
+      if (item.department) {
+        expPayload.department = item.department;
+      }
+
+      return expPayload;
+    }
 
     case 'direct_income':
       return {
@@ -8117,6 +8392,71 @@ function transformEntityFromPostgres(entity, row) {
           row.created_by ??
           row.createdBy ??
           null
+      };
+    }
+
+    case 'expenses': {
+      const resolvedDate = row.expense_date ?? row.expenseDate ?? row.date ?? '';
+      const resolvedGroup = row.category_group ?? row.categoryGroup ?? row.expenseGroup ?? 'Operations';
+      const resolvedCategory = row.sub_category ?? row.subCategory ?? row.category ?? '';
+      const resolvedVendor = row.beneficiary ?? row.vendor ?? row.payee ?? 'Vendor';
+      const resolvedAmount = Number(row.amount !== undefined ? row.amount : 0);
+      const resolvedMethod = row.payment_method ?? row.paymentMethod ?? 'Bank Transfer';
+      const resolvedDept = row.department ?? row.dept ?? 'Operations';
+
+      return {
+        ...base,
+        id: row.id,
+        tenantId: row.tenant_id ?? row.tenantId,
+        tenant_id: row.tenant_id ?? row.tenantId,
+
+        date: resolvedDate,
+        expenseDate: resolvedDate,
+        expense_date: resolvedDate,
+
+        categoryGroup: resolvedGroup,
+        category_group: resolvedGroup,
+        expenseGroup: resolvedGroup,
+
+        category: resolvedCategory,
+        subCategory: resolvedCategory,
+        sub_category: resolvedCategory,
+
+        description: row.description || '',
+        vendor: resolvedVendor,
+        beneficiary: resolvedVendor,
+        payee: resolvedVendor,
+
+        amount: resolvedAmount,
+        department: resolvedDept,
+
+        paymentMethod: resolvedMethod,
+        payment_method: resolvedMethod,
+
+        reference: row.reference ?? null,
+        programmeId: row.programme_id ?? row.programmeId ?? null,
+        programme_id: row.programme_id ?? row.programmeId ?? null,
+        status: row.status || 'recorded',
+
+        approvedBy: row.approved_by ?? row.approvedBy ?? null,
+        approved_by: row.approved_by ?? row.approvedBy ?? null,
+        approvedAt: row.approved_at ?? row.approvedAt ?? null,
+        approved_at: row.approved_at ?? row.approvedAt ?? null,
+
+        rejectionReason: row.rejection_reason ?? row.rejectionReason ?? null,
+        rejection_reason: row.rejection_reason ?? row.rejectionReason ?? null,
+        cancelledReason: row.cancelled_reason ?? row.cancelledReason ?? null,
+        cancelled_reason: row.cancelled_reason ?? row.cancelledReason ?? null,
+        cancelledAt: row.cancelled_at ?? row.cancelledAt ?? null,
+        cancelled_at: row.cancelled_at ?? row.cancelledAt ?? null,
+        cancelledBy: row.cancelled_by ?? row.cancelledBy ?? null,
+        cancelled_by: row.cancelled_by ?? row.cancelledBy ?? null,
+
+        source: row.source ?? 'APP',
+        createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+        created_at: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+        createdBy: row.created_by ?? row.createdBy ?? null,
+        created_by: row.created_by ?? row.createdBy ?? null
       };
     }
 
@@ -19329,7 +19669,7 @@ function renderModal(type, data) {
   else if (type === 'approvePayslip') renderApprovePayslipModal(container, data.payslip);
   else if (type === 'payPayslip') renderPayPayslipModal(container, data.payslip);
   else if (type === 'cancelPayslip') renderCancelPayslipModal(container, data.payslip);
-  else if (type === 'recordExpense') renderRecordExpenseModal(container);
+  else if (type === 'recordExpense') renderRecordExpenseModal(container, data.expense);
   else if (type === 'cancelExpense') renderCancelExpenseModal(container, data.expense);
   else if (type === 'recordDirectIncome') renderRecordDirectIncomeModal(container);
   else if (type === 'addProgramme') renderAddProgrammeModal(container);
@@ -21814,8 +22154,34 @@ function renderPayslipsTab(container) {
 // TAB 7: EXPENSES
 // ----------------------------------------------------
 function renderExpensesTab(container) {
-  const q = (state.filters.expenseSearch || '').toLowerCase();
-  const filtered = state.expenses.filter(e => e.description.toLowerCase().includes(q) || (e.vendor && e.vendor.toLowerCase().includes(q)) || (e.category && e.category.toLowerCase().includes(q)));
+  const q = (state.filters.expenseSearch || '').toLowerCase().trim();
+  const selGroup = state.filters.expenseGroup || '';
+  const selDept = state.filters.expenseDept || '';
+
+  const groups = getAuthoritativeExpenseGroups();
+
+  const filtered = state.expenses.filter(e => {
+    if (!e) return false;
+    if (q) {
+      const descMatch = (e.description || '').toLowerCase().includes(q);
+      const vendorMatch = (e.vendor || e.beneficiary || '').toLowerCase().includes(q);
+      const catMatch = (e.category || e.subCategory || '').toLowerCase().includes(q);
+      const grpMatch = (e.categoryGroup || e.category_group || '').toLowerCase().includes(q);
+      const deptMatch = (e.department || '').toLowerCase().includes(q);
+      const refMatch = (e.reference || '').toLowerCase().includes(q);
+      const methodMatch = (e.paymentMethod || e.payment_method || '').toLowerCase().includes(q);
+      if (!descMatch && !vendorMatch && !catMatch && !grpMatch && !deptMatch && !refMatch && !methodMatch) {
+        return false;
+      }
+    }
+    if (selGroup && (e.categoryGroup || e.category_group) !== selGroup) {
+      return false;
+    }
+    if (selDept && (e.department || 'Operations') !== selDept) {
+      return false;
+    }
+    return true;
+  });
 
   container.innerHTML = `
     <div class="cp-card">
@@ -21830,9 +22196,30 @@ function renderExpensesTab(container) {
         </div>
       </div>
 
-      <div class="cp-field" style="max-width:320px; margin-bottom:14px;">
-        <input type="text" id="expenseSearchInput" placeholder="Filter by description, vendor, or category..." value="${escapeHtml(state.filters.expenseSearch)}" />
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; align-items:center;">
+        <div class="cp-field" style="max-width:300px; margin-bottom:0; flex:1;">
+          <input type="text" id="expenseSearchInput" placeholder="Filter by description, vendor, category, or ref..." value="${escapeHtml(state.filters.expenseSearch || '')}" />
+        </div>
+        <div class="cp-field" style="max-width:220px; margin-bottom:0;">
+          <select id="expenseGroupFilter">
+            <option value="">All Expense Groups</option>
+            ${groups.map(g => `<option value="${escapeHtml(g)}" ${g === selGroup ? 'selected' : ''}>${escapeHtml(g)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cp-field" style="max-width:200px; margin-bottom:0;">
+          <select id="expenseDeptFilter">
+            <option value="">All Departments</option>
+            ${DEPARTMENTS.map(d => `<option value="${d}" ${d === selDept ? 'selected' : ''}>${d}</option>`).join('')}
+          </select>
+        </div>
       </div>
+
+      ${state.schemaMigrationPrerequisite ? `
+        <div style="background:#FFFBEB; border:1px solid #FCD34D; border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px; font-size:12px; color:#92400E; display:flex; align-items:center; gap:8px;">
+          <span>&#x26A0;&#xFE0F;</span>
+          <span>${escapeHtml(state.schemaMigrationPrerequisite)}</span>
+        </div>
+      ` : ''}
 
       ${filtered.length === 0 ? `
         <div class="cp-empty-state">
@@ -21847,26 +22234,32 @@ function renderExpensesTab(container) {
               <tr>
                 <th>Date</th><th>Expense Group</th><th>Category</th><th>Description</th>
                 <th>Vendor / Beneficiary</th><th>Department</th><th style="text-align:right;">Amount</th>
-                <th>Status</th><th style="text-align:center;">Actions</th>
+                <th>Payment Method</th><th>Status</th><th style="text-align:center;">Actions</th>
               </tr>
             </thead>
             <tbody>
               ${filtered.slice().reverse().map(e => `
                 <tr>
-                  <td>${fmtDate(e.date)}</td>
-                  <td style="font-weight:600;">${escapeHtml(e.categoryGroup)}</td>
-                  <td>${escapeHtml(e.category)}</td>
-                  <td>${escapeHtml(e.description)}</td>
-                  <td>${escapeHtml(e.vendor || '—')}</td>
+                  <td>${fmtDate(e.date || e.expenseDate)}</td>
+                  <td style="font-weight:600;">${escapeHtml(e.categoryGroup || e.category_group || '—')}</td>
+                  <td>${escapeHtml(e.category || e.subCategory || '—')}</td>
+                  <td>${escapeHtml(e.description || '—')}${e.reference ? ` <span style="font-size:10.5px; color:var(--text-secondary);">(${escapeHtml(e.reference)})</span>` : ''}</td>
+                  <td>${escapeHtml(e.vendor || e.beneficiary || '—')}</td>
                   <td>${escapeHtml(e.department || 'Operations')}</td>
                   <td style="text-align:right; font-weight:700; color:var(--danger);">${fmtMoney(e.amount)}</td>
-                  <td><span class="cp-pill ${e.status}">${e.status.toUpperCase()}</span></td>
-                  <td style="text-align:center;">
+                  <td><span style="font-size:11.5px; color:var(--text-secondary);">${escapeHtml(e.paymentMethod || e.payment_method || '—')}</span></td>
+                  <td><span class="cp-pill ${e.status}">${(e.status || 'RECORDED').toUpperCase()}</span></td>
+                  <td style="text-align:center; white-space:nowrap;">
+                    ${(e.status === 'recorded' || e.status === 'pending_approval') && canRecord() ? `
+                      <button class="cp-btn sm secondary btnEditExp" data-id="${e.id}" style="margin-right:4px;">Edit</button>
+                    ` : ''}
                     ${e.status === 'pending_approval' && canApprove() ? `
-                      <button class="cp-btn sm accent btnApproveExp" data-id="${e.id}">Approve</button>
-                    ` : (e.status === 'recorded' && canCancel() ? `
+                      <button class="cp-btn sm accent btnApproveExp" data-id="${e.id}" style="margin-right:4px;">Approve</button>
+                    ` : ''}
+                    ${(e.status === 'recorded' || e.status === 'pending_approval') && canCancel() ? `
                       <button class="cp-btn sm danger btnCancelExp" data-id="${e.id}">Cancel</button>
-                    ` : '—')}
+                    ` : ''}
+                    ${e.status !== 'recorded' && e.status !== 'pending_approval' ? '—' : ''}
                   </td>
                 </tr>
               `).join('')}
@@ -21882,16 +22275,40 @@ function renderExpensesTab(container) {
     render();
   });
 
+  document.getElementById('expenseGroupFilter').addEventListener('change', (e) => {
+    state.filters.expenseGroup = e.target.value;
+    render();
+  });
+
+  document.getElementById('expenseDeptFilter').addEventListener('change', (e) => {
+    state.filters.expenseDept = e.target.value;
+    render();
+  });
+
   document.getElementById('btnExportExpenses').addEventListener('click', () => {
     exportToCSV('Expenses_Ledger', filtered.map(e => ({
-      Date: e.date, Group: e.categoryGroup, Category: e.category,
-      Description: e.description, Vendor: e.vendor, Department: e.department,
-      Amount: e.amount, Status: e.status
+      Date: e.date || e.expenseDate,
+      Group: e.categoryGroup || e.category_group,
+      Category: e.category || e.subCategory,
+      Description: e.description,
+      Vendor: e.vendor || e.beneficiary,
+      Department: e.department || 'Operations',
+      Amount: e.amount,
+      PaymentMethod: e.paymentMethod || e.payment_method,
+      Reference: e.reference || '',
+      Status: e.status
     })));
   });
 
   const btnLog = document.getElementById('btnLogExpenseBtn');
   if (btnLog) btnLog.addEventListener('click', () => openModal('recordExpense'));
+
+  container.querySelectorAll('.btnEditExp').forEach(b => {
+    b.addEventListener('click', () => {
+      const exp = state.expenses.find(e => e.id === b.dataset.id);
+      if (exp) openModal('recordExpense', { expense: exp });
+    });
+  });
 
   container.querySelectorAll('.btnApproveExp').forEach(b => {
     b.addEventListener('click', async () => {
@@ -29021,48 +29438,134 @@ function renderViewPayslipModal(container, payslip) {
 // ----------------------------------------------------
 // EXPENSE LOGGING & DIRECT INCOME MODALS
 // ----------------------------------------------------
-function renderRecordExpenseModal(container) {
+function renderRecordExpenseModal(container, existingExp = null) {
+  const isEdit = Boolean(existingExp && existingExp.id);
   const todayStr = new Date().toISOString().slice(0, 10);
-  const groups = Object.keys(state.expenseCategories);
-  const firstGroup = groups[0] || 'Staff & People';
-  const firstCats = state.expenseCategories[firstGroup] || ['Salaries'];
+
+  const initialGroup = isEdit ? (existingExp.categoryGroup || existingExp.category_group || existingExp.expenseGroup || '') : '';
+  const initialCat = isEdit ? (existingExp.category || existingExp.subCategory || existingExp.sub_category || '') : '';
+  const initialDesc = isEdit ? (existingExp.description || '') : '';
+  const initialAmount = isEdit ? Number(existingExp.amount || 0) : '';
+  const initialDate = isEdit ? (existingExp.date || existingExp.expenseDate || existingExp.expense_date || todayStr) : todayStr;
+  const initialVendor = isEdit ? (existingExp.vendor || existingExp.beneficiary || existingExp.payee || '') : '';
+  const initialDept = isEdit ? (existingExp.department || 'Operations') : 'Operations';
+  const initialMethod = isEdit ? (existingExp.paymentMethod || existingExp.payment_method || 'Bank Transfer') : 'Bank Transfer';
+  const initialRef = isEdit ? (existingExp.reference || '') : '';
+
+  const groups = getAuthoritativeExpenseGroups();
+  const catsForGroup = initialGroup ? getAuthoritativeExpenseCategories(initialGroup) : [];
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
-      <div class="cp-modal">
+      <div class="cp-modal" style="max-width:680px;">
         <div class="cp-modal-header">
-          <div class="cp-modal-title">Log Operational Expense</div>
+          <div>
+            <div class="cp-modal-title">&#x1F4B8; ${isEdit ? 'Edit Operational Expense' : 'Log Operational Expense'}</div>
+            <div class="cp-modal-sub">${isEdit ? 'Update authoritative expense record #' + escapeHtml(existingExp.id) : 'Record a professional, controlled operational or administrative expense.'}</div>
+          </div>
           <button class="cp-modal-close" id="btnCloseExpMod">&times;</button>
         </div>
-        <div class="cp-modal-body">
+
+        <div class="cp-modal-body" style="padding:18px 22px; max-height:75vh; overflow-y:auto;">
+          <!-- SECTION A: CLASSIFICATION -->
+          <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+            Section A — Expense Classification
+          </div>
           <div class="cp-row2">
             <div class="cp-field">
-              <label>Expense Group *</label>
-              <select id="expGroup">${groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('')}</select>
+              <label for="expGroup">Expense Group *</label>
+              <select id="expGroup">
+                <option value="">Select expense group</option>
+                ${groups.map(g => `<option value="${escapeHtml(g)}" ${g === initialGroup ? 'selected' : ''}>${escapeHtml(g)}</option>`).join('')}
+              </select>
             </div>
             <div class="cp-field">
-              <label>Category *</label>
-              <select id="expCategory">${firstCats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select>
+              <label for="expCategory">Category *</label>
+              <select id="expCategory" ${!initialGroup ? 'disabled' : ''}>
+                <option value="">Select category</option>
+                ${catsForGroup.map(c => `<option value="${escapeHtml(c)}" ${c === initialCat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              </select>
+              <div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">Select the specific expense category within the selected group.</div>
             </div>
           </div>
 
-          <div class="cp-field"><label>Description / Purpose *</label><input id="expDesc" placeholder="e.g. AWS Cloud Infrastructure Subscription" /></div>
+          <!-- SECTION B: DETAILS -->
+          <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:0.5px; margin:14px 0 10px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+            Section B — Expense Details
+          </div>
+          <div class="cp-field">
+            <label for="expDesc">Description / Purpose *</label>
+            <textarea id="expDesc" rows="2" placeholder="Describe what this expense was for (e.g. September cybersecurity facilitator service payment)...">${escapeHtml(initialDesc)}</textarea>
+            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Clear, descriptive transaction rationale for audit and management accounts.</div>
+          </div>
           <div class="cp-row2">
-            <div class="cp-field"><label>Amount (₦) *</label><input type="number" id="expAmount" placeholder="50000" /></div>
-            <div class="cp-field"><label>Expense Date *</label><input type="date" id="expDate" value="${todayStr}" /></div>
+            <div class="cp-field">
+              <label for="expAmount">Amount (₦) *</label>
+              <input type="number" id="expAmount" step="any" min="0.01" placeholder="e.g. 175000" value="${initialAmount || ''}" />
+              <div id="expAmountFormatted" style="font-size:12px; font-weight:700; color:var(--primary); margin-top:4px;">${initialAmount ? fmtMoney(initialAmount) : '₦0.00'}</div>
+            </div>
+            <div class="cp-field">
+              <label for="expDate">Expense Date *</label>
+              <input type="date" id="expDate" value="${initialDate}" />
+              <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Date transaction occurred. Historical dates permitted if period open.</div>
+            </div>
           </div>
 
+          <!-- SECTION C: BENEFICIARY & ALLOCATION -->
+          <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:0.5px; margin:14px 0 10px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+            Section C — Beneficiary &amp; Organizational Allocation
+          </div>
           <div class="cp-row2">
-            <div class="cp-field"><label>Vendor / Beneficiary</label><input id="expVendor" placeholder="e.g. Amazon Web Services" /></div>
-            <div class="cp-field"><label>Department</label><select id="expDept">${DEPARTMENTS.map(d => `<option value="${d}">${d}</option>`).join('')}</select></div>
+            <div class="cp-field">
+              <label for="expVendor">Vendor / Beneficiary</label>
+              <input type="text" id="expVendor" placeholder="Who was paid? (e.g. AWS, John Doe, Power Utility)" value="${escapeHtml(initialVendor)}" />
+            </div>
+            <div class="cp-field">
+              <label for="expDept">Department</label>
+              <select id="expDept">
+                ${DEPARTMENTS.map(d => `<option value="${d}" ${d === initialDept ? 'selected' : ''}>${d}</option>`).join('')}
+              </select>
+            </div>
           </div>
 
-          <div class="cp-field"><label>Payment Method</label><select id="expMethod">${PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}</select></div>
-          <div id="expFormErr" style="color:var(--danger); font-size:12px; display:none;"></div>
+          <!-- SECTION D: PAYMENT & REFERENCE -->
+          <div style="font-size:11px; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:0.5px; margin:14px 0 10px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+            Section D — Payment &amp; Reference
+          </div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label for="expMethod">Payment Method *</label>
+              <select id="expMethod">
+                ${PAYMENT_METHODS.map(m => `<option value="${m}" ${m === initialMethod ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="expRef">Transaction / Payment Reference</label>
+              <input type="text" id="expRef" placeholder="e.g. TRX-123456, BANK-REF-99881 (optional)" value="${escapeHtml(initialRef)}" />
+            </div>
+          </div>
+
+          <!-- SECTION E: LIVE FINANCIAL SUMMARY PREVIEW -->
+          <div style="margin-top:16px; background:#F8FAFC; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px;">
+            <div style="font-size:11px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">
+              Live Transaction Preview
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; font-size:12px;">
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">GROUP:</span><br/><strong id="prevGroup" style="color:var(--primary);">${escapeHtml(initialGroup || '—')}</strong></div>
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">CATEGORY:</span><br/><strong id="prevCategory" style="color:var(--primary);">${escapeHtml(initialCat || '—')}</strong></div>
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">AMOUNT:</span><br/><strong id="prevAmount" style="color:var(--danger); font-size:13.5px;">${initialAmount ? fmtMoney(initialAmount) : '₦0.00'}</strong></div>
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">DEPARTMENT:</span><br/><strong id="prevDept">${escapeHtml(initialDept)}</strong></div>
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">DATE:</span><br/><strong id="prevDate">${escapeHtml(initialDate)}</strong></div>
+              <div><span style="color:var(--text-secondary); font-size:10.5px;">METHOD:</span><br/><strong id="prevMethod">${escapeHtml(initialMethod)}</strong></div>
+            </div>
+          </div>
+
+          <div id="expFormErr" style="color:var(--danger); font-size:12px; font-weight:600; margin-top:12px; display:none; background:rgba(220,38,38,0.08); padding:8px 12px; border-radius:4px;"></div>
         </div>
+
         <div class="cp-modal-footer">
           <button class="cp-btn secondary" id="btnCancelExp">Cancel</button>
-          <button class="cp-btn accent" id="btnSaveExp">&#x2714; Record Expense</button>
+          <button class="cp-btn accent" id="btnSaveExp">&#x2714; ${isEdit ? 'Save Changes' : 'Record Expense'}</button>
         </div>
       </div>
     </div>
@@ -29071,66 +29574,174 @@ function renderRecordExpenseModal(container) {
   document.getElementById('btnCloseExpMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelExp').addEventListener('click', closeModal);
 
-  document.getElementById('expGroup').addEventListener('change', (e) => {
-    const grp = e.target.value;
-    const cats = state.expenseCategories[grp] || ['General'];
-    const catSel = document.getElementById('expCategory');
-    catSel.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const groupEl = document.getElementById('expGroup');
+  const catEl = document.getElementById('expCategory');
+  const descEl = document.getElementById('expDesc');
+  const amountEl = document.getElementById('expAmount');
+  const amountFormattedEl = document.getElementById('expAmountFormatted');
+  const dateEl = document.getElementById('expDate');
+  const vendorEl = document.getElementById('expVendor');
+  const deptEl = document.getElementById('expDept');
+  const methodEl = document.getElementById('expMethod');
+  const refEl = document.getElementById('expRef');
+  const errEl = document.getElementById('expFormErr');
+  const saveBtn = document.getElementById('btnSaveExp');
+
+  const prevGroupEl = document.getElementById('prevGroup');
+  const prevCategoryEl = document.getElementById('prevCategory');
+  const prevAmountEl = document.getElementById('prevAmount');
+  const prevDeptEl = document.getElementById('prevDept');
+  const prevDateEl = document.getElementById('prevDate');
+  const prevMethodEl = document.getElementById('prevMethod');
+
+  function updateLiveSummary() {
+    const grp = groupEl.value.trim();
+    const cat = catEl.value.trim();
+    const amt = Number(amountEl.value || 0);
+    const dateStr = dateEl.value;
+    const dept = deptEl.value;
+    const method = methodEl.value;
+
+    prevGroupEl.textContent = grp || '—';
+    prevCategoryEl.textContent = cat || '—';
+    prevAmountEl.textContent = amt > 0 ? fmtMoney(amt) : '₦0.00';
+    amountFormattedEl.textContent = amt > 0 ? fmtMoney(amt) : '₦0.00';
+    prevDeptEl.textContent = dept || 'Operations';
+    prevDateEl.textContent = dateStr || todayStr;
+    prevMethodEl.textContent = method || 'Bank Transfer';
+  }
+
+  groupEl.addEventListener('change', () => {
+    const selectedGroup = groupEl.value;
+    if (!selectedGroup) {
+      catEl.innerHTML = '<option value="">Select category</option>';
+      catEl.disabled = true;
+    } else {
+      const cats = getAuthoritativeExpenseCategories(selectedGroup);
+      catEl.innerHTML = '<option value="">Select category</option>' +
+        cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      catEl.disabled = false;
+    }
+    updateLiveSummary();
   });
 
-  document.getElementById('btnSaveExp').addEventListener('click', async () => {
-    const grp = document.getElementById('expGroup').value;
-    const cat = document.getElementById('expCategory').value;
-    const desc = document.getElementById('expDesc').value.trim();
-    const amt = Number(document.getElementById('expAmount').value || 0);
-    const dateStr = document.getElementById('expDate').value;
-    const vendor = document.getElementById('expVendor').value.trim();
-    const dept = document.getElementById('expDept').value;
-    const method = document.getElementById('expMethod').value;
-    const errEl = document.getElementById('expFormErr');
+  catEl.addEventListener('change', updateLiveSummary);
+  amountEl.addEventListener('input', updateLiveSummary);
+  dateEl.addEventListener('change', updateLiveSummary);
+  deptEl.addEventListener('change', updateLiveSummary);
+  methodEl.addEventListener('change', updateLiveSummary);
+  vendorEl.addEventListener('input', updateLiveSummary);
 
-    if (!desc || amt <= 0) {
-      errEl.textContent = 'Please fill all required fields.';
-      errEl.style.display = 'block';
-      return;
-    }
-    if (isPeriodLocked(dateStr)) {
-      errEl.textContent = 'Financial period is locked. Modifications prohibited.';
-      errEl.style.display = 'block';
-      return;
-    }
+  let isSubmitting = false;
 
-    const reqRole = getRequiredApprovalRole(amt);
-    const initialStatus = reqRole === 'None' ? 'recorded' : 'pending_approval';
+  saveBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
 
-    const exp = {
-      id: 'exp_' + Date.now(),
-      tenant_id: DEFAULT_TENANT_ID,
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+
+    const grp = groupEl.value.trim();
+    const cat = catEl.value.trim();
+    const desc = descEl.value.trim();
+    const amt = Number(amountEl.value || 0);
+    const dateStr = dateEl.value.trim();
+    const vendor = vendorEl.value.trim();
+    const dept = deptEl.value.trim() || 'Operations';
+    const method = methodEl.value.trim() || 'Bank Transfer';
+    const reference = refEl.value.trim() || null;
+
+    const candidateRecord = {
       categoryGroup: grp,
       category: cat,
       description: desc,
       amount: amt,
       date: dateStr,
-      vendor,
       department: dept,
       paymentMethod: method,
-      status: initialStatus,
-      createdBy: state.auth.user ? state.auth.user.name : 'Super Admin',
-      createdAt: new Date().toISOString()
+      reference
     };
 
-    try {
-      await dbRepo.saveRecord(STORE_KEY_EXPENSES, exp);
-    } catch (dbErr) {
-      errEl.textContent = dbErr.message;
+    const valResult = validateExpenseRecord(candidateRecord);
+    if (!valResult.valid) {
+      errEl.textContent = valResult.error;
       errEl.style.display = 'block';
       return;
     }
 
-    state.expenses.push(exp);
-    await safeSet(STORE_KEY_EXPENSES, state.expenses);
-    await logAudit('RECORD_EXPENSE', 'expense', exp.id, `${exp.description} (₦${exp.amount})`, null, exp);
-    closeModal();
+    if (isPeriodLocked(dateStr)) {
+      errEl.textContent = `Financial period (${dateStr.slice(0, 7)}) is locked. Modifications prohibited.`;
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const reqRole = getRequiredApprovalRole(amt);
+    const initialStatus = isEdit
+      ? (existingExp.status || (reqRole === 'None' ? 'recorded' : 'pending_approval'))
+      : (reqRole === 'None' ? 'recorded' : 'pending_approval');
+
+    const exp = {
+      id: isEdit ? existingExp.id : ('exp_' + Date.now()),
+      tenant_id: DEFAULT_TENANT_ID,
+      categoryGroup: grp,
+      category: cat,
+      subCategory: cat,
+      description: desc,
+      amount: amt,
+      date: dateStr,
+      expenseDate: dateStr,
+      vendor: vendor || 'Vendor',
+      beneficiary: vendor || 'Vendor',
+      department: dept,
+      paymentMethod: method,
+      reference,
+      status: initialStatus,
+      createdBy: isEdit ? (existingExp.createdBy || existingExp.created_by) : (state.auth && state.auth.user ? state.auth.user.name : 'Super Admin'),
+      createdAt: isEdit ? (existingExp.createdAt || existingExp.created_at) : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      isSubmitting = true;
+      saveBtn.disabled = true;
+      saveBtn.textContent = isEdit ? 'Saving...' : 'Recording...';
+
+      await dbRepo.saveRecord(STORE_KEY_EXPENSES, exp);
+
+      if (isEdit) {
+        const idx = state.expenses.findIndex(x => x.id === exp.id);
+        if (idx !== -1) {
+          state.expenses[idx] = exp;
+        } else {
+          state.expenses.push(exp);
+        }
+      } else {
+        state.expenses.push(exp);
+      }
+
+      await safeSet(STORE_KEY_EXPENSES, state.expenses);
+      await logAudit(
+        isEdit ? 'UPDATE_EXPENSE' : 'RECORD_EXPENSE',
+        'expense',
+        exp.id,
+        `${exp.description} (₦${exp.amount})`,
+        isEdit ? existingExp : null,
+        exp
+      );
+
+      closeModal();
+      render();
+    } catch (dbErr) {
+      console.error('Expense save error:', dbErr);
+      errEl.textContent = dbErr.message || 'Error saving expense to database.';
+      errEl.style.display = 'block';
+    } finally {
+      isSubmitting = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = isEdit ? '✔ Save Changes' : '✔ Record Expense';
+      }
+    }
   });
 }
 
@@ -34613,6 +35224,20 @@ function renderChangeRoleModal(container, user) {
     window.createEnrolmentFromInvoice = createEnrolmentFromInvoice;
     window.syncPaymentToEnrolmentAndCustomer = syncPaymentToEnrolmentAndCustomer;
     window.ensureDefaultCohortForProgramme = ensureDefaultCohortForProgramme;
+    // Authoritative Operational Expense Exports
+    window.AUTHORITATIVE_EXPENSE_TAXONOMY = AUTHORITATIVE_EXPENSE_TAXONOMY;
+    window.DEFAULT_EXPENSE_CATEGORIES = DEFAULT_EXPENSE_CATEGORIES;
+    window.PAYMENT_METHODS = PAYMENT_METHODS;
+    window.DEPARTMENTS = DEPARTMENTS;
+    window.getAuthoritativeExpenseGroups = getAuthoritativeExpenseGroups;
+    window.getAuthoritativeExpenseCategories = getAuthoritativeExpenseCategories;
+    window.isValidExpenseClassification = isValidExpenseClassification;
+    window.validateExpenseRecord = validateExpenseRecord;
+    window.calculateExpenseAggregations = calculateExpenseAggregations;
+    window.renderRecordExpenseModal = renderRecordExpenseModal;
+    window.renderExpensesTab = renderExpensesTab;
+    window.transformEntityForPostgres = transformEntityForPostgres;
+    window.transformEntityFromPostgres = transformEntityFromPostgres;
   }
 })();
 </script>
