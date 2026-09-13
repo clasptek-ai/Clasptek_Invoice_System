@@ -770,6 +770,90 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_active_certificate_per_enrolment
     ON public.certificates(tenant_id, enrolment_id)
     WHERE status = 'ISSUED';
 
+-- 36. Authoritative Courses / Curriculum Modules
+CREATE TABLE IF NOT EXISTS public.courses (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    duration_hours NUMERIC(6,2) NOT NULL DEFAULT 10 CHECK (duration_hours >= 0),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft')),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_courses_tenant_id UNIQUE (tenant_id, id),
+    CONSTRAINT uq_courses_tenant_code UNIQUE (tenant_id, code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_courses_tenant_status ON public.courses(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_courses_tenant_code ON public.courses(tenant_id, code);
+
+-- 37. Authoritative Programme-Course Relationship (programme_courses)
+CREATE TABLE IF NOT EXISTS public.programme_courses (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    programme_id TEXT NOT NULL,
+    course_id TEXT NOT NULL,
+    display_order INT NOT NULL DEFAULT 1 CHECK (display_order > 0),
+    is_required BOOLEAN NOT NULL DEFAULT true,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_programme_courses_unique UNIQUE (tenant_id, programme_id, course_id),
+    CONSTRAINT fk_pc_tenant_programme FOREIGN KEY (tenant_id, programme_id)
+        REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_pc_tenant_course FOREIGN KEY (tenant_id, course_id)
+        REFERENCES public.courses(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_programme_courses_tenant_programme ON public.programme_courses(tenant_id, programme_id);
+CREATE INDEX IF NOT EXISTS idx_programme_courses_tenant_course ON public.programme_courses(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_programme_courses_order ON public.programme_courses(programme_id, display_order);
+
+-- 38. Authoritative Certificate Templates
+CREATE TABLE IF NOT EXISTS public.certificate_templates (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    name TEXT NOT NULL,
+    description TEXT,
+    version TEXT NOT NULL DEFAULT '1.0',
+    template_type TEXT NOT NULL DEFAULT 'standard_completion',
+    template_asset_url TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED')),
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    created_by UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_cert_templates_tenant_id UNIQUE (tenant_id, id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cert_templates_tenant_status ON public.certificate_templates(tenant_id, status);
+
+-- 39. Authoritative Programme Certificate Settings
+CREATE TABLE IF NOT EXISTS public.programme_certificate_settings (
+    id TEXT PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+    programme_id TEXT NOT NULL,
+    certificate_template_id TEXT NOT NULL,
+    certificate_title TEXT NOT NULL DEFAULT 'Certificate of Completion',
+    certificate_description TEXT NOT NULL,
+    certificate_role TEXT NOT NULL,
+    certificate_enabled BOOLEAN NOT NULL DEFAULT true,
+    requires_admin_approval BOOLEAN NOT NULL DEFAULT true,
+    completion_requirements JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_pcs_tenant_programme UNIQUE (tenant_id, programme_id),
+    CONSTRAINT fk_pcs_tenant_programme FOREIGN KEY (tenant_id, programme_id)
+        REFERENCES public.programmes(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_pcs_template FOREIGN KEY (certificate_template_id)
+        REFERENCES public.certificate_templates(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pcs_tenant_programme ON public.programme_certificate_settings(tenant_id, programme_id);
+
+
 -- =============================================================================
 -- PHASE 6 — OPERATIONAL & ENGAGEMENT TABLES
 -- =============================================================================
@@ -2466,6 +2550,7 @@ CREATE POLICY "recurring_expenses_manager_all" ON public.recurring_expenses FOR 
 CREATE POLICY "recurring_invoices_manager_all" ON public.recurring_invoices FOR ALL TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
 
 CREATE POLICY "audit_log_manager_select" ON public.finance_audit_log FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());
+CREATE POLICY "audit_log_staff_insert" ON public.finance_audit_log FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()) AND (actor_id IS NULL OR actor_id = auth.uid()));
 
 -- 5. HR, Personnel & CRM Policies
 CREATE POLICY "personnel_tenant_select" ON public.personnel FOR SELECT TO authenticated 
@@ -2626,6 +2711,31 @@ USING (
     tenant_id = public.get_auth_tenant_id()
     AND public.is_super_admin()
 );
+
+-- Courses Table RLS Policies
+CREATE POLICY "courses_tenant_select" ON public.courses FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "courses_staff_insert" ON public.courses FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "courses_staff_update" ON public.courses FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff()) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "courses_admin_delete" ON public.courses FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Programme Courses Table RLS Policies
+CREATE POLICY "programme_courses_tenant_select" ON public.programme_courses FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "programme_courses_staff_insert" ON public.programme_courses FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "programme_courses_staff_update" ON public.programme_courses FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff()) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "programme_courses_admin_delete" ON public.programme_courses FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Certificate Templates Table RLS Policies
+CREATE POLICY "cert_templates_tenant_select" ON public.certificate_templates FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "cert_templates_staff_insert" ON public.certificate_templates FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "cert_templates_staff_update" ON public.certificate_templates FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff()) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "cert_templates_admin_delete" ON public.certificate_templates FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
+-- Programme Certificate Settings Table RLS Policies
+CREATE POLICY "pcs_tenant_select" ON public.programme_certificate_settings FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id());
+CREATE POLICY "pcs_staff_insert" ON public.programme_certificate_settings FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "pcs_staff_update" ON public.programme_certificate_settings FOR UPDATE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_staff()) WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.is_staff());
+CREATE POLICY "pcs_admin_delete" ON public.programme_certificate_settings FOR DELETE TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND public.is_super_admin());
+
 
 CREATE POLICY "customers_tenant_select" ON public.customers FOR SELECT TO authenticated USING (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
 CREATE POLICY "customers_tenant_insert" ON public.customers FOR INSERT TO authenticated WITH CHECK (tenant_id = public.get_auth_tenant_id() AND (public.is_staff() OR public.can_manage_finance()));
