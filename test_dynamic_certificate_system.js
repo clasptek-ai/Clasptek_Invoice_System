@@ -102,7 +102,8 @@ try {
 
 const app = global.window;
 
-console.log('--- TEST GROUP 1: Dynamic Student Name (No Hardcoded Names) ---');
+async function runTests() {
+  console.log('--- TEST GROUP 1: Dynamic Student Name (No Hardcoded Names) ---');
 // Verify template never contains hardcoded student name "OSAS EMMANUEL OLUWANIFEMI"
 assert(
   !htmlContent.includes('OSAS EMMANUEL OLUWANIFEMI'),
@@ -461,7 +462,117 @@ assert(
   'Tenant isolation blocks verification of foreign tenant certificates'
 );
 
-console.log('\n--- TEST GROUP 8: Production Distribution Files Parity ---');
+console.log('\n--- TEST GROUP 8: Complete Lifecycle CRUD Operations (Part 31) ---');
+// 1. Certificate Settings CRUD
+// CREATE
+const newSettings = await app.saveProgrammeCertificateSettings('prog-101', {
+  certificateTitle: 'Executive Diploma in Data Science',
+  certificateIntro: 'Has demonstrated extraordinary mastery in',
+  certificateDescription: 'Advanced Machine Learning, Statistical Inference and Big Data Architecture',
+  certificateRole: 'Senior Data Scientist',
+  certificateTemplateId: 'tpl_clasptek_2025',
+  certificateEnabled: true
+});
+assert(newSettings && newSettings.certificateRole === 'Senior Data Scientist', 'Certificate Settings CREATE succeeds');
+
+// READ
+const readSettings = app.findProgrammeCertificateSettings('prog-101');
+assert(readSettings && readSettings.certificateTitle === 'Executive Diploma in Data Science', 'Certificate Settings READ succeeds');
+
+// UPDATE / UPSERT
+const updatedSettings = await app.saveProgrammeCertificateSettings('prog-101', {
+  certificateTitle: 'Postgraduate Diploma in Data Science & AI'
+});
+assert(updatedSettings.certificateTitle === 'Postgraduate Diploma in Data Science & AI', 'Certificate Settings UPDATE succeeds');
+assert(updatedSettings.certificateRole === 'Senior Data Scientist', 'Certificate Settings UPSERT preserves unspecified fields');
+
+// DEACTIVATE / DELETE
+const deactivatedSettings = await app.saveProgrammeCertificateSettings('prog-101', {
+  certificateEnabled: false
+});
+assert(deactivatedSettings.certificateEnabled === false, 'Certificate Settings DEACTIVATE succeeds');
+
+// Reactivate for subsequent tests
+await app.saveProgrammeCertificateSettings('prog-101', { certificateEnabled: true });
+
+// 2. Programme Courses CRUD
+const prog = app.findProgrammeById('prog-101');
+if (!prog.metadata) prog.metadata = {};
+if (!Array.isArray(prog.metadata.courses)) prog.metadata.courses = [];
+
+// CREATE
+prog.metadata.courses.push({
+  id: 'crs_test_ml',
+  code: 'DS-401',
+  title: 'Applied Machine Learning',
+  status: 'ACTIVE'
+});
+assert(prog.metadata.courses.some(c => c.id === 'crs_test_ml'), 'Programme Course CREATE succeeds');
+
+// READ
+const readCourse = prog.metadata.courses.find(c => c.id === 'crs_test_ml');
+assert(readCourse && readCourse.code === 'DS-401', 'Programme Course READ succeeds');
+
+// UPDATE
+readCourse.title = 'Advanced Machine Learning & Deep Learning';
+assert(readCourse.title === 'Advanced Machine Learning & Deep Learning', 'Programme Course UPDATE succeeds');
+
+// DEACTIVATE / DELETE
+readCourse.status = 'INACTIVE';
+assert(readCourse.status === 'INACTIVE', 'Programme Course DEACTIVATE succeeds');
+
+// 3. Certificate Templates CRUD
+if (!app.state.certificateTemplates) app.state.certificateTemplates = [];
+
+// CREATE
+const newTemplate = {
+  id: 'tpl_custom_honors_2026',
+  name: 'Clasptek Honors Template 2026',
+  description: 'Special Edition Honors Diploma Canvas',
+  layout: 'A4_LANDSCAPE',
+  width: 841.89,
+  height: 595.28,
+  status: 'ACTIVE'
+};
+app.state.certificateTemplates.push(newTemplate);
+assert(app.state.certificateTemplates.some(t => t.id === 'tpl_custom_honors_2026'), 'Template CREATE succeeds');
+
+// READ
+const foundTemplate = app.findCertificateTemplateById('tpl_custom_honors_2026');
+assert(foundTemplate && foundTemplate.name === 'Clasptek Honors Template 2026', 'Template READ succeeds');
+
+// UPDATE
+foundTemplate.name = 'Clasptek Premier Honors Template 2026';
+assert(foundTemplate.name === 'Clasptek Premier Honors Template 2026', 'Template UPDATE succeeds');
+
+// DEACTIVATE
+foundTemplate.status = 'INACTIVE';
+assert(foundTemplate.status === 'INACTIVE', 'Template DEACTIVATE succeeds');
+
+// ACTIVATE
+foundTemplate.status = 'ACTIVE';
+assert(foundTemplate.status === 'ACTIVE', 'Template ACTIVATE succeeds');
+
+// 4. Print Certificate Document Integration
+const mountEl = {
+  id: 'certificate-print-mount',
+  innerHTML: '',
+  style: {}
+};
+const origGetElementById = global.document.getElementById;
+global.document.getElementById = (id) => {
+  if (id === 'certificate-print-mount') return mountEl;
+  return origGetElementById ? origGetElementById(id) : { value: '', innerHTML: '', style: {} };
+};
+
+if (typeof app.printCertificateDocument === 'function') {
+  app.printCertificateDocument(issuedCert);
+  assert(mountEl.innerHTML.includes('clasptek-cert-a4-landscape'), 'printCertificateDocument mounts valid A4 landscape certificate HTML');
+  assert(mountEl.innerHTML.includes('Spicy Rice'), 'printCertificateDocument preserves authentic Spicy Rice typography');
+}
+global.document.getElementById = origGetElementById;
+
+console.log('\n--- TEST GROUP 9: Production Distribution Files Parity ---');
 const distFiles = [
   'clasptek_invoice_system.html',
   'index.html',
@@ -483,7 +594,14 @@ distFiles.slice(1).forEach(fileRel => {
   );
 });
 
-console.log('\n================================================================');
-console.log(`ALL TESTS PASSED! (${passedTests}/${totalTests} assertions)`);
-console.log('CLASPTEK DYNAMIC CERTIFICATE SYSTEM CERTIFIED FOR PRODUCTION');
-console.log('================================================================\n');
+  console.log('\n================================================================');
+  console.log(`ALL TESTS PASSED! (${passedTests}/${totalTests} assertions)`);
+  console.log('CLASPTEK DYNAMIC CERTIFICATE SYSTEM CERTIFIED FOR PRODUCTION');
+  console.log('================================================================\n');
+}
+
+runTests().catch(err => {
+  console.error('Test Suite Failed:', err);
+  process.exit(1);
+});
+

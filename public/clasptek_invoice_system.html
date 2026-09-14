@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/clasptek_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,600&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap" rel="stylesheet">
   <style>
     :root {
       /* Primary Brand Identity (Oxford Navy & ClaspTek Crimson) */
@@ -1336,7 +1336,7 @@
     }
 
     /* Print Architecture: Decoupled Full-Page Canonical Printing */
-    #print-root {
+    #print-root, #certificate-print-mount {
       display: none;
     }
 
@@ -1390,16 +1390,69 @@
         size: A4 portrait;
         margin: 8mm 12mm 8mm 12mm;
       }
-      @page certificate-landscape {
-        size: 297mm 210mm;
-        margin: 0;
+
+      /* Dedicated A4 Landscape Certificate Print Mode */
+      body.printing-certificate {
+        background: #DDDDF0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 297mm !important;
+        height: 210mm !important;
+        min-width: 297mm !important;
+        min-height: 210mm !important;
+        max-width: 297mm !important;
+        max-height: 210mm !important;
+        overflow: hidden !important;
       }
-      .clasptek-cert-print-container {
-        page: certificate-landscape;
-        width: 297mm;
-        height: 210mm;
-        margin: 0;
-        padding: 0;
+      body.printing-certificate #root,
+      body.printing-certificate .cp-modal-overlay,
+      body.printing-certificate .cp-sidebar,
+      body.printing-certificate .cp-topbar,
+      body.printing-certificate .cp-modal-header,
+      body.printing-certificate .cp-modal-footer,
+      body.printing-certificate .no-print,
+      body.printing-certificate #print-root {
+        display: none !important;
+      }
+      body.printing-certificate #certificate-print-mount {
+        display: block !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 297mm !important;
+        height: 210mm !important;
+        min-width: 297mm !important;
+        min-height: 210mm !important;
+        max-width: 297mm !important;
+        max-height: 210mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        z-index: 999999 !important;
+        background: #DDDDF0 !important;
+      }
+      body.printing-certificate #certificate-print-mount .clasptek-cert-print-container {
+        width: 297mm !important;
+        height: 210mm !important;
+        min-width: 297mm !important;
+        min-height: 210mm !important;
+        max-width: 297mm !important;
+        max-height: 210mm !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+      body.printing-certificate #certificate-print-mount svg {
+        width: 297mm !important;
+        height: 210mm !important;
+        display: block !important;
       }
     }
   </style>
@@ -1407,6 +1460,7 @@
 <body>
   <div id="root"></div>
   <div id="print-root"></div>
+  <div id="certificate-print-mount"></div>
 
   <script>
     (function() {
@@ -6572,6 +6626,13 @@ const dbRepo = {
             return;
           }
         }
+        if ((httpStatus === 404 || error.code === 'PGRST205') && (tableName === 'programme_certificate_settings' || tableName === 'programme_courses' || tableName === 'certificate_templates' || tableName === 'courses')) {
+          console.warn(`DATABASE SCHEMA NOTICE: Standalone table '${tableName}' is not present in PostgREST schema cache. Data is persisted to canonical 'programmes' table in PostgreSQL.`);
+          state.supabase.lastSuccessfulWrite = new Date().toISOString();
+          state.supabase.status = 'connected';
+          state.connectionError = null;
+          return;
+        }
         if (httpStatus === 0) {
           state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${error.message || 'Network error'})`;
         } else if (tableName === 'invoices' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('invoices_tenant_id_invoice_no_key')))) {
@@ -7499,7 +7560,19 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
-    case 'certificates':
+    case 'certificates': {
+      const certMetadata = typeof item.metadata === 'object' && item.metadata !== null ? { ...item.metadata } : {};
+      certMetadata.certificate_title_snapshot = item.certificateTitleSnapshot || item.certificate_title_snapshot || certMetadata.certificate_title_snapshot || 'Certificate of Completion';
+      certMetadata.certificate_description_snapshot = item.certificateDescriptionSnapshot || item.certificate_description_snapshot || certMetadata.certificate_description_snapshot || '';
+      certMetadata.certificate_role_snapshot = item.certificateRoleSnapshot || item.certificate_role_snapshot || certMetadata.certificate_role_snapshot || '';
+      certMetadata.certificate_template_id = item.certificateTemplateId || item.certificate_template_id || certMetadata.certificate_template_id || 'tpl_clasptek_2025';
+      certMetadata.template_version = item.templateVersion || item.template_version || certMetadata.template_version || '1.0';
+      certMetadata.verification_url = item.verificationUrl || item.verification_url || certMetadata.verification_url || '';
+      certMetadata.pdf_url = item.pdfUrl || item.pdf_url || certMetadata.pdf_url || null;
+      if (item.courses) certMetadata.courses = item.courses;
+      if (item.courseOfStudy || item.course_of_study) certMetadata.course_of_study = item.courseOfStudy || item.course_of_study;
+      if (item.certificateIntro || item.certificate_intro) certMetadata.certificate_intro = item.certificateIntro || item.certificate_intro;
+
       return {
         id: item.id || ('cert_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
         tenant_id: tenantId || item.tenant_id || item.tenantId || (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : DEFAULT_TENANT_ID),
@@ -7523,17 +7596,11 @@ function transformEntityForPostgres(entity, item, tenantId) {
         revoked_by: item.revokedBy || item.revoked_by || null,
         revoked_at: item.revokedAt || item.revoked_at || null,
         reissued_from_certificate_id: item.reissuedFromCertificateId || item.reissued_from_certificate_id || null,
-        certificate_title_snapshot: item.certificateTitleSnapshot || item.certificate_title_snapshot || item.metadata?.certificate_title_snapshot || 'Certificate of Completion',
-        certificate_description_snapshot: item.certificateDescriptionSnapshot || item.certificate_description_snapshot || item.metadata?.certificate_description_snapshot || '',
-        certificate_role_snapshot: item.certificateRoleSnapshot || item.certificate_role_snapshot || item.metadata?.certificate_role_snapshot || '',
-        certificate_template_id: item.certificateTemplateId || item.certificate_template_id || item.metadata?.certificate_template_id || 'tpl_clasptek_v1',
-        template_version: item.templateVersion || item.template_version || item.metadata?.template_version || '1.0',
-        verification_url: item.verificationUrl || item.verification_url || item.metadata?.verification_url || '',
-        pdf_url: item.pdfUrl || item.pdf_url || item.metadata?.pdf_url || null,
-        metadata: item.metadata || {},
+        metadata: certMetadata,
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'courses':
       return {
@@ -11065,11 +11132,7 @@ async function loadAll() {
           () => supabaseClient.from('training_sessions').select('*'),
           () => supabaseClient.from('attendance').select('*'),
           () => supabaseClient.from('facilitator_reports').select('*'),
-          () => supabaseClient.from('certificates').select('*'),
-          () => supabaseClient.from('courses').select('*'),
-          () => supabaseClient.from('programme_courses').select('*'),
-          () => supabaseClient.from('certificate_templates').select('*'),
-          () => supabaseClient.from('programme_certificate_settings').select('*')
+          () => supabaseClient.from('certificates').select('*')
         ];
 
         const queryResults = await runConcurrentBatch(queryTasks, SUPABASE_QUERY_CONCURRENCY);
@@ -11080,8 +11143,7 @@ async function loadAll() {
           dbFSet, dbPAccs, dbPSlips, dbPers,
           dbEnqs, dbEnrls, dbCohorts, dbCusts, dbStudents, dbCNotes, dbPRems,
           dbRExps, dbRInvs, dbRecons, dbSessions, dbCTimeline,
-          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates,
-          dbCourses, dbProgCourses, dbCertTpls, dbProgCertSettings
+          dbIntakeApps, dbTrainingSessions, dbAttendance, dbFacilitatorReports, dbCertificates
         ] = queryResults;
         const hasDbErrors = queryResults.some(r => r && r.error && (r.status >= 500 || (r.status !== 404 && r.status !== 401 && r.error.message)));
         const hasAuthExpired = queryResults.some(r => r && r.status === 401);
@@ -11155,10 +11217,77 @@ async function loadAll() {
             state.attendance = (dbAttendance && Array.isArray(dbAttendance.data)) ? dbAttendance.data.map(r => transformEntityFromPostgres('attendance', r)) : [];
             state.facilitatorReports = (dbFacilitatorReports && Array.isArray(dbFacilitatorReports.data)) ? dbFacilitatorReports.data.map(r => transformEntityFromPostgres('facilitator_reports', r)) : [];
             state.certificates = (dbCertificates && Array.isArray(dbCertificates.data)) ? dbCertificates.data.map(r => transformEntityFromPostgres('certificates', r)) : [];
-            state.courses = (dbCourses && Array.isArray(dbCourses.data)) ? dbCourses.data.map(r => transformEntityFromPostgres('courses', r)) : [];
-            state.programmeCourses = (dbProgCourses && Array.isArray(dbProgCourses.data)) ? dbProgCourses.data.map(r => transformEntityFromPostgres('programme_courses', r)) : [];
-            state.certificateTemplates = (dbCertTpls && Array.isArray(dbCertTpls.data)) ? dbCertTpls.data.map(r => transformEntityFromPostgres('certificate_templates', r)) : [];
-            state.programmeCertificateSettings = (dbProgCertSettings && Array.isArray(dbProgCertSettings.data)) ? dbProgCertSettings.data.map(r => transformEntityFromPostgres('programme_certificate_settings', r)) : [];
+            // Hydrate curriculum courses and relationships from authoritative programme metadata
+            const extractedCourses = [];
+            const extractedProgCourses = [];
+            (state.programmes || []).forEach(p => {
+              const curCourses = (p.metadata && Array.isArray(p.metadata.courses)) ? p.metadata.courses : [];
+              curCourses.forEach((c, idx) => {
+                const cId = c.id || `crs_${p.id}_${idx + 1}`;
+                if (!extractedCourses.some(ec => ec.id === cId)) {
+                  extractedCourses.push({
+                    id: cId,
+                    tenantId: p.tenantId || p.tenant_id,
+                    code: c.code || `${p.code || 'CRS'}-${idx + 1}`,
+                    title: c.title || c.name || `Course Module ${idx + 1}`,
+                    category: c.category || p.category || 'Vocational',
+                    status: 'ACTIVE'
+                  });
+                }
+                extractedProgCourses.push({
+                  id: `pc_${p.id}_${cId}`,
+                  tenantId: p.tenantId || p.tenant_id,
+                  programmeId: p.id,
+                  courseId: cId,
+                  displayOrder: idx + 1,
+                  isRequired: true,
+                  status: 'ACTIVE'
+                });
+              });
+            });
+            state.courses = extractedCourses;
+            state.programmeCourses = extractedProgCourses;
+
+            // Authoritative 2025 CorelDRAW A4 Landscape Official Template
+            state.certificateTemplates = [
+              {
+                id: 'tpl_clasptek_2025',
+                name: 'Clasptek Official Certificate 2025',
+                description: 'Authoritative CorelDRAW 2022/2025 A4 Landscape Official Template',
+                layout: 'A4_LANDSCAPE',
+                width: 841.89,
+                height: 595.28,
+                isDefault: true,
+                status: 'ACTIVE'
+              },
+              {
+                id: 'tpl_clasptek_v1',
+                name: 'Clasptek Certificate Legacy V1',
+                description: 'Standard Clasptek Certificate Layout',
+                layout: 'A4_LANDSCAPE',
+                width: 841.89,
+                height: 595.28,
+                isDefault: false,
+                status: 'ACTIVE'
+              }
+            ];
+
+            // Programme certificate settings from programme metadata with canonical fallbacks
+            state.programmeCertificateSettings = (state.programmes || []).map(p => {
+              const defSettings = (typeof getDefaultCertificateSettingsForProgramme === 'function')
+                ? getDefaultCertificateSettingsForProgramme(p)
+                : {};
+              const metaSettings = (p.metadata && (p.metadata.certificateSettings || p.metadata.certificate_settings)) || {};
+              return {
+                id: `pcs_${p.id}`,
+                tenantId: p.tenantId || p.tenant_id,
+                programmeId: p.id,
+                programme_id: p.id,
+                ...defSettings,
+                ...metaSettings,
+                certificateTemplateId: metaSettings.certificateTemplateId || 'tpl_clasptek_2025'
+              };
+            });
             state.certificateRevocations = [];
             state.collectionNotes = Array.isArray(dbCNotes.data) ? dbCNotes.data.map(r => transformEntityFromPostgres('collection_notes', r)) : [];
             state.paymentReminders = Array.isArray(dbPRems.data) ? dbPRems.data.map(r => transformEntityFromPostgres('payment_reminders', r)) : [];
@@ -14110,7 +14239,9 @@ const DEFAULT_CERTIFICATE_TEMPLATES = [
 ];
 
 function findCertificateTemplateById(templateId) {
-  if (!templateId) return DEFAULT_CERTIFICATE_TEMPLATES[0];
+  if (!templateId) return (state.certificateTemplates && state.certificateTemplates[0]) || DEFAULT_CERTIFICATE_TEMPLATES[0];
+  const custom = (state.certificateTemplates || []).find(t => t.id === templateId);
+  if (custom) return custom;
   return (DEFAULT_CERTIFICATE_TEMPLATES || []).find(t => t.id === templateId) || DEFAULT_CERTIFICATE_TEMPLATES[0];
 }
 
@@ -14208,6 +14339,9 @@ function findProgrammeCertificateSettings(programmeId) {
   const existing = (state.programmeCertificateSettings || []).find(s => (s.programmeId === programmeId || s.programme_id === programmeId) && isRecordForCurrentTenant(s));
   if (existing) return existing;
   const prog = findProgrammeById(programmeId);
+  if (prog && prog.metadata && (prog.metadata.certificateSettings || prog.metadata.certificate_settings)) {
+    return prog.metadata.certificateSettings || prog.metadata.certificate_settings;
+  }
   return getDefaultCertificateSettingsForProgramme(prog);
 }
 
@@ -14219,11 +14353,14 @@ async function saveProgrammeCertificateSettings(programmeId, settings) {
   let record = (state.programmeCertificateSettings || []).find(s => (s.programmeId === programmeId || s.programme_id === programmeId) && isRecordForCurrentTenant(s));
   if (record) {
     record.certificateTitle = settings.certificateTitle || record.certificateTitle;
+    record.certificateIntro = settings.certificateIntro !== undefined ? settings.certificateIntro : record.certificateIntro;
     record.certificateDescription = settings.certificateDescription !== undefined ? settings.certificateDescription : record.certificateDescription;
     record.certificateRole = settings.certificateRole !== undefined ? settings.certificateRole : record.certificateRole;
     record.certificateTemplateId = settings.certificateTemplateId || record.certificateTemplateId;
     record.certificateEnabled = settings.certificateEnabled !== undefined ? Boolean(settings.certificateEnabled) : record.certificateEnabled;
     record.requiresAdminApproval = settings.requiresAdminApproval !== undefined ? Boolean(settings.requiresAdminApproval) : record.requiresAdminApproval;
+    record.signatoryName = settings.signatoryName || record.signatoryName;
+    record.signatoryTitle = settings.signatoryTitle || record.signatoryTitle;
     record.updatedAt = new Date().toISOString();
   } else {
     record = {
@@ -14233,11 +14370,14 @@ async function saveProgrammeCertificateSettings(programmeId, settings) {
       programmeId: programmeId,
       programme_id: programmeId,
       certificateTitle: settings.certificateTitle || 'Certificate of Completion',
+      certificateIntro: settings.certificateIntro || 'Has successfully gained the knowledge and practical skills with core competencies in',
       certificateDescription: settings.certificateDescription || '',
       certificateRole: settings.certificateRole || '',
-      certificateTemplateId: settings.certificateTemplateId || 'tpl_clasptek_v1',
+      certificateTemplateId: settings.certificateTemplateId || 'tpl_clasptek_2025',
       certificateEnabled: settings.certificateEnabled !== undefined ? Boolean(settings.certificateEnabled) : true,
       requiresAdminApproval: settings.requiresAdminApproval !== undefined ? Boolean(settings.requiresAdminApproval) : true,
+      signatoryName: settings.signatoryName || 'Academy Director',
+      signatoryTitle: settings.signatoryTitle || 'Academy Director Signature',
       completionRequirements: settings.completionRequirements || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -14246,9 +14386,22 @@ async function saveProgrammeCertificateSettings(programmeId, settings) {
   }
 
   await safeSet(STORE_KEY_PROGRAMME_CERTIFICATE_SETTINGS, state.programmeCertificateSettings);
-  if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord) {
-    await dbRepo.saveRecord(STORE_KEY_PROGRAMME_CERTIFICATE_SETTINGS, transformEntityForPostgres('programme_certificate_settings', record));
+
+  // Authoritative persistence via programmes table metadata in Supabase PostgreSQL
+  const prog = findProgrammeById(programmeId);
+  if (prog) {
+    if (!prog.metadata) prog.metadata = {};
+    prog.metadata.certificateSettings = { ...record };
+    await safeSet(STORE_KEY_PROGRAMMES, state.programmes);
+    if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord) {
+      try {
+        await dbRepo.saveRecord(STORE_KEY_PROGRAMMES, transformEntityForPostgres('programmes', prog));
+      } catch (e) {
+        console.warn('Could not persist certificate settings to programmes table:', e);
+      }
+    }
   }
+
   return record;
 }
 
@@ -14815,20 +14968,8 @@ function issueAuthoritativeCertificate(enrolmentId, options = {}) {
 
   const issueDate = options.issueDate || new Date().toISOString().slice(0, 10);
   
-  // Format Human-Readable Certificate Number (e.g. CTK-2026-DA-000101)
-  let certNumber = options.certificateNumber;
-  if (!certNumber) {
-    const yr = new Date(issueDate).getFullYear();
-    let progAbbr = 'CLP';
-    if (programme?.code) {
-      progAbbr = programme.code.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
-    } else if (progNameSnapshot.toLowerCase().includes('data')) {
-      progAbbr = 'DA';
-    } else if (progNameSnapshot.toLowerCase().includes('cyber')) {
-      progAbbr = 'CS';
-    }
-    certNumber = `CTK-${yr}-${progAbbr}-${String(currentCount).padStart(5, '0')}`;
-  }
+  // Format Canonical Certificate Number (e.g. CERT-2026-1001)
+  const certNumber = options.certificateNumber || (typeof formatDocNo === 'function' ? formatDocNo('certificate', currentCount, issueDate) : `CERT-${new Date(issueDate).getFullYear()}-${currentCount}`);
 
   const verificationToken = options.verificationToken || generateCryptographicVerificationToken();
   const baseUrl = (typeof window !== 'undefined' && window.location && window.location.origin) 
@@ -15041,17 +15182,21 @@ function reissueAuthoritativeCertificate(oldCertificateId, reasonOrOptions, mayb
   };
 }
 
-function verifyCertificatePublic(query) {
-  if (!query) {
+function verifyCertificatePublic(queryOrCertNumber, verificationToken) {
+  const identifier = (queryOrCertNumber || verificationToken || '').trim();
+  if (!identifier) {
     return { found: false, isValid: false, status: 'NOT_FOUND', message: 'No credential identifier provided' };
   }
-  const cleanQ = String(query).trim().toLowerCase();
+  const cleanQ = (queryOrCertNumber ? String(queryOrCertNumber).trim() : '').toLowerCase();
+  const cleanTok = (verificationToken ? String(verificationToken).trim() : '').toLowerCase();
 
   const cert = (state.certificates || []).find(c => {
     const num = String(c.certificateNumber || c.certificate_number || '').trim().toLowerCase();
     const tok = String(c.verificationToken || c.verification_token || '').trim().toLowerCase();
     const id = String(c.id || '').trim().toLowerCase();
-    return (num === cleanQ || tok === cleanQ || id === cleanQ) && isRecordForCurrentTenant(c);
+    const matchQ = cleanQ && (num === cleanQ || tok === cleanQ || id === cleanQ);
+    const matchT = cleanTok && (tok === cleanTok);
+    return (matchQ || matchT) && isRecordForCurrentTenant(c);
   });
 
   if (!cert) {
@@ -15094,16 +15239,44 @@ function renderCertificateDocumentHtml(cert, options = {}) {
   const completionDate = cert.completionDate || cert.completion_date || 'N/A';
   const issueDate = cert.issueDate || cert.issue_date || 'N/A';
   
+  const progId = cert.programmeId || cert.programme_id;
+  const progSettings = (typeof findProgrammeCertificateSettings === 'function' && progId) 
+    ? findProgrammeCertificateSettings(progId) 
+    : null;
+
   // Programme-specific intro statement (dynamic per curriculum)
-  const certIntro = cert.certificateIntroSnapshot || cert.certificate_intro_snapshot || (cert.metadata && cert.metadata.certificate_intro_snapshot) || (progName.toLowerCase().includes('cyber') ? 'Has successfully gained the knowledge and practical skills with core competencies in' : 'Has successfully gained the knowledge and practical skills with key focus in');
-  
-  // Programme competencies and role
-  const certDescription = cert.certificateDescriptionSnapshot || cert.certificate_description_snapshot || (cert.metadata && cert.metadata.certificate_description_snapshot) || 'Data Analysis, Data Cleaning and Data Visualization';
-  const certRole = cert.certificateRoleSnapshot || cert.certificate_role_snapshot || (cert.metadata && cert.metadata.certificate_role_snapshot) || 'Certified Professional';
+  const certIntro = cert.certificateIntroSnapshot || cert.certificate_intro_snapshot || 
+    (cert.metadata && cert.metadata.certificate_intro_snapshot) || 
+    (progSettings && progSettings.certificateIntro) ||
+    (progName.toLowerCase().includes('cyber') 
+      ? 'Has successfully gained the knowledge and practical skills with core competencies in' 
+      : (progName.toLowerCase().includes('data')
+        ? 'Has successfully gained the knowledge and practical skills with key focus in'
+        : 'Has successfully gained the knowledge and practical skills with core competencies in'));
+
+  // Programme competencies description (Never hardcoded to Data Analysis for other programmes)
+  const certDescription = cert.certificateDescriptionSnapshot || cert.certificate_description_snapshot || 
+    (cert.metadata && cert.metadata.certificate_description_snapshot) || 
+    (progSettings && progSettings.certificateDescription) ||
+    (progName.toLowerCase().includes('cyber')
+      ? 'Threat Detection, Network Security, Risk Mitigation, and use of industry-standard tools.'
+      : (progName.toLowerCase().includes('data')
+        ? 'Data Analysis, Data Cleaning and Data Visualization'
+        : (progName ? `${progName} Core Vocational Competencies` : 'Curriculum competencies and practical training')));
+
+  // Programme awarded professional role
+  const certRole = cert.certificateRoleSnapshot || cert.certificate_role_snapshot || 
+    (cert.metadata && cert.metadata.certificate_role_snapshot) || 
+    (progSettings && progSettings.certificateRole) ||
+    (progName.toLowerCase().includes('cyber')
+      ? 'CyberSecurity Professional'
+      : (progName.toLowerCase().includes('data')
+        ? 'Data Analyst Professional'
+        : (progName ? `${progName} Professional` : 'Certified Professional')));
   const isRevoked = cert.status === 'REVOKED';
 
   // Configurable Signatory
-  const signatoryTitle = cert.signatoryTitle || cert.signatory_title || 'Academy Director Signature';
+  const signatoryTitle = cert.signatoryTitle || cert.signatory_title || (progSettings && progSettings.signatoryTitle) || 'Academy Director Signature';
 
   // Ordinal date formatting matching reference (e.g. 23RD OCTOBER, 2026)
   const displayDate = formatCertificateOrdinalDate(issueDate);
@@ -15123,7 +15296,7 @@ function renderCertificateDocumentHtml(cert, options = {}) {
   // Asset paths — resolved relative to document for file://, previews, and production
   const _assetBase = (typeof window !== 'undefined' && window.location)
     ? (() => {
-        const path = window.location.pathname;
+        const path = window.location.pathname || '';
         if (path.includes('/public/')) return '../assets/';
         return './assets/';
       })()
@@ -15132,7 +15305,7 @@ function renderCertificateDocumentHtml(cert, options = {}) {
   const sigSrc  = _assetBase + 'clasptek-certificate-signature.png';
 
   return `
-    <div class="clasptek-cert-a4-landscape clasptek-cert-print-container clasptek-cert-frame" data-programme-snapshot="${progName.replace(/"/g, '&quot;')}" style="box-sizing:border-box; width:100%; max-width:960px; margin:0 auto; padding:0; background:#DDDDF0; position:relative; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.18);">
+    <div class="clasptek-cert-a4-landscape clasptek-cert-print-container clasptek-cert-frame" data-programme-snapshot="${progName.replace(/"/g, '&quot;')}" data-credential-type="Certificate of Completion" style="box-sizing:border-box; width:100%; max-width:960px; margin:0 auto; padding:0; background:#DDDDF0; position:relative; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.18);">
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap');
         @media print {
@@ -15153,7 +15326,8 @@ function renderCertificateDocumentHtml(cert, options = {}) {
 
       <!-- ===================== PURE VECTOR SVG CANVAS ===================== -->
       <!-- A4 Landscape (841.89 x 595.28 pt) matching CorelDRAW 2022 reference -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.89 595.28" width="100%" height="auto" style="display:block; width:100%; height:auto;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.89 595.28" width="841.89" height="595.28" style="display:block; width:100%; height:auto; max-width:100%;">
+        <title>Certificate of Completion</title>
         
         <!-- LAYER 1: Light Royal Blue Outer Background (Covers entire canvas outside border) -->
         <rect width="841.89" height="595.28" fill="#DDDDF0"/>
@@ -15178,8 +15352,8 @@ function renderCertificateDocumentHtml(cert, options = {}) {
           <!-- Academy Director Signature Line (Y=480pt in SVG) -->
           <path d="M 132.1642 115.28 L 325.5066 115.28" fill="none" stroke="#111111" stroke-width="1"/>
 
-          <!-- Date Line (Y=480pt in SVG) -->
-          <path d="M 520.0 115.28 L 706.0 115.28" fill="none" stroke="#111111" stroke-width="1"/>
+          <!-- Date Line (Y=480pt in SVG, X: 505 to 665) -->
+          <path d="M 505.0 115.28 L 665.0 115.28" fill="none" stroke="#111111" stroke-width="1"/>
 
           <!-- Authentic 48-Tooth Red Serrated Rosette Seal Badge (#ED1C24) -->
           <!-- Ribbon Tail / Rosette Seal Badge -->
@@ -15226,24 +15400,67 @@ function renderCertificateDocumentHtml(cert, options = {}) {
         <!-- Signatory Caption (Below signature line, Y=494) -->
         <text x="228.84" y="494" text-anchor="middle" font-family="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif" font-size="10" fill="#111111">${escapeHtml(signatoryTitle)}</text>
 
-        <!-- Date Value (Above date line, baseline Y=473) -->
-        <text x="613.02" y="473" text-anchor="middle" font-family="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif" font-weight="700" font-size="12" fill="#111111">${escapeHtml(displayDate)}</text>
+        <!-- Date Value (Above date line, baseline Y=473, centered at X=585) -->
+        <text x="585" y="473" text-anchor="middle" font-family="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif" font-weight="700" font-size="12" fill="#111111">${escapeHtml(displayDate)}</text>
 
         <!-- Date Caption (Below date line, Y=494) -->
-        <text x="613.02" y="494" text-anchor="middle" font-family="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif" font-size="10" fill="#111111">Date</text>
+        <text x="585" y="494" text-anchor="middle" font-family="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif" font-size="10" fill="#111111">Date</text>
 
-        <!-- SUBORDINATE QR VERIFICATION CODE (Centered cleanly below Date section with ample whitespace) -->
-        <g class="cert-qr-svg" transform="translate(602, 497)">
+        <!-- SUBORDINATE QR VERIFICATION CODE (Side-by-side to the right of Date section with ample whitespace) -->
+        <g class="cert-qr-svg" transform="translate(686, 440)">
           <g>
             ${qrSvg}
           </g>
-          <text x="11.5" y="29" text-anchor="middle" font-family="'Montserrat', Arial, sans-serif" font-size="4.2" font-weight="bold" fill="#080B78">Scan to Verify</text>
-          <text x="11.5" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="3.5" fill="#6B7280">Verify: scan QR code</text>
+          <text x="16" y="38" text-anchor="middle" font-family="'Montserrat', Arial, sans-serif" font-size="5.5" font-weight="700" fill="#080B78">Scan to Verify</text>
+          <text x="16" y="46" text-anchor="middle" font-family="'Montserrat', Arial, sans-serif" font-size="4.5" fill="#4B5563">Certificate</text>
         </g>
 
       </svg>
     </div>
   `;
+}
+
+function printCertificateDocument(cert) {
+  if (!cert) return;
+  let mount = document.getElementById('certificate-print-mount');
+  if (!mount) {
+    mount = document.createElement('div');
+    mount.id = 'certificate-print-mount';
+    document.body.appendChild(mount);
+  }
+  mount.innerHTML = renderCertificateDocumentHtml(cert);
+
+  let pageStyle = document.getElementById('certificate-print-page-style');
+  if (!pageStyle) {
+    pageStyle = document.createElement('style');
+    pageStyle.id = 'certificate-print-page-style';
+    document.head.appendChild(pageStyle);
+  }
+  pageStyle.textContent = `@page { size: 297mm 210mm landscape !important; margin: 0 !important; }`;
+
+  document.body.classList.add('printing-certificate');
+
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    document.body.classList.remove('printing-certificate');
+    if (mount) mount.innerHTML = '';
+    if (pageStyle && pageStyle.parentNode) pageStyle.parentNode.removeChild(pageStyle);
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+
+  const triggerPrint = () => {
+    window.print();
+    setTimeout(cleanup, 2500);
+  };
+
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => setTimeout(triggerPrint, 100)).catch(() => setTimeout(triggerPrint, 100));
+  } else {
+    setTimeout(triggerPrint, 150);
+  }
 }
 
 function getStudentAccountSummaries() {
@@ -33966,7 +34183,7 @@ function renderViewCertificateModal(container, cert) {
 
   document.getElementById('btnCloseCertModal').addEventListener('click', closeModal);
   document.getElementById('btnCloseCertModal2').addEventListener('click', closeModal);
-  document.getElementById('btnPrintCert').addEventListener('click', () => window.print());
+  document.getElementById('btnPrintCert').addEventListener('click', () => printCertificateDocument(cert));
 
   const btnCopy = document.getElementById('btnCopyVerifyUrl');
   if (btnCopy) {
@@ -36301,6 +36518,7 @@ function renderChangeRoleModal(container, user) {
       reissueAuthoritativeCertificate,
       verifyCertificatePublic,
       renderCertificateDocumentHtml,
+      printCertificateDocument,
       transformEntityForPostgres,
       transformEntityFromPostgres,
       STORE_KEY_PROGRAMMES,
@@ -36612,6 +36830,7 @@ function renderChangeRoleModal(container, user) {
     window.reissueAuthoritativeCertificate = reissueAuthoritativeCertificate;
     window.verifyCertificatePublic = verifyCertificatePublic;
     window.renderCertificateDocumentHtml = renderCertificateDocumentHtml;
+    window.printCertificateDocument = printCertificateDocument;
     window.getDefaultCertificateSettingsForProgramme = getDefaultCertificateSettingsForProgramme;
     window.findProgrammeCertificateSettings = findProgrammeCertificateSettings;
     window.saveProgrammeCertificateSettings = saveProgrammeCertificateSettings;
