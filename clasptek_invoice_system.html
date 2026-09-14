@@ -1390,6 +1390,10 @@
         size: A4 portrait;
         margin: 8mm 12mm 8mm 12mm;
       }
+      @page certificate-landscape {
+        size: A4 landscape;
+        margin: 0;
+      }
 
       /* Dedicated A4 Landscape Certificate Print Mode */
       body.printing-certificate {
@@ -1416,7 +1420,8 @@
       body.printing-certificate #print-root {
         display: none !important;
       }
-      body.printing-certificate #certificate-print-mount {
+      body.printing-certificate #certificate-print-mount,
+      body.printing-certificate .certificate-print-page {
         display: block !important;
         position: fixed !important;
         top: 0 !important;
@@ -1432,10 +1437,12 @@
         overflow: hidden !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
-        z-index: 999999 !important;
+        z-index: 9999999 !important;
         background: #DDDDF0 !important;
+        page: certificate-landscape !important;
       }
-      body.printing-certificate #certificate-print-mount .clasptek-cert-print-container {
+      body.printing-certificate #certificate-print-mount .clasptek-cert-print-container,
+      body.printing-certificate .certificate-print-page {
         width: 297mm !important;
         height: 210mm !important;
         min-width: 297mm !important;
@@ -1448,10 +1455,12 @@
         overflow: hidden !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
+        box-sizing: border-box !important;
       }
-      body.printing-certificate #certificate-print-mount svg {
-        width: 297mm !important;
-        height: 210mm !important;
+      body.printing-certificate #certificate-print-mount svg,
+      body.printing-certificate .certificate-print-page svg {
+        width: 100% !important;
+        height: 100% !important;
         display: block !important;
       }
     }
@@ -6485,6 +6494,39 @@ const DB_TABLE_MAPPING = {
   [STORE_KEY_PRODUCTION_MIGRATION_RUNS]: 'production_migration_runs'
 };
 
+const POSTGREST_EXTENSION_TABLES = new Set([
+  'courses',
+  'programme_courses',
+  'certificate_templates',
+  'programme_certificate_settings'
+]);
+
+function isPostgrestExtensionTableAvailable(tableName) {
+  if (!POSTGREST_EXTENSION_TABLES.has(tableName)) return true;
+  return Boolean(state.postgrestAvailableTables && state.postgrestAvailableTables.has(tableName));
+}
+
+async function discoverPostgrestSchemaTables() {
+  if (typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.isConfigured || !supabaseClient.isConfigured()) return;
+  if (state.postgrestAvailableTables && state.postgrestAvailableTables.size > 0) return;
+  try {
+    const config = typeof resolveSupabaseConfiguration === 'function' ? resolveSupabaseConfiguration() : {};
+    const endpoint = (config.endpoint || 'https://logaawoigfxnisimfatf.supabase.co').replace(/\/$/, '');
+    const apiKey = config.anonKey || config.publishableKey;
+    if (!apiKey) return;
+    const res = await fetch(`${endpoint}/rest/v1/`, {
+      method: 'GET',
+      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (res.ok) {
+      const spec = await res.json();
+      if (spec && spec.paths) {
+        state.postgrestAvailableTables = new Set(Object.keys(spec.paths).map(p => p.replace(/^\//, '')));
+      }
+    }
+  } catch (_) {}
+}
+
 const dbRepo = {
   async saveRecord(storeKey, record, idField = 'id') {
     const tableName = DB_TABLE_MAPPING[storeKey];
@@ -6495,6 +6537,12 @@ const dbRepo = {
       }
     }
     if (supabaseClient.isConfigured() && tableName) {
+      if (POSTGREST_EXTENSION_TABLES.has(tableName) && !isPostgrestExtensionTableAvailable(tableName)) {
+        state.supabase.lastSuccessfulWrite = new Date().toISOString();
+        state.supabase.status = 'connected';
+        state.connectionError = null;
+        return;
+      }
       let tenantId = resolveAuthoritativeTenantId(record);
       if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
         tenantId = await lookupAuthoritativeTenantFromDatabase(record);
@@ -6679,6 +6727,9 @@ const dbRepo = {
     if (!supabaseClient.isConfigured() || !tableName) {
       return { success: false, reason: 'unconfigured' };
     }
+    if (POSTGREST_EXTENSION_TABLES.has(tableName) && !isPostgrestExtensionTableAvailable(tableName)) {
+      return { success: false, reason: 'extension_table_unmigrated' };
+    }
     let tenantId = resolveAuthoritativeTenantId();
     if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
       tenantId = await lookupAuthoritativeTenantFromDatabase();
@@ -6757,6 +6808,9 @@ async function safeSet(key, value) {
 
   // 1. Authoritative Mode Enforcement: When PostgreSQL is the authority, writes to business tables must succeed remotely
   if (isBusinessEntity && state.databaseAuthorityState === DATABASE_AUTHORITY_STATE.AUTHORITATIVE && supabaseClient.isConfigured()) {
+    if (POSTGREST_EXTENSION_TABLES.has(tableName) && !isPostgrestExtensionTableAvailable(tableName)) {
+      return;
+    }
     let tenantId = resolveAuthoritativeTenantId();
     if (!tenantId || tenantId === 'clasptek_main' || !isValidUuid(tenantId)) {
       tenantId = await lookupAuthoritativeTenantFromDatabase();
@@ -11101,6 +11155,7 @@ async function loadAll() {
     try {
       const pingRes = await supabaseClient.ping();
       if (pingRes.success) {
+        await discoverPostgrestSchemaTables();
         const queryTasks = [
           () => supabaseClient.from('programmes').select('*'),
           () => supabaseClient.from('invoices').select('*'),
@@ -11129,10 +11184,10 @@ async function loadAll() {
           () => supabaseClient.from('facilitator_sessions').select('*'),
           () => supabaseClient.from('customer_timeline').select('*'),
           () => supabaseClient.from('crm_intake_applications').select('*'),
-          () => supabaseClient.from('training_sessions').select('*'),
-          () => supabaseClient.from('attendance').select('*'),
-          () => supabaseClient.from('facilitator_reports').select('*'),
-          () => supabaseClient.from('certificates').select('*')
+          () => (isPostgrestExtensionTableAvailable('training_sessions') ? supabaseClient.from('training_sessions').select('*') : Promise.resolve({ data: [], error: null, status: 200 })),
+          () => (isPostgrestExtensionTableAvailable('attendance') ? supabaseClient.from('attendance').select('*') : Promise.resolve({ data: [], error: null, status: 200 })),
+          () => (isPostgrestExtensionTableAvailable('facilitator_reports') ? supabaseClient.from('facilitator_reports').select('*') : Promise.resolve({ data: [], error: null, status: 200 })),
+          () => (isPostgrestExtensionTableAvailable('certificates') ? supabaseClient.from('certificates').select('*') : Promise.resolve({ data: [], error: null, status: 200 }))
         ];
 
         const queryResults = await runConcurrentBatch(queryTasks, SUPABASE_QUERY_CONCURRENCY);
@@ -15305,13 +15360,13 @@ function renderCertificateDocumentHtml(cert, options = {}) {
   const sigSrc  = _assetBase + 'clasptek-certificate-signature.png';
 
   return `
-    <div class="clasptek-cert-a4-landscape clasptek-cert-print-container clasptek-cert-frame" data-programme-snapshot="${progName.replace(/"/g, '&quot;')}" data-credential-type="Certificate of Completion" style="box-sizing:border-box; width:100%; max-width:960px; margin:0 auto; padding:0; background:#DDDDF0; position:relative; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.18);">
+    <div class="certificate-print-page clasptek-cert-a4-landscape clasptek-cert-print-container clasptek-cert-frame" data-programme-snapshot="${progName.replace(/"/g, '&quot;')}" data-credential-type="Certificate of Completion" style="box-sizing:border-box; width:100%; max-width:960px; margin:0 auto; padding:0; background:#DDDDF0; position:relative; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.18);">
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap');
         @media print {
-          @page { size: 297mm 210mm landscape; margin: 0; }
+          @page { size: A4 landscape; margin: 0; }
           body { margin: 0; padding: 0; background: #DDDDF0; }
-          .clasptek-cert-print-container { width: 297mm !important; max-width: 297mm !important; box-shadow: none !important; margin: 0 !important; }
+          .clasptek-cert-print-container, .certificate-print-page { width: 297mm !important; max-width: 297mm !important; box-shadow: none !important; margin: 0 !important; }
         }
         .clasptek-cert-frame {
           --certificate-navy: #080B78;
@@ -15326,7 +15381,7 @@ function renderCertificateDocumentHtml(cert, options = {}) {
 
       <!-- ===================== PURE VECTOR SVG CANVAS ===================== -->
       <!-- A4 Landscape (841.89 x 595.28 pt) matching CorelDRAW 2022 reference -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.89 595.28" width="841.89" height="595.28" style="display:block; width:100%; height:auto; max-width:100%;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.89 595.28" width="100%" height="100%" style="display:block; width:100%; height:100%; max-width:100%;">
         <title>Certificate of Completion</title>
         
         <!-- LAYER 1: Light Royal Blue Outer Background (Covers entire canvas outside border) -->
@@ -15430,13 +15485,70 @@ function printCertificateDocument(cert) {
   }
   mount.innerHTML = renderCertificateDocumentHtml(cert);
 
+  // Suppress conflicting stylesheets containing "A4 portrait"
+  const suppressedStyles = [];
+  document.querySelectorAll('style').forEach(s => {
+    if (s.id !== 'certificate-print-page-style' && s.textContent && s.textContent.includes('A4 portrait')) {
+      s.dataset.prevMedia = s.media || '';
+      s.media = 'not print';
+      suppressedStyles.push(s);
+    }
+  });
+
   let pageStyle = document.getElementById('certificate-print-page-style');
   if (!pageStyle) {
     pageStyle = document.createElement('style');
     pageStyle.id = 'certificate-print-page-style';
     document.head.appendChild(pageStyle);
   }
-  pageStyle.textContent = `@page { size: 297mm 210mm landscape !important; margin: 0 !important; }`;
+  pageStyle.textContent = `
+    @page {
+      size: A4 landscape !important;
+      margin: 0 !important;
+    }
+    html, body {
+      width: 297mm !important;
+      height: 210mm !important;
+      min-width: 297mm !important;
+      min-height: 210mm !important;
+      max-width: 297mm !important;
+      max-height: 210mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background: #DDDDF0 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    #root, .cp-modal-overlay, .cp-sidebar, .cp-topbar, .cp-modal-header, .cp-modal-footer, .no-print, #print-root {
+      display: none !important;
+    }
+    #certificate-print-mount, .certificate-print-page {
+      display: block !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 297mm !important;
+      height: 210mm !important;
+      min-width: 297mm !important;
+      min-height: 210mm !important;
+      max-width: 297mm !important;
+      max-height: 210mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+      z-index: 9999999 !important;
+      background: #DDDDF0 !important;
+    }
+    #certificate-print-mount svg, .certificate-print-page svg {
+      width: 100% !important;
+      height: 100% !important;
+      display: block !important;
+    }
+  `;
 
   document.body.classList.add('printing-certificate');
 
@@ -15445,6 +15557,10 @@ function printCertificateDocument(cert) {
     if (cleanedUp) return;
     cleanedUp = true;
     document.body.classList.remove('printing-certificate');
+    suppressedStyles.forEach(s => {
+      s.media = s.dataset.prevMedia || '';
+      delete s.dataset.prevMedia;
+    });
     if (mount) mount.innerHTML = '';
     if (pageStyle && pageStyle.parentNode) pageStyle.parentNode.removeChild(pageStyle);
     window.removeEventListener('afterprint', cleanup);
@@ -15453,13 +15569,174 @@ function printCertificateDocument(cert) {
 
   const triggerPrint = () => {
     window.print();
-    setTimeout(cleanup, 2500);
+    setTimeout(cleanup, 3000);
   };
 
   if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => setTimeout(triggerPrint, 100)).catch(() => setTimeout(triggerPrint, 100));
   } else {
     setTimeout(triggerPrint, 150);
+  }
+}
+
+function generateA4LandscapePdf(jpegBytes) {
+  // A4 Landscape: 841.89 pt x 595.28 pt
+  const width = 841.89;
+  const height = 595.28;
+
+  function strToBytes(str) {
+    const arr = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      arr[i] = str.charCodeAt(i) & 0xFF;
+    }
+    return arr;
+  }
+
+  const header = '%PDF-1.4\n%\xFF\xFF\xFF\xFF\n';
+  const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+  const obj2 = '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n';
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`;
+  const imgHeader = `4 0 obj\n<< /Type /XObject /Subtype /Image /Width 3508 /Height 2480 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`;
+  const imgFooter = '\nendstream\nendobj\n';
+  const contentStreamData = `q ${width} 0 0 ${height} 0 0 cm /Im1 Do Q`;
+  const obj5 = `5 0 obj\n<< /Length ${contentStreamData.length} >>\nstream\n${contentStreamData}\nendstream\nendobj\n`;
+
+  let currentOffset = header.length;
+  const offsets = [0];
+
+  offsets.push(currentOffset);
+  currentOffset += obj1.length;
+
+  offsets.push(currentOffset);
+  currentOffset += obj2.length;
+
+  offsets.push(currentOffset);
+  currentOffset += obj3.length;
+
+  offsets.push(currentOffset);
+  currentOffset += imgHeader.length + jpegBytes.length + imgFooter.length;
+
+  offsets.push(currentOffset);
+  currentOffset += obj5.length;
+
+  const xrefOffset = currentOffset;
+  let xref = 'xref\n0 6\n0000000000 65535 f \n';
+  for (let i = 1; i <= 5; i++) {
+    xref += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+  }
+
+  const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+
+  const totalLength = currentOffset + xref.length + trailer.length;
+  const out = new Uint8Array(totalLength);
+
+  let pos = 0;
+  function writeChunk(str) {
+    const b = strToBytes(str);
+    out.set(b, pos);
+    pos += b.length;
+  }
+
+  writeChunk(header);
+  writeChunk(obj1);
+  writeChunk(obj2);
+  writeChunk(obj3);
+  writeChunk(imgHeader);
+  out.set(jpegBytes, pos);
+  pos += jpegBytes.length;
+  writeChunk(imgFooter);
+  writeChunk(obj5);
+  writeChunk(xref);
+  writeChunk(trailer);
+
+  return out;
+}
+
+async function downloadCertificatePdf(cert) {
+  if (!cert) return;
+  const certNumber = cert.certificateNumber || cert.certificate_number || cert.id || 'certificate';
+  const fileName = `Clasptek-Certificate-${certNumber}.pdf`;
+
+  try {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = renderCertificateDocumentHtml(cert);
+    const svgEl = tempDiv.querySelector('svg');
+    if (!svgEl) {
+      throw new Error('Certificate SVG element not found');
+    }
+
+    svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgEl.setAttribute('viewBox', '0 0 841.89 595.28');
+    svgEl.setAttribute('width', '841.89');
+    svgEl.setAttribute('height', '595.28');
+    svgEl.style.width = '841.89px';
+    svgEl.style.height = '595.28px';
+
+    const svgXml = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgXml], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    const canvasWidth = 3508;
+    const canvasHeight = 2480;
+
+    await new Promise((resolve, reject) => {
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvasWidth;
+          canvas.height = canvasHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+          ctx.fillStyle = '#DDDDF0';
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+          ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+          URL.revokeObjectURL(svgUrl);
+
+          canvas.toBlob((jpegBlob) => {
+            if (!jpegBlob) {
+              reject(new Error('Canvas toBlob returned null'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const jpegBytes = new Uint8Array(reader.result);
+                const pdfBytes = generateA4LandscapePdf(jpegBytes);
+                const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                const link = document.createElement('a');
+                link.href = pdfUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(pdfUrl), 30000);
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(jpegBlob);
+          }, 'image/jpeg', 0.96);
+        } catch (err) {
+          URL.revokeObjectURL(svgUrl);
+          reject(err);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        reject(new Error('Failed to load SVG into image element'));
+      };
+      img.src = svgUrl;
+    });
+  } catch (err) {
+    console.warn('Direct PDF export unavailable, falling back to browser print engine:', err);
+    printCertificateDocument(cert);
   }
 }
 
@@ -34174,7 +34451,8 @@ function renderViewCertificateModal(container, cert) {
           </div>
           <div style="display:flex; gap:10px;">
             <button class="cp-btn secondary" id="btnCloseCertModal2">Close</button>
-            <button class="cp-btn primary" id="btnPrintCert">&#x1F5B6; Print / Download PDF</button>
+            <button class="cp-btn secondary" id="btnPrintCert">&#x1F5B6; Print / Save as PDF</button>
+            <button class="cp-btn primary" id="btnDownloadCertPdf">&#x2193; Download PDF</button>
           </div>
         </div>
       </div>
@@ -34184,6 +34462,10 @@ function renderViewCertificateModal(container, cert) {
   document.getElementById('btnCloseCertModal').addEventListener('click', closeModal);
   document.getElementById('btnCloseCertModal2').addEventListener('click', closeModal);
   document.getElementById('btnPrintCert').addEventListener('click', () => printCertificateDocument(cert));
+  const btnDownloadCert = document.getElementById('btnDownloadCertPdf');
+  if (btnDownloadCert) {
+    btnDownloadCert.addEventListener('click', () => downloadCertificatePdf(cert));
+  }
 
   const btnCopy = document.getElementById('btnCopyVerifyUrl');
   if (btnCopy) {
@@ -36519,6 +36801,8 @@ function renderChangeRoleModal(container, user) {
       verifyCertificatePublic,
       renderCertificateDocumentHtml,
       printCertificateDocument,
+      downloadCertificatePdf,
+      generateA4LandscapePdf,
       transformEntityForPostgres,
       transformEntityFromPostgres,
       STORE_KEY_PROGRAMMES,
@@ -36831,6 +37115,8 @@ function renderChangeRoleModal(container, user) {
     window.verifyCertificatePublic = verifyCertificatePublic;
     window.renderCertificateDocumentHtml = renderCertificateDocumentHtml;
     window.printCertificateDocument = printCertificateDocument;
+    window.downloadCertificatePdf = downloadCertificatePdf;
+    window.generateA4LandscapePdf = generateA4LandscapePdf;
     window.getDefaultCertificateSettingsForProgramme = getDefaultCertificateSettingsForProgramme;
     window.findProgrammeCertificateSettings = findProgrammeCertificateSettings;
     window.saveProgrammeCertificateSettings = saveProgrammeCertificateSettings;
