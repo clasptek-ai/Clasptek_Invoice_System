@@ -46,7 +46,8 @@ function resolveCredentials() {
 function httpsRequest(url, options = {}, payload = null) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
-    const postData = payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
+    const resolvedPayload = payload !== null ? payload : (options.body || null);
+    const postData = resolvedPayload ? (typeof resolvedPayload === 'string' ? resolvedPayload : JSON.stringify(resolvedPayload)) : null;
     const reqHeaders = { ...(options.headers || {}) };
     if (postData && !reqHeaders['Content-Length']) {
       reqHeaders['Content-Length'] = Buffer.byteLength(postData);

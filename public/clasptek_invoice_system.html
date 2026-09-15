@@ -6510,11 +6510,10 @@ async function discoverPostgrestSchemaTables() {
   if (typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.isConfigured || !supabaseClient.isConfigured()) return;
   if (state.postgrestAvailableTables && state.postgrestAvailableTables.size > 0) return;
   try {
-    const config = typeof resolveSupabaseConfiguration === 'function' ? resolveSupabaseConfiguration() : {};
-    const endpoint = (config.endpoint || 'https://logaawoigfxnisimfatf.supabase.co').replace(/\/$/, '');
-    const apiKey = config.anonKey || config.publishableKey;
-    if (!apiKey) return;
-    const res = await fetch(`${endpoint}/rest/v1/`, {
+    const baseUrl = (typeof supabaseClient.getBaseUrl === 'function' ? supabaseClient.getBaseUrl() : '').replace(/\/+$/, '');
+    const apiKey = typeof supabaseClient.getAnonKey === 'function' ? supabaseClient.getAnonKey() : '';
+    if (!baseUrl || !apiKey) return;
+    const res = await fetch(`${baseUrl}/rest/v1/`, {
       method: 'GET',
       headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
     });
@@ -6692,6 +6691,9 @@ const dbRepo = {
         } else if (tableName === 'payments' && (error.code === '23505' || httpStatus === 409 || (error.message && error.message.includes('payments_tenant_id_receipt_no_key')))) {
           const dispNo = (record && (record.receipt_display_no || record.receiptDisplayNo || (record.receiptNo ? `RCT-${record.receiptNo}` : ''))) || (payload && (payload.receipt_display_no || payload.receipt_no)) || 'specified';
           state.connectionError = `Database rejected payment save: Receipt number ${dispNo} is already in use for this tenant (23505). No financial data has been changed.`;
+        } else if (tableName === 'payslips' && (error.code === '23505' || httpStatus === 409 || (error.message && (error.message.includes('uq_payslips_tenant_no') || error.message.includes('payslips_tenant_id_payslip_no_key'))))) {
+          const dispNo = (record && (record.payslip_display_no || record.payslipDisplayNo || (record.payslipNo ? `PSL-${record.payslipNo}` : ''))) || (payload && (payload.payslip_display_no || (payload.payslip_no ? `PSL-${payload.payslip_no}` : ''))) || 'specified';
+          state.connectionError = `Database rejected payslip save: Payslip number ${dispNo} is already in use for this tenant (23505). Please refresh or issue with next available sequence. No payroll data has been changed.`;
         } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
@@ -7015,13 +7017,20 @@ async function logAudit(action, entityType, entityId, reference, previousValue, 
     return { status: 'AUDIT_DEFERRED', reason: 'Enquiry interactions tracked in CRM timeline', entry };
   }
 
-  const hasAuthenticatedUser = Boolean(
-    (state.auth && state.auth.isAuthenticated && (state.auth.supabaseUser || state.auth.supabaseSession || state.auth.user)) ||
-    authUserId
+  const hasSupabaseJwt = Boolean(
+    (typeof state.auth?.supabaseJwt === 'string' && state.auth.supabaseJwt.startsWith('eyJ') && state.auth.supabaseJwt !== supabaseClient.getAnonKey()) ||
+    (typeof state.auth?.supabaseSession?.access_token === 'string' && state.auth.supabaseSession.access_token.startsWith('eyJ') && state.auth.supabaseSession.access_token !== supabaseClient.getAnonKey())
   );
 
-  if (!hasAuthenticatedUser || !isValidUuid(auditTenantId)) {
-    return { status: 'AUDIT_DEFERRED', reason: 'User session or authoritative tenant not yet ready', entry };
+  const hasAuthoritativeTenant = Boolean(
+    typeof isValidUuid === 'function' &&
+    isValidUuid(auditTenantId) &&
+    auditTenantId !== 'clasptek_main' &&
+    auditTenantId !== DEFAULT_TENANT_ID
+  );
+
+  if (!hasSupabaseJwt || !hasAuthoritativeTenant) {
+    return { status: 'AUDIT_DEFERRED', reason: 'Active Supabase session or authoritative tenant UUID not ready', entry };
   }
 
   try {
@@ -7362,7 +7371,10 @@ function transformEntityForPostgres(entity, item, tenantId) {
       };
     }
 
-    case 'personnel':
+    case 'personnel': {
+      const rawEmpStatus = String(item.employmentStatus || item.employment_status || item.status || 'active').trim().toLowerCase();
+      const validEmpStatuses = ['active', 'on_leave', 'suspended', 'deactivated', 'terminated'];
+      const resolvedEmpStatus = validEmpStatuses.includes(rawEmpStatus) ? rawEmpStatus : (rawEmpStatus.includes('active') ? 'active' : 'suspended');
       return {
         id: item.id,
         tenant_id: tenantId,
@@ -7376,7 +7388,7 @@ function transformEntityForPostgres(entity, item, tenantId) {
         employee_type: (item.employeeType || item.employee_type || item.type || 'staff').toLowerCase(),
         department: item.department || null,
         job_title: item.jobTitle || item.job_title || item.role || item.designation || null,
-        employment_status: ((item.employmentStatus || item.employment_status || item.status || 'active').toLowerCase().includes('active') ? 'active' : 'suspended'),
+        employment_status: resolvedEmpStatus,
         date_joined: item.dateJoined || item.date_joined || item.dateOfJoining || null,
         bank_name: item.bankName || item.bank_name || null,
         account_name: item.accountName || item.account_name || null,
@@ -7389,6 +7401,7 @@ function transformEntityForPostgres(entity, item, tenantId) {
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'customers':
       return {
@@ -7887,12 +7900,24 @@ function transformEntityForPostgres(entity, item, tenantId) {
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
 
-    case 'payslips':
+    case 'payslips': {
+      let pslNum = parseInt(item.payslipNo !== undefined ? item.payslipNo : item.payslip_no, 10);
+      if (isNaN(pslNum) || pslNum <= 0) {
+        if (state.counters && typeof state.counters.payslip === 'number' && state.counters.payslip > 0) {
+          state.counters.payslip += 1;
+          pslNum = state.counters.payslip;
+        } else {
+          pslNum = 30001;
+        }
+      }
+      const payDateVal = item.payDate || item.pay_date || new Date().toISOString().split('T')[0];
+      const pslDisplay = item.payslip_display_no || item.payslipDisplayNo || (typeof formatDocNo === 'function' ? formatDocNo('payslip', pslNum, payDateVal) : `PSL-2026-${pslNum}`);
+
       return {
         id: item.id,
         tenant_id: tenantId,
-        payslip_no: String(item.payslipNo || item.payslip_no || item.id),
-        payslip_display_no: item.payslip_display_no || item.payslipDisplayNo || String(item.payslipNo || item.payslip_no || item.id),
+        payslip_no: pslNum,
+        payslip_display_no: String(pslDisplay),
         personnel_id: item.personnelId || item.personnel_id,
         employee_name: item.employeeName || item.employee_name || item.name || 'Employee',
         employee_type: item.employeeType || item.employee_type || 'STAFF',
@@ -7930,6 +7955,7 @@ function transformEntityForPostgres(entity, item, tenantId) {
         created_at: item.createdAt || item.created_at || new Date().toISOString(),
         updated_at: item.updatedAt || item.updated_at || new Date().toISOString()
       };
+    }
 
     case 'facilitator_sessions':
       return {
@@ -11096,10 +11122,43 @@ async function loadAll() {
     if (!isSessionAuthoritative) {
       state.auth = { isAuthenticated: false, user: null };
       state.authoritativeTenantId = null;
-      state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
-      state.diagnosticState = 'NOT_AUTHENTICATED';
-      state.connectionError = null;
       await safeSet(STORE_KEY_AUTH_SESSION, null);
+
+      // Probe database connectivity for diagnostic state
+      try {
+        const pingRes = await supabaseClient.ping();
+        if (!pingRes.success) {
+          if (pingRes.httpStatus === 401 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_401_UNAUTHORIZED) {
+            state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
+            state.diagnosticState = 'AUTHENTICATION_REQUIRED';
+            state.supabase.status = 'connected';
+            state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — USER AUTHENTICATION REQUIRED. User session token is missing, expired, or invalid. PostgreSQL database is reachable. Existing business data has not been modified.';
+          } else if (pingRes.httpStatus === 403 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED) {
+            state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED;
+            state.diagnosticState = 'RLS_RESTRICTED';
+            state.supabase.status = 'connected';
+            state.connectionError = '❌ HTTP 403: POSTGRESQL REACHABLE — RLS RESTRICTION. PostgreSQL database is reachable, but Row-Level Security denied access. Existing business data has not been modified.';
+          } else if (pingRes.httpStatus >= 500 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_500_DATABASE_ERROR) {
+            state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE;
+            state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
+            state.supabase.status = 'error';
+            state.connectionError = '❌ HTTP 500: POSTGRESQL SERVER ERROR. Supabase PostgreSQL server encountered an error. Existing business data has not been modified.';
+          } else {
+            state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.CONNECTIVITY_FAILED;
+            state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
+            state.supabase.status = 'error';
+            state.connectionError = 'Unable to reach the database. POSTGRESQL: UNREACHABLE. Clasptek cannot currently reach its authoritative PostgreSQL database. No financial data has been changed.';
+          }
+        } else {
+          state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
+          state.diagnosticState = 'NOT_AUTHENTICATED';
+          state.connectionError = null;
+        }
+      } catch (_) {
+        state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.UNVERIFIED;
+        state.diagnosticState = 'NOT_AUTHENTICATED';
+        state.connectionError = null;
+      }
       state.loading = false;
       render();
       return;
@@ -11397,12 +11456,12 @@ async function loadAll() {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
           state.diagnosticState = 'AUTHENTICATION_REQUIRED';
           state.supabase.status = 'connected';
-          state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — USER AUTHENTICATION REQUIRED. User session token is missing, expired, or invalid. PostgreSQL database is reachable.';
+          state.connectionError = '❌ HTTP 401: POSTGRESQL REACHABLE — USER AUTHENTICATION REQUIRED. User session token is missing, expired, or invalid. PostgreSQL database is reachable. Existing business data has not been modified.';
         } else if (pingRes.httpStatus === 403 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_403_RLS_DENIED) {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED;
           state.diagnosticState = 'RLS_RESTRICTED';
           state.supabase.status = 'connected';
-          state.connectionError = '❌ HTTP 403: POSTGRESQL REACHABLE — RLS RESTRICTION. PostgreSQL database is reachable, but Row-Level Security denied access.';
+          state.connectionError = '❌ HTTP 403: POSTGRESQL REACHABLE — RLS RESTRICTION. PostgreSQL database is reachable, but Row-Level Security denied access. Existing business data has not been modified.';
         } else if (pingRes.httpStatus >= 500 || pingRes.failureClassification === DIAGNOSTIC_CLASSIFICATION.HTTP_500_DATABASE_ERROR) {
           state.databaseAuthorityState = DATABASE_AUTHORITY_STATE.DATABASE_UNAVAILABLE;
           state.diagnosticState = SUPABASE_DIAGNOSTIC_STATE.CONFIGURED_NOT_REACHABLE;
@@ -11911,6 +11970,16 @@ function reconcileCountersFromDatabase() {
       return max;
     }, 1000);
     state.counters.enrolment = Math.max(Number(state.counters.enrolment) || 0, maxEnr);
+  }
+
+  // 6. Authoritative Payslip Counter Reconciliation
+  if (Array.isArray(state.payslips) && state.payslips.length > 0) {
+    const maxPsl = state.payslips.reduce((max, psl) => {
+      const raw = psl.payslipNo || psl.payslip_no;
+      const n = parseInt(raw, 10);
+      return (!isNaN(n) && n > max) ? n : max;
+    }, 30000);
+    state.counters.payslip = Math.max(Number(state.counters.payslip) || 0, maxPsl);
   }
 
   try {
@@ -20516,7 +20585,7 @@ function renderDatabaseBannerHtml() {
     return `
       <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div><strong>🔴 POSTGRESQL REACHABLE — AUTHENTICATION REQUIRED.</strong> ${escapeHtml(state.connectionError || 'Supabase user session expired or unauthorized. Please sign in again.')}</div>
+          <div><strong>🔴 POSTGRESQL AUTHENTICATION FAILED — AUTHORITATIVE MODE NOT ACTIVE.</strong> ${escapeHtml(state.connectionError || 'Supabase user session expired or unauthorized. Please sign in again.')}</div>
           <div style="font-size:11.5px; margin-top:3px; color:#7F1D1D;">Authentication: SESSION EXPIRED / SIGN-IN REQUIRED | PostgreSQL: REACHABLE | Authority: UNVERIFIED | Data Safety: PROTECTED</div>
         </div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
@@ -20537,7 +20606,7 @@ function renderDatabaseBannerHtml() {
   if (st === 'CONNECTIVITY_FAILED' || st === 'DATABASE_UNAVAILABLE') {
     return `
       <div id="dbConnWarningBanner" style="background:#FEF2F2; border-bottom:1.5px solid var(--danger); padding:10px 18px; font-size:12.5px; color:#991B1B; display:flex; justify-content:space-between; align-items:center;">
-        <div><strong>🔴 POSTGRESQL UNREACHABLE — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
+        <div><strong>🔴 POSTGRESQL DISCONNECTED — AUTHORITATIVE MODE NOT ACTIVE.</strong> Clasptek cannot currently reach its authoritative PostgreSQL database. Existing business data has not been modified.</div>
         <button class="cp-btn sm secondary" id="btnDismissConnErr" style="border-color:var(--danger); color:#991B1B; padding:2px 8px;">Dismiss</button>
       </div>
     `;
@@ -21124,6 +21193,13 @@ function closeModal() {
   state.modal = null;
   document.body.classList.remove('cp-modal-open');
   render();
+}
+
+function renderContent(container) {
+  return render(container);
+}
+if (typeof window !== 'undefined') {
+  window.renderContent = renderContent;
 }
 
 function attachModalWheelHandling(container) {
@@ -32449,7 +32525,7 @@ function renderEnrolStudentModal(container, data = {}) {
     }
 
     closeModal();
-    renderContent();
+    render();
   });
 }
 
@@ -33441,7 +33517,7 @@ function renderAddProgrammeModal(container) {
     }
 
     closeModal();
-    renderContent();
+    render();
   });
 }
 
@@ -33553,7 +33629,7 @@ function renderEditProgrammeModal(container, prog) {
     }
 
     closeModal();
-    renderContent();
+    render();
   });
 }
 
@@ -33672,7 +33748,7 @@ function renderAddCohortModal(container, data = {}) {
     }
 
     closeModal();
-    renderContent();
+    render();
   });
 }
 
@@ -33782,7 +33858,7 @@ function renderEditCohortModal(container, cohort) {
     }
 
     closeModal();
-    renderContent();
+    render();
   });
 }
 
@@ -35987,7 +36063,11 @@ function renderAddStaffModal(container) {
       if (!res.ok) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '&#x2714; Create Staff Profile';
-        errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        if (res.status === 409) {
+          errEl.innerHTML = `&#x26A0;&#xFE0F; <strong>Duplicate Conflict (409):</strong> ${escapeHtml(result.error || 'A record with this email or Employee ID already exists.')} Please check existing personnel directory or use a distinct email.`;
+        } else {
+          errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        }
         errEl.style.display = 'block';
         errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -36213,7 +36293,11 @@ function renderAddFacilitatorModal(container) {
       if (!res.ok) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '&#x2714; Create Facilitator Profile';
-        errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        if (res.status === 409) {
+          errEl.innerHTML = `&#x26A0;&#xFE0F; <strong>Duplicate Conflict (409):</strong> ${escapeHtml(result.error || 'A record with this email or Facilitator ID already exists.')} Please check existing personnel directory or use a distinct email.`;
+        } else {
+          errEl.textContent = result.error || `Provisioning failed (HTTP ${res.status}).`;
+        }
         errEl.style.display = 'block';
         errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -36344,14 +36428,23 @@ function renderDeactivatePersonnelModal(container, pers) {
     }
 
     pers.status = 'deactivated';
+    pers.employmentStatus = 'deactivated';
+    pers.employment_status = 'deactivated';
     pers.deactivatedAt = new Date().toISOString();
     pers.deactivatedBy = state.auth.user ? state.auth.user.name : 'Super Admin';
     pers.deactivationReason = reason;
 
     // Suspend associated user login account
-    const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || u.email.toLowerCase() === pers.email.toLowerCase());
+    const usr = state.users.find(u => u.personnelId === pers.id || u.id === pers.userId || (u.email && pers.email && u.email.toLowerCase() === pers.email.toLowerCase()));
     if (usr) {
       usr.status = 'deactivated';
+      if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord) {
+        try { await dbRepo.saveRecord(STORE_KEY_SYSTEM_USERS, usr); } catch (_) {}
+      }
+    }
+
+    if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord) {
+      try { await dbRepo.saveRecord(STORE_KEY_PERSONNEL, pers); } catch (_) {}
     }
 
     await safeSet(STORE_KEY_PERSONNEL, state.personnel);
@@ -36360,6 +36453,7 @@ function renderDeactivatePersonnelModal(container, pers) {
 
     alert(`${pers.name} has been deactivated. Historical records have been preserved.`);
     closeModal();
+    if (typeof render === 'function') render();
   });
 }
 
@@ -36453,8 +36547,7 @@ function renderDeletePersonnelModal(container, pers) {
         conflictBox.style.display = 'block';
         if (switchBtn) {
           switchBtn.onclick = () => {
-            closeModal();
-            openModal('deactivatePersonnelModal', { personnel: pers });
+            renderDeactivatePersonnelModal(container, pers);
           };
         }
         return;
@@ -36917,6 +37010,7 @@ function renderChangeRoleModal(container, user) {
       renderProductionControlTab,
       renderSupabaseModal,
       render,
+      renderContent,
       renderDashboardTab,
       renderDatabaseBannerHtml,
       renderReceivablesTab,
@@ -37166,6 +37260,7 @@ function renderChangeRoleModal(container, user) {
     window.supabaseAuth = supabaseAuth;
     window.state = state;
     window.render = render;
+    window.renderContent = renderContent;
     window.renderInvoicesTab = renderInvoicesTab;
     window.dbRepo = dbRepo;
     window.CANONICAL_INVOICE_STATUSES = CANONICAL_INVOICE_STATUSES;

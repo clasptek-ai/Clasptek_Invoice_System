@@ -52,7 +52,8 @@ function resolveCredentials() {
 function httpsRequest(url, options = {}, payload = null) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
-    const postData = payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
+    const resolvedPayload = payload !== null ? payload : (options.body || null);
+    const postData = resolvedPayload ? (typeof resolvedPayload === 'string' ? resolvedPayload : JSON.stringify(resolvedPayload)) : null;
     const reqHeaders = { ...(options.headers || {}) };
     if (postData && !reqHeaders['Content-Length']) {
       reqHeaders['Content-Length'] = Buffer.byteLength(postData);
@@ -423,14 +424,17 @@ module.exports = async function handler(req, res) {
   // Step D: Log Audit Entry
   try {
     const auditId = `aud_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    await httpsRequest(`${supabaseUrl}/rest/v1/finance_audit_log`, {
-      method: 'POST',
-      headers: {
-        'apikey': secretKey,
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json'
+    await httpsRequest(
+      `${supabaseUrl}/rest/v1/finance_audit_log`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': secretKey,
+          'Authorization': `Bearer ${secretKey}`,
+          'Content-Type': 'application/json'
+        }
       },
-      body: JSON.stringify({
+      {
         id: auditId,
         tenant_id: authoritativeTenantId,
         actor_id: callerUser.id,
@@ -441,8 +445,8 @@ module.exports = async function handler(req, res) {
         entity_name: targetPersonnel.full_name,
         source: 'supabase_app',
         reason: `Deleted personnel ${targetPersonnel.full_name} (${targetPersonnel.employee_id || 'ID'}), Auth account: ${authUserId || 'None'}. Post-check: personnel_absent=${persAbsent}, auth_absent=${authAbsent}.`
-      })
-    });
+      }
+    );
   } catch (_) {}
 
   // Return success
