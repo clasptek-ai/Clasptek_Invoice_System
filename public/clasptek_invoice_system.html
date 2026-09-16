@@ -6513,14 +6513,39 @@ async function discoverPostgrestSchemaTables() {
     const baseUrl = (typeof supabaseClient.getBaseUrl === 'function' ? supabaseClient.getBaseUrl() : '').replace(/\/+$/, '');
     const apiKey = typeof supabaseClient.getAnonKey === 'function' ? supabaseClient.getAnonKey() : '';
     if (!baseUrl || !apiKey) return;
+
+    const hasSession = Boolean(state.auth?.supabaseSession);
+    const hasAccessToken = Boolean(state.auth?.supabaseJwt || state.auth?.supabaseSession?.access_token);
+    const hasApiKey = Boolean(apiKey);
+
+    const isDev = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.__CLASPTEK_DEV__)) || (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production');
+    if (isDev) {
+      console.log('[Supabase Schema Discovery Diagnostic]', {
+        hasSession,
+        hasAccessToken,
+        hasApiKey
+      });
+    }
+
+    // Follow established application authentication pattern via getHeaders()
+    const headers = typeof supabaseClient.getHeaders === 'function'
+      ? supabaseClient.getHeaders()
+      : { 'apikey': apiKey };
+
     const res = await fetch(`${baseUrl}/rest/v1/`, {
       method: 'GET',
-      headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}` }
+      headers
     });
     if (res.ok) {
       const spec = await res.json();
       if (spec && spec.paths) {
         state.postgrestAvailableTables = new Set(Object.keys(spec.paths).map(p => p.replace(/^\//, '')));
+      }
+    } else {
+      // Safely skip schema discovery if endpoint requires secret API key (401/403) or is restricted;
+      // never turn a harmless discovery operation into a blocking application failure
+      if (isDev) {
+        console.warn(`[Supabase Schema Discovery] Root schema endpoint returned HTTP ${res.status}. Falling back safely.`);
       }
     }
   } catch (_) {}
@@ -6694,6 +6719,8 @@ const dbRepo = {
         } else if (tableName === 'payslips' && (error.code === '23505' || httpStatus === 409 || (error.message && (error.message.includes('uq_payslips_tenant_no') || error.message.includes('payslips_tenant_id_payslip_no_key'))))) {
           const dispNo = (record && (record.payslip_display_no || record.payslipDisplayNo || (record.payslipNo ? `PSL-${record.payslipNo}` : ''))) || (payload && (payload.payslip_display_no || (payload.payslip_no ? `PSL-${payload.payslip_no}` : ''))) || 'specified';
           state.connectionError = `Database rejected payslip save: Payslip number ${dispNo} is already in use for this tenant (23505). Please refresh or issue with next available sequence. No payroll data has been changed.`;
+        } else if (tableName === 'payslips' && (httpStatus === 403 || (error.message && error.message.includes('violates row-level security')))) {
+          state.connectionError = `Database rejected update on payslips (HTTP 403): User lacks finance management authorization or tenant membership mismatch. No financial data has been changed.`;
         } else if (tableName === 'invoices' && (error.code === '23514' || (error.message && error.message.includes('invoices_status_check')))) {
           state.connectionError = `Database rejected invoice save: Invalid invoice status constraint violation (23514). Status must be one of: ${CANONICAL_INVOICE_STATUSES.join(', ')}.`;
         } else if (tableName === 'enquiries' && (error.code === '23514' || (error.message && error.message.includes('enquiries_status_check')))) {
@@ -6842,6 +6869,10 @@ async function safeSet(key, value) {
               state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
             } else if (tableName === 'payments' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('payments_tenant_id_receipt_no_key'))) {
               state.connectionError = `Database rejected update on payments (HTTP 409): Receipt number is already in use for this tenant. No financial data has been changed.`;
+            } else if (tableName === 'payslips' && (httpStatus === 403 || errMsg.includes('violates row-level security'))) {
+              state.connectionError = `Database rejected update on payslips (HTTP 403): User lacks finance management authorization or tenant membership mismatch. No financial data has been changed.`;
+            } else if (tableName === 'payslips' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('uq_payslips_tenant_no') || errMsg.includes('payslips_tenant_id_payslip_no_key'))) {
+              state.connectionError = `Database rejected update on payslips (HTTP 409): Payslip number is already in use for this tenant. No financial data has been changed.`;
             } else if (httpStatus === 0) {
               state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
             } else {
@@ -6874,6 +6905,10 @@ async function safeSet(key, value) {
             state.connectionError = `Database rejected update on invoices (HTTP 409): Invoice number is already in use for this tenant. No financial data has been changed.`;
           } else if (tableName === 'payments' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('payments_tenant_id_receipt_no_key'))) {
             state.connectionError = `Database rejected update on payments (HTTP 409): Receipt number is already in use for this tenant. No financial data has been changed.`;
+          } else if (tableName === 'payslips' && (httpStatus === 403 || errMsg.includes('violates row-level security'))) {
+            state.connectionError = `Database rejected update on payslips (HTTP 403): User lacks finance management authorization or tenant membership mismatch. No financial data has been changed.`;
+          } else if (tableName === 'payslips' && (errCode === '23505' || httpStatus === 409 || errMsg.includes('uq_payslips_tenant_no') || errMsg.includes('payslips_tenant_id_payslip_no_key'))) {
+            state.connectionError = `Database rejected update on payslips (HTTP 409): Payslip number is already in use for this tenant. No financial data has been changed.`;
           } else if (httpStatus === 0) {
             state.connectionError = `Unable to connect to the database. Please check your network connection. No financial data has been changed. (${errMsg || 'Network error'})`;
           } else {
@@ -7913,16 +7948,23 @@ function transformEntityForPostgres(entity, item, tenantId) {
       const payDateVal = item.payDate || item.pay_date || new Date().toISOString().split('T')[0];
       const pslDisplay = item.payslip_display_no || item.payslipDisplayNo || (typeof formatDocNo === 'function' ? formatDocNo('payslip', pslNum, payDateVal) : `PSL-2026-${pslNum}`);
 
+      // Resolve authoritative tenant UUID without defaulting to clasptek_main
+      const resolvedTenant = (tenantId && isValidUuid(tenantId) && tenantId !== 'clasptek_main')
+        ? tenantId
+        : ((item.tenant_id && isValidUuid(item.tenant_id) && item.tenant_id !== 'clasptek_main')
+          ? item.tenant_id
+          : (state.authoritativeTenantId && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main' ? state.authoritativeTenantId : tenantId));
+
       return {
         id: item.id,
-        tenant_id: tenantId,
+        tenant_id: resolvedTenant,
         payslip_no: pslNum,
         payslip_display_no: String(pslDisplay),
         personnel_id: item.personnelId || item.personnel_id,
         employee_name: item.employeeName || item.employee_name || item.name || 'Employee',
         employee_type: item.employeeType || item.employee_type || 'STAFF',
-        department: item.department || null,
-        role: item.role || null,
+        department: item.department || item.dept || 'Operations',
+        role: item.role || 'Staff',
         pay_period: item.payPeriod || item.pay_period || item.payrollPeriod || item.payroll_period || '2026-09',
         pay_date: item.payDate || item.pay_date || new Date().toISOString().split('T')[0],
         basic_pay: Number(item.basicPay !== undefined ? item.basicPay : (item.basic_pay !== undefined ? item.basic_pay : (item.basicSalary !== undefined ? item.basicSalary : (item.basic_salary !== undefined ? item.basic_salary : 0)))),
@@ -30469,8 +30511,29 @@ function renderGeneratePayslipModal(container) {
       errEl.style.display = 'block';
       return;
     }
+    if (!dept) {
+      errEl.textContent = 'Please select or enter a department.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const pers = state.personnel.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (!pers || !pers.id) {
+      errEl.textContent = 'Selected personnel must exist in the personnel directory.';
+      errEl.style.display = 'block';
+      return;
+    }
     if (isPeriodLocked(dateStr)) {
       errEl.textContent = 'Financial period is locked. Modifications prohibited.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    let authoritativeTenant = (typeof resolveAuthoritativeTenantId === 'function' ? resolveAuthoritativeTenantId() : null) || state.authoritativeTenantId;
+    if (!authoritativeTenant || !isValidUuid(authoritativeTenant) || authoritativeTenant === 'clasptek_main') {
+      authoritativeTenant = await lookupAuthoritativeTenantFromDatabase();
+    }
+    if (!authoritativeTenant || !isValidUuid(authoritativeTenant) || authoritativeTenant === 'clasptek_main') {
+      errEl.textContent = 'Cannot save payslip: Active tenant membership could not be verified. Please ensure your account has an assigned tenant.';
       errEl.style.display = 'block';
       return;
     }
@@ -30490,18 +30553,17 @@ function renderGeneratePayslipModal(container) {
     });
 
     const totals = calculatePayslipTotals(basic, allowances, deductions);
-    const pers = state.personnel.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
 
     state.counters.payslip += 1;
     const pslNo = formatDocNo('payslip', state.counters.payslip, dateStr);
 
     const payslip = {
       id: 'psl_' + Date.now(),
-      tenant_id: DEFAULT_TENANT_ID,
+      tenant_id: authoritativeTenant,
       payslipNo: state.counters.payslip,
       payslip_display_no: pslNo,
-      personnelId: pers ? pers.id : null,
-      employeeId: pers ? (pers.employeeId || pers.id) : 'EMP-XXXX',
+      personnelId: pers.id,
+      employeeId: pers.employeeId || pers.id || 'EMP-XXXX',
       employeeName: name,
       employeeType: type,
       department: dept,
