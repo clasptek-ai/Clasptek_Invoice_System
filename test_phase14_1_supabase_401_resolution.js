@@ -434,9 +434,8 @@ async function runPhase14_1Tests() {
   app1.state.databaseAuthorityState = app1.DATABASE_AUTHORITY_STATE.AUTHENTICATION_FAILED;
   const banner401 = app1.renderDatabaseBannerHtml();
   assert(banner401.includes('🔴 POSTGRESQL AUTHENTICATION FAILED'), '401 banner displays POSTGRESQL AUTHENTICATION FAILED');
-  assert(banner401.includes('HTTP Status: 401'), '401 banner explicitly shows HTTP Status: 401');
+  assert(banner401.includes('Authentication: SESSION EXPIRED / SIGN-IN REQUIRED'), '401 banner shows authentication status');
   assert(banner401.includes('Data Safety: PROTECTED'), '401 banner confirms Data Safety: PROTECTED');
-  assert(banner401.includes('Migration: BLOCKED'), '401 banner confirms Migration: BLOCKED');
 
   // 403 Banner
   app1.state.databaseAuthorityState = app1.DATABASE_AUTHORITY_STATE.RLS_AUTHORIZATION_FAILED;
@@ -450,12 +449,14 @@ async function runPhase14_1Tests() {
   assert(bannerEmpty.includes('🟠 POSTGRESQL CONNECTED — DATABASE EMPTY'), '200 empty banner displays POSTGRESQL CONNECTED — DATABASE EMPTY');
   assert(bannerEmpty.includes('LOCAL LEGACY DATA DETECTED — MIGRATION REQUIRED'), '200 empty banner displays LOCAL LEGACY DATA DETECTED');
 
-  // 200 Data Present Banner
+  // 200 Data Present (Clean Portal Header - No status indicator)
   app1.state.databaseAuthorityState = app1.DATABASE_AUTHORITY_STATE.AUTHORITATIVE;
   app1.state.invoices = [{ id: 'INV-1', total: 500000 }];
   const bannerData = app1.renderDatabaseBannerHtml();
-  assert(bannerData.includes('🟢 POSTGRESQL CONNECTED — DATA PRESENT'), '200 data present banner displays POSTGRESQL CONNECTED — DATA PRESENT');
-  assert(bannerData.includes('POSTGRESQL AUTHORITATIVE MODE ACTIVE'), 'Authoritative banner active');
+  assert(bannerData === '', 'Healthy authoritative state renders clean header without status banner');
+  assert(!bannerData.includes('POSTGRESQL CONNECTED'), 'Header does NOT contain POSTGRESQL CONNECTED');
+  assert(!bannerData.includes('POSTGRESQL AUTHORITATIVE MODE ACTIVE'), 'Header does NOT contain POSTGRESQL AUTHORITATIVE MODE ACTIVE');
+  assert(!bannerData.includes('certified single source of truth'), 'Header does NOT contain certified single source of truth');
 
   console.log('\n========================================================================================');
   console.log(` PHASE 14.1 CERTIFICATION: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL ${totalTests} ASSERTIONS)`);
