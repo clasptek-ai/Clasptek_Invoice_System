@@ -72,11 +72,13 @@ function loadApplicationSandbox() {
       warn: () => {},
       error: () => {}
     },
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
     setTimeout: (fn) => setTimeout(fn, 0),
     clearTimeout: (id) => clearTimeout(id),
     setInterval: () => 1,
     clearInterval: () => {}
   };
+  sandbox.window.fetch = sandbox.fetch;
 
   vm.runInNewContext(scriptContent, sandbox);
   return { app: sandbox.module.exports, sandbox, html };
