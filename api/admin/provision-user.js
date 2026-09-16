@@ -113,6 +113,104 @@ async function parseRequestBody(req) {
   });
 }
 
+async function allocateAuthoritativePersonnelId(supabaseUrl, secretKey, tenantId, employeeType, requestedId = null) {
+  const prefix = employeeType === 'facilitator' ? 'FAC-' : 'EMP-';
+  const expectedFormat = employeeType === 'facilitator' ? /^FAC-[0-9]{4}$/ : /^EMP-[0-9]{4}$/;
+
+  const persRes = await httpsRequest(
+    `${supabaseUrl}/rest/v1/personnel?tenant_id=eq.${tenantId}&select=employee_id`,
+    { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+  );
+
+  const idempRes = await httpsRequest(
+    `${supabaseUrl}/rest/v1/idempotency_keys?tenant_id=eq.${tenantId}&resource_type=eq.personnel_id_sequence&select=resource_id`,
+    { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+  );
+
+  const consumedNumbers = new Set();
+
+  if (Array.isArray(persRes.body)) {
+    persRes.body.forEach(row => {
+      const eid = String(row.employee_id || '').trim();
+      if (eid.startsWith(prefix)) {
+        const num = parseInt(eid.slice(prefix.length), 10);
+        if (!isNaN(num)) consumedNumbers.add(num);
+      }
+    });
+  }
+
+  if (Array.isArray(idempRes.body)) {
+    idempRes.body.forEach(row => {
+      const rid = String(row.resource_id || '').trim();
+      if (rid.startsWith(prefix)) {
+        const num = parseInt(rid.slice(prefix.length), 10);
+        if (!isNaN(num)) consumedNumbers.add(num);
+      }
+    });
+  }
+
+  // Baseline minimums derived from existing database records:
+  // Staff: max known is 6 (EMP-0006)
+  // Facilitator: max known is 4 (FAC-0004)
+  let maxNum = employeeType === 'facilitator' ? 4 : 6;
+  consumedNumbers.forEach(n => {
+    if (n > maxNum) maxNum = n;
+  });
+
+  let candidateNum = maxNum + 1;
+  if (requestedId && expectedFormat.test(requestedId)) {
+    const reqNum = parseInt(requestedId.slice(prefix.length), 10);
+    if (!consumedNumbers.has(reqNum) && reqNum >= candidateNum) {
+      candidateNum = reqNum;
+    }
+  }
+
+  const maxAttempts = 50;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    while (consumedNumbers.has(candidateNum)) {
+      candidateNum++;
+    }
+
+    const candidateId = `${prefix}${String(candidateNum).padStart(4, '0')}`;
+    const reservationKey = `idemp_pers_${tenantId}_${candidateId}`;
+
+    // Atomically reserve in public.idempotency_keys using PostgreSQL PK uniqueness
+    const reserveRes = await httpsRequest(
+      `${supabaseUrl}/rest/v1/idempotency_keys`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': secretKey,
+          'Authorization': `Bearer ${secretKey}`,
+          'Prefer': 'return=representation'
+        }
+      },
+      {
+        id: reservationKey,
+        tenant_id: tenantId,
+        idempotency_key: `allocated_personnel_id_${candidateId}`,
+        resource_type: 'personnel_id_sequence',
+        resource_id: candidateId
+      }
+    );
+
+    if (reserveRes.status === 201) {
+      const checkPersonnel = await httpsRequest(
+        `${supabaseUrl}/rest/v1/personnel?tenant_id=eq.${tenantId}&employee_id=eq.${encodeURIComponent(candidateId)}&select=id`,
+        { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+      );
+      if (Array.isArray(checkPersonnel.body) && checkPersonnel.body.length === 0) {
+        return candidateId;
+      }
+    }
+
+    consumedNumbers.add(candidateNum);
+    candidateNum++;
+  }
+
+  throw new Error(`Failed to allocate sequential ${prefix}#### after ${maxAttempts} attempts.`);
+}
+
 module.exports = async function handler(req, res) {
   // 1. CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -254,11 +352,28 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  let employeeId = String(body.employee_id || body.employeeId || '').trim();
-  if (!employeeId) {
-    const prefix = employeeType === 'facilitator' ? 'FAC-' : 'EMP-';
-    const randSuffix = Math.floor(1000 + Math.random() * 9000);
-    employeeId = `${prefix}${randSuffix}`;
+  // 4b. Canonical Format Validation & Authoritative PostgreSQL Sequence Allocation
+  const isFacilitator = employeeType === 'facilitator';
+  const expectedFormat = isFacilitator ? /^FAC-[0-9]{4}$/ : /^EMP-[0-9]{4}$/;
+  const requestedId = String(body.employee_id || body.employeeId || '').trim();
+
+  // If client passes an ID, validate format strictly against ^(EMP|FAC)-[0-9]{4}$
+  if (requestedId && !expectedFormat.test(requestedId)) {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({
+      error: `Invalid personnel ID format: '${requestedId}'. ${isFacilitator ? 'Facilitator IDs must follow FAC-#### (exactly 4 digits).' : 'Staff IDs must follow EMP-#### (exactly 4 digits).'}`
+    }));
+  }
+
+  // Authoritatively allocate the next sequential, atomic, collision-free ID from PostgreSQL
+  let employeeId;
+  try {
+    employeeId = await allocateAuthoritativePersonnelId(supabaseUrl, secretKey, authoritativeTenantId, employeeType, requestedId);
+  } catch (allocErr) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ error: `Authoritative personnel ID allocation failed: ${allocErr.message}` }));
   }
 
   const firstName = String(body.first_name || body.firstName || fullName.split(' ')[0] || '').trim();
@@ -534,3 +649,5 @@ module.exports = async function handler(req, res) {
     membership: createdMembership
   }));
 };
+
+module.exports.allocateAuthoritativePersonnelId = allocateAuthoritativePersonnelId;

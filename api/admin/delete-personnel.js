@@ -349,6 +349,29 @@ module.exports = async function handler(req, res) {
     }));
   }
 
+  // Ensure the employee_id remains permanently consumed in PostgreSQL so it can never be reused
+  if (targetPersonnel.employee_id) {
+    try {
+      const idempKey = `idemp_pers_${authoritativeTenantId}_${targetPersonnel.employee_id}`;
+      await httpsRequest(`${supabaseUrl}/rest/v1/idempotency_keys`, {
+        method: 'POST',
+        headers: {
+          'apikey': secretKey,
+          'Authorization': `Bearer ${secretKey}`,
+          'Prefer': 'resolution=ignore-duplicates'
+        },
+        body: JSON.stringify({
+          id: idempKey,
+          tenant_id: authoritativeTenantId,
+          operation: 'PERSONNEL_ID_CONSUMED_DELETED',
+          request_hash: targetPersonnel.employee_id,
+          response_payload: { employee_id: targetPersonnel.employee_id, deleted_personnel_id: persId, consumed_at: new Date().toISOString() },
+          created_at: new Date().toISOString()
+        })
+      });
+    } catch (_) {}
+  }
+
   // 8. Safe Transactional Deletion (Zero Dependencies)
   // Step A: Database-side deletion of tenant_memberships and personnel
   try {

@@ -6671,6 +6671,19 @@ const dbRepo = {
         }
       }
 
+      if (tableName === 'personnel' && record && record.id) {
+        // Enforce employee_id immutability on personnel updates
+        const existingPers = Array.isArray(state.personnel) ? state.personnel.find(p => p.id === record.id) : null;
+        if (existingPers) {
+          const lockedEmpId = existingPers.employeeId || existingPers.employee_id || existingPers.employeeNo;
+          if (lockedEmpId) {
+            payload.employee_id = lockedEmpId;
+            record.employeeId = lockedEmpId;
+            record.employee_id = lockedEmpId;
+          }
+        }
+      }
+
       let saveRes;
       if (tableName === 'crm_intake_applications') {
         saveRes = await supabaseClient.from(tableName).update(payload, { id: record.id });
@@ -12024,9 +12037,77 @@ function reconcileCountersFromDatabase() {
     state.counters.payslip = Math.max(Number(state.counters.payslip) || 0, maxPsl);
   }
 
+  // 7. Authoritative Staff Counter Reconciliation (EMP-####)
+  if (Array.isArray(state.personnel) && state.personnel.length > 0) {
+    const maxStaff = state.personnel.reduce((max, p) => {
+      const raw = p.employeeId || p.employee_id || p.employeeNo || '';
+      const match = String(raw).match(/^EMP-(\d+)$/i);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        return (!isNaN(n) && n > max) ? n : max;
+      }
+      return max;
+    }, 6);
+    state.counters.staff = Math.max(Number(state.counters.staff) || 0, maxStaff);
+  } else {
+    state.counters.staff = Math.max(Number(state.counters.staff) || 0, 6);
+  }
+
+  // 8. Authoritative Facilitator Counter Reconciliation (FAC-####)
+  if (Array.isArray(state.personnel) && state.personnel.length > 0) {
+    const maxFac = state.personnel.reduce((max, p) => {
+      const raw = p.employeeId || p.employee_id || p.employeeNo || '';
+      const match = String(raw).match(/^FAC-(\d+)$/i);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        return (!isNaN(n) && n > max) ? n : max;
+      }
+      return max;
+    }, 4);
+    state.counters.facilitator = Math.max(Number(state.counters.facilitator) || 0, maxFac);
+  } else {
+    state.counters.facilitator = Math.max(Number(state.counters.facilitator) || 0, 4);
+  }
+
   try {
     localStorage.setItem(STORE_KEY_COUNTERS, JSON.stringify(state.counters));
   } catch (_) {}
+}
+
+function getNextStaffIdPreview() {
+  let max = 6;
+  if (Array.isArray(state.personnel)) {
+    for (const p of state.personnel) {
+      const raw = p.employeeId || p.employee_id || p.employeeNo || '';
+      const m = String(raw).match(/^EMP-(\d+)$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+  }
+  if (state.counters && typeof state.counters.staff === 'number') {
+    max = Math.max(max, state.counters.staff);
+  }
+  return 'EMP-' + String(max + 1).padStart(4, '0');
+}
+
+function getNextFacilitatorIdPreview() {
+  let max = 4;
+  if (Array.isArray(state.personnel)) {
+    for (const p of state.personnel) {
+      const raw = p.employeeId || p.employee_id || p.employeeNo || '';
+      const m = String(raw).match(/^FAC-(\d+)$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+  }
+  if (state.counters && typeof state.counters.facilitator === 'number') {
+    max = Math.max(max, state.counters.facilitator);
+  }
+  return 'FAC-' + String(max + 1).padStart(4, '0');
 }
 
 let _studentNumberGenerationLock = Promise.resolve();
@@ -29404,12 +29485,13 @@ function renderSettingsTab(container) {
               <table class="cp-table">
                 <thead>
                   <tr>
-                    <th>Personnel Name</th><th>Personnel Type</th><th>Department</th><th>Official Role</th><th>Contact Email</th><th style="text-align:right;">Base Compensation</th>
+                    <th>Personnel ID</th><th>Personnel Name</th><th>Personnel Type</th><th>Department</th><th>Official Role</th><th>Contact Email</th><th style="text-align:right;">Base Compensation</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${state.personnel.map(emp => `
                     <tr>
+                      <td style="font-family:var(--font-mono); font-weight:700; color:var(--text-muted);">${escapeHtml(emp.employeeId || emp.employee_id || emp.employeeNo || emp.id)}</td>
                       <td style="font-weight:700; color:var(--primary);">${escapeHtml(emp.name)}</td>
                       <td><span class="cp-pill ${emp.type === 'facilitator' ? 'category-pill' : 'new'}">${escapeHtml(emp.type.toUpperCase())}</span></td>
                       <td>${escapeHtml(emp.department)}</td>
@@ -31132,6 +31214,11 @@ function renderCanonicalPayslipDocument(payslip) {
         <div class="cp-doc-meta-block">
           <div class="cp-doc-section-label">EMPLOYEE / BENEFICIARY INFORMATION</div>
           <div class="cp-doc-client-name">${escapeHtml(payslip.employeeName)}</div>
+          ${(() => {
+            const linkedPers = (Array.isArray(state.personnel) ? state.personnel : []).find(p => p.id === payslip.personnelId || p.id === payslip.personnel_id);
+            const empIdDisp = payslip.employeeId || payslip.employee_id || (linkedPers ? (linkedPers.employeeId || linkedPers.employee_id || linkedPers.employeeNo) : null);
+            return empIdDisp ? `<div class="cp-doc-meta-line">Personnel ID: <strong style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(empIdDisp)}</strong></div>` : '';
+          })()}
           <div class="cp-doc-meta-line">Designation / Role: <strong>${escapeHtml(payslip.role)}</strong></div>
           <div class="cp-doc-meta-line">Department: <strong>${escapeHtml(payslip.department)}</strong></div>
           <div class="cp-doc-meta-line">Classification: <strong>${escapeHtml((payslip.employeeType || 'Staff').toUpperCase())}</strong></div>
@@ -35890,6 +35977,7 @@ Action: Update the application's Supabase public API key in the field above and 
 // ----------------------------------------------------
 function renderAddStaffModal(container) {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const previewEmpId = (typeof getNextStaffIdPreview === 'function') ? getNextStaffIdPreview() : 'EMP-0007';
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
@@ -35915,15 +36003,19 @@ function renderAddStaffModal(container) {
           <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin:16px 0 8px;">2. EMPLOYMENT INFORMATION</div>
           <div class="cp-row3">
             <div class="cp-field">
+              <label>Personnel ID (Auto-Allocated) *</label>
+              <input id="staffEmpId" value="${escapeHtml(previewEmpId)}" readonly disabled style="background:var(--bg-subtle, #f1f5f9); color:var(--text-muted, #475569); cursor:not-allowed; font-weight:700; font-family:monospace; letter-spacing:0.5px;" />
+            </div>
+            <div class="cp-field">
               <label>Department *</label>
               <select id="staffDept">
                 ${DEPARTMENTS.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
               </select>
             </div>
             <div class="cp-field"><label>Official Designation / Role *</label><input id="staffRole" placeholder="e.g. Admissions & Operations Officer" /></div>
-            <div class="cp-field"><label>Date of Joining</label><input type="date" id="staffJoinDate" value="${todayStr}" /></div>
           </div>
-          <div class="cp-row2">
+          <div class="cp-row3">
+            <div class="cp-field"><label>Date of Joining</label><input type="date" id="staffJoinDate" value="${todayStr}" /></div>
             <div class="cp-field">
               <label>Employment Status</label>
               <select id="staffEmpStatus">
@@ -36077,8 +36169,7 @@ function renderAddStaffModal(container) {
       }
 
       const fullName = `${fn} ${ln}${on ? ' ' + on : ''}`;
-      const nextEmpNo = state.personnel.filter(p => p.type === 'staff').length + 1;
-      const empIdStr = 'EMP-' + String(nextEmpNo).padStart(4, '0');
+      const empIdStr = previewEmpId;
 
       saveBtn.disabled = true;
       saveBtn.innerHTML = '&#x23F3; Provisioning Staff Account...';
@@ -36128,6 +36219,14 @@ function renderAddStaffModal(container) {
         return;
       }
 
+      if (result && result.personnel && result.personnel.employee_id) {
+        if (!state.counters) state.counters = {};
+        const parsedStaffNo = parseInt(result.personnel.employee_id.replace(/\D/g, ''), 10);
+        if (!isNaN(parsedStaffNo)) {
+          state.counters.staff = Math.max(state.counters.staff || 0, parsedStaffNo);
+        }
+      }
+
       await logAudit('CREATE_STAFF_PERSONNEL', 'personnel', result.personnel.id, `Provisioned staff ${fullName} (${result.personnel.employee_id})`);
       await loadAll();
 
@@ -36149,6 +36248,7 @@ function renderAddStaffModal(container) {
 
 function renderAddFacilitatorModal(container) {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const previewFacId = (typeof getNextFacilitatorIdPreview === 'function') ? getNextFacilitatorIdPreview() : 'FAC-0005';
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
@@ -36159,9 +36259,13 @@ function renderAddFacilitatorModal(container) {
         </div>
         <div class="cp-modal-body">
           <div style="font-size:11.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">1. FACILITATOR IDENTIFICATION</div>
-          <div class="cp-row2">
+          <div class="cp-row3">
             <div class="cp-field"><label>Full Name *</label><input id="facName" placeholder="e.g. Dr. Kemi Adebayo" /></div>
             <div class="cp-field"><label>Official Title / Designation</label><input id="facDesignation" placeholder="e.g. Lead IELTS Master Trainer" /></div>
+            <div class="cp-field">
+              <label>Facilitator ID (Auto-Allocated) *</label>
+              <input id="facEmpId" value="${escapeHtml(previewFacId)}" readonly disabled style="background:var(--bg-subtle, #f1f5f9); color:var(--text-muted, #475569); cursor:not-allowed; font-weight:700; font-family:monospace; letter-spacing:0.5px;" />
+            </div>
           </div>
           <div class="cp-row3">
             <div class="cp-field"><label>Phone Number *</label><input id="facPhone" placeholder="+2348012345678" /></div>
@@ -36307,8 +36411,7 @@ function renderAddFacilitatorModal(container) {
         return;
       }
 
-      const nextFacNo = state.personnel.filter(p => p.type === 'facilitator').length + 1;
-      const facIdStr = 'FAC-' + String(nextFacNo).padStart(4, '0');
+      const facIdStr = previewFacId;
 
       saveBtn.disabled = true;
       saveBtn.innerHTML = '&#x23F3; Provisioning Facilitator Account...';
@@ -36358,6 +36461,14 @@ function renderAddFacilitatorModal(container) {
         return;
       }
 
+      if (result && result.personnel && result.personnel.employee_id) {
+        if (!state.counters) state.counters = {};
+        const parsedFacNo = parseInt(result.personnel.employee_id.replace(/\D/g, ''), 10);
+        if (!isNaN(parsedFacNo)) {
+          state.counters.facilitator = Math.max(state.counters.facilitator || 0, parsedFacNo);
+        }
+      }
+
       await logAudit('CREATE_FACILITATOR_PERSONNEL', 'personnel', result.personnel.id, `Provisioned facilitator ${name} (${result.personnel.employee_id})`);
       await loadAll();
 
@@ -36377,17 +36488,23 @@ function renderAddFacilitatorModal(container) {
   });
 }
 
-
 function renderEditPersonnelModal(container, pers) {
+  const currentEmpId = pers.employeeId || pers.employee_id || pers.employeeNo || '';
   container.innerHTML = `
     <div class="cp-modal-overlay">
       <div class="cp-modal">
         <div class="cp-modal-header">
-          <div class="cp-modal-title">&#x1F4DD; Edit Personnel &mdash; ${escapeHtml(pers.name)} (${escapeHtml(pers.employeeId || 'EMP')})</div>
+          <div class="cp-modal-title">&#x1F4DD; Edit Personnel &mdash; ${escapeHtml(pers.name)} (${escapeHtml(currentEmpId || 'EMP')})</div>
           <button class="cp-modal-close" id="btnCloseEditPers">&times;</button>
         </div>
         <div class="cp-modal-body">
-          <div class="cp-field"><label>Full Name *</label><input id="editPersName" value="${escapeHtml(pers.name)}" /></div>
+          <div class="cp-row2">
+            <div class="cp-field">
+              <label>Personnel ID (Immutable)</label>
+              <input id="editPersId" value="${escapeHtml(currentEmpId)}" readonly disabled style="background:var(--bg-subtle, #f1f5f9); color:var(--text-muted, #475569); cursor:not-allowed; font-weight:700; font-family:monospace; letter-spacing:0.5px;" />
+            </div>
+            <div class="cp-field"><label>Full Name *</label><input id="editPersName" value="${escapeHtml(pers.name)}" /></div>
+          </div>
           <div class="cp-row2">
             <div class="cp-field"><label>Phone *</label><input id="editPersPhone" value="${escapeHtml(pers.phone || '')}" /></div>
             <div class="cp-field"><label>Email *</label><input id="editPersEmail" value="${escapeHtml(pers.email)}" /></div>
@@ -36428,6 +36545,8 @@ function renderEditPersonnelModal(container, pers) {
     pers.accountNumber = document.getElementById('editPersAccNo').value.trim();
     pers.basicPay = Number(document.getElementById('editPersPay').value) || 0;
     pers.feeStructure = document.getElementById('editPersFee').value.trim();
+    pers.employeeId = currentEmpId;
+    pers.employee_id = currentEmpId;
 
     try {
       await dbRepo.saveRecord(STORE_KEY_PERSONNEL, pers);
