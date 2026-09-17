@@ -19301,14 +19301,14 @@ function getManagementAttentionAlerts() {
       id: 'alt_crm_new_leads',
       domain: 'crm',
       severity: newLeads.length >= 5 ? 'high' : 'medium',
-      title: `${newLeads.length} New Admissions Enquiries Without Contact`,
-      description: `New prospect leads are waiting for admissions counselor contact.`,
+      title: `${newLeads.length} New Enquiries & Leads Without Contact`,
+      description: `New prospect leads are waiting for follow-up contact.`,
       recordType: 'enquiry',
       recordId: null,
       status: 'OPEN',
       assignedRole: 'Super Admin',
       actionUrl: 'enquiries',
-      actionLabel: 'Open Admissions Desk'
+      actionLabel: 'Open Enquiries & Leads'
     });
   }
 
@@ -22060,19 +22060,19 @@ function render(container) {
   const tabLabels = {
     dashboard: 'Dashboard',
     productionControl: 'Production Control Centre',
-    enquiries: 'Admissions & Enquiries',
-    studentAccounts: 'Students & Clients',
+    enquiries: 'Enquiries & Leads',
+    studentAccounts: 'Student & Client Directory',
     invoices: 'Invoices',
     payments: 'Payments & Receipts',
     payslips: 'Payroll & Payslips',
     expenses: 'Expenses',
     programmes: 'Programmes',
-    // Training Operations (Phase 5 & 5.1)
-    applications: 'Intake Applications',
+    // Admissions & CRM / Training Operations
+    applications: 'Candidate Applications',
     apply: 'New Application',
     applicantPortal: 'Applicant Portal',
     cohorts: 'Cohorts & Schedules',
-    enrolments: 'Enrolments',
+    enrolments: 'Course Enrollments', // phase 5: enrolments: 'Enrolments'
     attendance: 'Attendance Register',
     meetings: 'Meeting Operations',
     meetingPreJoin: 'Meeting Lobby',
@@ -22198,15 +22198,32 @@ function render(container) {
                   <span class="cp-nav-icon">${renderNavIcon('dashboard')}</span>
                   <span class="cp-nav-label">Dashboard</span>
                 </div>
-                <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries" title="Admissions & Enquiries">
+              </div>
+
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">ADMISSIONS &amp; CRM</div>
+                <div class="cp-nav-item ${state.tab === 'enquiries' ? 'active' : ''}" data-tab="enquiries" title="Enquiries &amp; Leads">
                   <span class="cp-nav-icon">${renderNavIcon('enquiries')}</span>
-                  <span class="cp-nav-label">Admissions &amp; Enquiries</span>
+                  <span class="cp-nav-label">Enquiries &amp; Leads</span>
                   ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
                 </div>
-                <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts" title="Students & Clients">
-                  <span class="cp-nav-icon">${renderNavIcon('students')}</span>
-                  <span class="cp-nav-label">Students &amp; Clients</span>
+                <div class="cp-nav-item ${state.tab === 'applications' ? 'active' : ''}" data-tab="applications" title="Candidate Applications">
+                  <span class="cp-nav-icon">${renderNavIcon('applications')}</span>
+                  <span class="cp-nav-label">Candidate Applications</span>
+                  ${((state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length > 0) ? `<span class="cp-nav-badge" style="background:#FEF3C7; color:#B45309;">${(state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length}</span>` : ''}
                 </div>
+              </div>
+
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">DIRECTORY &amp; ACCOUNTS</div>
+                <div class="cp-nav-item ${state.tab === 'studentAccounts' ? 'active' : ''}" data-tab="studentAccounts" title="Student &amp; Client Directory">
+                  <span class="cp-nav-icon">${renderNavIcon('students')}</span>
+                  <span class="cp-nav-label">Student &amp; Client Directory</span>
+                </div>
+              </div>
+
+              <div class="cp-nav-section">
+                <div class="cp-nav-section-title">FINANCE</div>
                 <div class="cp-nav-item ${state.tab === 'invoices' ? 'active' : ''}" data-tab="invoices" title="Invoices">
                   <span class="cp-nav-icon">${renderNavIcon('invoices')}</span>
                   <span class="cp-nav-label">Invoices</span>
@@ -22234,20 +22251,15 @@ function render(container) {
 
               <div class="cp-nav-section">
                 <div class="cp-nav-section-title">TRAINING OPERATIONS</div>
-                <div class="cp-nav-item ${state.tab === 'applications' ? 'active' : ''}" data-tab="applications" title="Enrollment & Student Intake">
-                  <span class="cp-nav-icon">${renderNavIcon('applications')}</span>
-                  <span class="cp-nav-label">Enrollment &amp; Student Intake</span>
-                  ${((state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length > 0) ? `<span class="cp-nav-badge" style="background:#FEF3C7; color:#B45309;">${(state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length}</span>` : ''}
+                <div class="cp-nav-item ${state.tab === 'enrolments' ? 'active' : ''}" data-tab="enrolments" title="Course Enrollments">
+                  <span class="cp-nav-icon">${renderNavIcon('enrolments')}</span>
+                  <span class="cp-nav-label">Course Enrollments</span>
+                  <span class="cp-nav-badge">${(state.enrolments || []).length}</span>
                 </div>
-                <div class="cp-nav-item ${state.tab === 'cohorts' ? 'active' : ''}" data-tab="cohorts" title="Cohorts & Schedules">
+                <div class="cp-nav-item ${state.tab === 'cohorts' ? 'active' : ''}" data-tab="cohorts" title="Cohorts &amp; Schedules">
                   <span class="cp-nav-icon">${renderNavIcon('cohorts')}</span>
                   <span class="cp-nav-label">Cohorts &amp; Schedules</span>
                   ${activeCohortsCount > 0 ? `<span class="cp-nav-badge">${activeCohortsCount}</span>` : ''}
-                </div>
-                <div class="cp-nav-item ${state.tab === 'enrolments' ? 'active' : ''}" data-tab="enrolments" title="Enrolments">
-                  <span class="cp-nav-icon">${renderNavIcon('enrolments')}</span>
-                  <span class="cp-nav-label">Enrolments</span>
-                  <span class="cp-nav-badge">${(state.enrolments || []).length}</span>
                 </div>
                 <div class="cp-nav-item ${state.tab === 'attendance' ? 'active' : ''}" data-tab="attendance" title="Attendance Register">
                   <span class="cp-nav-icon">${renderNavIcon('attendance')}</span>
@@ -23000,7 +23012,7 @@ function renderDashboardTab(container) {
           </div>
           <div class="cp-section-desc">People-based conversion tracking. Stage counts are unique prospects, not invoice or payment transaction counts.</div>
         </div>
-        <button class="cp-btn sm secondary" id="btnGoCrm">Admissions Desk &rarr;</button>
+        <button class="cp-btn sm secondary" id="btnGoCrm">Enquiries &amp; Leads &rarr;</button>
       </div>
 
       <!-- CRM Summary KPI Strip -->
@@ -23151,7 +23163,7 @@ function renderDashboardTab(container) {
           </div>
 
                   <div class="cp-card cp-pipe-card" id="dashKpiEnrolments" style="margin:0; padding:10px; cursor:pointer; background:#FAFBFD; border:1px solid var(--border);">
-            <div style="font-size:9.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Enrolments</div>
+            <div style="font-size:9.5px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Course Enrollments</div>
             <div style="font-size:18px; font-weight:900; color:var(--primary); margin:2px 0;">${tk.totalEnrolments}</div>
             <div style="font-size:9.5px; color:var(--text-secondary);">${tk.activeEnrolments} Active Learning</div>
           </div>
@@ -24126,8 +24138,8 @@ function renderEnquiriesTab(container) {
     <div class="cp-card">
       <div class="cp-card-header">
         <div>
-          <div class="cp-section-title">&#x1F4E5; Student Enquiries &amp; Admissions Directory</div>
-          <div class="cp-section-desc">Manage prospect interactions, programme requests, billing triggers, and cohort enrolments.</div>
+          <div class="cp-section-title">&#x1F4E5; Enquiries &amp; Leads Directory</div>
+          <div class="cp-section-desc">Manage prospect interactions, programme requests, billing triggers, and lead progression.</div>
         </div>
         <div style="display:flex; gap:8px;">
           <button class="cp-btn sm secondary" id="btnExportEnquiries">&#x1F4E5; Export CSV</button>
@@ -24307,7 +24319,7 @@ function renderStudentAccountsTab(container) {
     <div class="cp-card">
       <div class="cp-card-header">
         <div>
-          <div class="cp-section-title">&#x1F465; Unified Student &amp; Client Directory</div>
+          <div class="cp-section-title">&#x1F465; Student &amp; Client Directory</div>
           <div class="cp-section-desc">Single source of truth for student journey, billing history, receipts, cohort enrolments, and balance tracking.</div>
         </div>
         <div style="display:flex; gap:8px;">
@@ -26096,7 +26108,7 @@ function renderEnrolmentsTab(container) {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
       <div>
         <h2 style="margin:0; font-size:22px; font-weight:800; color:var(--primary); display:flex; align-items:center; gap:8px;">
-          <span>&#x1F4DD;</span> Student Enrolment Operations
+          <span>&#x1F4DD;</span> Course Enrollments
         </h2>
         <div style="font-size:12.5px; color:var(--text-secondary); margin-top:2px;">
           Comprehensive enrolment lifecycle management, immutable agreed tuition snapshots, and academic status tracking.
@@ -26133,7 +26145,7 @@ function renderEnrolmentsTab(container) {
     <div class="cp-card">
       <div class="cp-card-header" style="flex-wrap:wrap; gap:10px;">
         <div>
-          <div class="cp-section-title">&#x1F4CB; Enrolment Register</div>
+          <div class="cp-section-title">&#x1F4CB; Course Enrollment Register</div>
           <div class="cp-section-desc">Track status transitions, fee snapshots, attendance rates, and credentials.</div>
         </div>
 
@@ -26161,7 +26173,7 @@ function renderEnrolmentsTab(container) {
         <div class="cp-empty-state">
           <div class="cp-empty-icon">&#x1F4DD;</div>
           <div class="cp-empty-title">No enrolments match criteria</div>
-          <div class="cp-empty-desc">Enrol students from Admissions or adjust filter parameters.</div>
+          <div class="cp-empty-desc">Enroll students from Candidate Applications or adjust filter parameters.</div>
         </div>
       ` : `
         <div class="cp-table-wrap">
@@ -27727,10 +27739,10 @@ function renderApplicationsTab(container) {
     <div class="cp-page-header" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
       <div>
         <div class="cp-page-title" style="font-size:22px; font-weight:800; color:#0F172A; display:flex; align-items:center; gap:8px;">
-          <span>&#x1F4CB;</span> Enrollment &amp; Student Intake
+          <span>&#x1F4CB;</span> Candidate Applications
         </div>
         <div class="cp-page-subtitle" style="font-size:13px; color:var(--text-muted); margin-top:4px;">
-          Unified admissions and candidate progression. Authoritative tracking from initial enquiry to active student enrollment.
+          Authoritative candidate admissions pipeline and intake queue. Review, screen, and admit applicants into training programmes.
         </div>
       </div>
       <div style="display:flex; gap:10px;">
