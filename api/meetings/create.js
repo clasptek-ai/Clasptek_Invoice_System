@@ -11,7 +11,7 @@
  */
 
 const crypto = require('crypto');
-const { getSFUAdapter } = require('./sfu-adapter');
+const { getSFUAdapter } = require('../_lib/sfu-adapter');
 
 function generatePublicId() {
   const p1 = crypto.randomBytes(4).toString('hex');
@@ -21,6 +21,22 @@ function generatePublicId() {
 
 function generateMeetingId() {
   return `mtg_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+}
+
+async function parseRequestBody(req) {
+  if (req.body !== undefined && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    return req.body;
+  }
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    try { return JSON.parse(req.body); } catch (_) { return {}; }
+  }
+  return new Promise(resolve => {
+    let raw = '';
+    req.on('data', chunk => raw += chunk);
+    req.on('end', () => {
+      try { resolve(JSON.parse(raw)); } catch (_) { resolve({}); }
+    });
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -38,7 +54,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const body = await parseRequestBody(req).catch(() => ({}));
     const {
       title,
       description,
@@ -57,10 +73,14 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Meeting title is required' });
     }
 
+    if (!user) {
+      return res.status(401).json({ error: 'UNAUTHORIZED: User authentication required' });
+    }
+
     // Role verification: Admins and Facilitators only
     const userRole = (user && (user.role || user.type) || '').toLowerCase();
     const isAuthorized = ['super admin', 'admin', 'facilitator', 'staff'].includes(userRole);
-    if (!isAuthorized && process.env.NODE_ENV === 'production') {
+    if (!isAuthorized) {
       return res.status(403).json({ error: 'FORBIDDEN: Only administrators and facilitators can schedule meetings' });
     }
 

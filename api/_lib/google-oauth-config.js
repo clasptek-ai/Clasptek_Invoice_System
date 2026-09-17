@@ -887,10 +887,16 @@ async function upsertGoogleDriveConnection({
   rootFolderId = null,
   rootFolderName = 'Clasptek Meeting Recordings',
   scope,
-  expiresIn
+  expiresIn,
+  tokens
 }) {
   const now = new Date();
-  const expiryDate = expiresIn ? new Date(now.getTime() + expiresIn * 1000).toISOString() : null;
+  const effectiveAccessToken = accessToken || (tokens && (tokens.access_token || tokens.accessToken));
+  const effectiveRefreshToken = refreshToken || (tokens && (tokens.refresh_token || tokens.refreshToken));
+  let expiryDate = expiresIn ? new Date(now.getTime() + expiresIn * 1000).toISOString() : null;
+  if (!expiryDate && tokens && tokens.expiry_date) {
+    expiryDate = new Date(tokens.expiry_date).toISOString();
+  }
 
   const connectionRecord = {
     tenant_id: tenantId,
@@ -898,8 +904,8 @@ async function upsertGoogleDriveConnection({
     connection_type: connectionType,
     google_user_id: googleUserId || null,
     google_email: googleEmail,
-    access_token: accessToken,
-    refresh_token: refreshToken || null,
+    access_token: effectiveAccessToken,
+    refresh_token: effectiveRefreshToken || null,
     root_folder_id: rootFolderId || null,
     root_folder_name: rootFolderName || 'Clasptek Meeting Recordings',
     last_verified_at: rootFolderId ? now.toISOString() : null,
@@ -1142,8 +1148,8 @@ module.exports = {
   getGoogleDriveConnectionStatus,
   disconnectGoogleDriveConnection,
   setTestUploadFailure,
-  seedTestMeeting: (m) => require('../../../api/meetings/upload-recording').seedTestMeeting(m),
-  getTestMeeting: (id) => require('../../../api/meetings/upload-recording').getTestMeeting(id),
+  seedTestMeeting: (m) => require('../meetings/upload-recording').seedTestMeeting(m),
+  getTestMeeting: (id) => require('../meetings/upload-recording').getTestMeeting(id),
   _memoryStateStore: memoryStateStore,
   _memoryConnectionStore: memoryConnectionStore
 };

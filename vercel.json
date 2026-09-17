@@ -4,6 +4,15 @@
   "outputDirectory": "public",
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/api/admin/provision-user", "destination": "/api/admin?action=provision-user" },
+    { "source": "/api/admin/delete-personnel", "destination": "/api/admin?action=delete-personnel" },
+    { "source": "/api/auth/google/start", "destination": "/api/auth/google/auth?action=start" },
+    { "source": "/api/auth/google/status", "destination": "/api/auth/google/auth?action=status" },
+    { "source": "/api/auth/google/disconnect", "destination": "/api/auth/google/auth?action=disconnect" },
+    { "source": "/api/auth/google/verify-repository", "destination": "/api/auth/google/auth?action=verify-repository" },
+    { "source": "/api/meetings/leave", "destination": "/api/meetings/action?action=leave" },
+    { "source": "/api/meetings/status", "destination": "/api/meetings/action?action=status" },
+    { "source": "/api/meetings/chat", "destination": "/api/meetings/action?action=chat" },
     { "source": "/clasptek_invoice_system.html", "destination": "/index.html" },
     { "source": "/((?!api/|runtime-config\\.js).*)", "destination": "/index.html" }
   ],

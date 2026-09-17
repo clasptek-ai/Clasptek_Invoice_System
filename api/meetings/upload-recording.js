@@ -29,7 +29,7 @@ const {
   resolveAuthoritativeRootFolder,
   verifyGoogleDriveFolder,
   uploadFileToGoogleDrive
-} = require('../auth/google/google-oauth-config');
+} = require('../_lib/google-oauth-config');
 
 // In-memory meeting store fallback for testing/simulation environments
 const memoryMeetingStore = new Map();

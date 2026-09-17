@@ -84,19 +84,21 @@ async function runAllOAuthTests() {
     assert(fs.existsSync(p), 'api/auth/google/callback.js must exist on disk');
   });
 
-  runTest('1.2: api/auth/google/start.js exists', () => {
-    const p = path.join(process.cwd(), 'api', 'auth', 'google', 'start.js');
-    assert(fs.existsSync(p), 'api/auth/google/start.js must exist on disk');
+  runTest('1.2: Consolidated api/auth/google/auth.js exists', () => {
+    const p = path.join(process.cwd(), 'api', 'auth', 'google', 'auth.js');
+    assert(fs.existsSync(p), 'api/auth/google/auth.js must exist on disk');
   });
 
-  runTest('1.3: api/auth/google/status.js exists', () => {
-    const p = path.join(process.cwd(), 'api', 'auth', 'google', 'status.js');
-    assert(fs.existsSync(p), 'api/auth/google/status.js must exist on disk');
+  runTest('1.3: api/_lib/google-oauth-config.js exists', () => {
+    const p = path.join(process.cwd(), 'api', '_lib', 'google-oauth-config.js');
+    assert(fs.existsSync(p), 'api/_lib/google-oauth-config.js must exist on disk');
   });
 
-  runTest('1.4: api/auth/google/disconnect.js exists', () => {
-    const p = path.join(process.cwd(), 'api', 'auth', 'google', 'disconnect.js');
-    assert(fs.existsSync(p), 'api/auth/google/disconnect.js must exist on disk');
+  runTest('1.4: vercel.json routes start, status, disconnect to auth.js', () => {
+    const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+    assert(vercel.rewrites.find(r => r.source === '/api/auth/google/start'), 'start rewrite missing');
+    assert(vercel.rewrites.find(r => r.source === '/api/auth/google/status'), 'status rewrite missing');
+    assert(vercel.rewrites.find(r => r.source === '/api/auth/google/disconnect'), 'disconnect rewrite missing');
   });
 
   runTest('1.5: migrations/20260917_google_drive_oauth.sql exists', () => {
@@ -125,12 +127,22 @@ async function runAllOAuthTests() {
     disconnectGoogleDriveConnection,
     _memoryStateStore,
     _memoryConnectionStore
-  } = require('../api/auth/google/google-oauth-config');
+  } = require('../api/_lib/google-oauth-config');
 
   const callbackHandler = require('../api/auth/google/callback');
-  const startHandler = require('../api/auth/google/start');
-  const statusHandler = require('../api/auth/google/status');
-  const disconnectHandler = require('../api/auth/google/disconnect');
+  const authHandler = require('../api/auth/google/auth');
+  const startHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/start') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=start';
+    return authHandler(req, res);
+  };
+  const statusHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/status') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=status';
+    return authHandler(req, res);
+  };
+  const disconnectHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/disconnect') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=disconnect';
+    return authHandler(req, res);
+  };
 
   runTest('2.1: Production fallback redirect URI is exactly https://portal.clasptek.org/api/auth/google/callback', () => {
     delete process.env.GOOGLE_REDIRECT_URI;

@@ -73,11 +73,21 @@ async function runCentralRepositoryCertification() {
   console.log(' CLASPTEK CENTRAL GOOGLE DRIVE REPOSITORY & RECORDING UPLOAD SUITE');
   console.log('================================================================================\n');
 
-  const oauthConfig = require('../api/auth/google/google-oauth-config');
-  const verifyRepoHandler = require('../api/auth/google/verify-repository');
+  const oauthConfig = require('../api/_lib/google-oauth-config');
+  const authHandler = require('../api/auth/google/auth');
   const uploadRecordingHandler = require('../api/meetings/upload-recording');
-  const startHandler = require('../api/auth/google/start');
-  const statusHandler = require('../api/auth/google/status');
+  const verifyRepoHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/verify-repository') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=verify-repository';
+    return authHandler(req, res);
+  };
+  const startHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/start') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=start';
+    return authHandler(req, res);
+  };
+  const statusHandler = (req, res) => {
+    req.url = (req.url || '/api/auth/google/status') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=status';
+    return authHandler(req, res);
+  };
 
   // --- SECTION 1: Migration & File Architecture ---
   console.log('--- SECTION 1: Migration & File Architecture ---');
@@ -93,9 +103,9 @@ async function runCentralRepositoryCertification() {
   });
 
   runTest('1.2: All required API handlers exist on disk', () => {
-    assert(fs.existsSync(path.join(process.cwd(), 'api/auth/google/verify-repository.js')), 'verify-repository.js must exist');
+    assert(fs.existsSync(path.join(process.cwd(), 'api/auth/google/auth.js')), 'auth.js must exist');
     assert(fs.existsSync(path.join(process.cwd(), 'api/meetings/upload-recording.js')), 'upload-recording.js must exist');
-    assert(fs.existsSync(path.join(process.cwd(), 'api/auth/google/google-oauth-config.js')), 'google-oauth-config.js must exist');
+    assert(fs.existsSync(path.join(process.cwd(), 'api/_lib/google-oauth-config.js')), 'google-oauth-config.js must exist');
   });
 
   // --- SECTION 2: Scope & Security Invariants ---

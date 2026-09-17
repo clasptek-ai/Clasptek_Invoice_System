@@ -26,7 +26,7 @@ const {
   fetchGoogleUserInfo,
   resolveAuthoritativeRootFolder,
   upsertGoogleDriveConnection
-} = require('./google-oauth-config');
+} = require('../../_lib/google-oauth-config');
 
 module.exports = async function handler(req, res) {
   // 1. Only accept GET requests

@@ -36,14 +36,25 @@ const {
   DailyAdapter,
   MockSFUAdapter,
   getSFUAdapter
-} = require('../api/meetings/sfu-adapter');
+} = require('../api/_lib/sfu-adapter');
 
 const createHandler = require('../api/meetings/create');
 const joinHandler = require('../api/meetings/join');
 const actionHandler = require('../api/meetings/action');
-const leaveHandler = require('../api/meetings/leave');
-const chatHandler = require('../api/meetings/chat');
-const statusHandler = require('../api/meetings/status');
+
+// Leave, chat, and status are consolidated sub-actions of api/meetings/action.js
+const leaveHandler = (req, res) => {
+  req.url = (req.url || '/api/meetings/leave') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=leave';
+  return actionHandler(req, res);
+};
+const chatHandler = (req, res) => {
+  req.url = (req.url || '/api/meetings/chat') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=chat';
+  return actionHandler(req, res);
+};
+const statusHandler = (req, res) => {
+  req.url = (req.url || '/api/meetings/status') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=status';
+  return actionHandler(req, res);
+};
 
 let totalPassed = 0;
 let totalFailed = 0;

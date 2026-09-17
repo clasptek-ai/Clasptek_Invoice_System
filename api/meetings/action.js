@@ -1,29 +1,153 @@
 /**
- * CLASPTEK ENTERPRISE PLATFORM — MEETING HOST ACTIONS ENDPOINT
- * Route: POST /api/meetings/action
+ * CLASPTEK ENTERPRISE PLATFORM — CONSOLIDATED MEETING OPERATIONAL ACTIONS
+ * File: api/meetings/action.js
  * 
- * Privileged Operations:
- * - MUTE_PARTICIPANT: Mutes a specific participant's microphone.
- * - REMOVE_PARTICIPANT: Ejects a participant from the meeting room.
- * - END_MEETING: Terminates the meeting for all participants and finalizes attendance.
+ * Endpoints Dispatched:
+ * 1. POST /api/meetings/action (action: MUTE_PARTICIPANT, REMOVE_PARTICIPANT, END_MEETING)
+ * 2. POST /api/meetings/leave (action: 'leave')
+ * 3. GET /api/meetings/status (action: 'status')
+ * 4. POST /api/meetings/chat (action: 'chat')
  * 
  * Invariants:
- * - Server-side authorization: caller MUST be Host, assigned Facilitator, or Admin.
- * - Synchronizes meeting state on the SFU provider via SFUAdapter.
+ * - Host actions remain strictly gated to Host / Facilitator / Admin
+ * - SFUAdapter loaded from api/_lib/sfu-adapter
+ * - Exact response structures preserved for backwards compatibility
  */
 
-const { getSFUAdapter } = require('./sfu-adapter');
+const crypto = require('crypto');
+const { getSFUAdapter } = require('../_lib/sfu-adapter');
+
+function sendJson(res, statusCode, data) {
+  if (typeof res.status === 'function') {
+    return res.status(statusCode).json(data);
+  }
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json');
+  return res.end(JSON.stringify(data));
+}
+
+async function parseRequestBody(req) {
+  if (req.body !== undefined && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    return req.body;
+  }
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    try { return JSON.parse(req.body); } catch (_) { return {}; }
+  }
+  return new Promise(resolve => {
+    let raw = '';
+    req.on('data', chunk => raw += chunk);
+    req.on('end', () => {
+      try { resolve(JSON.parse(raw)); } catch (_) { resolve({}); }
+    });
+  });
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    if (typeof res.status === 'function') return res.status(200).end();
+    res.statusCode = 200;
+    return res.end();
+  }
+
+  const reqUrl = new URL(req.url, 'http://localhost');
+  const pathname = reqUrl.pathname;
+  let actionParam = reqUrl.searchParams.get('action');
+
+  let body = {};
+  if (req.method === 'POST') {
+    body = await parseRequestBody(req).catch(() => ({}));
+  }
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    // ---------------------------------------------------------
+    // SUB-HANDLER: STATUS (GET /api/meetings/status)
+    // ---------------------------------------------------------
+    if (req.method === 'GET' || actionParam === 'status' || pathname.includes('status')) {
+      const publicId = reqUrl.searchParams.get('publicId') || req.query?.publicId || body.publicId;
+      const meetingId = reqUrl.searchParams.get('meetingId') || req.query?.meetingId || body.meetingId;
+      const roomId = publicId || meetingId;
+
+      if (!roomId) {
+        return sendJson(res, 400, { error: 'Meeting publicId is required' });
+      }
+
+      let sfuStatus = 'UNKNOWN';
+      let participants = [];
+      try {
+        const sfuAdapter = getSFUAdapter();
+        const [roomStatus, participantsResult] = await Promise.all([
+          sfuAdapter.getRoomStatus({ roomId }).catch(() => ({ status: 'UNKNOWN' })),
+          sfuAdapter.getParticipants({ roomId }).catch(() => ({ participants: [] }))
+        ]);
+        sfuStatus = roomStatus.status;
+        participants = participantsResult.participants || [];
+      } catch (_) {}
+
+      return sendJson(res, 200, {
+        success: true,
+        roomId,
+        sfuStatus,
+        participants
+      });
+    }
+
+    // ---------------------------------------------------------
+    // SUB-HANDLER: LEAVE (POST /api/meetings/leave)
+    // ---------------------------------------------------------
+    if (actionParam === 'leave' || pathname.includes('leave') || body.action === 'leave') {
+      const {
+        meetingId,
+        participantSessionId,
+        participantId,
+        joinedAt,
+        leftAt = new Date().toISOString()
+      } = body;
+
+      let durationSeconds = 0;
+      if (joinedAt) {
+        const joinMs = new Date(joinedAt).getTime();
+        const leaveMs = new Date(leftAt).getTime();
+        durationSeconds = Math.max(0, Math.round((leaveMs - joinMs) / 1000));
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        meetingId,
+        participantSessionId,
+        participantId,
+        leftAt,
+        durationSeconds
+      });
+    }
+
+    // ---------------------------------------------------------
+    // SUB-HANDLER: CHAT (POST /api/meetings/chat)
+    // ---------------------------------------------------------
+    if (actionParam === 'chat' || pathname.includes('chat') || body.action === 'chat') {
+      const { meetingId, user, message } = body;
+      if (!meetingId) return sendJson(res, 400, { error: 'meetingId is required' });
+      if (!message || !message.trim()) return sendJson(res, 400, { error: 'message cannot be empty' });
+
+      const msgRecord = {
+        id: `msg_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        meetingId,
+        userId: user ? user.id : null,
+        senderName: user ? (user.name || user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim()) : 'Participant',
+        senderRole: user ? (user.role || 'STUDENT') : 'STUDENT',
+        message: message.trim(),
+        createdAt: new Date().toISOString()
+      };
+
+      return sendJson(res, 201, { success: true, message: msgRecord });
+    }
+
+    // ---------------------------------------------------------
+    // SUB-HANDLER: HOST ACTIONS (MUTE_PARTICIPANT, REMOVE_PARTICIPANT, END_MEETING)
+    // ---------------------------------------------------------
     const {
       action,
       meetingId,
@@ -35,7 +159,7 @@ module.exports = async function handler(req, res) {
     } = body;
 
     if (!user) {
-      return res.status(401).json({ error: 'UNAUTHORIZED: Authentication required' });
+      return sendJson(res, 401, { error: 'UNAUTHORIZED: Authentication required' });
     }
 
     const userRole = (user.role || user.type || '').toLowerCase();
@@ -47,9 +171,8 @@ module.exports = async function handler(req, res) {
       )
     );
 
-    // Privileged action gate: Host/Admin only
     if (!isAdmin && !isAssignedFacilitator) {
-      return res.status(403).json({
+      return sendJson(res, 403, {
         error: 'FORBIDDEN',
         message: 'Only the meeting host or an administrator can perform this action.'
       });
@@ -60,20 +183,20 @@ module.exports = async function handler(req, res) {
 
     switch (action) {
       case 'MUTE_PARTICIPANT': {
-        if (!participantId) return res.status(400).json({ error: 'participantId is required' });
+        if (!participantId) return sendJson(res, 400, { error: 'participantId is required' });
         const result = await sfuAdapter.muteParticipant({ roomId, participantId, trackType });
-        return res.status(200).json({ success: true, action, result });
+        return sendJson(res, 200, { success: true, action, result });
       }
 
       case 'REMOVE_PARTICIPANT': {
-        if (!participantId) return res.status(400).json({ error: 'participantId is required' });
+        if (!participantId) return sendJson(res, 400, { error: 'participantId is required' });
         const result = await sfuAdapter.removeParticipant({ roomId, participantId });
-        return res.status(200).json({ success: true, action, result });
+        return sendJson(res, 200, { success: true, action, result });
       }
 
       case 'END_MEETING': {
         const result = await sfuAdapter.endRoom({ roomId });
-        return res.status(200).json({
+        return sendJson(res, 200, {
           success: true,
           action: 'END_MEETING',
           meetingStatus: 'ENDED',
@@ -83,11 +206,11 @@ module.exports = async function handler(req, res) {
       }
 
       default:
-        return res.status(400).json({ error: `Unknown action: '${action}'` });
+        return sendJson(res, 400, { error: `Unknown action: '${action || actionParam || pathname}'` });
     }
 
   } catch (err) {
     console.error('[API /api/meetings/action Error]', err);
-    return res.status(500).json({ error: 'Internal server error', message: err.message });
+    return sendJson(res, 500, { error: 'Internal server error', message: err.message });
   }
 };
