@@ -748,7 +748,54 @@
     }
     .cp-modal.large { max-width: 880px; }
     .cp-modal.doc-modal { max-width: 900px; }
-    .cp-modal.drawer { max-width: 540px; height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0; }
+    .cp-modal.drawer {
+      height: 100vh; max-height: 100vh; position: fixed; right: 0; top: 0; border-radius: 0;
+      box-shadow: -8px 0 28px rgba(0, 0, 0, 0.22);
+      animation: cpDrawerSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      z-index: 1001;
+    }
+    .cp-candidate-drawer {
+      width: 480px;
+      max-width: 480px;
+    }
+    .cp-candidate-drawer .cp-modal-body {
+      max-height: calc(100vh - 140px);
+    }
+    .cp-intake-mode-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: #94A3B8;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .cp-intake-mode-btn.active {
+      background: #0284C7 !important;
+      color: #FFFFFF !important;
+      border-color: #38BDF8 !important;
+      font-weight: 700 !important;
+    }
+    @keyframes cpDrawerSlideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    @media (max-width: 1024px) {
+      .cp-candidate-drawer {
+        width: 460px;
+        max-width: 90vw;
+      }
+    }
+    @media (max-width: 640px) {
+      .cp-candidate-drawer {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        border-left: none;
+      }
+    }
     .cp-modal-header {
       padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center; background: var(--surface-1);
@@ -960,9 +1007,11 @@
       .cp-kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .cp-pipe-grid { grid-template-columns: repeat(4, 1fr) !important; }
       .cp-pipe-metrics { grid-template-columns: repeat(2, 1fr) !important; }
+      .cp-candidate-drawer { width: 460px; max-width: 90vw; }
     }
 
     @media (max-width: 768px) {
+      .cp-candidate-drawer { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; }
       .cp-mobile-nav-btn {
         display: inline-flex;
       }
@@ -11427,6 +11476,14 @@ function syncRouteFromHash() {
 }
 
 function navigateTab(tabName, options = {}) {
+  // Automatically close/unmount active drawer/modal when navigating to another module
+  if (state.modal) {
+    state.modal = null;
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.remove('cp-modal-open');
+    }
+  }
+
   if (!state.auth || !state.auth.isAuthenticated || !state.auth.user) {
     state.tab = 'dashboard';
     render();
@@ -11491,6 +11548,13 @@ function setTab(tabName, options = {}) {
 if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     if (isRouterNavigating) return;
+    // Automatically close/unmount active drawer/modal on route/hash change
+    if (state.modal) {
+      state.modal = null;
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.classList.remove('cp-modal-open');
+      }
+    }
     const hash = window.location.hash;
     if (!hash || hash === '#') return;
     const { route, params } = parseUrlHash(hash);
@@ -22622,6 +22686,15 @@ function closeModal() {
   render();
 }
 
+if (typeof window !== 'undefined' && !window.__hasGlobalEscapeCloseAttached) {
+  window.__hasGlobalEscapeCloseAttached = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.modal) {
+      closeModal();
+    }
+  });
+}
+
 function renderContent(container) {
   return render(container);
 }
@@ -22696,7 +22769,7 @@ function renderModal(type, data) {
   else if (type === 'enquiryDetail') renderEnquiryDetailModal(container, data.enquiry, data);
   else if (type === 'contactProspect') renderEnquiryDetailModal(container, data.enquiry, { showContactForm: true, ...data });
   else if (type === 'applicationDetail') renderApplicationDetailModal(container, data.application || data);
-  else if (type === 'applicantIntake' || type === 'newApplication') renderApplicantIntakePortal(container);
+  else if (type === 'applicantIntake' || type === 'newApplication') renderCandidateApplicationDrawer(container, data);
   else if (type === 'enrolStudent') renderEnrolStudentModal(container, data);
   else if (type === 'studentProfile') renderStudentProfileModal(container, data.account || data.student || data);
   else if (type === 'viewInvoice') renderViewInvoiceModal(container, data.invoice);
@@ -22760,6 +22833,17 @@ function renderModal(type, data) {
 
   // Attach robust modal mouse-wheel scrolling
   attachModalWheelHandling(container);
+
+  // Attach outside-click dismiss listener to backdrop overlay
+  const overlay = container.querySelector('.cp-modal-overlay');
+  if (overlay && !overlay.__hasBackdropCloseAttached) {
+    overlay.__hasBackdropCloseAttached = true;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeModal();
+      }
+    });
+  }
 }
 
 // ----------------------------------------------------
@@ -28172,278 +28256,366 @@ function renderApplicationDetailModal(container, app) {
 }
 
 // -----------------------------------------------------------------------------
-// NATIVE APPLICANT-FACING INTAKE PORTAL (SECTION A, B, C, D)
+// RESPONSIVE CANDIDATE APPLICATION DRAWER & GOOGLE FORMS INTAKE INTEGRATION
 // -----------------------------------------------------------------------------
-function renderApplicantIntakePortal(container) {
+function renderCandidateApplicationDrawer(container, options = {}) {
   const activeProgrammes = (state.programmes || []).filter(
     p =>
       isRecordForCurrentTenant(p) &&
       (!p.status || String(p.status).toLowerCase() === 'active')
   );
-  const isStaff = (typeof isStaffUser === 'function' && isStaffUser()) || (state.auth?.user?.role && ['super admin', 'admin', 'staff'].includes(state.auth.user.role.toLowerCase()));
+  const isStaff = (typeof isStaffUser === 'function' && isStaffUser()) || (state.auth?.user?.role && ['super admin', 'admin', 'staff', 'finance manager'].includes((state.auth.user.role || '').toLowerCase()));
+  const isPageMode = options.isPageMode || (container && container.id === 'contentView');
+
+  // Active intake mode: 'staff' (Manual Staff Entry) or 'google_forms' (Google Forms & Sheets Intake)
+  let activeMode = options.initialMode || 'staff';
+  let parsedGoogleSubmissions = [];
 
   container.innerHTML = `
-    <div style="max-width:840px; margin:20px auto; padding:0 16px;">
-      <!-- Portal Header Banner -->
-      <div style="background:linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius:12px; padding:28px 32px; color:#FFFFFF; margin-bottom:24px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div>
-            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#38BDF8; margin-bottom:6px;">CLASPTEK VOCATIONAL TRAINING</div>
-            <h1 style="font-size:24px; font-weight:800; margin:0 0 6px 0; color:#F8FAFC;">New Candidate Application</h1>
-            <div style="font-size:13.5px; color:#94A3B8; max-width:600px;">
-              Clasptek Professional Training Intake. Apply for authoritative vocational technical training programmes registered directly into our admissions system.
-            </div>
+    <div class="cp-modal-overlay" id="candidateDrawerOverlay" style="background:rgba(15, 23, 42, 0.65); backdrop-filter:blur(3px);">
+      <div class="cp-modal drawer cp-candidate-drawer" id="candidateDrawer" role="dialog" aria-modal="true" aria-labelledby="candidateDrawerTitle">
+        <!-- Drawer Header -->
+        <div class="cp-modal-header" style="background:#0F172A; color:#FFFFFF; border-bottom:1px solid #1E293B; padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-start;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#38BDF8;">Admissions &amp; Candidate Intake</div>
+            <div class="cp-modal-title" id="candidateDrawerTitle" style="font-size:18px; font-weight:800; color:#F8FAFC; line-height:1.2;">New Candidate Application</div>
+            <div style="font-size:12px; color:#94A3B8;">Register an applicant or sync intake responses directly into Supabase.</div>
           </div>
-          ${isStaff ? `<span class="cp-pill" style="background:#0369A1; color:#FFFFFF; font-weight:700;">Staff Entry Mode</span>` : ''}
+          <button class="cp-modal-close" id="btnCloseCandidateDrawer" title="Close Drawer (Esc)" aria-label="Close" style="color:#94A3B8; font-size:24px; cursor:pointer; background:transparent; border:none; line-height:1;">&times;</button>
         </div>
-      </div>
 
-      <div id="intakeFormContainer" class="cp-card" style="padding:28px;">
-        <form id="clasptekIntakeForm">
-          <!-- SECTION A: PERSONAL INFORMATION -->
-          <div style="margin-bottom:28px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px; border-bottom:2px solid #E2E8F0; padding-bottom:8px;">
-              <span style="background:#0284C7; color:#FFFFFF; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;">1</span>
-              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Section A — Personal Information</h2>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">First Name <span style="color:#DC2626;">*</span></label>
-                <input type="text" id="intakeFirstName" required placeholder="e.g., Victor" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Last Name <span style="color:#DC2626;">*</span></label>
-                <input type="text" id="intakeLastName" required placeholder="e.g., Chukwuma" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Email Address <span style="color:#DC2626;">*</span></label>
-                <input type="email" id="intakeEmail" required placeholder="applicant@example.com" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Phone Number <span style="color:#DC2626;">*</span></label>
-                <input type="tel" id="intakePhone" required placeholder="+2348031112233" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Date of Birth</label>
-                <input type="date" id="intakeDob" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Gender</label>
-                <select id="intakeGender" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other / Prefer not to say</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Marital Status</label>
-                <select id="intakeMarital" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">State of Origin &amp; Nationality</label>
-                <div style="display:flex; gap:8px;">
-                  <input type="text" id="intakeState" placeholder="State (e.g. Anambra)" style="flex:1; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-                  <input type="text" id="intakeNationality" value="Nigerian" style="width:100px; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+        <!-- Segmented Intake Mode Switcher -->
+        <div style="background:#1E293B; padding:8px 16px; border-bottom:1px solid #334155; display:flex; gap:8px;">
+          <button type="button" class="cp-btn sm cp-intake-mode-btn ${activeMode === 'staff' ? 'active' : ''}" id="btnModeStaffEntry" style="flex:1; font-weight:700; border-radius:6px;">
+            ✍️ Manual Staff Entry
+          </button>
+          <button type="button" class="cp-btn sm cp-intake-mode-btn ${activeMode === 'google_forms' ? 'active' : ''}" id="btnModeGoogleForms" style="flex:1; font-weight:700; border-radius:6px;">
+            📊 Google Forms / Sheets
+          </button>
+        </div>
+
+        <!-- Drawer Body (scrollable independently) -->
+        <div class="cp-modal-body" id="candidateDrawerBody" style="padding:18px; flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;">
+          
+          <!-- PANEL 1: MANUAL STAFF ENTRY -->
+          <div id="panelStaffEntry" style="display:${activeMode === 'staff' ? 'block' : 'none'};">
+            <form id="drawerStaffForm">
+              <!-- SECTION A: PERSONAL INFORMATION -->
+              <div style="margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; border-bottom:1.5px solid #E2E8F0; padding-bottom:6px;">
+                  <span style="background:#0284C7; color:#FFFFFF; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">1</span>
+                  <div style="font-size:14px; font-weight:800; color:#0F172A;">Personal Information</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">First Name <span style="color:#DC2626;">*</span></label>
+                    <input type="text" id="intakeFirstName" required placeholder="e.g. Victor" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Last Name <span style="color:#DC2626;">*</span></label>
+                    <input type="text" id="intakeLastName" required placeholder="e.g. Chukwuma" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Email Address <span style="color:#DC2626;">*</span></label>
+                    <input type="email" id="intakeEmail" required placeholder="applicant@example.com" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Phone Number <span style="color:#DC2626;">*</span></label>
+                    <input type="tel" id="intakePhone" required placeholder="+2348031112233" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Date of Birth</label>
+                    <input type="date" id="intakeDob" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Gender</label>
+                    <select id="intakeGender" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="OTHER">Other / Prefer not to say</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Marital Status</label>
+                    <select id="intakeMarital" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">State of Origin</label>
+                    <input type="text" id="intakeState" placeholder="e.g. Anambra" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Residential Address</label>
+                    <input type="text" id="intakeAddress" placeholder="Street, City, State" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
                 </div>
               </div>
-              <div class="cp-field" style="grid-column:span 2;">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Residential Address</label>
-                <input type="text" id="intakeAddress" placeholder="Physical street address, City, State" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+
+              <!-- SECTION B: TRAINING INTEREST -->
+              <div style="margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; border-bottom:1.5px solid #E2E8F0; padding-bottom:6px;">
+                  <span style="background:#0284C7; color:#FFFFFF; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">2</span>
+                  <div style="font-size:14px; font-weight:800; color:#0F172A;">Training Interest &amp; Programme</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Programme / Course <span style="color:#DC2626;">*</span></label>
+                    <select id="intakeProgramme" required style="width:100%; padding:9px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; font-weight:600;">
+                      <option value="">-- Select Active Programme --</option>
+                      ${activeProgrammes.map(p => `
+                        <option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${escapeHtml(p.code || 'CODE')}) — ${fmtMoney(p.tuitionFee)}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Schedule</label>
+                    <select id="intakeSchedule" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="WEEKDAY">Weekday</option>
+                      <option value="WEEKEND">Weekend Intensive</option>
+                      <option value="EVENING">Evening Sessions</option>
+                      <option value="FLEXIBLE">Flexible</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Delivery Mode</label>
+                    <select id="intakeDeliveryMode" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="IN_PERSON">In-Person</option>
+                      <option value="HYBRID">Hybrid</option>
+                      <option value="ONLINE">Online</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Expertise Level</label>
+                    <select id="intakeExpertise" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="BEGINNER">Beginner</option>
+                      <option value="INTERMEDIATE">Intermediate</option>
+                      <option value="ADVANCED">Advanced</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Agreed Tuition Snapshot (NGN)</label>
+                    <input type="number" id="intakeTuitionFee" min="0" placeholder="0.00" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Start Date</label>
+                    <input type="date" id="intakeStartDate" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Duration</label>
+                    <input type="text" id="intakeDuration" placeholder="e.g. 12 weeks" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <!-- SECTION C: SPONSORSHIP -->
+              <div style="margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; border-bottom:1.5px solid #E2E8F0; padding-bottom:6px;">
+                  <span style="background:#0284C7; color:#FFFFFF; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">3</span>
+                  <div style="font-size:14px; font-weight:800; color:#0F172A;">Sponsorship &amp; Financing</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Sponsorship Type</label>
+                    <select id="intakeSponsorType" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="Self-sponsored">Self-sponsored</option>
+                      <option value="Corporate">Corporate</option>
+                      <option value="Government">Government / Grant</option>
+                      <option value="NGO">NGO / Foundation</option>
+                    </select>
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Sponsor Name</label>
+                    <input type="text" id="intakeSponsorName" placeholder="Organization / Sponsor" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Sponsor Phone</label>
+                    <input type="tel" id="intakeSponsorPhone" placeholder="+234..." style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Sponsor Email</label>
+                    <input type="email" id="intakeSponsorEmail" placeholder="sponsor@example.org" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION D: BACKGROUND & DECLARATIONS -->
+              <div style="margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; border-bottom:1.5px solid #E2E8F0; padding-bottom:6px;">
+                  <span style="background:#0284C7; color:#FFFFFF; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">4</span>
+                  <div style="font-size:14px; font-weight:800; color:#0F172A;">Background &amp; Consent</div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Claimed Student ID (Optional)</label>
+                    <input type="text" id="intakeClaimedStudentNumber" placeholder="STU-2026-0101" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;" />
+                  </div>
+                  <div class="cp-field">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Employment Status</label>
+                    <select id="intakeEmployment" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="Employed">Employed</option>
+                      <option value="Self-Employed">Self-Employed</option>
+                      <option value="Unemployed">Seeking Employment</option>
+                      <option value="Student">Student</option>
+                    </select>
+                  </div>
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Referral Channel</label>
+                    <select id="intakeReferral" style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;">
+                      <option value="Website">Clasptek Official Website</option>
+                      <option value="Social Media">LinkedIn / Social Media</option>
+                      <option value="Alumni">Alumni / Peer Recommendation</option>
+                      <option value="Employer">Employer Recommendation</option>
+                      <option value="Other">Other Intake Channel</option>
+                    </select>
+                  </div>
+                  <div class="cp-field" style="grid-column:span 2;">
+                    <label style="font-weight:700; font-size:12px; color:#334155;">Notes / Aspirations</label>
+                    <textarea id="intakeNotes" rows="2" placeholder="Specific technical goals or requirements..." style="width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px;"></textarea>
+                  </div>
+                </div>
+
+                <!-- Honeypot -->
+                <div style="display:none;" aria-hidden="true">
+                  <input type="text" id="intakeHp" name="hp_field" tabindex="-1" autocomplete="off" />
+                </div>
+
+                <!-- Consent -->
+                <div style="margin-top:14px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; padding:12px;">
+                  <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:12px; color:#1E293B;">
+                    <input type="checkbox" id="intakeConsent" required style="margin-top:2px;" />
+                    <span><strong>Declaration:</strong> I certify that the submitted candidate data is accurate and acknowledge authoritative admission governance.</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="drawerStaffErr" style="color:var(--danger); font-size:12px; margin-bottom:12px; display:none;"></div>
+            </form>
           </div>
 
-          <!-- SECTION B: TRAINING INTEREST -->
-          <div style="margin-bottom:28px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px; border-bottom:2px solid #E2E8F0; padding-bottom:8px;">
-              <span style="background:#0284C7; color:#FFFFFF; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;">2</span>
-              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Section B — Training Interest &amp; Course Selection</h2>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div class="cp-field" style="grid-column:span 2;">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Authoritative Programme / Course <span style="color:#DC2626;">*</span></label>
-                <select id="intakeProgramme" required style="width:100%; padding:10px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px; font-weight:600;">
-                  <option value="">-- Select Active Programme from Catalogue --</option>
-                  ${activeProgrammes.map(p => `
-                    <option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${escapeHtml(p.code || 'CODE')}) — ${fmtMoney(p.tuitionFee)}</option>
-                  `).join('')}
-                </select>
-                <div style="font-size:11.5px; color:var(--text-muted); margin-top:4px;">Selection maps strictly to Clasptek accredited programmes.</div>
+          <!-- PANEL 2: GOOGLE FORMS & SHEETS INTAKE -->
+          <div id="panelGoogleForms" style="display:${activeMode === 'google_forms' ? 'block' : 'none'};">
+            <div style="background:#F0F9FF; border:1px solid #BAE6FD; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+              <div style="display:flex; align-items:center; gap:6px; font-weight:700; font-size:13px; color:#0369A1; margin-bottom:4px;">
+                <span>📊</span> Google Forms &amp; Sheets Direct Ingestion
               </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Expertise Level</label>
-                <select id="intakeExpertise" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="BEGINNER">Beginner (No prior experience)</option>
-                  <option value="INTERMEDIATE">Intermediate (Basic practical experience)</option>
-                  <option value="ADVANCED">Advanced (Industry professional)</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Preferred Training Schedule</label>
-                <select id="intakeSchedule" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="WEEKDAY">Weekday (Mon &ndash; Fri)</option>
-                  <option value="WEEKEND">Weekend Intensive (Sat &ndash; Sun)</option>
-                  <option value="EVENING">Evening Sessions</option>
-                  <option value="FLEXIBLE">Flexible / Self-paced</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Delivery Mode</label>
-                <select id="intakeDeliveryMode" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="IN_PERSON">In-Person (Workshop &amp; Lab)</option>
-                  <option value="HYBRID">Hybrid (Online Theory + Physical Lab)</option>
-                  <option value="ONLINE">Online Instructor-Led</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Preferred Start Date</label>
-                <input type="date" id="intakeStartDate" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Agreed Tuition Snapshot (NGN)</label>
-                <input type="number" id="intakeTuitionFee" min="0" placeholder="0.00" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-                <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">Preserves agreed tuition snapshot for enrolment without altering catalogue price.</div>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Preferred Duration</label>
-                <input type="text" id="intakeDuration" placeholder="e.g. 12 weeks" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-            </div>
-          </div>
-
-          <!-- SECTION C: SPONSORSHIP -->
-          <div style="margin-bottom:28px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px; border-bottom:2px solid #E2E8F0; padding-bottom:8px;">
-              <span style="background:#0284C7; color:#FFFFFF; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;">3</span>
-              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Section C — Sponsorship</h2>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Sponsorship Type</label>
-                <select id="intakeSponsorType" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="Self-sponsored">Self-sponsored</option>
-                  <option value="Corporate">Corporate Sponsored</option>
-                  <option value="Government">Government / Agency Grant</option>
-                  <option value="NGO">NGO / Foundation</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Organization / Name</label>
-                <input type="text" id="intakeSponsorName" placeholder="Company or Sponsor Name" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Phone</label>
-                <input type="tel" id="intakeSponsorPhone" placeholder="+234..." style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Email</label>
-                <input type="email" id="intakeSponsorEmail" placeholder="sponsorship@sponsor.org" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-              </div>
-            </div>
-          </div>
-
-          <!-- SECTION D: ADDITIONAL INFORMATION & DECLARATIONS -->
-          <div style="margin-bottom:28px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px; border-bottom:2px solid #E2E8F0; padding-bottom:8px;">
-              <span style="background:#0284C7; color:#FFFFFF; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800;">4</span>
-              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Section D — Background &amp; Consent</h2>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Employment Status</label>
-                <select id="intakeEmployment" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="Employed">Employed (Full-Time / Part-Time)</option>
-                  <option value="Self-Employed">Self-Employed / Freelancer</option>
-                  <option value="Unemployed">Seeking Employment</option>
-                  <option value="Student">Undergraduate / Graduate Student</option>
-                </select>
-              </div>
-              <div class="cp-field">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Referral Source</label>
-                <select id="intakeReferral" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
-                  <option value="Website">Clasptek Official Website</option>
-                  <option value="Social Media">LinkedIn / Social Media</option>
-                  <option value="Alumni">Alumni / Peer Recommendation</option>
-                  <option value="Employer">Employer Recommendation</option>
-                  <option value="Other">Other Intake Channel</option>
-                </select>
-              </div>
-              <div class="cp-field" style="grid-column:span 2;">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Existing Clasptek Student? (Optional Hint)</label>
-                <input type="text" id="intakeClaimedStudentNumber" placeholder="If already enrolled previously, enter your Student Number (e.g. STU-2026-0101)" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
-                <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">Clasptek will verify this against authoritative records during identity resolution.</div>
-              </div>
-              <div class="cp-field" style="grid-column:span 2;">
-                <label style="font-weight:700; font-size:12.5px; color:#334155;">Additional Notes / Specific Objectives</label>
-                <textarea id="intakeNotes" rows="3" placeholder="Tell us about your technical goals or specific requirements..." style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;"></textarea>
+              <div style="font-size:12px; color:#0C4A6E; line-height:1.4;">
+                Paste rows copied directly from Google Sheets or CSV exports. Columns are auto-mapped, deduplicated with immutable IDs, and ingested directly into Supabase.
               </div>
             </div>
 
-            <!-- Honeypot Anti-Bot Field (Hidden from human users) -->
-            <div style="display:none;" aria-hidden="true">
-              <input type="text" id="intakeHp" name="website_url_hp" tabindex="-1" autocomplete="off" />
-            </div>
-
-            <!-- Consent Checkbox -->
-            <div style="margin-top:20px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px;">
-              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:13px; color:#1E293B;">
-                <input type="checkbox" id="intakeConsent" required style="margin-top:3px;" />
-                <span>
-                  <strong>Declaration &amp; Privacy Consent:</strong> I certify that the information provided is accurate. I understand that submitting this application registers my interest and triggers identity resolution, and that authoritative admission is governed by Clasptek Training Operations without formal examinations.
-                </span>
+            <!-- Paste Input Box -->
+            <div style="margin-bottom:16px;">
+              <label style="font-weight:700; font-size:12px; color:#334155; display:block; margin-bottom:6px;">
+                Paste Google Sheet Rows (Tab-separated with headers)
               </label>
+              <textarea id="gformsPasteInput" rows="6" placeholder="Timestamp&#9;Email Address&#9;Full Name&#9;Phone Number&#9;Programme&#9;Schedule&#10;2026-09-17 12:00:00&#9;candidate@example.com&#9;Adeola Bakare&#9;08012345678&#9;Full Stack Web Dev&#9;Weekday" style="width:100%; padding:10px; font-family:var(--font-mono); font-size:11.5px; border:1px solid #CBD5E1; border-radius:6px; resize:vertical;"></textarea>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <button type="button" class="cp-btn secondary sm" id="btnClearGformsInput">Clear</button>
+                <button type="button" class="cp-btn primary sm" id="btnParseGformsInput" style="font-weight:700;">
+                  🔍 Parse &amp; Preview Rows
+                </button>
+              </div>
+            </div>
+
+            <!-- Parsed Submissions & Mapping Preview -->
+            <div id="gformsPreviewContainer" style="display:none; margin-bottom:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-weight:700; font-size:13px; color:#0F172A;">
+                  Parsed Candidates Preview (<span id="gformsParsedCount">0</span>)
+                </div>
+                <span id="gformsDuplicateBadge" class="cp-pill" style="display:none; background:#FEF3C7; color:#B45309; font-size:11px;"></span>
+              </div>
+
+              <div style="max-height:220px; overflow-y:auto; border:1px solid #E2E8F0; border-radius:6px; margin-bottom:12px;">
+                <table class="cp-table" style="width:100%; font-size:11px; border-collapse:collapse;" id="gformsPreviewTable">
+                  <thead>
+                    <tr style="background:#F8FAFC; border-bottom:1px solid #E2E8F0; text-align:left;">
+                      <th style="padding:8px 10px;">ID / Ref</th>
+                      <th style="padding:8px 10px;">Applicant</th>
+                      <th style="padding:8px 10px;">Programme</th>
+                      <th style="padding:8px 10px;">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="gformsPreviewTableBody"></tbody>
+                </table>
+              </div>
+
+              <div id="gformsImportResult" style="display:none; margin-bottom:12px; padding:10px 12px; border-radius:6px; font-size:12px; font-weight:600;"></div>
+
+              <button type="button" class="cp-btn primary" id="btnExecuteGformsImport" style="width:100%; font-weight:800; padding:10px;">
+                ✔ Import Submissions into Pipeline
+              </button>
+            </div>
+
+            <!-- Server-to-Server Apps Script Guide -->
+            <div style="margin-top:16px; border:1px solid #E2E8F0; border-radius:8px; overflow:hidden;">
+              <details style="background:#F8FAFC; padding:12px;">
+                <summary style="font-weight:700; font-size:12px; color:#334155; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                  <span>⚙️</span> Automated Webhook Setup (Google Apps Script)
+                </summary>
+                <div style="padding-top:10px; font-size:11.5px; color:#475569; line-height:1.5;">
+                  <p style="margin:0 0 8px 0;">To ingest Google Form responses in real-time as they are submitted, add a trigger script to your Google Form or linked sheet:</p>
+                  <pre style="background:#0F172A; color:#E2E8F0; padding:10px; border-radius:6px; overflow-x:auto; font-size:11px; margin:0 0 8px 0;"><code>function onFormSubmit(e) {
+  var secret = PropertiesService.getScriptProperties().getProperty('CLASPTEK_INTAKE_WEBHOOK_SECRET');
+  var payload = {
+    responseId: e.response.getId(),
+    timestamp: e.response.getTimestamp(),
+    email: e.response.getRespondentEmail(),
+    // Map your form items...
+  };
+  UrlFetchApp.fetch('https://portal.clasptek.org/api/intake/google-forms', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'X-Clasptek-Webhook-Secret': secret },
+    payload: JSON.stringify(payload)
+  });
+}</code></pre>
+                  <p style="margin:0; font-size:11px; color:#0369A1;">
+                    <strong>Security Invariant:</strong> Store webhook secrets strictly in Google Apps Script Script Properties. Never put secrets in spreadsheet cells or client HTML.
+                  </p>
+                </div>
+              </details>
             </div>
           </div>
 
-          <div id="intakeSubmitErr" style="color:var(--danger); font-size:13px; margin-bottom:16px; display:none;"></div>
-
-          <div style="display:flex; justify-content:flex-end; gap:12px;">
-            <button type="button" class="cp-btn secondary" id="btnCancelIntake">Cancel</button>
-            <button type="submit" class="cp-btn primary" id="btnSubmitIntake" style="font-size:14px; font-weight:700; padding:10px 24px;">
-              &#x2714; Submit Official Application
-            </button>
+          <!-- SUCCESS CONFIRMATION PANEL -->
+          <div id="panelIntakeSuccess" style="display:none; text-align:center; padding:30px 10px;">
+            <div style="width:54px; height:54px; background:#DCFCE7; color:#16A34A; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:28px; margin-bottom:14px;">
+              ✔
+            </div>
+            <div style="font-size:18px; font-weight:800; color:#0F172A; margin-bottom:6px;">Application Registered Successfully</div>
+            <div style="font-size:12.5px; color:var(--text-muted); max-width:380px; margin:0 auto 16px auto;">
+              Ingested into Clasptek Training Operations. Authoritative reference number:
+            </div>
+            <div style="background:#F1F5F9; border:2px dashed #94A3B8; border-radius:6px; padding:12px 18px; display:inline-flex; align-items:center; gap:12px; margin-bottom:20px;">
+              <div id="confirmAppNo" style="font-family:var(--font-mono); font-size:22px; font-weight:800; color:#0F172A;">
+                APP-2026-000000
+              </div>
+              <button class="cp-btn secondary sm" id="btnCopyAppNo">Copy</button>
+            </div>
+            <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+              <button type="button" class="cp-btn secondary sm" id="btnDrawerSubmitAnother">Submit Another</button>
+              <button type="button" class="cp-btn primary sm" id="btnDrawerCloseSuccess">Close Drawer</button>
+            </div>
           </div>
-        </form>
-      </div>
 
-      <!-- Confirmation Screen (Rendered on success) -->
-      <div id="intakeConfirmContainer" class="cp-card" style="display:none; padding:40px; text-align:center;">
-        <div style="width:64px; height:64px; background:#DCFCE7; color:#16A34A; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:16px;">
-          &#x2714;
-        </div>
-        <h2 style="font-size:22px; font-weight:800; color:#0F172A; margin:0 0 8px 0;">Application Registered Successfully</h2>
-        <div style="font-size:14px; color:var(--text-muted); max-width:500px; margin:0 auto 24px auto;">
-          Your application has been ingested into Clasptek Training Operations. Your unique authoritative application reference is:
         </div>
 
-        <div style="background:#F1F5F9; border:2px dashed #94A3B8; border-radius:8px; padding:16px 24px; display:inline-flex; align-items:center; gap:16px; margin-bottom:24px;">
-          <div id="confirmAppNo" style="font-family:var(--font-mono); font-size:26px; font-weight:800; color:#0F172A; letter-spacing:1px;">
-            APP-2026-000001
-          </div>
-          <button class="cp-btn secondary sm" id="btnCopyAppNo">Copy</button>
-        </div>
-
-        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px; max-width:520px; margin:0 auto 28px auto; text-align:left; font-size:12.5px; color:#475569;">
-          <div style="font-weight:700; color:#0F172A; margin-bottom:4px;">Next Steps:</div>
-          <div>&bull; Admissions will verify identity matching and catalogue programme availability.</div>
-          <div>&bull; If additional details are required, you will be contacted by our training coordinator.</div>
-          <div>&bull; Upon qualification, your enrolment will be confirmed with an official schedule.</div>
-        </div>
-
-        <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-          <button class="cp-btn primary" id="btnTrackSubmittedApp">Track Application Status &rarr;</button>
-          <button class="cp-btn secondary" id="btnSubmitAnotherApp">Submit Another Application</button>
-          <button class="cp-btn secondary" id="btnReturnToDash">Return to Dashboard</button>
+        <!-- Drawer Footer -->
+        <div class="cp-modal-footer" id="candidateDrawerFooter" style="background:#F8FAFC; border-top:1px solid #E2E8F0; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" class="cp-btn secondary" id="btnCancelCandidateDrawer">Cancel</button>
+          <button type="button" class="cp-btn primary" id="btnSubmitActiveDrawerAction" style="font-weight:700;">
+            ✔ Submit Official Application
+          </button>
         </div>
       </div>
     </div>
   `;
 
-  // Prepopulate tuition fee when programme changes
+  // Prepopulate tuition fee when programme changes in Staff form
   const progSelect = container.querySelector('#intakeProgramme');
   const tuitionInput = container.querySelector('#intakeTuitionFee');
   progSelect?.addEventListener('change', () => {
@@ -28453,22 +28625,102 @@ function renderApplicantIntakePortal(container) {
     }
   });
 
-  // Cancel
-  container.querySelector('#btnCancelIntake')?.addEventListener('click', () => {
-    state.tab = 'dashboard';
-    render();
+  // Mode Switcher Listeners
+  const btnStaff = container.querySelector('#btnModeStaffEntry');
+  const btnGforms = container.querySelector('#btnModeGoogleForms');
+  const panelStaff = container.querySelector('#panelStaffEntry');
+  const panelGforms = container.querySelector('#panelGoogleForms');
+  const panelSuccess = container.querySelector('#panelIntakeSuccess');
+  const footer = container.querySelector('#candidateDrawerFooter');
+  const actionBtn = container.querySelector('#btnSubmitActiveDrawerAction');
+
+  function updateModeUI(mode) {
+    activeMode = mode;
+    panelSuccess.style.display = 'none';
+    footer.style.display = 'flex';
+
+    if (mode === 'staff') {
+      btnStaff.classList.add('active');
+      btnGforms.classList.remove('active');
+      panelStaff.style.display = 'block';
+      panelGforms.style.display = 'none';
+      actionBtn.textContent = '✔ Submit Official Application';
+      actionBtn.style.display = 'inline-block';
+    } else {
+      btnGforms.classList.add('active');
+      btnStaff.classList.remove('active');
+      panelStaff.style.display = 'none';
+      panelGforms.style.display = 'block';
+      actionBtn.textContent = '🔍 Parse & Preview Rows';
+      actionBtn.style.display = parsedGoogleSubmissions.length > 0 ? 'none' : 'inline-block';
+    }
+  }
+
+  btnStaff?.addEventListener('click', () => updateModeUI('staff'));
+  btnGforms?.addEventListener('click', () => updateModeUI('google_forms'));
+
+  // Close & Cancel Triggers
+  const handleClose = () => {
+    if (isPageMode) {
+      state.tab = 'applications';
+      render();
+    } else {
+      closeModal();
+    }
+  };
+
+  container.querySelector('#btnCloseCandidateDrawer')?.addEventListener('click', handleClose);
+  container.querySelector('#btnCancelCandidateDrawer')?.addEventListener('click', handleClose);
+  container.querySelector('#btnDrawerCloseSuccess')?.addEventListener('click', handleClose);
+
+  // Outside click on backdrop
+  const overlay = container.querySelector('#candidateDrawerOverlay');
+  overlay?.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      handleClose();
+    }
   });
 
-  // Form Submit Handler
-  const form = container.querySelector('#clasptekIntakeForm');
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errDiv = container.querySelector('#intakeSubmitErr');
-    errDiv.style.display = 'none';
+  // Success: Submit Another
+  container.querySelector('#btnDrawerSubmitAnother')?.addEventListener('click', () => {
+    renderCandidateApplicationDrawer(container, { initialMode: activeMode, isPageMode });
+  });
 
-    const submitBtn = container.querySelector('#btnSubmitIntake');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Registering Application...';
+  // Success: Copy Reference
+  container.querySelector('#btnCopyAppNo')?.addEventListener('click', () => {
+    const num = container.querySelector('#confirmAppNo')?.textContent?.trim() || '';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(num);
+      alert('Application reference copied to clipboard!');
+    } else {
+      prompt('Application Reference:', num);
+    }
+  });
+
+  // Footer Action Button
+  actionBtn?.addEventListener('click', () => {
+    if (activeMode === 'staff') {
+      const form = container.querySelector('#drawerStaffForm');
+      if (form) {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    } else {
+      parseGoogleFormsInput();
+    }
+  });
+
+  // Staff Form Submit Handler
+  const staffForm = container.querySelector('#drawerStaffForm');
+  staffForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errDiv = container.querySelector('#drawerStaffErr');
+    errDiv.style.display = 'none';
+    actionBtn.disabled = true;
+    actionBtn.textContent = 'Registering Application...';
 
     const payload = {
       firstName: container.querySelector('#intakeFirstName').value.trim(),
@@ -28479,7 +28731,6 @@ function renderApplicantIntakePortal(container) {
       gender: container.querySelector('#intakeGender').value,
       maritalStatus: container.querySelector('#intakeMarital').value,
       stateOfOrigin: container.querySelector('#intakeState').value.trim(),
-      nationality: container.querySelector('#intakeNationality').value.trim(),
       address: container.querySelector('#intakeAddress').value.trim(),
       programmeId: container.querySelector('#intakeProgramme').value,
       expertiseLevel: container.querySelector('#intakeExpertise').value,
@@ -28504,42 +28755,326 @@ function renderApplicantIntakePortal(container) {
       const source = isStaff ? 'STAFF_ENTRY' : 'WEB_INTAKE';
       const res = await submitAuthoritativeApplication(payload, source);
 
-      // Transition to Confirmation Screen
-      container.querySelector('#intakeFormContainer').style.display = 'none';
-      const confirmContainer = container.querySelector('#intakeConfirmContainer');
-      confirmContainer.style.display = 'block';
+      panelStaff.style.display = 'none';
+      panelSuccess.style.display = 'block';
+      footer.style.display = 'none';
       container.querySelector('#confirmAppNo').textContent = res.applicationNumber;
 
-      container.querySelector('#btnCopyAppNo').addEventListener('click', () => {
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(res.applicationNumber);
-          alert('Application number copied to clipboard!');
-        } else {
-          prompt('Application Number:', res.applicationNumber);
-        }
-      });
-
-      container.querySelector('#btnTrackSubmittedApp')?.addEventListener('click', () => {
-        state.tab = 'applicantPortal';
-        state.trackingInitialRef = res.applicationNumber;
-        render();
-      });
-
-      container.querySelector('#btnSubmitAnotherApp').addEventListener('click', () => {
-        renderApplicantIntakePortal(container);
-      });
-
-      container.querySelector('#btnReturnToDash').addEventListener('click', () => {
-        state.tab = 'dashboard';
-        render();
-      });
+      // Re-render underlying applications view if present
+      const mainContentView = document.getElementById('contentView');
+      if (state.tab === 'applications' && mainContentView) {
+        renderApplicationsTab(mainContentView);
+      }
     } catch (err) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = '✔ Submit Official Application';
-      errDiv.textContent = err.message || 'An error occurred while registering the application.';
+      actionBtn.disabled = false;
+      actionBtn.textContent = '✔ Submit Official Application';
+      errDiv.textContent = err.message || 'Failed to submit application.';
       errDiv.style.display = 'block';
     }
   });
+
+  // Google Forms & Sheets Parsing Logic
+  function parseGoogleFormsInput() {
+    const rawInput = container.querySelector('#gformsPasteInput')?.value || '';
+    parsedGoogleSubmissions = parsePastedIntakeData(rawInput);
+
+    const previewBox = container.querySelector('#gformsPreviewContainer');
+    const tableBody = container.querySelector('#gformsPreviewTableBody');
+    const countSpan = container.querySelector('#gformsParsedCount');
+    const dupBadge = container.querySelector('#gformsDuplicateBadge');
+    const resultBox = container.querySelector('#gformsImportResult');
+
+    resultBox.style.display = 'none';
+
+    if (parsedGoogleSubmissions.length === 0) {
+      alert('No valid applicant rows found. Please paste data containing column headers (e.g. Full Name, Email, Phone, Programme).');
+      return;
+    }
+
+    countSpan.textContent = parsedGoogleSubmissions.length;
+    const dups = parsedGoogleSubmissions.filter(p => p.isDuplicate).length;
+    if (dups > 0) {
+      dupBadge.textContent = `${dups} duplicate${dups > 1 ? 's' : ''} detected`;
+      dupBadge.style.display = 'inline-block';
+    } else {
+      dupBadge.style.display = 'none';
+    }
+
+    tableBody.innerHTML = parsedGoogleSubmissions.map(item => `
+      <tr style="border-bottom:1px solid #F1F5F9; ${item.isDuplicate ? 'background:#FFFBEB;' : ''}">
+        <td style="padding:6px 8px; font-family:var(--font-mono); font-weight:700; color:#475569;">
+          ${escapeHtml(item.sourceSubmissionId.slice(0, 14))}...
+        </td>
+        <td style="padding:6px 8px;">
+          <div style="font-weight:700; color:#0F172A;">${escapeHtml(item.fullName)}</div>
+          <div style="color:var(--text-muted); font-size:10.5px;">${escapeHtml(item.email || '')} ${item.phone ? '&middot; ' + escapeHtml(item.phone) : ''}</div>
+        </td>
+        <td style="padding:6px 8px; color:#334155;">
+          ${escapeHtml(item.programmeName)}
+        </td>
+        <td style="padding:6px 8px;">
+          ${item.isDuplicate
+            ? '<span class="cp-pill" style="background:#FEF3C7; color:#B45309; font-size:10px; font-weight:700;">REPLAY / DUP</span>'
+            : '<span class="cp-pill" style="background:#E0F2FE; color:#0369A1; font-size:10px; font-weight:700;">NEW READY</span>'}
+        </td>
+      </tr>
+    `).join('');
+
+    previewBox.style.display = 'block';
+    actionBtn.style.display = 'none'; // Replaced by the prominent Import button inside previewBox
+  }
+
+  container.querySelector('#btnParseGformsInput')?.addEventListener('click', parseGoogleFormsInput);
+  container.querySelector('#btnClearGformsInput')?.addEventListener('click', () => {
+    container.querySelector('#gformsPasteInput').value = '';
+    container.querySelector('#gformsPreviewContainer').style.display = 'none';
+    parsedGoogleSubmissions = [];
+    actionBtn.style.display = 'inline-block';
+  });
+
+  // Execute Ingestion of Parsed Google Form Submissions
+  container.querySelector('#btnExecuteGformsImport')?.addEventListener('click', async () => {
+    if (parsedGoogleSubmissions.length === 0) return;
+
+    const importBtn = container.querySelector('#btnExecuteGformsImport');
+    const resultBox = container.querySelector('#gformsImportResult');
+    importBtn.disabled = true;
+    importBtn.textContent = 'Ingesting Submissions into Pipeline...';
+
+    let importedCount = 0;
+    let duplicateCount = 0;
+    let failedCount = 0;
+
+    for (const item of parsedGoogleSubmissions) {
+      try {
+        const payload = {
+          firstName: item.firstName,
+          lastName: item.lastName,
+          email: item.email,
+          phone: item.phone,
+          programmeId: item.programmeId,
+          deliveryMode: item.deliveryMode,
+          preferredSchedule: item.preferredSchedule,
+          expertiseLevel: item.expertiseLevel,
+          sponsorType: item.sponsorType,
+          claimedStudentNumber: item.claimedStudentNumber,
+          gender: item.gender,
+          address: item.address,
+          stateOfOrigin: item.stateOfOrigin,
+          notes: item.notes,
+          referralSource: 'Google Form',
+          consentAcknowledged: true,
+          applicant_data: item.raw
+        };
+
+        // Call canonical authoritative intake service with immutable submission ID
+        const res = await submitAuthoritativeApplication(payload, 'GOOGLE_FORM', item.sourceSubmissionId);
+        if (res.isReplay || res.isDuplicate) {
+          duplicateCount++;
+        } else {
+          importedCount++;
+        }
+      } catch (err) {
+        console.error('[Google Forms Intake] Failed row ingestion:', err);
+        failedCount++;
+      }
+    }
+
+    importBtn.disabled = false;
+    importBtn.textContent = '✔ Import Submissions into Pipeline';
+
+    resultBox.style.display = 'block';
+    if (failedCount === 0) {
+      resultBox.style.background = '#DCFCE7';
+      resultBox.style.color = '#15803D';
+      resultBox.textContent = `✅ Successfully processed ${parsedGoogleSubmissions.length} submissions: ${importedCount} new candidates ingested, ${duplicateCount} duplicates skipped.`;
+    } else {
+      resultBox.style.background = '#FEF3C7';
+      resultBox.style.color = '#B45309';
+      resultBox.textContent = `⚠️ Ingestion finished: ${importedCount} imported, ${duplicateCount} duplicates skipped, ${failedCount} errors.`;
+    }
+
+    // Refresh application list and KPIs immediately
+    const mainContentView = document.getElementById('contentView');
+    if (state.tab === 'applications' && mainContentView) {
+      renderApplicationsTab(mainContentView);
+    }
+  });
+
+  // Helper: parse pasted text (TSV, CSV, or JSON)
+  function parsePastedIntakeData(rawText) {
+    if (!rawText || !rawText.trim()) return [];
+    const trimmed = rawText.trim();
+    
+    // Try JSON array first
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr)) {
+          return arr.map((item, idx) => normalizeParsedRow(item, idx));
+        }
+      } catch (_) {}
+    }
+
+    // Split rows
+    const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+
+    // Detect delimiter
+    const firstLine = lines[0];
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const delimiter = tabCount >= commaCount ? '\t' : ',';
+
+    function splitLine(line) {
+      if (delimiter === '\t') {
+        return line.split('\t').map(c => c.trim().replace(/^["']|["']$/g, ''));
+      }
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) {
+          result.push(cur.trim().replace(/^["']|["']$/g, ''));
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim().replace(/^["']|["']$/g, ''));
+      return result;
+    }
+
+    const rawHeaders = splitLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const headerMap = {};
+    rawHeaders.forEach((h, idx) => {
+      if (h.includes('responseid') || h.includes('formid') || h.includes('submissionid') || h.includes('submission')) headerMap.responseId = idx;
+      else if (h.includes('timestamp') || h.includes('submittedat') || h.includes('date')) headerMap.timestamp = idx;
+      else if (h.includes('email')) headerMap.email = idx;
+      else if (h.includes('firstname') || h === 'first') headerMap.firstName = idx;
+      else if (h.includes('lastname') || h.includes('surname') || h === 'last') headerMap.lastName = idx;
+      else if (h.includes('fullname') || h.includes('name') || h.includes('candidate')) headerMap.fullName = idx;
+      else if (h.includes('phone') || h.includes('mobile') || h.includes('tel') || h.includes('whatsapp')) headerMap.phone = idx;
+      else if (h.includes('programme') || h.includes('program') || h.includes('course') || h.includes('track')) headerMap.programme = idx;
+      else if (h.includes('schedule')) headerMap.schedule = idx;
+      else if (h.includes('mode') || h.includes('delivery')) headerMap.deliveryMode = idx;
+      else if (h.includes('expertise') || h.includes('experience') || h.includes('level')) headerMap.expertise = idx;
+      else if (h.includes('sponsor')) headerMap.sponsor = idx;
+      else if (h.includes('notes') || h.includes('comment') || h.includes('objective')) headerMap.notes = idx;
+      else if (h.includes('studentnumber') || h.includes('studentid')) headerMap.claimedStudentNumber = idx;
+      else if (h.includes('gender')) headerMap.gender = idx;
+      else if (h.includes('address')) headerMap.address = idx;
+      else if (h.includes('state')) headerMap.stateOfOrigin = idx;
+    });
+
+    const parsed = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = splitLine(lines[i]);
+      if (cols.length === 0 || cols.every(c => !c)) continue;
+
+      let fullName = headerMap.fullName !== undefined ? cols[headerMap.fullName] : '';
+      let firstName = headerMap.firstName !== undefined ? cols[headerMap.firstName] : '';
+      let lastName = headerMap.lastName !== undefined ? cols[headerMap.lastName] : '';
+
+      if (!firstName && !lastName && fullName) {
+        const parts = fullName.trim().split(/\s+/);
+        firstName = parts[0] || 'Candidate';
+        lastName = parts.slice(1).join(' ') || 'Applicant';
+      } else if (firstName && !fullName) {
+        fullName = `${firstName} ${lastName || ''}`.trim();
+      }
+
+      const rowObj = {
+        _rowIdx: i,
+        responseId: headerMap.responseId !== undefined ? cols[headerMap.responseId] : '',
+        timestamp: headerMap.timestamp !== undefined ? cols[headerMap.timestamp] : '',
+        firstName: firstName || 'Candidate',
+        lastName: lastName || 'Applicant',
+        fullName: fullName || `${firstName || 'Candidate'} ${lastName || 'Applicant'}`,
+        email: headerMap.email !== undefined ? cols[headerMap.email] : '',
+        phone: headerMap.phone !== undefined ? cols[headerMap.phone] : '',
+        programme: headerMap.programme !== undefined ? cols[headerMap.programme] : '',
+        preferredSchedule: headerMap.schedule !== undefined ? cols[headerMap.schedule] : 'WEEKDAY',
+        deliveryMode: headerMap.deliveryMode !== undefined ? cols[headerMap.deliveryMode] : 'IN_PERSON',
+        expertiseLevel: headerMap.expertise !== undefined ? cols[headerMap.expertise] : 'BEGINNER',
+        sponsorType: headerMap.sponsor !== undefined ? cols[headerMap.sponsor] : 'Self-sponsored',
+        notes: headerMap.notes !== undefined ? cols[headerMap.notes] : '',
+        claimedStudentNumber: headerMap.claimedStudentNumber !== undefined ? cols[headerMap.claimedStudentNumber] : '',
+        gender: headerMap.gender !== undefined ? cols[headerMap.gender] : '',
+        address: headerMap.address !== undefined ? cols[headerMap.address] : '',
+        stateOfOrigin: headerMap.stateOfOrigin !== undefined ? cols[headerMap.stateOfOrigin] : ''
+      };
+
+      parsed.push(normalizeParsedRow(rowObj, i));
+    }
+    return parsed;
+  }
+
+  function normalizeParsedRow(item, idx) {
+    // Preferred: Google Forms Response ID
+    // Fallback: CLP-GF-<UUID> (Strictly UUID-based, never timestamp+email+phone)
+    // Persist this generated/imported ID across retries
+    let subId = item.sourceSubmissionId || item.source_submission_id || item.responseId || item.response_id || '';
+    if (!subId || !String(subId).trim()) {
+      const genUuid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          });
+      subId = `CLP-GF-${genUuid}`;
+    }
+
+    // Resolve programme against active programmes
+    let resolvedProg = null;
+    const progQuery = String(item.programme || item.programmeId || item.course || '').trim().toLowerCase();
+    if (progQuery) {
+      resolvedProg = (state.programmes || []).find(p =>
+        p.id.toLowerCase() === progQuery ||
+        (p.code && p.code.toLowerCase() === progQuery) ||
+        p.name.toLowerCase().includes(progQuery) ||
+        progQuery.includes(p.name.toLowerCase())
+      );
+    }
+
+    // Check duplicate in state.intakeApplications
+    const tenantId = (typeof isValidUuid === 'function' && isValidUuid(state.authoritativeTenantId) && state.authoritativeTenantId !== 'clasptek_main')
+      ? state.authoritativeTenantId
+      : DEFAULT_TENANT_ID;
+
+    const isDuplicate = (state.intakeApplications || []).some(a =>
+      a.tenantId === tenantId && a.source === 'GOOGLE_FORM' && a.sourceSubmissionId === subId
+    );
+
+    return {
+      _rowIdx: idx,
+      sourceSubmissionId: subId,
+      firstName: item.firstName || item.first_name || 'Candidate',
+      lastName: item.lastName || item.last_name || 'Applicant',
+      fullName: item.fullName || item.name || `${item.firstName || 'Candidate'} ${item.lastName || 'Applicant'}`,
+      email: (item.email || item.email_address || '').trim().toLowerCase(),
+      phone: (item.phone || item.phone_number || '').trim(),
+      programmeId: resolvedProg ? resolvedProg.id : (item.programmeId || null),
+      programmeName: resolvedProg ? resolvedProg.name : (item.programme || 'Unassigned / Review Required'),
+      preferredSchedule: item.preferredSchedule || item.schedule || 'WEEKDAY',
+      deliveryMode: (String(item.deliveryMode || item.mode || 'IN_PERSON').toUpperCase().includes('ONLINE')) ? 'ONLINE' : ((String(item.deliveryMode || '').toUpperCase().includes('HYBRID')) ? 'HYBRID' : 'IN_PERSON'),
+      expertiseLevel: item.expertiseLevel || item.expertise || 'BEGINNER',
+      sponsorType: item.sponsorType || item.sponsor || 'Self-sponsored',
+      notes: item.notes || '',
+      claimedStudentNumber: item.claimedStudentNumber || '',
+      gender: item.gender || 'OTHER',
+      address: item.address || '',
+      stateOfOrigin: item.stateOfOrigin || '',
+      isDuplicate,
+      raw: item
+    };
+  }
+}
+
+function renderApplicantIntakePortal(container, options = {}) {
+  return renderCandidateApplicationDrawer(container, options);
 }
 
 // -----------------------------------------------------------------------------
@@ -41889,6 +42424,7 @@ function renderMeetingSummaryModal(meeting, stats = {}) {
     window.renderApplicationsTab = renderApplicationsTab;
     window.renderApplicationDetailModal = renderApplicationDetailModal;
     window.renderApplicantIntakePortal = renderApplicantIntakePortal;
+    window.renderCandidateApplicationDrawer = renderCandidateApplicationDrawer;
     window.lookupApplicantTrackingInfo = lookupApplicantTrackingInfo;
     window.renderApplicantTrackingPortal = renderApplicantTrackingPortal;
     // Student CRM Management Exports

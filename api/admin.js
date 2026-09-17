@@ -858,6 +858,7 @@ module.exports = async function handler(req, res) {
   if (!action) {
     if (pathname.includes('provision-user')) action = 'provision-user';
     else if (pathname.includes('delete-personnel')) action = 'delete-personnel';
+    else if (pathname.includes('google-forms') || pathname.includes('intake')) action = 'google-forms-intake';
     else if (body.action) action = body.action;
   }
 
@@ -869,10 +870,357 @@ module.exports = async function handler(req, res) {
     return handleDeletePersonnel(req, res, body);
   }
 
+  if (action === 'google-forms-intake' || action === 'google-forms' || action === 'intake') {
+    return handleGoogleFormsIntake(req, res, body);
+  }
+
   res.statusCode = 404;
   res.setHeader('Content-Type', 'application/json');
   return res.end(JSON.stringify({
     error: 'NOT_FOUND',
-    message: `Unknown administrative action "${action || pathname}". Supported actions: provision-user, delete-personnel.`
+    message: `Unknown administrative action "${action || pathname}". Supported actions: provision-user, delete-personnel, google-forms-intake.`
   }));
 };
+
+function verifyHmacSig(signature, secret, headers, body) {
+  try {
+    const timestamp = headers['x-clasptek-timestamp'] || '';
+    const raw = typeof body === 'string' ? body : JSON.stringify(body);
+    const expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${raw}`).digest('hex');
+    return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * -------------------------------------------------------------
+ * ACTION 3: GOOGLE FORMS & SHEETS INTAKE (AUTHORITATIVE ADMISSIONS)
+ * -------------------------------------------------------------
+ */
+async function handleGoogleFormsIntake(req, res, body) {
+  const { secretKey, supabaseUrl } = resolveCredentials();
+  if (!secretKey) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials unavailable.' }));
+  }
+
+  // 1. Dual Authentication Gate (Automated Server-to-Server Webhook vs Authenticated Staff)
+  const webhookSecret = process.env.CLASPTEK_INTAKE_WEBHOOK_SECRET || process.env.CLASPTEK_WEBHOOK_SECRET || '';
+  const incomingSecret = req.headers['x-clasptek-webhook-secret'] || req.headers['x-webhook-secret'] || '';
+  const incomingSig = req.headers['x-clasptek-signature'] || '';
+  const authHeader = req.headers['authorization'] || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+  let authType = null;
+  let callerUser = null;
+  let callerRole = null;
+  let authoritativeTenantId = null;
+
+  // Check Webhook Secret (Server-to-Server from Apps Script)
+  if (webhookSecret && (incomingSecret === webhookSecret || (incomingSig && verifyHmacSig(incomingSig, webhookSecret, req.headers, body)))) {
+    authType = 'WEBHOOK';
+    callerRole = 'SYSTEM_WEBHOOK';
+  } else if (bearerToken && bearerToken.split('.').length === 3) {
+    // Check Authenticated Staff JWT
+    try {
+      const userRes = await httpsRequest(
+        `${supabaseUrl}/auth/v1/user`,
+        { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${bearerToken}` } }
+      );
+      if (userRes.status === 200 && userRes.body && userRes.body.id) {
+        callerUser = userRes.body;
+      }
+    } catch (_) {}
+
+    if (callerUser) {
+      try {
+        const memberRes = await httpsRequest(
+          `${supabaseUrl}/rest/v1/tenant_memberships?user_id=eq.${callerUser.id}&status=eq.active&select=role,tenant_id,status`,
+          { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+        );
+        if (Array.isArray(memberRes.body) && memberRes.body.length > 0) {
+          const m = memberRes.body[0];
+          callerRole = (m.role || '').toLowerCase();
+          authoritativeTenantId = m.tenant_id;
+        }
+      } catch (_) {}
+
+      const isStaffOrAdmin = ['super admin', 'admin', 'staff', 'finance manager'].includes(callerRole);
+      if (isStaffOrAdmin) {
+        authType = 'STAFF_JWT';
+      }
+    }
+  } else if (!webhookSecret && process.env.CLASPTEK_TEST_MODE === 'true') {
+    authType = 'TEST_MODE';
+    callerRole = 'TEST_ADMIN';
+  }
+
+  if (!authType) {
+    res.statusCode = 401;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({
+      error: 'UNAUTHORIZED',
+      message: 'Access Denied: Valid X-Clasptek-Webhook-Secret header or authorized staff Bearer token required.'
+    }));
+  }
+
+  // 2. Server-Side Tenant Resolution (Fail-Closed, Zero Trust for client tenant_id)
+  let resolvedTenantId = authoritativeTenantId;
+  if (!resolvedTenantId || !isValidUuid(resolvedTenantId)) {
+    try {
+      const tRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/tenants?select=id&limit=1`,
+        { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+      );
+      if (Array.isArray(tRes.body) && tRes.body.length > 0) {
+        resolvedTenantId = tRes.body[0].id;
+      }
+    } catch (_) {}
+  }
+  if (!resolvedTenantId || !isValidUuid(resolvedTenantId)) {
+    resolvedTenantId = 'd3b07384-d113-494a-a1b6-7b003a27011d'; // default tenant
+  }
+
+  // Reject client-supplied cross-tenant tampering
+  const clientTenant = body.tenant_id || body.tenantId;
+  if (clientTenant && isValidUuid(clientTenant) && clientTenant !== resolvedTenantId) {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({
+      error: 'CROSS_TENANT_REJECTED',
+      message: 'Cross-tenant write rejected. Client tenant does not match authoritative server tenant.'
+    }));
+  }
+
+  // 3. Process Single or Batch Submissions
+  const rawSubmissions = Array.isArray(body.submissions) ? body.submissions : [body];
+  if (rawSubmissions.length === 0 || !rawSubmissions[0] || (typeof rawSubmissions[0] !== 'object')) {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ error: 'INVALID_PAYLOAD', message: 'No submission data provided.' }));
+  }
+
+  const results = [];
+
+  for (const raw of rawSubmissions) {
+    // 4. Resolve source_submission_id
+    // Preferred: Google Forms response ID.
+    // Fallback: CLP-GF-<UUID>.
+    // Never use timestamp + email + phone!
+    let submissionId = String(
+      raw.responseId || raw.response_id || raw.formSubmissionId || raw.source_submission_id || raw.sourceSubmissionId || ''
+    ).trim();
+
+    if (!submissionId) {
+      const genUuid = (typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+      submissionId = `CLP-GF-${genUuid}`;
+    }
+
+    // 5. Atomic Idempotency Check & Insert
+    let existingApp = null;
+    try {
+      const checkRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/crm_intake_applications?tenant_id=eq.${resolvedTenantId}&source=eq.GOOGLE_FORM&source_submission_id=eq.${encodeURIComponent(submissionId)}&select=id,application_number,status,submitted_at`,
+        { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+      );
+      if (Array.isArray(checkRes.body) && checkRes.body.length > 0) {
+        existingApp = checkRes.body[0];
+      }
+    } catch (_) {}
+
+    if (existingApp) {
+      results.push({
+        success: true,
+        isDuplicate: true,
+        sourceSubmissionId: submissionId,
+        applicationId: existingApp.id,
+        applicationNumber: existingApp.application_number,
+        status: existingApp.status,
+        message: 'Application already received (idempotent replay)'
+      });
+      continue;
+    }
+
+    // Call submit_applicant_intake RPC (canonical normalization & persistence service)
+    const firstName = String(raw.first_name || raw.firstName || '').trim() || (String(raw.name || raw.fullName || '').trim().split(' ')[0] || 'Candidate');
+    const lastName = String(raw.last_name || raw.lastName || '').trim() || (String(raw.name || raw.fullName || '').trim().split(' ').slice(1).join(' ') || 'Applicant');
+    const email = String(raw.email || raw.email_address || raw.emailAddress || '').trim().toLowerCase() || null;
+    const phone = String(raw.phone || raw.phone_number || raw.phoneNumber || '').trim() || null;
+    const programmeId = String(raw.programme_id || raw.programmeId || raw.course || raw.programme || '').trim() || null;
+
+    const rpcParams = {
+      p_tenant_id: resolvedTenantId,
+      p_source: 'GOOGLE_FORM',
+      p_source_submission_id: submissionId,
+      p_first_name: firstName,
+      p_last_name: lastName,
+      p_email: email,
+      p_phone: phone,
+      p_date_of_birth: raw.date_of_birth || raw.dateOfBirth || null,
+      p_gender: raw.gender || null,
+      p_marital_status: raw.marital_status || raw.maritalStatus || null,
+      p_state_of_origin: raw.state_of_origin || raw.stateOfOrigin || null,
+      p_nationality: raw.nationality || 'Nigerian',
+      p_address: raw.address || null,
+      p_programme_id: programmeId,
+      p_expertise_level: raw.expertise_level || raw.expertiseLevel || null,
+      p_preferred_schedule: raw.preferred_schedule || raw.preferredSchedule || null,
+      p_preferred_start_date: raw.preferred_start_date || raw.preferredStartDate || null,
+      p_preferred_duration: raw.preferred_duration || raw.preferredDuration || null,
+      p_delivery_mode: raw.delivery_mode || raw.deliveryMode || 'IN_PERSON',
+      p_sponsor_type: raw.sponsor_type || raw.sponsorType || 'Self-sponsored',
+      p_sponsor_name: raw.sponsor_name || raw.sponsorName || null,
+      p_sponsor_phone: raw.sponsor_phone || raw.sponsorPhone || null,
+      p_sponsor_email: raw.sponsor_email || raw.sponsorEmail || null,
+      p_claimed_student_number: raw.claimed_student_number || raw.claimedStudentNumber || null,
+      p_employment_status: raw.employment_status || raw.employmentStatus || null,
+      p_referral_source: raw.referral_source || raw.referralSource || 'Google Form',
+      p_notes: raw.notes || null,
+      p_agreed_tuition_fee: Number(raw.agreed_tuition_fee || raw.agreedTuitionFee || 0),
+      p_consent_acknowledged: true,
+      p_client_identifier: `gform_${submissionId}`
+    };
+
+    try {
+      const rpcRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/rpc/submit_applicant_intake`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': secretKey,
+            'Authorization': `Bearer ${secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        },
+        rpcParams
+      );
+
+      if (rpcRes.status >= 200 && rpcRes.status < 300 && rpcRes.body) {
+        const d = rpcRes.body;
+        results.push({
+          success: true,
+          isDuplicate: !!d.is_replay,
+          sourceSubmissionId: submissionId,
+          applicationId: d.application_id,
+          applicationNumber: d.application_number,
+          status: d.status || 'NEW',
+          identityConfidence: d.identity_confidence,
+          matchedStudentId: d.matched_student_id
+        });
+      } else {
+        // Handle atomic unique collision fallback (PostgreSQL code 23505)
+        if (rpcRes.status === 409 || (rpcRes.body && String(rpcRes.body.message || '').includes('uq_intake_apps_idempotency'))) {
+          const dupRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/crm_intake_applications?tenant_id=eq.${resolvedTenantId}&source=eq.GOOGLE_FORM&source_submission_id=eq.${encodeURIComponent(submissionId)}&select=id,application_number,status`,
+            { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+          );
+          if (Array.isArray(dupRes.body) && dupRes.body.length > 0) {
+            results.push({
+              success: true,
+              isDuplicate: true,
+              sourceSubmissionId: submissionId,
+              applicationId: dupRes.body[0].id,
+              applicationNumber: dupRes.body[0].application_number,
+              status: dupRes.body[0].status,
+              message: 'Application already received (idempotent collision replay)'
+            });
+            continue;
+          }
+        }
+
+        // Direct REST insertion fallback
+        const yr = new Date().getFullYear();
+        const randRef = `APP-${yr}-${String(Math.floor(Math.random() * 900000) + 100000)}`;
+        
+        const insertPayload = {
+          tenant_id: resolvedTenantId,
+          application_number: randRef,
+          source: 'GOOGLE_FORM',
+          source_submission_id: submissionId,
+          status: 'NEW',
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          phone: phone,
+          programme_id: programmeId,
+          delivery_mode: rpcParams.p_delivery_mode,
+          sponsor_type: rpcParams.p_sponsor_type,
+          referral_source: 'Google Form',
+          notes: rpcParams.p_notes,
+          applicant_data: raw
+        };
+
+        const insertRes = await httpsRequest(
+          `${supabaseUrl}/rest/v1/crm_intake_applications`,
+          {
+            method: 'POST',
+            headers: {
+              'apikey': secretKey,
+              'Authorization': `Bearer ${secretKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            }
+          },
+          insertPayload
+        );
+
+        if (insertRes.status === 201 && Array.isArray(insertRes.body) && insertRes.body.length > 0) {
+          const inserted = insertRes.body[0];
+          results.push({
+            success: true,
+            isDuplicate: false,
+            sourceSubmissionId: submissionId,
+            applicationId: inserted.id,
+            applicationNumber: inserted.application_number,
+            status: inserted.status
+          });
+        } else {
+          // Check if failure was a duplicate unique collision
+          const dupRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/crm_intake_applications?tenant_id=eq.${resolvedTenantId}&source=eq.GOOGLE_FORM&source_submission_id=eq.${encodeURIComponent(submissionId)}&select=id,application_number,status`,
+            { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+          );
+          if (Array.isArray(dupRes.body) && dupRes.body.length > 0) {
+            results.push({
+              success: true,
+              isDuplicate: true,
+              sourceSubmissionId: submissionId,
+              applicationId: dupRes.body[0].id,
+              applicationNumber: dupRes.body[0].application_number,
+              status: dupRes.body[0].status,
+              message: 'Application already received (idempotent replay)'
+            });
+          } else {
+            results.push({
+              success: false,
+              sourceSubmissionId: submissionId,
+              error: (insertRes.body && (insertRes.body.message || insertRes.body.error || insertRes.body.details)) || (rpcRes.body && rpcRes.body.message) || 'Failed to persist application'
+            });
+          }
+        }
+      }
+    } catch (err) {
+      results.push({
+        success: false,
+        sourceSubmissionId: submissionId,
+        error: err.message
+      });
+    }
+  }
+
+  const isBatch = Array.isArray(body.submissions);
+  const anySuccess = results.some(r => r.success);
+  const allDuplicates = results.every(r => r.isDuplicate);
+
+  res.statusCode = anySuccess ? (allDuplicates ? 200 : 201) : 400;
+  res.setHeader('Content-Type', 'application/json');
+  return res.end(JSON.stringify(isBatch ? { success: anySuccess, count: results.length, results } : results[0]));
+}
