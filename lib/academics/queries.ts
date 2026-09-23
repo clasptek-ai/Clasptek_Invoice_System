@@ -46,7 +46,7 @@ export async function getCohorts(
 
     let query = supabase
       .from('cohorts')
-      .select('*, programmes(name), personnel(name)')
+      .select('*, programmes(name), personnel(full_name)')
       .order('start_date', { ascending: false });
 
     if (filters.programmeId && filters.programmeId !== 'ALL') {
@@ -85,7 +85,7 @@ export async function getCohorts(
 
     type RawCohort = Cohort & {
       programmes?: { name?: string };
-      personnel?: { name?: string };
+      personnel?: { full_name?: string };
     };
 
     const enrichedCohorts: Cohort[] = (cohorts as RawCohort[])
@@ -101,7 +101,7 @@ export async function getCohorts(
           const code = (c.cohort_code || '').toLowerCase();
           const name = (c.name || '').toLowerCase();
           const progName = (c.programmes?.name || '').toLowerCase();
-          const facName = (c.personnel?.name || '').toLowerCase();
+          const facName = (c.personnel?.full_name || '').toLowerCase();
           matchesSearch =
             code.includes(q) || name.includes(q) || progName.includes(q) || facName.includes(q);
         }
@@ -109,7 +109,7 @@ export async function getCohorts(
         return {
           ...c,
           programme_name: c.programmes?.name || 'General',
-          lead_facilitator_name: c.personnel?.name || undefined,
+          lead_facilitator_name: c.personnel?.full_name || undefined,
           enrolled_count: enrolled,
           is_full: isFull,
           percentage_full: pct,
@@ -136,7 +136,7 @@ export async function getEnrolments(
 
     let query = supabase
       .from('enrolments')
-      .select('*, programmes(name), cohorts(cohort_code, name)', { count: 'exact' })
+      .select('*, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(cohort_code, name)', { count: 'exact' })
       .order('enrolment_date', { ascending: false });
 
     if (filters.cohortId && filters.cohortId !== 'ALL') {

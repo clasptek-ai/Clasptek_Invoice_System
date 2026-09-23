@@ -55,31 +55,50 @@ export async function getStudents(
 
     const studentIds = students.map((s) => s.id);
 
-    // 2. Fetch associated enrolments, programmes, and invoices in parallel
+    // 2. Fetch associated enrolments, programmes, invoices, and payments
     const [enrolmentsRes, invoicesRes, paymentsRes] = await Promise.all([
       supabase
         .from('enrolments')
-        .select('id, student_id, programme_id, status, programmes(name)')
+        .select('id, student_id, programme_id, status, programmes!fk_enrolments_programme_tenant(name)')
         .in('student_id', studentIds),
       supabase
         .from('invoices')
-        .select('id, student_id, amount, balance, status')
-        .in('student_id', studentIds),
+        .select('id, invoice_no, total_amount, status, student_name, student_email'),
       supabase
         .from('payments')
-        .select('id, student_id, amount')
-        .in('student_id', studentIds),
+        .select('id, invoice_id, amount'),
     ]);
 
     const enrolments = enrolmentsRes.data ?? [];
-    const invoices = invoicesRes.data ?? [];
-    const payments = paymentsRes.data ?? [];
+    const allInvoices = invoicesRes.data ?? [];
+    const allPayments = paymentsRes.data ?? [];
+
+    const paymentsByInvoice: Record<string, number> = {};
+    allPayments.forEach((p) => {
+      if (p.invoice_id) {
+        paymentsByInvoice[p.invoice_id] = (paymentsByInvoice[p.invoice_id] || 0) + Number(p.amount || 0);
+      }
+    });
 
     // 3. Map into StudentSummary matching legacy getStudentAccountSummaries
     const summaries: StudentSummary[] = students.map((stu: Student) => {
       const stuEnrolments = enrolments.filter((e) => e.student_id === stu.id);
-      const stuInvoices = invoices.filter((inv) => inv.student_id === stu.id);
-      const stuPayments = payments.filter((p) => p.student_id === stu.id);
+
+      const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim();
+      const lowerName = fullName.toLowerCase();
+      const lowerEmail = (stu.email || '').toLowerCase();
+
+      const stuInvoices = allInvoices.filter((inv) => {
+        const invName = (inv.student_name || '').toLowerCase();
+        const invEmail = (inv.student_email || '').toLowerCase();
+        if (lowerName && invName && (invName === lowerName || invName.includes(lowerName))) return true;
+        if (lowerEmail && invEmail && invEmail === lowerEmail) return true;
+        return false;
+      });
+
+      const totalInvoiced = stuInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+      const totalPaid = stuInvoices.reduce((sum, inv) => sum + (paymentsByInvoice[inv.id] || 0), 0);
+      const balance = Math.max(0, totalInvoiced - totalPaid);
 
       const programmeNames = new Set<string>();
       stuEnrolments.forEach((e) => {
@@ -87,10 +106,6 @@ export async function getStudents(
         const pName = e.programmes?.name;
         if (pName) programmeNames.add(pName);
       });
-
-      const totalInvoiced = stuInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
-      const totalPaid = stuPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      const balance = Math.max(0, totalInvoiced - totalPaid);
 
       let financialStatus: StudentSummary['financial_status'] = 'NO_INVOICE';
       let statusDisplay = 'Prospect';
@@ -106,14 +121,12 @@ export async function getStudents(
         statusDisplay = 'Outstanding';
       }
 
-      const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim() || 'Student';
-
       return {
         id: stu.id,
         student_number: stu.student_number || '',
         first_name: stu.first_name,
         last_name: stu.last_name,
-        name: fullName,
+        name: fullName || 'Student',
         email: stu.email,
         phone: stu.phone,
         gender: stu.gender,
@@ -167,25 +180,40 @@ export async function getStudentDossier(
       return { data: null, error: stuErr?.message || 'Student not found' };
     }
 
-    // 2. Parallel fetch related enrolments, invoices, payments
-    const [enrolRes, invRes, payRes] = await Promise.all([
-      supabase
-        .from('enrolments')
-        .select('id, enrolment_number, agreed_tuition_fee, enrolment_date, completion_attendance_pct, certificate_issued, certificate_number, status, programmes(name), cohorts(name)')
-        .eq('student_id', studentId),
-      supabase
-        .from('invoices')
-        .select('id, invoice_number, amount, balance, status, issue_date')
-        .eq('student_id', studentId)
-        .order('issue_date', { ascending: false }),
-      supabase
-        .from('payments')
-        .select('id, receipt_number, amount, payment_date, method')
-        .eq('student_id', studentId)
-        .order('payment_date', { ascending: false }),
-    ]);
+    const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
 
-    const enrolments = (enrolRes.data ?? []).map((e: Record<string, unknown>) => ({
+    // 2. Fetch enrolments with explicit FK hints
+    const { data: enrolmentsRaw } = await supabase
+      .from('enrolments')
+      .select('id, enrolment_number, agreed_tuition_fee, enrolment_date, completion_attendance_pct, certificate_issued, certificate_number, status, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(name)')
+      .eq('student_id', studentId);
+
+    // 3. Fetch invoices by name or email
+    let invoicesQuery = supabase
+      .from('invoices')
+      .select('id, invoice_no, total_amount, status, invoice_date, student_name, student_email');
+
+    if (fullName) {
+      invoicesQuery = invoicesQuery.or(`student_name.ilike.%${fullName}%,student_email.ilike.%${student.email || '___none___'}%`);
+    } else if (student.email) {
+      invoicesQuery = invoicesQuery.eq('student_email', student.email);
+    }
+
+    const { data: invoicesRaw } = await invoicesQuery;
+    const invList = invoicesRaw || [];
+    const invIds = invList.map((i) => i.id);
+
+    // 4. Fetch payments for those invoices
+    let paymentsRaw: Array<Record<string, unknown>> = [];
+    if (invIds.length > 0) {
+      const { data: payData } = await supabase
+        .from('payments')
+        .select('id, receipt_no, amount, payment_date, payment_method, invoice_id')
+        .in('invoice_id', invIds);
+      paymentsRaw = payData || [];
+    }
+
+    const enrolments = (enrolmentsRaw ?? []).map((e: Record<string, unknown>) => ({
       id: String(e.id || ''),
       enrolment_number: String(e.enrolment_number || 'ENR-—'),
       programme_name: String((e.programmes as { name?: string } | undefined)?.name || 'General Programme'),
@@ -198,21 +226,21 @@ export async function getStudentDossier(
       certificate_number: (e.certificate_number as string | null) || null,
     }));
 
-    const invoices = (invRes.data ?? []).map((inv: Record<string, unknown>) => ({
+    const invoices = invList.map((inv: Record<string, unknown>) => ({
       id: String(inv.id || ''),
-      invoice_number: String(inv.invoice_number || 'INV-—'),
-      amount: Number(inv.amount || 0),
-      balance: Number(inv.balance || 0),
+      invoice_number: String(inv.invoice_no || 'INV-—'),
+      amount: Number(inv.total_amount || 0),
+      balance: 0,
       status: String(inv.status || 'UNPAID'),
-      issue_date: String(inv.issue_date || ''),
+      issue_date: String(inv.invoice_date || ''),
     }));
 
-    const payments = (payRes.data ?? []).map((p: Record<string, unknown>) => ({
+    const payments = paymentsRaw.map((p) => ({
       id: String(p.id || ''),
-      receipt_number: String(p.receipt_number || 'REC-—'),
+      receipt_number: String(p.receipt_no || 'REC-—'),
       amount: Number(p.amount || 0),
       payment_date: String(p.payment_date || ''),
-      method: String(p.method || 'TRANSFER'),
+      method: String(p.payment_method || 'TRANSFER'),
     }));
 
     const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
