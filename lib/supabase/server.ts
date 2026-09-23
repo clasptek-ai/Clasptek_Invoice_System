@@ -39,6 +39,8 @@ export async function createSupabaseServerClient() {
   );
 }
 
+export { createSupabaseServerClient as createServerClient };
+
 /**
  * Creates a Supabase server client using the SERVICE ROLE key.
  * FOR INTERNAL SERVER-SIDE USE ONLY. Never expose service role key to clients.
