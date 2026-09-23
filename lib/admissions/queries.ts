@@ -75,7 +75,7 @@ export async function getCohortsByProgramme(programmeId: string): Promise<Cohort
     .from('cohorts')
     .select('id, cohort_code, name, programme_id, start_date, status')
     .eq('programme_id', programmeId)
-    .in('status', ['UPCOMING', 'ACTIVE', 'OPEN'])
+    .in('status', ['PLANNING', 'UPCOMING', 'IN_PROGRESS'])
     .order('start_date', { ascending: true });
 
   if (error) {
