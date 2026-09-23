@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app components lib types",
     "typecheck": "tsc --noEmit",
     "test": "node run_all_certification_suites.js",
     "build:legacy": "node scripts/generate-runtime-config.js"
