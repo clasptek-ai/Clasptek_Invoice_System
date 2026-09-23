@@ -74,7 +74,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/students',
         icon: 'users',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 4',
+        migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
         id: 'enrolments',
@@ -82,7 +82,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/enrolments',
         icon: 'clipboard-list',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 4',
+        migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
         id: 'programmes',
@@ -90,7 +90,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/programmes',
         icon: 'book-open',
         rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 4',
+        migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
         id: 'cohorts',
@@ -98,7 +98,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/cohorts',
         icon: 'grid',
         rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 4',
+        migrationPhase: 'Phase 4 — ACTIVE',
       },
     ],
   },

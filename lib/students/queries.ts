@@ -1,0 +1,237 @@
+/**
+ * lib/students/queries.ts — Phase 4
+ * Server-side Data Access Layer for Students & Client Directory.
+ * Enforces multi-tenant RLS through createServerClient().
+ */
+
+import { createServerClient } from '@/lib/supabase/server';
+import type {
+  Student,
+  StudentSummary,
+  StudentFilters,
+  StudentDossier,
+} from '@/types/students';
+
+const PAGE_SIZE = 25;
+
+export async function getStudents(
+  filters: StudentFilters = {}
+): Promise<{ data: StudentSummary[]; count: number; error: string | null }> {
+  try {
+    const supabase = await createServerClient();
+    const { page = 1, pageSize = PAGE_SIZE, search = '' } = filters;
+
+    // 1. Fetch Students
+    let query = supabase
+      .from('students')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (search.trim()) {
+      const q = search.trim();
+      query = query.or(
+        `first_name.ilike.%${q}%,last_name.ilike.%${q}%,student_number.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`
+      );
+    }
+
+    if (filters.status && filters.status !== 'ALL') {
+      query = query.eq('status', filters.status);
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+
+    const { data: students, count, error } = await query;
+
+    if (error) {
+      console.error('[getStudents]', error.message);
+      return { data: [], count: 0, error: error.message };
+    }
+
+    if (!students || students.length === 0) {
+      return { data: [], count: count ?? 0, error: null };
+    }
+
+    const studentIds = students.map((s) => s.id);
+
+    // 2. Fetch associated enrolments, programmes, and invoices in parallel
+    const [enrolmentsRes, invoicesRes, paymentsRes] = await Promise.all([
+      supabase
+        .from('enrolments')
+        .select('id, student_id, programme_id, status, programmes(name)')
+        .in('student_id', studentIds),
+      supabase
+        .from('invoices')
+        .select('id, student_id, amount, balance, status')
+        .in('student_id', studentIds),
+      supabase
+        .from('payments')
+        .select('id, student_id, amount')
+        .in('student_id', studentIds),
+    ]);
+
+    const enrolments = enrolmentsRes.data ?? [];
+    const invoices = invoicesRes.data ?? [];
+    const payments = paymentsRes.data ?? [];
+
+    // 3. Map into StudentSummary matching legacy getStudentAccountSummaries
+    const summaries: StudentSummary[] = students.map((stu: Student) => {
+      const stuEnrolments = enrolments.filter((e) => e.student_id === stu.id);
+      const stuInvoices = invoices.filter((inv) => inv.student_id === stu.id);
+      const stuPayments = payments.filter((p) => p.student_id === stu.id);
+
+      const programmeNames = new Set<string>();
+      stuEnrolments.forEach((e) => {
+        // @ts-expect-error Supabase nested relation shape
+        const pName = e.programmes?.name;
+        if (pName) programmeNames.add(pName);
+      });
+
+      const totalInvoiced = stuInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
+      const totalPaid = stuPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      const balance = Math.max(0, totalInvoiced - totalPaid);
+
+      let financialStatus: StudentSummary['financial_status'] = 'NO_INVOICE';
+      let statusDisplay = 'Prospect';
+
+      if (totalInvoiced > 0 && balance <= 0) {
+        financialStatus = 'FULLY_PAID';
+        statusDisplay = 'Fully Paid';
+      } else if (totalInvoiced > 0 && totalPaid > 0 && balance > 0) {
+        financialStatus = 'PARTIALLY_PAID';
+        statusDisplay = 'Partial Balance';
+      } else if (totalInvoiced > 0) {
+        financialStatus = 'UNPAID';
+        statusDisplay = 'Outstanding';
+      }
+
+      const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim() || 'Student';
+
+      return {
+        id: stu.id,
+        student_number: stu.student_number || '',
+        first_name: stu.first_name,
+        last_name: stu.last_name,
+        name: fullName,
+        email: stu.email,
+        phone: stu.phone,
+        gender: stu.gender,
+        address: stu.address,
+        parent_name: stu.emergency_contact_name,
+        programmes_list: Array.from(programmeNames).join(', ') || '—',
+        total_invoiced: totalInvoiced,
+        total_paid: totalPaid,
+        balance,
+        is_enrolled: stuEnrolments.length > 0,
+        financial_status: financialStatus,
+        training_status: stu.status,
+        status_display: statusDisplay,
+      };
+    });
+
+    return { data: summaries, count: count ?? 0, error: null };
+  } catch (err: unknown) {
+    console.error('[getStudents unexpected error]', err);
+    return { data: [], count: 0, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+export async function getStudentById(id: string): Promise<{ data: Student | null; error: string | null }> {
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.from('students').select('*').eq('id', id).single();
+    if (error) {
+      return { data: null, error: error.message };
+    }
+    return { data: data as Student, error: null };
+  } catch (err: unknown) {
+    return { data: null, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+export async function getStudentDossier(
+  studentId: string
+): Promise<{ data: StudentDossier | null; error: string | null }> {
+  try {
+    const supabase = await createServerClient();
+
+    // 1. Fetch Student
+    const { data: student, error: stuErr } = await supabase
+      .from('students')
+      .select('*')
+      .eq('id', studentId)
+      .single();
+
+    if (stuErr || !student) {
+      return { data: null, error: stuErr?.message || 'Student not found' };
+    }
+
+    // 2. Parallel fetch related enrolments, invoices, payments
+    const [enrolRes, invRes, payRes] = await Promise.all([
+      supabase
+        .from('enrolments')
+        .select('id, enrolment_number, agreed_tuition_fee, enrolment_date, completion_attendance_pct, certificate_issued, certificate_number, status, programmes(name), cohorts(name)')
+        .eq('student_id', studentId),
+      supabase
+        .from('invoices')
+        .select('id, invoice_number, amount, balance, status, issue_date')
+        .eq('student_id', studentId)
+        .order('issue_date', { ascending: false }),
+      supabase
+        .from('payments')
+        .select('id, receipt_number, amount, payment_date, method')
+        .eq('student_id', studentId)
+        .order('payment_date', { ascending: false }),
+    ]);
+
+    const enrolments = (enrolRes.data ?? []).map((e: Record<string, unknown>) => ({
+      id: String(e.id || ''),
+      enrolment_number: String(e.enrolment_number || 'ENR-—'),
+      programme_name: String((e.programmes as { name?: string } | undefined)?.name || 'General Programme'),
+      cohort_name: String((e.cohorts as { name?: string } | undefined)?.name || 'General Cohort'),
+      status: String(e.status || ''),
+      agreed_tuition_fee: Number(e.agreed_tuition_fee || 0),
+      enrolment_date: String(e.enrolment_date || ''),
+      attendance_pct: Number(e.completion_attendance_pct || 0),
+      certificate_issued: Boolean(e.certificate_issued),
+      certificate_number: (e.certificate_number as string | null) || null,
+    }));
+
+    const invoices = (invRes.data ?? []).map((inv: Record<string, unknown>) => ({
+      id: String(inv.id || ''),
+      invoice_number: String(inv.invoice_number || 'INV-—'),
+      amount: Number(inv.amount || 0),
+      balance: Number(inv.balance || 0),
+      status: String(inv.status || 'UNPAID'),
+      issue_date: String(inv.issue_date || ''),
+    }));
+
+    const payments = (payRes.data ?? []).map((p: Record<string, unknown>) => ({
+      id: String(p.id || ''),
+      receipt_number: String(p.receipt_number || 'REC-—'),
+      amount: Number(p.amount || 0),
+      payment_date: String(p.payment_date || ''),
+      method: String(p.method || 'TRANSFER'),
+    }));
+
+    const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const balanceDue = Math.max(0, totalInvoiced - totalPaid);
+
+    return {
+      data: {
+        student: student as Student,
+        enrolments,
+        invoices,
+        payments,
+        totalInvoiced,
+        totalPaid,
+        balanceDue,
+      },
+      error: null,
+    };
+  } catch (err: unknown) {
+    return { data: null, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
