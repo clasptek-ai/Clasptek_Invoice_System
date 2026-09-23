@@ -27,6 +27,8 @@ export interface NavigationItem {
   isDisabled?: boolean;
   /** Phase label — indicates migration phase target */
   migrationPhase?: string;
+  /** Sub-navigation links under a parent module */
+  subItems?: Array<{ id: string; label: string; href: string }>;
 }
 
 // ─── Navigation Section ───────────────────────────────────────────────────────

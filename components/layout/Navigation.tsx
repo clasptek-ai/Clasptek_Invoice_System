@@ -147,6 +147,7 @@ interface NavItemProps {
   badge?: string | number;
   isDisabled?: boolean;
   isCollapsed?: boolean;
+  subItems?: Array<{ id: string; label: string; href: string }>;
   onClick?: () => void;
 }
 
@@ -158,44 +159,73 @@ export function NavItem({
   badge,
   isDisabled = false,
   isCollapsed = false,
+  subItems,
   onClick,
 }: NavItemProps) {
   const pathname = usePathname();
   const isActive = pathname === href || (href !== '/' && pathname.startsWith(href + '/'));
 
   return (
-    <Link
-      id={`nav-item-${id}`}
-      href={isDisabled ? '#' : href}
-      onClick={onClick}
-      aria-current={isActive ? 'page' : undefined}
-      aria-disabled={isDisabled}
-      tabIndex={isDisabled ? -1 : 0}
-      className={cn(
-        'group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5',
-        'text-sm font-medium transition-all duration-[var(--transition-fast)]',
-        'outline-none focus-visible:ring-2 focus-visible:ring-white/30',
-        isActive
-          ? 'bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-text)]'
-          : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-active-text)]',
-        isDisabled && 'opacity-40 cursor-not-allowed pointer-events-none'
+    <div>
+      <Link
+        id={`nav-item-${id}`}
+        href={isDisabled ? '#' : href}
+        onClick={onClick}
+        aria-current={isActive ? 'page' : undefined}
+        aria-disabled={isDisabled}
+        tabIndex={isDisabled ? -1 : 0}
+        className={cn(
+          'group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5',
+          'text-sm font-medium transition-all duration-[var(--transition-fast)]',
+          'outline-none focus-visible:ring-2 focus-visible:ring-white/30',
+          isActive
+            ? 'bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-text)]'
+            : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-active-text)]',
+          isDisabled && 'opacity-40 cursor-not-allowed pointer-events-none'
+        )}
+      >
+        {icon && (
+          <span className={cn(
+            'shrink-0 transition-colors',
+            isActive ? 'text-white' : 'text-[var(--sidebar-text-muted)] group-hover:text-[var(--sidebar-text)]'
+          )}>
+            {getIcon(icon)}
+          </span>
+        )}
+        {!isCollapsed && (
+          <span className="flex-1 min-w-0 truncate">{label}</span>
+        )}
+        {!isCollapsed && badge !== undefined && (
+          <Badge variant="primary" size="sm">{badge}</Badge>
+        )}
+      </Link>
+
+      {/* Sub-items rendering (when expanded) */}
+      {!isCollapsed && subItems && subItems.length > 0 && (isActive || pathname.startsWith(href)) && (
+        <ul className="pl-7 mt-0.5 space-y-0.5">
+          {subItems.map((sub) => {
+            const isSubActive = pathname === sub.href;
+            return (
+              <li key={sub.id}>
+                <Link
+                  id={`nav-subitem-${sub.id}`}
+                  href={sub.href}
+                  onClick={onClick}
+                  className={cn(
+                    'block px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-medium transition-colors',
+                    isSubActive
+                      ? 'text-white bg-white/10 font-semibold'
+                      : 'text-[var(--sidebar-text-muted)] hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  {sub.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    >
-      {icon && (
-        <span className={cn(
-          'shrink-0 transition-colors',
-          isActive ? 'text-white' : 'text-[var(--sidebar-text-muted)] group-hover:text-[var(--sidebar-text)]'
-        )}>
-          {getIcon(icon)}
-        </span>
-      )}
-      {!isCollapsed && (
-        <span className="flex-1 min-w-0 truncate">{label}</span>
-      )}
-      {!isCollapsed && badge !== undefined && (
-        <Badge variant="primary" size="sm">{badge}</Badge>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -226,6 +256,7 @@ export function NavSection({ section, isCollapsed = false, onItemClick }: NavSec
               badge={item.badge}
               isDisabled={item.isDisabled}
               isCollapsed={isCollapsed}
+              subItems={item.subItems}
               onClick={onItemClick}
             />
           </li>

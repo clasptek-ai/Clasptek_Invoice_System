@@ -103,10 +103,10 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
     ],
   },
 
-  // ─── Training & Meetings ──────────────────────────────────────────────────────
+  // ─── TRAINING OPERATIONS ──────────────────────────────────────────────────────
   {
     id: 'training',
-    sectionTitle: 'Training & Meetings',
+    sectionTitle: 'TRAINING OPERATIONS',
     items: [
       {
         id: 'attendance',
@@ -114,7 +114,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/attendance',
         icon: 'check-square',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 5',
+        migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
         id: 'facilitatorReports',
@@ -122,7 +122,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/facilitator-reports',
         icon: 'bar-chart-2',
         rolesAllowed: ['Super Admin', 'Finance Manager', 'Staff', 'Facilitator'],
-        migrationPhase: 'Phase 5',
+        migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
         id: 'meetings',
@@ -130,7 +130,14 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/meetings',
         icon: 'video',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 5',
+        migrationPhase: 'Phase 5 — ACTIVE',
+        subItems: [
+          { id: 'allMeetings', label: 'All Meetings', href: '/meetings?subTab=all' },
+          { id: 'scheduleMeeting', label: 'Schedule Meeting', href: '/meetings?subTab=upcoming' },
+          { id: 'liveMeetings', label: 'Live Meetings', href: '/meetings?subTab=live' },
+          { id: 'recordings', label: 'Recordings', href: '/meetings?subTab=recordings' },
+          { id: 'meetingHistory', label: 'Meeting History', href: '/meetings?subTab=completed' },
+        ],
       },
     ],
   },
