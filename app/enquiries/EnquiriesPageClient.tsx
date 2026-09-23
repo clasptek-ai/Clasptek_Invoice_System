@@ -137,12 +137,56 @@ export function EnquiriesPageClient({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page Header */}
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-gray-900">Enquiries & Leads</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Manage prospect interactions, programme interest, and lead progression.
-        </p>
+      {/* Page Header — Exact Legacy Clasptek Styling */}
+      <div className="cp-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h1 className="cp-page-title" style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+            <span aria-hidden="true">📥</span> Enquiries &amp; Leads Directory
+          </h1>
+          <p className="cp-page-subtitle" style={{ fontSize: '13px', color: 'var(--text-muted, #64748B)', marginTop: '4px', margin: 0 }}>
+            Manage prospect interactions, programme requests, billing triggers, and lead progression.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="cp-btn secondary"
+            id="btnExportEnquiries"
+            onClick={() => {
+              // CSV Export of current enquiries
+              const headers = ['Name', 'Email', 'Phone', 'Programme', 'Source', 'Status', 'Date'];
+              const rows = enquiries.map((e) => [
+                `"${e.student_name.replace(/"/g, '""')}"`,
+                `"${(e.email || '').replace(/"/g, '""')}"`,
+                `"${(e.phone || '').replace(/"/g, '""')}"`,
+                `"${(e.programme_name || '').replace(/"/g, '""')}"`,
+                `"${e.source}"`,
+                `"${e.status}"`,
+                `"${e.created_at || ''}"`,
+              ]);
+              const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', `clasptek-enquiries-${new Date().toISOString().slice(0, 10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span aria-hidden="true">📥</span> Export CSV
+          </button>
+          <a
+            href="/apply"
+            className="cp-btn primary"
+            id="btnNewEnquiryBtn"
+            style={{ fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            + Log Enquiry
+          </a>
+        </div>
       </div>
 
       {/* Global action error */}

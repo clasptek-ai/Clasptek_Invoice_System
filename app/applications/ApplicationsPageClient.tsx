@@ -147,13 +147,35 @@ export function ApplicationsPageClient({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page Header */}
-      <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* Page Header — Exact Legacy Clasptek Styling */}
+      <div className="cp-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Intake Applications</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Review admissions submissions, manage verification workflows, and execute student conversions.
+          <h1 className="cp-page-title" style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+            <span aria-hidden="true">📋</span> Candidate Applications
+          </h1>
+          <p className="cp-page-subtitle" style={{ fontSize: '13px', color: 'var(--text-muted, #64748B)', marginTop: '4px', margin: 0 }}>
+            Authoritative candidate admissions pipeline and intake queue. Review, screen, and admit applicants into training programmes.
           </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <a
+            href="/apply"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cp-btn secondary"
+            id="btnOpenApplicantPortal"
+            style={{ fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span aria-hidden="true">🌐</span> Applicant Portal
+          </a>
+          <a
+            href="/apply"
+            className="cp-btn primary"
+            id="btnEnterStaffApplication"
+            style={{ fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            + New Application
+          </a>
         </div>
       </div>
 
