@@ -7,7 +7,7 @@
 'use client';
 
 import React from 'react';
-import type { Cohort } from '@/types/academics';
+import type { Cohort } from '../../types/academics';
 
 interface CohortTableProps {
   cohorts: Cohort[];

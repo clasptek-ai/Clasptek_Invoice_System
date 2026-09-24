@@ -7,7 +7,7 @@
 'use client';
 
 import React from 'react';
-import type { Programme } from '@/types/academics';
+import type { Programme } from '../../types/academics';
 
 interface ProgrammeTableProps {
   programmes: Programme[];

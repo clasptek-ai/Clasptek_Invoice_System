@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createEnquiry, getEnquiries } from '@/lib/admissions/queries';
-import { getAuthoritativeSession } from '@/lib/auth/server';
-import type { EnquiryStatus } from '@/types/admissions';
+import { createEnquiry, getEnquiries } from '../../../../lib/admissions/queries';
+import { getAuthoritativeSession } from '../../../../lib/auth/server';
+import type { EnquiryStatus } from '../../../../types/admissions';
 
 export const dynamic = 'force-dynamic';
 

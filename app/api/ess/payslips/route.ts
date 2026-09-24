@@ -4,8 +4,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getAuthoritativeSession } from '@/lib/auth/server';
-import { getEmployeePayslips } from '@/lib/ess/queries';
+import { getAuthoritativeSession } from '../../../../lib/auth/server';
+import { getEmployeePayslips } from '../../../../lib/ess/queries';
 
 export async function GET() {
   try {
