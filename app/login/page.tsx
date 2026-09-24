@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * app/login/page.tsx — Authentication Entry Point
- * Phase 2: Next.js Foundation
- * Integrates with Supabase GoTrue via useAuth().signIn().
- * Redirects authenticated users to /dashboard (middleware also guards this).
+ * app/login/page.tsx — Authoritative Clasptek Authentication Screen
+ * Phase 9A: Visual Shell, Branding & Navigation Restoration
+ * Restores dark radial gradient, 440px white card with heavy shadow,
+ * official logo clasptek-official-logo.png, and original typography.
+ * Preserves Supabase GoTrue authentication integration.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/context';
 
 export default function LoginPage() {
@@ -22,9 +22,10 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({ email: '', password: '', general: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // If already authenticated, redirect immediately
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.replace(nextPath);
     }
@@ -77,118 +78,176 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--surface-1)] px-4 py-12">
-      <div className="w-full max-w-sm animate-fade-in">
-        {/* Brand */}
-        <div className="text-center mb-8">
-          <div className="mx-auto w-14 h-14 rounded-[var(--radius-xl)] bg-[var(--primary)] flex items-center justify-center mb-4">
-            <span className="text-white font-extrabold text-2xl select-none">C</span>
+    <div className="cp-auth-wrap">
+      <div className="cp-auth-card animate-fade-in">
+        {/* Brand Header */}
+        <div className="cp-auth-header">
+          <div className="cp-auth-logo-wrap">
+            <Image
+              src="/assets/clasptek-official-logo.png"
+              alt="Clasptek Portal Logo"
+              width={240}
+              height={60}
+              className="cp-auth-logo"
+              style={{ width: 'auto', maxHeight: '80px' }}
+              priority
+            />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            Clasptek Portal
-          </h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Sign in to your account
-          </p>
+          <h1 className="cp-auth-title">Clasptek Portal</h1>
+          <p className="cp-auth-sub">Sign in to access your secure workspace.</p>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-[var(--radius-xl)] border border-[var(--border)] shadow-[var(--shadow-md)] p-8">
-          <form id="login-form" onSubmit={handleSubmit} noValidate className="space-y-5">
-            {/* General Error */}
-            {errors.general && (
-              <div
-                role="alert"
-                aria-live="assertive"
-                className="flex items-start gap-3 rounded-[var(--radius-md)] bg-[var(--danger-light)] border border-[var(--danger)] border-opacity-30 px-4 py-3"
-              >
-                <svg
-                  className="shrink-0 mt-0.5 text-[var(--danger)]"
-                  width="16" height="16" viewBox="0 0 24 24"
-                  fill="none" stroke="currentColor" strokeWidth="2"
-                  strokeLinecap="round" strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <p className="text-sm text-[var(--danger-dark)] font-medium">
-                  {errors.general}
-                </p>
-              </div>
-            )}
+        {/* Global Error Banner */}
+        {errors.general && (
+          <div role="alert" aria-live="assertive" className="cp-auth-alert error">
+            {errors.general}
+          </div>
+        )}
 
-            {/* Email */}
-            <Input
+        {/* Login Form */}
+        <form id="login-form" onSubmit={handleSubmit} noValidate>
+          <div className="cp-field" style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="login-email"
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '6px',
+              }}
+            >
+              Work Email Address
+            </label>
+            <input
               id="login-email"
-              label="Email address"
               type="email"
-              autoComplete="email"
-              placeholder="you@clasptek.com"
+              autoComplete="username"
+              placeholder="name@clasptek.org"
               required
+              disabled={isSubmitting}
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              error={errors.email}
-              disabled={isSubmitting}
-              leftAddon={
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-              }
+              style={{
+                width: '100%',
+                height: '40px',
+                padding: '0 12px',
+                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${errors.email ? 'var(--danger)' : 'var(--border)'}`,
+                background: 'var(--surface-0)',
+                fontSize: '14px',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
             />
-
-            {/* Password */}
-            <Input
-              id="login-password"
-              label="Password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              required
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              error={errors.password}
-              disabled={isSubmitting}
-              leftAddon={
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              }
-            />
-
-            {/* Submit */}
-            <Button
-              id="login-submit-btn"
-              type="submit"
-              variant="primary"
-              size="md"
-              isLoading={isSubmitting}
-              className="w-full mt-2"
-            >
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
-            </Button>
-          </form>
-
-          {/* Forgot password placeholder */}
-          <div className="mt-5 text-center">
-            <button
-              type="button"
-              id="forgot-password-btn"
-              className="text-sm text-[var(--text-interactive)] hover:underline"
-              onClick={() => alert('Password reset: contact your system administrator.')}
-            >
-              Forgot your password?
-            </button>
+            {errors.email && (
+              <p style={{ color: 'var(--danger)', fontSize: '11px', marginTop: '4px' }}>
+                {errors.email}
+              </p>
+            )}
           </div>
+
+          <div className="cp-field" style={{ marginBottom: '20px' }}>
+            <label
+              htmlFor="login-password"
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '6px',
+              }}
+            >
+              Password
+            </label>
+            <div className="cp-password-wrap">
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                required
+                disabled={isSubmitting}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  padding: '0 42px 0 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: `1px solid ${errors.password ? 'var(--danger)' : 'var(--border)'}`,
+                  background: 'var(--surface-0)',
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <button
+                type="button"
+                id="btnTogglePwd"
+                className="cp-password-toggle"
+                onClick={() => setShowPassword((p) => !p)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            {errors.password && (
+              <p style={{ color: 'var(--danger)', fontSize: '11px', marginTop: '4px' }}>
+                {errors.password}
+              </p>
+            )}
+          </div>
+
+          <button
+            id="login-submit-btn"
+            type="submit"
+            disabled={isSubmitting}
+            className="cp-btn accent"
+            style={{
+              width: '100%',
+              padding: '11px',
+              fontSize: '14px',
+              fontWeight: 700,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.7 : 1,
+            }}
+          >
+            {isSubmitting ? 'Signing In…' : 'Sign In'}
+          </button>
+        </form>
+
+        {/* Footer Links */}
+        <div className="cp-auth-footer-links">
+          <button
+            type="button"
+            id="forgot-password-btn"
+            className="cp-auth-link"
+            onClick={() => alert('Password reset: please contact your system administrator.')}
+          >
+            Forgot Password?
+          </button>
+          <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>
+            Authorized Personnel Only
+          </span>
         </div>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-xs text-[var(--text-tertiary)]">
-          © {new Date().getFullYear()} Clasptek. All rights reserved.
-        </p>
+        <div className="cp-auth-footer">
+          &copy; {new Date().getFullYear()} Clasptek Coaching Limited &middot; Secure Enterprise Portal
+        </div>
       </div>
     </div>
   );
