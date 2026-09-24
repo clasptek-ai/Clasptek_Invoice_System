@@ -1,11 +1,7 @@
 /**
  * navigation.ts — Centralized Navigation Registry
- * Phase 2: Next.js Foundation
- * Reflects the 44 modules verified in Phase 1 module inventory audit.
- *
- * Route Status:
- *  - ACTIVE (Phase 2): /dashboard, /login — fully implemented
- *  - PENDING migration: all other routes resolve to legacy app during migration phases
+ * Phase 9A: Visual Shell, Branding & Navigation Restoration
+ * Restores original 7-section information architecture and exact labels from clasptek_invoice_system.html
  */
 
 import type { NavigationSection } from '@/types/navigation';
@@ -17,118 +13,145 @@ const ADMIN: UserRole[] = ['Super Admin', 'Finance Manager'];
 const SUPER_ADMIN: UserRole[] = ['Super Admin'];
 
 export const NAVIGATION_REGISTRY: NavigationSection[] = [
-  // ─── Executive / Staff Dashboard ─────────────────────────────────────────────
+  // ─── 1. WORKSPACE ────────────────────────────────────────────────────────────
   {
-    id: 'home',
-    sectionTitle: 'Home',
+    id: 'workspace',
+    sectionTitle: 'WORKSPACE',
     items: [
       {
         id: 'dashboard',
         label: 'Dashboard',
         href: '/dashboard',
-        icon: 'home',
+        icon: 'dashboard',
         migrationPhase: 'Phase 2 — ACTIVE',
       },
     ],
   },
 
-  // ─── Admissions & CRM ────────────────────────────────────────────────────────
+  // ─── 2. ADMISSIONS & CRM ─────────────────────────────────────────────────────
   {
     id: 'crm',
-    sectionTitle: 'Admissions & CRM',
+    sectionTitle: 'ADMISSIONS & CRM',
     items: [
       {
         id: 'enquiries',
-        label: 'Enquiries',
+        label: 'Enquiries & Leads',
         href: '/enquiries',
-        icon: 'inbox',
+        icon: 'enquiries',
         rolesAllowed: ALL_STAFF,
         migrationPhase: 'Phase 3 — ACTIVE',
       },
       {
         id: 'applications',
-        label: 'Applications',
+        label: 'Candidate Applications',
         href: '/applications',
-        icon: 'file-text',
+        icon: 'applications',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 3 — ACTIVE',
-      },
-      {
-        id: 'apply',
-        label: 'Apply (Public Form)',
-        href: '/apply',
-        icon: 'send',
         migrationPhase: 'Phase 3 — ACTIVE',
       },
     ],
   },
 
-  // ─── Students & Academics ────────────────────────────────────────────────────
+  // ─── 3. DIRECTORY & ACCOUNTS ─────────────────────────────────────────────────
   {
-    id: 'students',
-    sectionTitle: 'Students & Academics',
+    id: 'directory',
+    sectionTitle: 'DIRECTORY & ACCOUNTS',
     items: [
       {
         id: 'students',
-        label: 'Students',
+        label: 'Student & Client Directory',
         href: '/students',
-        icon: 'users',
+        icon: 'students',
         rolesAllowed: ALL_STAFF,
         migrationPhase: 'Phase 4 — ACTIVE',
       },
+    ],
+  },
+
+  // ─── 4. FINANCE ──────────────────────────────────────────────────────────────
+  {
+    id: 'finance',
+    sectionTitle: 'FINANCE',
+    items: [
       {
-        id: 'enrolments',
-        label: 'Enrolments',
-        href: '/enrolments',
-        icon: 'clipboard-list',
-        rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 4 — ACTIVE',
+        id: 'invoices',
+        label: 'Invoices',
+        href: '/invoices',
+        icon: 'invoices',
+        rolesAllowed: FINANCE,
+        migrationPhase: 'Phase 6 — ACTIVE',
+      },
+      {
+        id: 'payments',
+        label: 'Payments',
+        href: '/payments',
+        icon: 'payments',
+        rolesAllowed: FINANCE,
+        migrationPhase: 'Phase 6 — ACTIVE',
+      },
+      {
+        id: 'payroll',
+        label: 'Payroll',
+        href: '/payroll',
+        icon: 'payroll',
+        rolesAllowed: ADMIN,
+        migrationPhase: 'Phase 6 — ACTIVE',
+      },
+      {
+        id: 'expenses',
+        label: 'Expenses',
+        href: '#',
+        icon: 'expenses',
+        rolesAllowed: FINANCE,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
         id: 'programmes',
         label: 'Programmes',
         href: '/programmes',
-        icon: 'book-open',
-        rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 4 — ACTIVE',
-      },
-      {
-        id: 'cohorts',
-        label: 'Cohorts',
-        href: '/cohorts',
-        icon: 'grid',
+        icon: 'programmes',
         rolesAllowed: ADMIN,
         migrationPhase: 'Phase 4 — ACTIVE',
       },
     ],
   },
 
-  // ─── TRAINING OPERATIONS ──────────────────────────────────────────────────────
+  // ─── 5. TRAINING OPERATIONS ──────────────────────────────────────────────────
   {
     id: 'training',
     sectionTitle: 'TRAINING OPERATIONS',
     items: [
       {
-        id: 'attendance',
-        label: 'Attendance',
-        href: '/attendance',
-        icon: 'check-square',
+        id: 'enrolments',
+        label: 'Course Enrollments',
+        href: '/enrolments',
+        icon: 'enrolments',
         rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 5 — ACTIVE',
+        migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
-        id: 'facilitatorReports',
-        label: 'Facilitator Reports',
-        href: '/facilitator-reports',
-        icon: 'bar-chart-2',
-        rolesAllowed: ['Super Admin', 'Finance Manager', 'Staff', 'Facilitator'],
+        id: 'cohorts',
+        label: 'Cohorts & Schedules',
+        href: '/cohorts',
+        icon: 'cohorts',
+        rolesAllowed: ADMIN,
+        migrationPhase: 'Phase 4 — ACTIVE',
+      },
+      {
+        id: 'attendance',
+        label: 'Attendance Register',
+        href: '/attendance',
+        icon: 'attendance',
+        rolesAllowed: ALL_STAFF,
         migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
         id: 'meetings',
         label: 'Meetings',
         href: '/meetings',
-        icon: 'video',
+        icon: 'meetings',
         rolesAllowed: ALL_STAFF,
         migrationPhase: 'Phase 5 — ACTIVE',
         subItems: [
@@ -139,149 +162,145 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
           { id: 'meetingHistory', label: 'Meeting History', href: '/meetings?subTab=completed' },
         ],
       },
-    ],
-  },
-
-  // ─── Financial Management ─────────────────────────────────────────────────────
-  {
-    id: 'finance',
-    sectionTitle: 'Financial Management',
-    items: [
       {
-        id: 'invoices',
-        label: 'Invoices',
-        href: '/invoices',
-        icon: 'file-invoice',
-        rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6 — ACTIVE',
+        id: 'facilitatorReports',
+        label: 'Facilitator Reports',
+        href: '/facilitator-reports',
+        icon: 'facilitatorReports',
+        rolesAllowed: ['Super Admin', 'Finance Manager', 'Staff', 'Facilitator'],
+        migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
-        id: 'payments',
-        label: 'Payments',
-        href: '/payments',
-        icon: 'credit-card',
-        rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6 — ACTIVE',
+        id: 'completions',
+        label: 'Certificate Eligibility',
+        href: '#',
+        icon: 'completions',
+        rolesAllowed: ALL_STAFF,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
-        id: 'receipts',
-        label: 'Receipts',
-        href: '/receipts',
-        icon: 'receipt',
-        rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6',
-      },
-      {
-        id: 'expenses',
-        label: 'Expenses',
-        href: '/expenses',
-        icon: 'trending-down',
-        rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6',
-      },
-      {
-        id: 'directIncome',
-        label: 'Direct Income',
-        href: '/direct-income',
-        icon: 'trending-up',
-        rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6',
-      },
-      {
-        id: 'payroll',
-        label: 'Payroll',
-        href: '/payroll',
-        icon: 'dollar-sign',
-        rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 6 — ACTIVE',
-      },
-      {
-        id: 'budgets',
-        label: 'Budgets',
-        href: '/budgets',
-        icon: 'pie-chart',
-        rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 6',
+        id: 'certificates',
+        label: 'Certificates',
+        href: '#',
+        icon: 'certificates',
+        rolesAllowed: ALL_STAFF,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
     ],
   },
 
-  // ─── MANAGEMENT INTELLIGENCE ──────────────────────────────────────────────────
+  // ─── 6. MANAGEMENT INTELLIGENCE ──────────────────────────────────────────────
   {
     id: 'intelligence',
     sectionTitle: 'MANAGEMENT INTELLIGENCE',
     items: [
       {
-        id: 'managementDashboard',
-        label: 'Management Intelligence',
+        id: 'financialIntelligence',
+        label: 'Financial Intelligence',
         href: '/intelligence',
-        icon: 'bar-chart-2',
+        icon: 'financialIntelligence',
         rolesAllowed: ADMIN,
         migrationPhase: 'Phase 7 — ACTIVE',
+      },
+      {
+        id: 'fundsAndTransfers',
+        label: 'Funds & Transfers',
+        href: '#',
+        icon: 'funds',
+        rolesAllowed: ADMIN,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
+      },
+      {
+        id: 'receivables',
+        label: 'Receivables & Collections',
+        href: '#',
+        icon: 'receivables',
+        rolesAllowed: ADMIN,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
+      },
+      {
+        id: 'budgets',
+        label: 'Budgets & Planning',
+        href: '#',
+        icon: 'budgets',
+        rolesAllowed: ADMIN,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
         id: 'reports',
         label: 'Reports & Analytics',
         href: '/reports',
-        icon: 'file-text',
+        icon: 'reports',
         rolesAllowed: ADMIN,
         migrationPhase: 'Phase 7 — ACTIVE',
       },
     ],
   },
 
-  // ─── Certificates & Governance ────────────────────────────────────────────────
+  // ─── 7. ADMINISTRATION ───────────────────────────────────────────────────────
   {
-    id: 'governance',
-    sectionTitle: 'Certificates & Governance',
+    id: 'administration',
+    sectionTitle: 'ADMINISTRATION',
     items: [
       {
-        id: 'certificates',
-        label: 'Certificates',
-        href: '/certificates',
-        icon: 'award',
-        rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 7',
+        id: 'productionControl',
+        label: 'Production Control',
+        href: '#',
+        icon: 'productionControl',
+        rolesAllowed: SUPER_ADMIN,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
-        id: 'controls',
-        label: 'Financial Controls',
-        href: '/controls',
-        icon: 'shield',
+        id: 'usersRoles',
+        label: 'People & Access',
+        href: '#',
+        icon: 'usersRoles',
         rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 7',
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
+      },
+      {
+        id: 'financialControls',
+        label: 'Financial Controls',
+        href: '#',
+        icon: 'financialControls',
+        rolesAllowed: ADMIN,
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
         id: 'auditLog',
         label: 'Audit Log',
-        href: '/audit-log',
-        icon: 'activity',
+        href: '#',
+        icon: 'auditLog',
         rolesAllowed: SUPER_ADMIN,
-        migrationPhase: 'Phase 7',
-      },
-    ],
-  },
-
-  // ─── Organization Settings ────────────────────────────────────────────────────
-  {
-    id: 'settings',
-    sectionTitle: 'Organisation',
-    items: [
-      {
-        id: 'personnel',
-        label: 'Personnel',
-        href: '/personnel',
-        icon: 'user-check',
-        rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 8',
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
       {
         id: 'settings',
         label: 'Settings',
-        href: '/settings',
+        href: '#',
         icon: 'settings',
         rolesAllowed: SUPER_ADMIN,
-        migrationPhase: 'Phase 8',
+        isDisabled: true,
+        badge: 'Upcoming',
+        migrationPhase: 'Future Phase',
       },
     ],
   },
@@ -308,7 +327,7 @@ export function getNavigationForRole(role: UserRole | null): NavigationSection[]
 export function findActiveNavItem(pathname: string) {
   for (const section of NAVIGATION_REGISTRY) {
     for (const item of section.items) {
-      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+      if (item.href !== '#' && (pathname === item.href || pathname.startsWith(item.href + '/'))) {
         return { section, item };
       }
     }
