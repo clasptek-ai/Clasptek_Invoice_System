@@ -25,6 +25,7 @@ interface EnquiriesPageClientProps {
   programmes?: ProgrammeOption[];
   initialOpenNew?: boolean;
   staffName?: string;
+  initialError?: string | null;
 }
 
 const PAGE_SIZE = 25;
@@ -38,6 +39,7 @@ export function EnquiriesPageClient({
   programmes = [],
   initialOpenNew = false,
   staffName = 'Admissions',
+  initialError = null,
 }: EnquiriesPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,7 +48,7 @@ export function EnquiriesPageClient({
   // Optimistic local state — updated immediately on status change
   const [enquiries, setEnquiries] = useState<Enquiry[]>(initialEnquiries);
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(initialError);
   const [isNewModalOpen, setIsNewModalOpen] = useState(initialOpenNew);
 
   const handleEnquiryCreated = useCallback((newEnq: Enquiry) => {

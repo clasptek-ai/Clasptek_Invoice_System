@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
 import { createEnquiry, getEnquiries } from '@/lib/admissions/queries';
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import type { EnquiryStatus } from '@/types/admissions';
@@ -8,14 +7,17 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthoritativeSession();
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -25,7 +27,11 @@ export async function GET(request: NextRequest) {
 
     const result = await getEnquiries({ search, status, page });
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      console.error('[Admissions Enquiries GET error]', result.error);
+      return NextResponse.json(
+        { error: 'Unable to load enquiries. Please try again. If the problem persists, contact an administrator.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -35,8 +41,8 @@ export async function GET(request: NextRequest) {
       page,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[Admissions Enquiries GET uncaught error]', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -48,14 +54,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Parse request body
-    const body = await request.json();
-    const student_name = (body.student_name ?? body.name ?? '').trim();
-    const phone = (body.phone ?? '').trim();
-    const email = (body.email ?? '').trim() || null;
-    const programme_id = body.programme_id || null;
-    const source = (body.source ?? 'Direct').trim();
-    const notes = (body.notes ?? '').trim() || null;
+    // Role check
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions to create prospect enquiries' },
+        { status: 403 }
+      );
+    }
+
+    // 2. Parse request body safely
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+    }
+
+    const student_name = String(body.student_name ?? body.name ?? '').trim();
+    const phone = String(body.phone ?? '').trim();
+    const email = body.email ? String(body.email).trim() : null;
+    const programme_id = body.programme_id ? String(body.programme_id).trim() : null;
+    const source = String(body.source ?? 'Direct').trim();
+    const notes = body.notes ? String(body.notes).trim() : null;
     const status = (body.status ?? 'NEW') as EnquiryStatus;
 
     // 3. Validation
@@ -99,7 +120,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create enquiry in database
+    // 4. Create enquiry in database with authoritative tenant
     const { data: enquiry, error: createErr } = await createEnquiry({
       student_name,
       phone,
@@ -108,18 +129,20 @@ export async function POST(request: NextRequest) {
       source,
       notes,
       status,
+      tenant_id: session.tenantId,
     });
 
     if (createErr || !enquiry) {
+      console.error('[Admissions Enquiries POST error]', createErr);
       return NextResponse.json(
-        { error: createErr ?? 'Failed to log prospect enquiry' },
+        { error: 'Failed to log prospect enquiry. Please check your input or contact an administrator.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ ok: true, data: enquiry }, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[Admissions Enquiries POST uncaught error]', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

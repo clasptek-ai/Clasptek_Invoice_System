@@ -69,8 +69,8 @@ export function Sidebar({
             <Image
               src="/assets/clasptek_brand_mark.png"
               alt="Clasptek Logo"
-              width={30}
-              height={30}
+              width={2610}
+              height={905}
               className="cp-sidebar-logo"
               style={{ height: '30px', width: 'auto' }}
               priority
@@ -79,8 +79,8 @@ export function Sidebar({
             <Image
               src="/assets/clasptek_logo.png"
               alt="Clasptek Logo"
-              width={160}
-              height={34}
+              width={977}
+              height={255}
               className="cp-sidebar-logo"
               style={{ height: '34px', width: 'auto' }}
               priority

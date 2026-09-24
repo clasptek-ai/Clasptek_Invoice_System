@@ -64,6 +64,11 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
       programmes={programmes}
       initialOpenNew={initialOpenNew}
       staffName={user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admissions'}
+      initialError={
+        error
+          ? 'Unable to load enquiries. Please try again. If the problem persists, contact an administrator.'
+          : null
+      }
     />
   );
 }

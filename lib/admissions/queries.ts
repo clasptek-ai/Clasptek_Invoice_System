@@ -231,37 +231,38 @@ export interface CreateEnquiryInput {
   source?: string | null;
   notes?: string | null;
   status?: EnquiryStatus;
+  tenant_id?: string | null;
 }
 
 /**
  * Create a new enquiry.
  * Enforces tenant_id from authoritative user session.
+ * Generates authoritative ID matching public.enquiries schema (id TEXT PRIMARY KEY NOT NULL).
  */
 export async function createEnquiry(
   input: CreateEnquiryInput
 ): Promise<{ data: Enquiry | null; error: string | null }> {
   const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { data: null, error: 'Unauthorized: No active session' };
+  let tenantId = input.tenant_id;
+  if (!tenantId) {
+    const { getAuthoritativeSession } = await import('@/lib/auth/server');
+    const session = await getAuthoritativeSession();
+    if (!session?.user?.id) {
+      return { data: null, error: 'Unauthorized: No active session' };
+    }
+    tenantId = session.tenantId;
   }
 
-  // Retrieve user tenant_id from profile or user metadata
-  const { data: profile } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const tenantId = profile?.tenant_id || user.user_metadata?.tenant_id;
   if (!tenantId) {
     return { data: null, error: 'User does not belong to a valid tenant' };
   }
 
+  // Generate authoritative unique ID for public.enquiries
+  const enquiryId = `enq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
   const newRecord = {
+    id: enquiryId,
     tenant_id: tenantId,
     student_name: input.student_name.trim(),
     email: input.email ? input.email.trim() : null,
