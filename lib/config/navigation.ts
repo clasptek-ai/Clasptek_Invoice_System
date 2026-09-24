@@ -153,7 +153,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/invoices',
         icon: 'file-invoice',
         rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6',
+        migrationPhase: 'Phase 6 — ACTIVE',
       },
       {
         id: 'payments',
@@ -161,7 +161,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/payments',
         icon: 'credit-card',
         rolesAllowed: FINANCE,
-        migrationPhase: 'Phase 6',
+        migrationPhase: 'Phase 6 — ACTIVE',
       },
       {
         id: 'receipts',
@@ -193,7 +193,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         href: '/payroll',
         icon: 'dollar-sign',
         rolesAllowed: ADMIN,
-        migrationPhase: 'Phase 6',
+        migrationPhase: 'Phase 6 — ACTIVE',
       },
       {
         id: 'budgets',
