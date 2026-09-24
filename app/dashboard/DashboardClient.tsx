@@ -11,6 +11,7 @@ import { Card, MetricCard } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/lib/auth/context';
 import { cn } from '@/lib/utils/cn';
+import { StaffFacilitatorDashboard } from '@/components/dashboard/StaffFacilitatorDashboard';
 
 // ─── Migration Phase Status ───────────────────────────────────────────────────
 
@@ -92,6 +93,18 @@ export function DashboardClient() {
   })();
 
   const displayName = user?.full_name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
+
+  if (role === 'Facilitator' || role === 'Staff') {
+    return (
+      <div className="max-w-[var(--content-max-width)] mx-auto animate-fade-in">
+        <StaffFacilitatorDashboard
+          userName={user?.full_name || displayName}
+          role={role}
+          userEmail={user?.email || ''}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[var(--content-max-width)] mx-auto space-y-6 animate-fade-in">
