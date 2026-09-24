@@ -206,6 +206,30 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
     ],
   },
 
+  // ─── MANAGEMENT INTELLIGENCE ──────────────────────────────────────────────────
+  {
+    id: 'intelligence',
+    sectionTitle: 'MANAGEMENT INTELLIGENCE',
+    items: [
+      {
+        id: 'managementDashboard',
+        label: 'Management Intelligence',
+        href: '/intelligence',
+        icon: 'bar-chart-2',
+        rolesAllowed: ADMIN,
+        migrationPhase: 'Phase 7 — ACTIVE',
+      },
+      {
+        id: 'reports',
+        label: 'Reports & Analytics',
+        href: '/reports',
+        icon: 'file-text',
+        rolesAllowed: ADMIN,
+        migrationPhase: 'Phase 7 — ACTIVE',
+      },
+    ],
+  },
+
   // ─── Certificates & Governance ────────────────────────────────────────────────
   {
     id: 'governance',
