@@ -1,6 +1,7 @@
 /**
- * components/admissions/ApplicationKpiStrip.tsx — Phase 3
+ * components/admissions/ApplicationKpiStrip.tsx — Phase 3 & 9G
  * KPI metric strip for the Applications management page.
+ * Uses genuine .cp-kpi-grid and .cp-kpi-card design system classes.
  */
 
 'use client';
@@ -18,8 +19,6 @@ interface ApplicationKpiStripProps {
 interface KpiCard {
   label: string;
   count: number;
-  color: string;
-  badgeBg: string;
   statusFilter: string;
   icon: string;
 }
@@ -47,55 +46,43 @@ export function ApplicationKpiStrip({
     {
       label: 'Total Intake',
       count: total,
-      color: 'border-slate-400 text-slate-800',
-      badgeBg: 'bg-slate-100 text-slate-700',
       statusFilter: 'ALL',
       icon: '📊',
     },
     {
       label: 'Active Pipeline',
       count: getCount(['NEW', 'REVIEW_REQUIRED', 'MATCHED', 'QUALIFIED']),
-      color: 'border-blue-500 text-blue-700',
-      badgeBg: 'bg-blue-50 text-blue-700',
       statusFilter: 'ALL',
       icon: '⚡',
     },
     {
       label: 'Needs Review',
       count: getCount(['REVIEW_REQUIRED']),
-      color: 'border-amber-500 text-amber-700',
-      badgeBg: 'bg-amber-50 text-amber-700',
       statusFilter: 'REVIEW_REQUIRED',
       icon: '⚠️',
     },
     {
       label: 'Ready / Qualified',
       count: getCount(['QUALIFIED', 'MATCHED']),
-      color: 'border-indigo-500 text-indigo-700',
-      badgeBg: 'bg-indigo-50 text-indigo-700',
       statusFilter: 'QUALIFIED',
       icon: '🎯',
     },
     {
       label: 'Converted',
       count: getCount(['CONVERTED']),
-      color: 'border-emerald-500 text-emerald-700',
-      badgeBg: 'bg-emerald-50 text-emerald-700',
       statusFilter: 'CONVERTED',
       icon: '🎓',
     },
     {
       label: 'Rejected / Cancelled',
       count: getCount(['REJECTED', 'CANCELLED']),
-      color: 'border-rose-400 text-rose-700',
-      badgeBg: 'bg-rose-50 text-rose-700',
       statusFilter: 'REJECTED',
       icon: '🚫',
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+    <div className="cp-kpi-grid" style={{ marginBottom: '20px' }}>
       {cards.map((card) => {
         const isSelected = activeStatus === card.statusFilter && card.statusFilter !== 'ALL';
         return (
@@ -103,22 +90,19 @@ export function ApplicationKpiStrip({
             key={card.label}
             type="button"
             onClick={() => onStatusFilter?.(card.statusFilter)}
-            className={`bg-white rounded-xl border-l-4 ${card.color} shadow-sm p-3.5 text-left transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 ${
-              isSelected ? 'ring-2 ring-blue-500 shadow-md bg-blue-50/20' : ''
-            }`}
+            className={`cp-kpi-card ${isSelected ? 'active' : ''}`}
+            style={isSelected ? { borderColor: 'var(--interactive)', boxShadow: '0 0 0 2px rgba(2, 132, 199, 0.25)', background: 'var(--surface-1)' } : undefined}
             aria-label={`Filter by ${card.label}: ${card.count} applications`}
           >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-base" aria-hidden="true">{card.icon}</span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${card.badgeBg}`}>
-                {card.label}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span aria-hidden="true" style={{ fontSize: '16px' }}>{card.icon}</span>
+              <span className="cp-kpi-label">{card.label}</span>
             </div>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className={`text-2xl font-extrabold tracking-tight ${card.color.split(' ')[1]}`}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span className="cp-kpi-val" style={{ color: 'var(--text-primary, #0F172A)' }}>
                 {card.count}
               </span>
-              <span className="text-[11px] text-gray-400">
+              <span className="cp-kpi-sub">
                 {total > 0 ? `${Math.round((card.count / total) * 100)}%` : '0%'}
               </span>
             </div>

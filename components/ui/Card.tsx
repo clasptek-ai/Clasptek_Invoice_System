@@ -1,55 +1,53 @@
+/**
+ * components/ui/Card.tsx — Phase 2 & 9G
+ * Universal Card primitive backed by authoritative .cp-card design system.
+ */
+
 import React from 'react';
-import { cn } from '@/lib/utils/cn';
 
 interface CardProps {
   children: React.ReactNode;
   className?: string;
-  /** Elevation level — controls shadow and background */
   elevation?: 0 | 1 | 2;
-  /** Optional card header slot */
   header?: React.ReactNode;
-  /** Optional card footer slot */
   footer?: React.ReactNode;
-  /** Makes the card interactive (hover effect) */
   interactive?: boolean;
   onClick?: () => void;
+  style?: React.CSSProperties;
 }
-
-const elevationStyles = {
-  0: 'bg-white border border-[var(--border)] shadow-none',
-  1: 'bg-white border border-[var(--border)] shadow-[var(--shadow-sm)]',
-  2: 'bg-white border border-[var(--border)] shadow-[var(--shadow-md)]',
-};
 
 export function Card({
   children,
-  className,
+  className = '',
   elevation = 1,
   header,
   footer,
   interactive = false,
   onClick,
+  style,
 }: CardProps) {
   return (
     <div
-      className={cn(
-        'rounded-[var(--radius-lg)] overflow-hidden',
-        elevationStyles[elevation],
-        interactive && 'cursor-pointer transition-all duration-[var(--transition-base)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5',
-        className
-      )}
+      className={`cp-card ${className}`.trim()}
       onClick={onClick}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
+      style={{
+        cursor: interactive ? 'pointer' : undefined,
+        boxShadow: elevation === 0 ? 'none' : elevation === 2 ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+        padding: 0,
+        overflow: 'hidden',
+        ...style,
+      }}
     >
       {header && (
-        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--surface-1)]">
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-1)' }}>
           {header}
         </div>
       )}
-      <div className="p-6">{children}</div>
+      <div style={{ padding: '20px' }}>{children}</div>
       {footer && (
-        <div className="px-6 py-4 border-t border-[var(--border)] bg-[var(--surface-1)]">
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-1)' }}>
           {footer}
         </div>
       )}
@@ -67,6 +65,7 @@ interface MetricCardProps {
   changePeriod?: string;
   icon?: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export function MetricCard({
@@ -76,36 +75,40 @@ export function MetricCard({
   changeDirection = 'neutral',
   changePeriod = 'vs last month',
   icon,
-  className,
+  className = '',
+  style,
 }: MetricCardProps) {
   const changeColor =
     changeDirection === 'up'
-      ? 'text-[var(--success)]'
+      ? 'var(--success)'
       : changeDirection === 'down'
-      ? 'text-[var(--danger)]'
-      : 'text-[var(--text-tertiary)]';
+      ? 'var(--danger)'
+      : 'var(--text-muted)';
 
   const changeArrow =
     changeDirection === 'up' ? '↑' : changeDirection === 'down' ? '↓' : '→';
 
   return (
-    <Card className={cn('animate-fade-in', className)}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-[var(--text-secondary)] truncate">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-[var(--text-primary)] tabular-nums">{value}</p>
+    <div
+      className={`cp-kpi-card ${className}`.trim()}
+      style={{ padding: '16px 20px', ...style }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p className="cp-kpi-label" style={{ margin: 0 }}>{label}</p>
+          <p className="cp-kpi-val" style={{ margin: '4px 0 0 0', color: 'var(--text-primary)' }}>{value}</p>
           {change !== undefined && (
-            <p className={cn('mt-1 text-xs font-medium', changeColor)}>
+            <p style={{ margin: '4px 0 0 0', fontSize: '11px', fontWeight: 600, color: changeColor }}>
               {changeArrow} {Math.abs(change)}% {changePeriod}
             </p>
           )}
         </div>
         {icon && (
-          <div className="shrink-0 w-10 h-10 rounded-[var(--radius-md)] bg-[var(--surface-2)] flex items-center justify-center text-[var(--text-secondary)]">
+          <div style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '6px', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
             {icon}
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

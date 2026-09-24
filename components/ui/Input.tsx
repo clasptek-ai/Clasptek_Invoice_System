@@ -1,5 +1,9 @@
+/**
+ * components/ui/Input.tsx — Phase 2 & 9G
+ * Universal Input primitive backed by authoritative .cp-field design tokens.
+ */
+
 import React, { forwardRef } from 'react';
-import { cn } from '@/lib/utils/cn';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -19,8 +23,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       leftAddon,
       rightAddon,
       id,
-      className,
-      inputClassName,
+      className = '',
+      inputClassName = '',
+      style,
       ...props
     },
     ref
@@ -28,41 +33,31 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id ?? (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
-      <div className={cn('flex flex-col gap-1.5', className)}>
+      <div className={`cp-field ${error ? 'has-error' : ''} ${className}`.trim()} style={style}>
         {label && (
-          <label
-            htmlFor={inputId}
-            className="text-sm font-medium text-[var(--text-primary)]"
-          >
+          <label htmlFor={inputId}>
             {label}
             {props.required && (
-              <span className="ml-1 text-[var(--danger)]" aria-hidden="true">*</span>
+              <span style={{ color: 'var(--danger)', marginLeft: '4px' }} aria-hidden="true">*</span>
             )}
           </label>
         )}
 
-        <div className="relative flex items-center">
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           {leftAddon && (
-            <div className="absolute left-3 text-[var(--text-tertiary)] pointer-events-none">
+            <div style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }}>
               {leftAddon}
             </div>
           )}
           <input
             ref={ref}
             id={inputId}
-            className={cn(
-              'w-full h-10 rounded-[var(--radius-md)] border bg-white text-sm',
-              'text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]',
-              'transition-all duration-[var(--transition-fast)] outline-none',
-              'focus:ring-2 focus:ring-[var(--interactive)] focus:ring-offset-0 focus:border-[var(--interactive)]',
-              'disabled:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-60',
-              error
-                ? 'border-[var(--danger)] focus:ring-[var(--danger)]'
-                : 'border-[var(--border)] hover:border-[var(--border-strong)]',
-              leftAddon ? 'pl-10' : 'pl-3',
-              rightAddon ? 'pr-10' : 'pr-3',
-              inputClassName
-            )}
+            className={inputClassName}
+            style={{
+              width: '100%',
+              paddingLeft: leftAddon ? '36px' : '12px',
+              paddingRight: rightAddon ? '36px' : '12px',
+            }}
             aria-invalid={error ? 'true' : undefined}
             aria-describedby={
               error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
@@ -70,21 +65,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {rightAddon && (
-            <div className="absolute right-3 text-[var(--text-tertiary)]">
+            <div style={{ position: 'absolute', right: '12px', color: 'var(--text-muted)' }}>
               {rightAddon}
             </div>
           )}
         </div>
 
         {error && (
-          <p id={`${inputId}-error`} role="alert" className="text-xs text-[var(--danger)] font-medium">
+          <span id={`${inputId}-error`} role="alert" className="cp-error">
             {error}
-          </p>
+          </span>
         )}
         {!error && hint && (
-          <p id={`${inputId}-hint`} className="text-xs text-[var(--text-tertiary)]">
+          <span id={`${inputId}-hint`} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
             {hint}
-          </p>
+          </span>
         )}
       </div>
     );

@@ -1,34 +1,31 @@
+/**
+ * components/ui/Spinner.tsx — Phase 2 & 9G
+ * Universal Spinner primitive backed by authoritative .cp-spinner design tokens.
+ */
+
 import React from 'react';
-import { cn } from '@/lib/utils/cn';
 
 interface SpinnerProps {
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
   label?: string;
+  style?: React.CSSProperties;
 }
 
-const sizeStyles = {
-  sm: 'w-4 h-4 border-2',
-  md: 'w-6 h-6 border-2',
-  lg: 'w-8 h-8 border-[3px]',
-  xl: 'w-12 h-12 border-4',
-};
+export function Spinner({ size = 'md', className = '', label = 'Loading…', style }: SpinnerProps) {
+  const sizeClass = size === 'sm' ? 'cp-spinner-sm' : size === 'lg' ? 'cp-spinner-lg' : 'cp-spinner-md';
 
-export function Spinner({ size = 'md', className, label = 'Loading…' }: SpinnerProps) {
   return (
     <div
       role="status"
       aria-label={label}
-      className={cn('inline-flex items-center justify-center', className)}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...style }}
+      className={className}
     >
-      <span
-        className={cn(
-          'rounded-full border-[var(--border-strong)] border-t-[var(--interactive)] animate-spin',
-          sizeStyles[size]
-        )}
-        aria-hidden="true"
-      />
-      <span className="sr-only">{label}</span>
+      <span className={`cp-spinner ${sizeClass}`} aria-hidden="true" />
+      <span style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+        {label}
+      </span>
     </div>
   );
 }
@@ -37,12 +34,9 @@ export function Spinner({ size = 'md', className, label = 'Loading…' }: Spinne
 
 export function PageLoader({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-[var(--surface-0)] z-50">
-      <div
-        className="w-10 h-10 rounded-full border-4 border-[var(--border)] border-t-[var(--interactive)] animate-spin"
-        aria-hidden="true"
-      />
-      <p className="mt-4 text-sm text-[var(--text-tertiary)] font-medium">{label}</p>
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-0)', zIndex: 1000 }}>
+      <span className="cp-spinner cp-spinner-lg" aria-hidden="true" />
+      <p style={{ marginTop: '16px', fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>{label}</p>
     </div>
   );
 }

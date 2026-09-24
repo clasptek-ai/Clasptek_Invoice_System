@@ -184,7 +184,7 @@ export function EnquiriesPageClient({
 
       {/* Global action error */}
       {actionError && (
-        <div role="alert" className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+        <div role="alert" className="cp-alert error">
           {actionError}
         </div>
       )}
@@ -195,40 +195,40 @@ export function EnquiriesPageClient({
       {/* Filters */}
       <EnquiryFilters currentSearch={currentSearch} currentStatus={currentStatus} />
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex-1">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-700">
+      {/* Table Container */}
+      <div className="cp-card" style={{ padding: '0', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
             {totalCount === 0
               ? 'No enquiries'
               : `${totalCount} enquir${totalCount === 1 ? 'y' : 'ies'}`}
           </span>
-          <span className="text-xs text-gray-400">
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Page {currentPage} of {Math.max(1, totalPages)}
           </span>
         </div>
-        <div className="p-4">
+        <div style={{ padding: '12px' }}>
           <EnquiryTable enquiries={enquiries} onSelect={setSelectedEnquiry} />
         </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-center gap-2">
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="cp-btn sm secondary"
               aria-label="Previous page"
             >
               ← Previous
             </button>
-            <span className="text-sm text-gray-500">
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               {currentPage} / {totalPages}
             </span>
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="cp-btn sm secondary"
               aria-label="Next page"
             >
               Next →

@@ -1,7 +1,7 @@
 /**
- * components/admissions/EnquiryTable.tsx — Phase 3
+ * components/admissions/EnquiryTable.tsx — Phase 3 & 9G
  * Responsive table of enquiries.
- * Desktop: full table. Mobile: card stack layout.
+ * Uses genuine .cp-table-wrap and .cp-table styling.
  */
 
 'use client';
@@ -43,10 +43,10 @@ function formatWhatsApp(phone: string | null): string | null {
 export function EnquiryTable({ enquiries, onSelect, isLoading }: EnquiryTableProps) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-400" aria-live="polite">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-          <span className="text-sm">Loading enquiries...</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: 'var(--text-muted)' }} aria-live="polite">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span className="cp-spinner cp-spinner-md" aria-hidden="true" />
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>Loading enquiries...</span>
         </div>
       </div>
     );
@@ -54,78 +54,76 @@ export function EnquiryTable({ enquiries, onSelect, isLoading }: EnquiryTablePro
 
   if (enquiries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center" role="status">
-        <div className="text-4xl mb-3" aria-hidden="true">📭</div>
-        <p className="text-gray-700 font-semibold text-base">No enquiries found</p>
-        <p className="text-gray-400 text-sm mt-1">
+      <div className="cp-empty-state">
+        <div className="cp-empty-icon" aria-hidden="true">📭</div>
+        <div className="cp-empty-title">No enquiries found</div>
+        <div className="cp-empty-desc">
           Try adjusting your search or filter criteria.
-        </p>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      {/* Desktop Table */}
-      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100">
-        <table className="min-w-full divide-y divide-gray-100">
-          <thead className="bg-gray-50">
+      {/* Desktop & Tablet Table */}
+      <div className="cp-table-wrap cp-table-desktop">
+        <table className="cp-table">
+          <thead>
             <tr>
-              {['Prospect', 'Contact', 'Programme', 'Source', 'Status', 'Date', ''].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                >
-                  {h}
-                </th>
-              ))}
+              <th scope="col">Prospect</th>
+              <th scope="col">Contact</th>
+              <th scope="col">Programme</th>
+              <th scope="col">Source</th>
+              <th scope="col">Status</th>
+              <th scope="col">Date</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-50">
+          <tbody>
             {enquiries.map((enquiry) => {
               const wa = formatWhatsApp(enquiry.phone);
               return (
                 <tr
                   key={enquiry.id}
-                  className="hover:bg-blue-50 transition-colors cursor-pointer group"
+                  style={{ cursor: 'pointer' }}
                   onClick={() => onSelect(enquiry)}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="font-semibold text-sm text-gray-900 group-hover:text-blue-700">
+                  <td>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary, #0F172A)' }}>
                       {enquiry.student_name}
                     </div>
                     {enquiry.notes && (
-                      <div className="text-xs text-gray-400 truncate max-w-[180px]">
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748B)', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {enquiry.notes.slice(0, 60)}{enquiry.notes.length > 60 ? '…' : ''}
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-xs text-gray-600">{enquiry.email ?? '—'}</div>
-                    <div className="text-xs text-gray-500">{enquiry.phone ?? '—'}</div>
+                  <td>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary, #0F172A)' }}>{enquiry.email ?? '—'}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748B)' }}>{enquiry.phone ?? '—'}</div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td style={{ fontSize: '12px' }}>
                     {enquiry.programme_name ?? '—'}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
+                  <td style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)' }}>
                     {enquiry.source ?? '—'}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td>
                     <StatusBadge status={enquiry.status} />
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-400">
+                  <td style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)' }}>
                     {formatDate(enquiry.updated_at)}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       {wa && (
                         <a
                           href={wa}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-emerald-600 hover:text-emerald-700 text-sm"
+                          style={{ textDecoration: 'none', fontSize: '14px' }}
                           aria-label={`WhatsApp ${enquiry.student_name}`}
                           title="WhatsApp"
                         >
@@ -136,7 +134,7 @@ export function EnquiryTable({ enquiries, onSelect, isLoading }: EnquiryTablePro
                         <a
                           href={`mailto:${enquiry.email}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-blue-500 hover:text-blue-700 text-sm"
+                          style={{ textDecoration: 'none', fontSize: '14px' }}
                           aria-label={`Email ${enquiry.student_name}`}
                           title="Email"
                         >
@@ -144,7 +142,13 @@ export function EnquiryTable({ enquiries, onSelect, isLoading }: EnquiryTablePro
                         </a>
                       )}
                       <button
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(enquiry);
+                        }}
+                        style={{ padding: '3px 8px', fontSize: '11px' }}
                         aria-label={`Open enquiry for ${enquiry.student_name}`}
                       >
                         View →
@@ -159,38 +163,43 @@ export function EnquiryTable({ enquiries, onSelect, isLoading }: EnquiryTablePro
       </div>
 
       {/* Mobile Card Stack */}
-      <div className="md:hidden space-y-3">
+      <div className="cp-cards-mobile">
         {enquiries.map((enquiry) => {
           const wa = formatWhatsApp(enquiry.phone);
           return (
             <div
               key={enquiry.id}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 cursor-pointer hover:border-blue-200 hover:shadow-md transition-all"
+              className="cp-card"
+              style={{ padding: '14px', cursor: 'pointer' }}
               onClick={() => onSelect(enquiry)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === 'Enter' && onSelect(enquiry)}
               aria-label={`View enquiry for ${enquiry.student_name}`}
             >
-              <div className="flex items-start justify-between gap-2 mb-2">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
                 <div>
-                  <p className="font-semibold text-sm text-gray-900">{enquiry.student_name}</p>
-                  <p className="text-xs text-gray-500">{enquiry.programme_name ?? 'No programme'}</p>
+                  <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary, #0F172A)', margin: 0 }}>
+                    {enquiry.student_name}
+                  </p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', margin: '2px 0 0 0' }}>
+                    {enquiry.programme_name ?? 'No programme'}
+                  </p>
                 </div>
                 <StatusBadge status={enquiry.status} />
               </div>
-              <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px', color: 'var(--text-muted, #64748B)', marginBottom: '8px' }}>
                 {enquiry.email && <span>{enquiry.email}</span>}
                 {enquiry.phone && <span>{enquiry.phone}</span>}
               </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-400">{formatDate(enquiry.updated_at)}</span>
-                <div className="flex gap-2">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748B)' }}>{formatDate(enquiry.updated_at)}</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {wa && (
-                    <a href={wa} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-emerald-600 text-sm" aria-label="WhatsApp">💬</a>
+                    <a href={wa} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', fontSize: '14px' }} aria-label="WhatsApp">💬</a>
                   )}
                   {enquiry.email && (
-                    <a href={`mailto:${enquiry.email}`} onClick={(e) => e.stopPropagation()} className="text-blue-500 text-sm" aria-label="Email">✉️</a>
+                    <a href={`mailto:${enquiry.email}`} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', fontSize: '14px' }} aria-label="Email">✉️</a>
                   )}
                 </div>
               </div>

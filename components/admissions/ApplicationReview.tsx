@@ -1,7 +1,8 @@
 /**
- * components/admissions/ApplicationReview.tsx — Phase 3
+ * components/admissions/ApplicationReview.tsx — Phase 3 & 9G
  * Application review panel displaying identity confidence, match notes,
  * review reason, and status progression actions.
+ * Uses genuine .cp-* design system styles.
  */
 
 'use client';
@@ -14,12 +15,6 @@ interface ApplicationReviewProps {
   application: IntakeApplication;
   onStatusChange: (newStatus: ApplicationStatus) => Promise<void>;
 }
-
-const CONFIDENCE_STYLES = {
-  HIGH: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  AMBIGUOUS: 'bg-amber-50 text-amber-700 border-amber-200',
-  NONE: 'bg-gray-100 text-gray-600 border-gray-200',
-};
 
 export function ApplicationReview({ application, onStatusChange }: ApplicationReviewProps) {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -39,51 +34,50 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
 
   const isConverted = application.status === 'CONVERTED';
   const confidence = application.identity_confidence || 'NONE';
-  const confidenceStyle = CONFIDENCE_STYLES[confidence] || CONFIDENCE_STYLES.NONE;
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Identity Resolution Section */}
-      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-base" aria-hidden="true">🔍</span>
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Identity & CRM Resolution
+      <div className="cp-card" style={{ padding: '16px', background: '#F8FAFC' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span aria-hidden="true">🔍</span>
+            <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted, #64748B)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+              Identity &amp; CRM Resolution
             </h4>
           </div>
-          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${confidenceStyle}`}>
+          <span className={`cp-pill ${confidence === 'HIGH' ? 'success' : confidence === 'AMBIGUOUS' ? 'warning' : 'neutral'}`}>
             Confidence: {confidence}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '12px' }}>
           <div>
-            <span className="text-slate-400 block mb-0.5">Matched Student ID</span>
+            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Matched Student ID</span>
             {application.matched_student_id ? (
-              <span className="font-mono text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+              <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: 'var(--text-primary)', background: '#FFFFFF', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
                 {application.matched_student_id}
               </span>
             ) : (
-              <span className="text-slate-500 italic">None (New Student)</span>
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>None (New Student)</span>
             )}
           </div>
 
           <div>
-            <span className="text-slate-400 block mb-0.5">Linked Enquiry ID</span>
+            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Linked Enquiry ID</span>
             {application.enquiry_id ? (
-              <span className="font-mono text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+              <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: 'var(--text-primary)', background: '#FFFFFF', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
                 {application.enquiry_id}
               </span>
             ) : (
-              <span className="text-slate-500 italic">Direct Application</span>
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Direct Application</span>
             )}
           </div>
 
           {application.enrolment_id && (
-            <div className="sm:col-span-2">
-              <span className="text-slate-400 block mb-0.5">Active Enrolment ID</span>
-              <span className="font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+            <div style={{ gridColumn: 'span 2' }}>
+              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Active Enrolment ID</span>
+              <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, color: 'var(--success)', background: 'var(--success-bg)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--success-border)' }}>
                 {application.enrolment_id}
               </span>
             </div>
@@ -92,17 +86,17 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
 
         {/* Review reason / Match notes */}
         {(application.review_reason || application.match_notes) && (
-          <div className="mt-3 pt-3 border-t border-slate-200/60 space-y-2 text-xs">
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
             {application.review_reason && (
-              <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-2.5 text-amber-900">
-                <span className="font-semibold block mb-0.5">Flagged Reason:</span>
-                <p>{application.review_reason}</p>
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px', padding: '10px', color: '#92400E' }}>
+                <span style={{ fontWeight: 700, display: 'block', marginBottom: '2px' }}>Flagged Reason:</span>
+                <p style={{ margin: 0 }}>{application.review_reason}</p>
               </div>
             )}
             {application.match_notes && (
-              <div className="bg-blue-50/60 border border-blue-200/60 rounded-lg p-2.5 text-blue-900">
-                <span className="font-semibold block mb-0.5">System Matching Notes:</span>
-                <p>{application.match_notes}</p>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '10px', color: '#1E40AF' }}>
+                <span style={{ fontWeight: 700, display: 'block', marginBottom: '2px' }}>System Matching Notes:</span>
+                <p style={{ margin: 0 }}>{application.match_notes}</p>
               </div>
             )}
           </div>
@@ -111,27 +105,27 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
 
       {/* Review Actions */}
       {!isConverted ? (
-        <div className="bg-white border border-gray-200/80 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+        <div className="cp-card" style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted, #64748B)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
               Application Progression
             </h4>
             <StatusBadge status={application.status} />
           </div>
 
           {error && (
-            <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+            <div role="alert" className="cp-alert error" style={{ marginBottom: '12px' }}>
               {error}
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {application.status !== 'QUALIFIED' && (
               <button
                 type="button"
                 disabled={isUpdating}
                 onClick={() => handleStatus('QUALIFIED')}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                className="cp-btn sm primary"
               >
                 Mark as Qualified
               </button>
@@ -142,7 +136,7 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
                 type="button"
                 disabled={isUpdating}
                 onClick={() => handleStatus('MATCHED')}
-                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                className="cp-btn sm secondary"
               >
                 Mark as Matched
               </button>
@@ -153,7 +147,7 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
                 type="button"
                 disabled={isUpdating}
                 onClick={() => handleStatus('REVIEW_REQUIRED')}
-                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                className="cp-btn sm secondary"
               >
                 Request Review
               </button>
@@ -164,7 +158,8 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
                 type="button"
                 disabled={isUpdating}
                 onClick={() => handleStatus('REJECTED')}
-                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors ml-auto"
+                className="cp-btn sm danger"
+                style={{ marginLeft: 'auto' }}
               >
                 Reject
               </button>
@@ -175,7 +170,7 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
                 type="button"
                 disabled={isUpdating}
                 onClick={() => handleStatus('CANCELLED')}
-                className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                className="cp-btn sm secondary"
               >
                 Cancel
               </button>
@@ -183,17 +178,13 @@ export function ApplicationReview({ application, onStatusChange }: ApplicationRe
           </div>
         </div>
       ) : (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
-            ✓
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider">
-              Enrolment Converted
-            </h4>
-            <p className="text-xs text-emerald-700 mt-0.5">
-              This application has been successfully converted into an active student record.
-            </p>
+        <div className="cp-alert success" style={{ margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 800 }}>✓</span>
+            <div>
+              <div style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px' }}>Enrolment Converted</div>
+              <div style={{ fontSize: '12px', marginTop: '2px' }}>This application has been successfully converted into an active student record.</div>
+            </div>
           </div>
         </div>
       )}

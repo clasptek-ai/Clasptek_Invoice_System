@@ -1,6 +1,7 @@
 /**
- * components/admissions/ApplicationFilters.tsx — Phase 3
+ * components/admissions/ApplicationFilters.tsx — Phase 3 & 9G
  * Search, status, programme, and source filter controls for the Applications list.
+ * Uses genuine .cp-* design system styles.
  */
 
 'use client';
@@ -78,10 +79,10 @@ export function ApplicationFilters({
   );
 
   return (
-    <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-sm mb-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+    <div className="cp-filter-bar">
       {/* Search */}
-      <div className="flex-1 relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" aria-hidden="true">
+      <div className="cp-search-wrap">
+        <span className="cp-search-icon" aria-hidden="true">
           🔍
         </span>
         <input
@@ -97,13 +98,13 @@ export function ApplicationFilters({
               updateParam('search', val);
             }, 350);
           }}
-          className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50/50 hover:bg-white transition-colors"
+          className="cp-search-input"
           aria-label="Search applications"
         />
       </div>
 
       {/* Status Filter */}
-      <div className="w-full sm:w-44">
+      <div>
         <label htmlFor="app-status-filter" className="sr-only">
           Status
         </label>
@@ -111,7 +112,7 @@ export function ApplicationFilters({
           id="app-status-filter"
           value={currentStatus || 'ALL'}
           onChange={(e) => updateParam('status', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50/50 hover:bg-white transition-colors"
+          className="cp-filter-select"
         >
           {APPLICATION_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>
@@ -122,7 +123,7 @@ export function ApplicationFilters({
       </div>
 
       {/* Programme Filter */}
-      <div className="w-full sm:w-48">
+      <div>
         <label htmlFor="app-programme-filter" className="sr-only">
           Programme
         </label>
@@ -130,7 +131,7 @@ export function ApplicationFilters({
           id="app-programme-filter"
           value={currentProgramme || ''}
           onChange={(e) => updateParam('programme', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50/50 hover:bg-white transition-colors truncate"
+          className="cp-filter-select"
         >
           <option value="">All Programmes</option>
           {programmes.map((p) => (
@@ -142,7 +143,7 @@ export function ApplicationFilters({
       </div>
 
       {/* Source Filter */}
-      <div className="w-full sm:w-40">
+      <div>
         <label htmlFor="app-source-filter" className="sr-only">
           Source
         </label>
@@ -150,7 +151,7 @@ export function ApplicationFilters({
           id="app-source-filter"
           value={currentSource || 'ALL'}
           onChange={(e) => updateParam('source', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50/50 hover:bg-white transition-colors"
+          className="cp-filter-select"
         >
           {APPLICATION_SOURCES.map((s) => (
             <option key={s.value} value={s.value}>
@@ -165,7 +166,8 @@ export function ApplicationFilters({
         <button
           type="button"
           onClick={handleReset}
-          className="px-3 py-2 text-xs font-medium text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors whitespace-nowrap self-stretch sm:self-auto flex items-center justify-center gap-1"
+          className="cp-btn sm secondary"
+          style={{ height: '38px' }}
         >
           <span aria-hidden="true">↺</span> Reset
         </button>

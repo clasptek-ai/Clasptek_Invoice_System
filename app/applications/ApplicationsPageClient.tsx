@@ -181,7 +181,7 @@ export function ApplicationsPageClient({
 
       {/* Global Error Banner */}
       {actionError && (
-        <div role="alert" className="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+        <div role="alert" className="cp-alert error">
           {actionError}
         </div>
       )}

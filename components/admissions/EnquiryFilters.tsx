@@ -1,7 +1,7 @@
 /**
- * components/admissions/EnquiryFilters.tsx — Phase 3
+ * components/admissions/EnquiryFilters.tsx — Phase 3 & 9G
  * Search + status filter bar for the Enquiries list.
- * Uses URL search params for shareable / bookmarkable filters.
+ * Uses genuine .cp-* design system styles.
  */
 
 'use client';
@@ -48,10 +48,10 @@ export function EnquiryFilters({ currentSearch, currentStatus }: EnquiryFiltersP
   );
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-4">
+    <div className="cp-filter-bar">
       {/* Search */}
-      <div className="flex-1 relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" aria-hidden="true">
+      <div className="cp-search-wrap">
+        <span className="cp-search-icon" aria-hidden="true">
           🔍
         </span>
         <input
@@ -68,13 +68,13 @@ export function EnquiryFilters({ currentSearch, currentStatus }: EnquiryFiltersP
               updateParam('search', val);
             }, 400);
           }}
-          className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+          className="cp-search-input"
           aria-label="Search enquiries"
         />
       </div>
 
       {/* Status */}
-      <div className="w-full sm:w-52">
+      <div>
         <label htmlFor="enquiry-status-filter" className="sr-only">
           Filter by status
         </label>
@@ -82,7 +82,7 @@ export function EnquiryFilters({ currentSearch, currentStatus }: EnquiryFiltersP
           id="enquiry-status-filter"
           defaultValue={currentStatus || 'all'}
           onChange={(e) => updateParam('status', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          className="cp-filter-select"
         >
           {ENQUIRY_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>
