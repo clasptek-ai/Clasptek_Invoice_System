@@ -223,6 +223,81 @@ export async function appendEnquiryNote(
   return { error: null };
 }
 
+export interface CreateEnquiryInput {
+  student_name: string;
+  email?: string | null;
+  phone?: string | null;
+  programme_id?: string | null;
+  source?: string | null;
+  notes?: string | null;
+  status?: EnquiryStatus;
+}
+
+/**
+ * Create a new enquiry.
+ * Enforces tenant_id from authoritative user session.
+ */
+export async function createEnquiry(
+  input: CreateEnquiryInput
+): Promise<{ data: Enquiry | null; error: string | null }> {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null, error: 'Unauthorized: No active session' };
+  }
+
+  // Retrieve user tenant_id from profile or user metadata
+  const { data: profile } = await supabase
+    .from('users')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const tenantId = profile?.tenant_id || user.user_metadata?.tenant_id;
+  if (!tenantId) {
+    return { data: null, error: 'User does not belong to a valid tenant' };
+  }
+
+  const newRecord = {
+    tenant_id: tenantId,
+    student_name: input.student_name.trim(),
+    email: input.email ? input.email.trim() : null,
+    phone: input.phone ? input.phone.trim() : null,
+    programme_id: input.programme_id || null,
+    source: input.source || 'Direct',
+    notes: input.notes ? input.notes.trim() : null,
+    status: input.status || 'NEW',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('enquiries')
+    .insert(newRecord)
+    .select(
+      `id, tenant_id, student_name, email, phone, programme_id, source, status, notes, created_at, updated_at,
+       programmes:programme_id ( name )`
+    )
+    .single();
+
+  if (error) {
+    console.error('[admissions/createEnquiry]', error.message);
+    return { data: null, error: error.message };
+  }
+
+  const prog = (data as Record<string, unknown>).programmes as { name?: string } | null;
+  const row = {
+    ...(data as Record<string, unknown>),
+    programme_name: prog?.name ?? null,
+    programmes: undefined,
+  } as unknown as Enquiry;
+
+  return { data: row, error: null };
+}
+
 // ─── Applications ────────────────────────────────────────────────────────────
 
 /**

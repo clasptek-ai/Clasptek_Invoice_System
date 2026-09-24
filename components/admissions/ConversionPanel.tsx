@@ -87,7 +87,9 @@ export function ConversionPanel({ application, onConverted }: ConversionPanelPro
     return (
       <div className="cp-alert success" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>🎉</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
           <h4 style={{ margin: 0, fontWeight: 700, fontSize: '14px' }}>Conversion Complete!</h4>
         </div>
         <p style={{ margin: 0, fontSize: '12px' }}>
@@ -111,7 +113,10 @@ export function ConversionPanel({ application, onConverted }: ConversionPanelPro
     <div className="cp-card" style={{ padding: '16px', background: '#F8FAFC', display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span aria-hidden="true" style={{ fontSize: '16px' }}>🎓</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--interactive, #1D4ED8)' }} aria-hidden="true">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+            <path d="M6 12v5c3 3 9 3 12 0v-5" />
+          </svg>
           <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted, #64748B)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
             Convert to Enrolled Student
           </h4>

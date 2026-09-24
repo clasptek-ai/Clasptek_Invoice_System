@@ -8,11 +8,12 @@
 
 import { useState, useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { Enquiry, EnquiryStatus } from '@/types/admissions';
+import type { Enquiry, EnquiryStatus, ProgrammeOption } from '@/types/admissions';
 import { EnquirySummaryStrip } from '@/components/admissions/EnquirySummaryStrip';
 import { EnquiryFilters } from '@/components/admissions/EnquiryFilters';
 import { EnquiryTable } from '@/components/admissions/EnquiryTable';
 import { EnquiryDrawer } from '@/components/admissions/EnquiryDrawer';
+import { NewEnquiryModal } from '@/components/admissions/NewEnquiryModal';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface EnquiriesPageClientProps {
@@ -21,6 +22,9 @@ interface EnquiriesPageClientProps {
   currentSearch: string;
   currentStatus: string;
   currentPage: number;
+  programmes?: ProgrammeOption[];
+  initialOpenNew?: boolean;
+  staffName?: string;
 }
 
 const PAGE_SIZE = 25;
@@ -31,6 +35,9 @@ export function EnquiriesPageClient({
   currentSearch,
   currentStatus,
   currentPage,
+  programmes = [],
+  initialOpenNew = false,
+  staffName = 'Admissions',
 }: EnquiriesPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,6 +47,11 @@ export function EnquiriesPageClient({
   const [enquiries, setEnquiries] = useState<Enquiry[]>(initialEnquiries);
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isNewModalOpen, setIsNewModalOpen] = useState(initialOpenNew);
+
+  const handleEnquiryCreated = useCallback((newEnq: Enquiry) => {
+    setEnquiries((prev) => [newEnq, ...prev]);
+  }, []);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -142,7 +154,11 @@ export function EnquiriesPageClient({
       <div className="cp-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 className="cp-page-title" style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-            <span aria-hidden="true">📥</span> Enquiries &amp; Leads Directory
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #C1272D)' }} aria-hidden="true">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            Enquiries &amp; Leads Directory
           </h1>
           <p className="cp-page-subtitle" style={{ fontSize: '13px', color: 'var(--text-muted, #64748B)', marginTop: '4px', margin: 0 }}>
             Manage prospect interactions, programme requests, billing triggers, and lead progression.
@@ -169,16 +185,26 @@ export function EnquiriesPageClient({
             }}
             style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            <span aria-hidden="true">📥</span> Export CSV
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export CSV
           </button>
-          <a
-            href="/apply"
+          <button
+            type="button"
+            onClick={() => setIsNewModalOpen(true)}
             className="cp-btn primary"
             id="btnNewEnquiryBtn"
-            style={{ fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
           >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
             + Log Enquiry
-          </a>
+          </button>
         </div>
       </div>
 
@@ -243,6 +269,16 @@ export function EnquiriesPageClient({
         onClose={() => setSelectedEnquiry(null)}
         onStatusChange={handleStatusChange}
         onNoteAppend={handleNoteAppend}
+      />
+
+      {/* New Enquiry Modal */}
+      <NewEnquiryModal
+        isOpen={isNewModalOpen}
+        onClose={() => setIsNewModalOpen(false)}
+        programmes={programmes}
+        existingEnquiries={enquiries}
+        assignedStaffName={staffName}
+        onEnquiryCreated={handleEnquiryCreated}
       />
     </div>
   );

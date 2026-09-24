@@ -54,7 +54,8 @@ const suites = [
   { name: 'Phase 9E.2: Facilitator Workspace Certification', file: 'scripts/test_phase9e_facilitator_workspace.js' },
   { name: 'Phase 9E.3: Applicant Portal & Application Tracking Certification', file: 'scripts/test_phase9e_applicant_portal.js' },
   { name: 'Phase 9F: Visual Shell & Dashboard Remediation Certification', file: 'scripts/test_phase9f_visual_shell_dashboard.js' },
-  { name: 'Phase 9G: Complete Portal UI, CSS & Functionality Certification', file: 'scripts/test_phase9g_complete_portal.js' }
+  { name: 'Phase 9G: Complete Portal UI, CSS & Functionality Certification', file: 'scripts/test_phase9g_complete_portal.js' },
+  { name: 'Phase 9G: Admissions & CRM + Executive Dashboard Remediation Certification', file: 'scripts/test_phase9g_admissions_dashboard.js' }
 ];
 
 let totalPassed = 0;

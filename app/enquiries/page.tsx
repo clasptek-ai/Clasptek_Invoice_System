@@ -10,7 +10,7 @@
 
 import { redirect } from 'next/navigation';
 import { createServerClient } from '@/lib/supabase/server';
-import { getEnquiries } from '@/lib/admissions/queries';
+import { getEnquiries, getProgrammes } from '@/lib/admissions/queries';
 import { EnquiriesPageClient } from './EnquiriesPageClient';
 import type { EnquiryFilters } from '@/types/admissions';
 
@@ -41,9 +41,13 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
   const search = (params.search ?? '').trim();
   const status = (params.status ?? '') as EnquiryFilters['status'];
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
+  const initialOpenNew = params.new === '1' || params.action === 'new';
 
-  // 3. Fetch initial data server-side
-  const { data: enquiries, count, error } = await getEnquiries({ search, status, page });
+  // 3. Fetch initial data and active programmes in parallel
+  const [{ data: enquiries, count, error }, programmes] = await Promise.all([
+    getEnquiries({ search, status, page }),
+    getProgrammes(),
+  ]);
 
   if (error) {
     // Non-blocking — surface error in UI
@@ -57,6 +61,9 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
       currentSearch={search}
       currentStatus={status}
       currentPage={page}
+      programmes={programmes}
+      initialOpenNew={initialOpenNew}
+      staffName={user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admissions'}
     />
   );
 }
