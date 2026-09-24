@@ -45,7 +45,10 @@ const suites = [
   { name: 'Phase 5: Admin CRM & Training Operations Model', file: 'scripts/test_phase5_admin_crm_training_ops.js' },
   { name: 'Phase 5.1: Professional CRM Intake & Applicant Management', file: 'scripts/test_phase5_1_crm_intake.js' },
   { name: 'Supabase Authentication & Password Remediation Certification', file: 'scripts/verify_supabase_authentication.js' },
-  { name: 'Enquiries Tab Resilience & Favicon Verification', file: 'test_enquiries_tab_resilience.js' }
+  { name: 'Enquiries Tab Resilience & Favicon Verification', file: 'test_enquiries_tab_resilience.js' },
+  { name: 'Phase 8: Security Governance & Authorization Architecture', file: 'scripts/test_phase8_security_governance.js' },
+  { name: 'Phase 9B: Administration & Governance Certification', file: 'scripts/test_phase9b_administration_governance.js' },
+  { name: 'Phase 9C: Finance Completion Certification', file: 'scripts/test_phase9c_finance_completion.js' }
 ];
 
 let totalPassed = 0;
