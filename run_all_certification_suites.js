@@ -48,7 +48,8 @@ const suites = [
   { name: 'Enquiries Tab Resilience & Favicon Verification', file: 'test_enquiries_tab_resilience.js' },
   { name: 'Phase 8: Security Governance & Authorization Architecture', file: 'scripts/test_phase8_security_governance.js' },
   { name: 'Phase 9B: Administration & Governance Certification', file: 'scripts/test_phase9b_administration_governance.js' },
-  { name: 'Phase 9C: Finance Completion Certification', file: 'scripts/test_phase9c_finance_completion.js' }
+  { name: 'Phase 9C: Finance Completion Certification', file: 'scripts/test_phase9c_finance_completion.js' },
+  { name: 'Phase 9D: Certificates & Training Completion Certification', file: 'scripts/test_phase9d_certificates_training.js' }
 ];
 
 let totalPassed = 0;
