@@ -33,6 +33,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { ShellLayout } from '@/components/layout/ShellLayout';
+
 // ─── Root Layout ──────────────────────────────────────────────────────────────
 
 export default function RootLayout({
@@ -43,7 +45,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ShellLayout>{children}</ShellLayout>
+        </AuthProvider>
       </body>
     </html>
   );

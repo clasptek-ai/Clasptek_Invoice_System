@@ -1,131 +1,146 @@
 'use client';
 
 /**
- * Header.tsx — Top Application Bar
- * Phase 2: Next.js Foundation
- * Displays: hamburger (mobile), tenant badge, active user info, role pill, sign-out.
+ * Header.tsx — Authoritative Clasptek Topbar
+ * Phase 9A: Visual Shell, Branding & Navigation Restoration
+ * Restores topbar height (64px), breadcrumb context, omnisearch presentation,
+ * role pill tag, and mobile navigation toggle.
  */
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils/cn';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import React, { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import { findActiveNavItem } from '@/lib/config/navigation';
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;
 }
 
-const ROLE_VARIANT_MAP: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  'Super Admin':     'danger',
-  'Finance Manager': 'warning',
-  'Finance Staff':   'info',
-  'Finance Viewer':  'neutral',
-  'Staff':           'success',
-  'Facilitator':     'info',
-  'Student':         'neutral',
-};
-
 export function Header({ onOpenMobileSidebar }: HeaderProps) {
-  const { user, role, tenant, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const activeNav = findActiveNavItem(pathname);
+  const pageTitle = activeNav?.item.label ?? 'Dashboard';
+  const sectionTitle = activeNav?.section.sectionTitle ?? 'Workspace';
 
   const handleSignOut = async () => {
     await signOut();
     router.push('/login');
   };
 
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-    : user?.email?.slice(0, 2).toUpperCase() ?? 'CL';
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    // Client-side search / filter integration or redirect to search
+    // Omnisearch presentation is preserved without inventing unsupported backend calls
+  };
 
   return (
-    <header
-      id="app-header"
-      className={cn(
-        'flex items-center justify-between gap-4',
-        'h-[var(--header-height)] px-4 lg:px-6',
-        'bg-[var(--surface-0)] border-b border-[var(--border)]',
-        'shrink-0 z-20'
-      )}
-    >
-      {/* Left: Mobile menu toggle + tenant */}
-      <div className="flex items-center gap-3">
-        {/* Hamburger — mobile only */}
+    <header id="app-header" className="cp-topbar">
+      {/* Topbar Left: Mobile Toggle + Breadcrumb + Omnisearch */}
+      <div className="cp-topbar-left">
         <button
-          id="sidebar-toggle"
+          className="cp-mobile-nav-btn"
+          id="btnMobileNavToggle"
           onClick={onOpenMobileSidebar}
+          title="Open Navigation Menu"
           aria-label="Open navigation menu"
-          className={cn(
-            'lg:hidden flex items-center justify-center w-9 h-9 rounded-[var(--radius-md)]',
-            'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]',
-            'transition-colors duration-[var(--transition-fast)]'
-          )}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
+          &#x2630;
         </button>
 
-        {/* Tenant Badge */}
-        <div className="hidden sm:flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--success)]" aria-hidden="true" />
-          <span className="text-sm font-semibold text-[var(--text-primary)]">
-            {tenant?.name ?? 'Clasptek Main'}
-          </span>
+        <div className="cp-breadcrumb">
+          <span>{sectionTitle}</span> / <strong>{pageTitle}</strong>
         </div>
+
+        <form onSubmit={handleSearchSubmit} className="cp-omni-search">
+          <span className="cp-omni-icon">
+            <svg
+              className="cp-svg-icon"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </span>
+          <input
+            type="text"
+            className="cp-omni-input"
+            id="globalSearchInput"
+            placeholder="Search enquiries, students, invoices, receipts, programmes..."
+            autoComplete="off"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </form>
       </div>
 
-      {/* Right: User info + sign out */}
-      <div className="flex items-center gap-3">
-        {/* Role badge */}
-        {role && (
-          <Badge
-            variant={ROLE_VARIANT_MAP[role] ?? 'neutral'}
-            dot
-            className="hidden md:inline-flex"
+      {/* Topbar Right: Role Badge + User Info + Sign Out */}
+      <div className="cp-topbar-right">
+        <div className="cp-role-tag">
+          <span
+            className="cp-pill paid"
+            style={{
+              fontSize: '10.5px',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              fontWeight: 700,
+              letterSpacing: '0.4px',
+            }}
           >
-            {role}
-          </Badge>
-        )}
-
-        {/* User avatar + name */}
-        <div className="flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center shrink-0"
-            aria-hidden="true"
+            {(role ?? 'STAFF').toUpperCase()}
+          </span>
+          <span
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '11.5px',
+              fontWeight: 500,
+              maxWidth: '160px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={user?.full_name ?? user?.email ?? 'User'}
           >
-            <span className="text-xs font-semibold text-white">{initials}</span>
-          </div>
-          <div className="hidden md:block min-w-0">
-            <p className="text-sm font-medium text-[var(--text-primary)] truncate max-w-[160px]">
-              {user?.full_name ?? user?.email ?? 'User'}
-            </p>
-            {user?.email && (
-              <p className="text-xs text-[var(--text-tertiary)] truncate max-w-[160px]">
-                {user.email}
-              </p>
-            )}
-          </div>
+            {user?.full_name ?? user?.email ?? 'User'}
+          </span>
         </div>
 
-        {/* Sign Out */}
-        <Button
+        <button
           id="header-signout-btn"
-          variant="ghost"
-          size="sm"
           onClick={handleSignOut}
+          className="cp-signout-btn hidden sm:flex"
+          title="Sign out"
           aria-label="Sign out"
-          className="shrink-0 text-[var(--text-secondary)]"
-          leftIcon={
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          }
         >
-          <span className="hidden sm:inline">Sign out</span>
-        </Button>
+          <svg
+            className="cp-svg-icon"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </div>
     </header>
   );

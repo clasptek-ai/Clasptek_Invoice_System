@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * AppLayout.tsx — Shared Application Shell
- * Phase 2: Next.js Foundation
- * Composes: Sidebar + Header + main content area with independent vertical scroll.
+ * AppLayout.tsx — Authoritative Clasptek Application Shell
+ * Phase 9A: Visual Shell, Branding & Navigation Restoration
+ * Composes: Sidebar + Topbar + independent scrolling main area (.cp-main-area).
  */
 
 import React, { useState } from 'react';
@@ -19,8 +19,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
-    <div className="app-shell">
-      {/* Sidebar */}
+    <div className="cp-layout">
+      {/* Mobile Sidebar Backdrop */}
+      <div
+        id="sidebarBackdrop"
+        className={`cp-sidebar-backdrop ${isMobileOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Left Collapsible Sidebar */}
       <Sidebar
         isCollapsed={isCollapsed}
         isMobileOpen={isMobileOpen}
@@ -28,13 +36,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         onCloseMobile={() => setIsMobileOpen(false)}
       />
 
-      {/* Content Area */}
-      <div className="app-content">
-        {/* Top Header */}
+      {/* Main Area with independent scrolling */}
+      <div className="cp-main-area">
         <Header onOpenMobileSidebar={() => setIsMobileOpen(true)} />
-
-        {/* Page Content */}
-        <main id="main-content" className="app-main" tabIndex={-1}>
+        <main id="main-content" className="cp-content-view" tabIndex={-1}>
           {children}
         </main>
       </div>

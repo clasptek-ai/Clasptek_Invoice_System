@@ -7,7 +7,6 @@
  */
 
 import React from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, MetricCard } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/lib/auth/context';
@@ -95,8 +94,7 @@ export function DashboardClient() {
   const displayName = user?.full_name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
 
   return (
-    <AppLayout>
-      <div className="max-w-[var(--content-max-width)] mx-auto space-y-6 animate-fade-in">
+    <div className="max-w-[var(--content-max-width)] mx-auto space-y-6 animate-fade-in">
 
         {/* Page Header */}
         <div className="flex items-start justify-between gap-4">
@@ -258,6 +256,5 @@ export function DashboardClient() {
         </Card>
 
       </div>
-    </AppLayout>
   );
 }
