@@ -12,6 +12,7 @@ import type { StudentSummary, StudentDossier } from '@/types/students';
 import { StudentTable } from '@/components/students/StudentTable';
 import { StudentFilters } from '@/components/students/StudentFilters';
 import { StudentDrawer } from '@/components/students/StudentDrawer';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface StudentsPageClientProps {
   initialStudents: StudentSummary[];
@@ -87,27 +88,19 @@ export function StudentsPageClient({
       'TrainingStatus',
     ];
     const rows = initialStudents.map((s) => [
-      `"${s.student_number || ''}"`,
-      `"${s.name.replace(/"/g, '""')}"`,
-      `"${s.phone || ''}"`,
-      `"${s.email || ''}"`,
-      `"${s.programmes_list.replace(/"/g, '""')}"`,
+      s.student_number || '',
+      s.name,
+      s.phone || '',
+      s.email || '',
+      s.programmes_list,
       s.total_invoiced,
       s.total_paid,
       s.balance,
-      `"${s.status_display}"`,
-      `"${s.training_status}"`,
+      s.status_display,
+      s.training_status,
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Student_Directory_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv('Student_Directory', headers, rows);
   }, [initialStudents]);
 
   return (

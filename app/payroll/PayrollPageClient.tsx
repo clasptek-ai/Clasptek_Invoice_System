@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import type { Payslip, Personnel, FinancialMetrics, AllowanceDeductionItem } from '@/types/finance';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface PayrollPageClientProps {
   initialPayslips: Payslip[];
@@ -168,27 +169,20 @@ export function PayrollPageClient({
   const handleExportCSV = () => {
     const headers = ['Payslip #', 'Pay Period', 'Employee Name', 'Type', 'Department', 'Role', 'Basic Pay', 'Gross Pay', 'Total Deductions', 'Net Pay', 'Status'];
     const rows = filteredPayslips.map(p => [
-      `"${p.payslipDisplayNo}"`,
-      `"${p.payPeriod}"`,
-      `"${p.employeeName.replace(/"/g, '""')}"`,
-      `"${p.employeeType.toUpperCase()}"`,
-      `"${p.department.replace(/"/g, '""')}"`,
-      `"${p.role.replace(/"/g, '""')}"`,
+      p.payslipDisplayNo,
+      p.payPeriod,
+      p.employeeName,
+      p.employeeType.toUpperCase(),
+      p.department,
+      p.role,
       p.basicPay,
       p.grossPay,
       p.totalDeductions,
       p.netPay,
-      `"${p.status.toUpperCase()}"`,
+      p.status.toUpperCase(),
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `clasptek_payroll_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv('clasptek_payroll', headers, rows);
   };
 
   // Unique periods for dropdown

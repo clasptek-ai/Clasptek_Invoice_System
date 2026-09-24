@@ -13,6 +13,7 @@ import { EnquirySummaryStrip } from '@/components/admissions/EnquirySummaryStrip
 import { EnquiryFilters } from '@/components/admissions/EnquiryFilters';
 import { EnquiryTable } from '@/components/admissions/EnquiryTable';
 import { EnquiryDrawer } from '@/components/admissions/EnquiryDrawer';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface EnquiriesPageClientProps {
   initialEnquiries: Enquiry[];
@@ -156,23 +157,15 @@ export function EnquiriesPageClient({
               // CSV Export of current enquiries
               const headers = ['Name', 'Email', 'Phone', 'Programme', 'Source', 'Status', 'Date'];
               const rows = enquiries.map((e) => [
-                `"${e.student_name.replace(/"/g, '""')}"`,
-                `"${(e.email || '').replace(/"/g, '""')}"`,
-                `"${(e.phone || '').replace(/"/g, '""')}"`,
-                `"${(e.programme_name || '').replace(/"/g, '""')}"`,
-                `"${e.source}"`,
-                `"${e.status}"`,
-                `"${e.created_at || ''}"`,
+                e.student_name,
+                e.email || '',
+                e.phone || '',
+                e.programme_name || '',
+                e.source,
+                e.status,
+                e.created_at || '',
               ]);
-              const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', `clasptek-enquiries-${new Date().toISOString().slice(0, 10)}.csv`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
+              downloadSafeCsv('clasptek-enquiries', headers, rows);
             }}
             style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >

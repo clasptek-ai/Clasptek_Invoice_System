@@ -14,6 +14,7 @@ import type {
   AttendanceStatus,
   EnrolmentStudentInfo,
 } from '@/types/training';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface AttendancePageClientProps {
   cohorts: Array<{
@@ -360,8 +361,8 @@ export function AttendancePageClient({
   // Export CSV
   const handleExportCSV = () => {
     if (!activeCohort) return;
-    let csv = 'Student ID,Student Name,Enrolment Number,Delivered Sessions,Present,Late,Excused,Absent,Attendance %\n';
-    enrolments.forEach((en) => {
+    const headers = ['Student ID', 'Student Name', 'Enrolment Number', 'Delivered Sessions', 'Present', 'Late', 'Excused', 'Absent', 'Attendance %'];
+    const rows = enrolments.map((en) => {
       let p = 0, l = 0, ex = 0, ab = 0;
       deliveredSessions.forEach((ds) => {
         const r = attendance.find((a) => a.sessionId === ds.id && a.enrolmentId === en.enrolmentId);
@@ -371,17 +372,20 @@ export function AttendancePageClient({
         else if (r?.attendanceStatus === 'ABSENT') ab++;
       });
       const pct = deliveredSessions.length > 0 ? Math.round(((p + l + 0.5 * ex) / deliveredSessions.length) * 100) : 0;
-      csv += `"${en.studentNumber}","${en.studentName}","${en.enrolmentNumber}",${deliveredSessions.length},${p},${l},${ex},${ab},"${pct}%"\n`;
+      return [
+        en.studentNumber,
+        en.studentName,
+        en.enrolmentNumber,
+        deliveredSessions.length,
+        p,
+        l,
+        ex,
+        ab,
+        `${pct}%`,
+      ];
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Attendance_${activeCohort.cohortCode}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv(`Attendance_${activeCohort.cohortCode}`, headers, rows);
   };
 
   return (

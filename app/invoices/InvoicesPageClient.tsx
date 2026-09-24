@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import type { Invoice, Customer, FinancialMetrics } from '@/types/finance';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface ProgrammeOption {
   id: string;
@@ -174,25 +175,18 @@ export function InvoicesPageClient({
   const handleExportCSV = () => {
     const headers = ['Invoice #', 'Issue Date', 'Due Date', 'Student / Client', 'Programme', 'Total', 'Paid', 'Balance', 'Status'];
     const rows = filteredInvoices.map(inv => [
-      `"${inv.invoiceDisplayNo}"`,
-      `"${inv.invoiceDate}"`,
-      `"${inv.dueDate}"`,
-      `"${inv.studentName.replace(/"/g, '""')}"`,
-      `"${(inv.programmeName || '').replace(/"/g, '""')}"`,
+      inv.invoiceDisplayNo,
+      inv.invoiceDate,
+      inv.dueDate,
+      inv.studentName,
+      inv.programmeName || '',
       inv.totalAmount,
       inv.paidAmount || 0,
       inv.balanceAmount || 0,
-      `"${inv.status.toUpperCase()}"`,
+      inv.status.toUpperCase(),
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `clasptek_invoices_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv('clasptek_invoices', headers, rows);
   };
 
   // Filter invoices

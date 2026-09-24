@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import type { ManagementDashboardMetrics, DateFilterScope } from '@/types/intelligence';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface IntelligencePageClientProps {
   initialMetrics: ManagementDashboardMetrics;
@@ -69,14 +70,7 @@ export function IntelligencePageClient({ initialMetrics }: IntelligencePageClien
       ['Payroll', 'Disbursed Paid', metrics.payroll.disbursedPaidPayroll],
     ];
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `clasptek_management_intelligence_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv('clasptek_management_intelligence', headers, rows);
   };
 
   return (

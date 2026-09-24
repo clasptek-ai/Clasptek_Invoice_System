@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import type { ReportItem } from '@/types/intelligence';
 import type { FinancialMetrics } from '@/types/finance';
+import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface ReportsPageClientProps {
   initialReports: ReportItem[];
@@ -49,23 +50,16 @@ export function ReportsPageClient({ initialReports, financeMetrics }: ReportsPag
   const handleExportCSV = () => {
     const headers = ['Dimension', 'Reference #', 'Date', 'Title', 'Details', 'Primary Value', 'Status'];
     const rows = filteredReports.map(r => [
-      `"${r.category}"`,
-      `"${r.referenceNo}"`,
-      `"${r.date}"`,
-      `"${r.title.replace(/"/g, '""')}"`,
-      `"${(r.subTitle || '').replace(/"/g, '""')}"`,
-      `"${String(r.primaryValue).replace(/"/g, '""')}"`,
-      `"${r.status}"`,
+      r.category,
+      r.referenceNo,
+      r.date,
+      r.title,
+      r.subTitle || '',
+      String(r.primaryValue),
+      r.status,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `clasptek_performance_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadSafeCsv('clasptek_performance_report', headers, rows);
   };
 
   // Filtered reports
