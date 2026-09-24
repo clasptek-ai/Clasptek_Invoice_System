@@ -192,7 +192,19 @@ export interface FinanceAuditLogEntry {
   id: string;
   tenantId: string;
   action: string;
-  entityType: 'invoice' | 'payment' | 'payslip' | 'receipt' | 'direct_income' | 'expense' | 'system';
+  entityType:
+    | 'invoice'
+    | 'payment'
+    | 'payslip'
+    | 'receipt'
+    | 'direct_income'
+    | 'expense'
+    | 'system'
+    | 'personnel'
+    | 'user'
+    | 'finance_period'
+    | 'finance_settings'
+    | 'payment_account';
   entityId: string;
   entityName?: string | null;
   oldState?: Record<string, unknown> | null;
