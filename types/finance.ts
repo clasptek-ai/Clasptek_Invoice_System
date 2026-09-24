@@ -204,7 +204,8 @@ export interface FinanceAuditLogEntry {
     | 'user'
     | 'finance_period'
     | 'finance_settings'
-    | 'payment_account';
+    | 'payment_account'
+    | 'internal_transfer';
   entityId: string;
   entityName?: string | null;
   oldState?: Record<string, unknown> | null;
@@ -247,3 +248,173 @@ export interface FinancialMetrics {
     paidCount: number;
   };
 }
+
+// ----------------------------------------------------
+// PHASE 9C: EXPENSES DATA CONTRACTS
+// ----------------------------------------------------
+export type ExpenseStatus = 'recorded' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | 'voided';
+
+export interface Expense {
+  id: string;
+  tenantId: string;
+  categoryGroup: string;
+  subCategory: string;
+  amount: number;
+  expenseDate: string;
+  description: string;
+  beneficiary: string;
+  paymentMethod: PaymentMethod;
+  reference?: string | null;
+  programmeId?: string | null;
+  status: ExpenseStatus;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
+  cancelledReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  department?: string;
+  source: string;
+  createdAt: string;
+  createdBy?: string | null;
+}
+
+// ----------------------------------------------------
+// PHASE 9C: FUNDS & TRANSFERS DATA CONTRACTS
+// ----------------------------------------------------
+export interface PaymentAccount {
+  id: string;
+  tenantId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  accountType?: string;
+  isActive: boolean;
+  isDefault: boolean;
+  createdAt?: string;
+}
+
+export interface InternalTransfer {
+  id: string;
+  tenantId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  fromBank: string;
+  toBank: string;
+  amount: number;
+  date: string;
+  reference: string;
+  reason?: string | null;
+  isRevenue: false; // Explicit non-revenue invariant
+  recordedBy?: string | null;
+  createdAt: string;
+}
+
+export interface CreditedAccountDistribution {
+  accountId: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  total: number;
+  count: number;
+}
+
+// ----------------------------------------------------
+// PHASE 9C: RECEIVABLES & COLLECTIONS DATA CONTRACTS
+// ----------------------------------------------------
+export interface AgeingBucketInfo {
+  count: number;
+  amount: number;
+  invoices: Invoice[];
+}
+
+export interface ReceivablesAgeingBuckets {
+  current: AgeingBucketInfo;
+  days1to30: AgeingBucketInfo;
+  days31to60: AgeingBucketInfo;
+  days61to90: AgeingBucketInfo;
+  days90Plus: AgeingBucketInfo;
+  totalOutstanding: number;
+  totalOverdue: number;
+}
+
+export interface CollectionNote {
+  id: string;
+  tenantId: string;
+  invoiceId: string;
+  note: string;
+  promisedDate?: string | null;
+  createdAt: string;
+  createdBy?: string | null;
+}
+
+export interface CollectionPriority {
+  score: number;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  recommendedAction: string;
+  actionType: 'Email' | 'WhatsApp' | 'Phone Call' | 'Escalation';
+  balance: number;
+  daysOverdue: number;
+  clientName: string;
+  invoiceId?: string | null;
+}
+
+// ----------------------------------------------------
+// PHASE 9C: BUDGETS & PLANNING DATA CONTRACTS
+// ----------------------------------------------------
+export interface FinancialBudget {
+  id: string;
+  tenantId: string;
+  financialYear: string;
+  periodType: 'annual' | 'quarterly' | 'monthly';
+  periodKey: string;
+  department: string;
+  totalBudgetAmount: number;
+  allocatedBy: string;
+  status: 'draft' | 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetLine {
+  id: string;
+  tenantId: string;
+  budgetId: string;
+  category: string;
+  subCategory?: string | null;
+  monthKey: string;
+  budgetAmount: number;
+  actualAmount: number;
+  variance: number;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetVsActualCategory {
+  category: string;
+  department: string;
+  budgetAmount: number;
+  actualAmount: number;
+  variance: number;
+  variancePct: number;
+  utilizationPct: number;
+  isOverBudget: boolean;
+  isNearLimit: boolean;
+  status: 'UNDER_BUDGET' | 'NEAR_LIMIT' | 'OVER_BUDGET';
+  subCategories?: Record<string, { budgetAmount: number; actualAmount: number }>;
+}
+
+export interface BudgetVsActualSummary {
+  financialYear: string;
+  periodKey: string;
+  totalBudget: number;
+  totalActual: number;
+  totalVariance: number;
+  overallUtilizationPct: number;
+  categories: BudgetVsActualCategory[];
+  overBudgetCategories: BudgetVsActualCategory[];
+  nearLimitCategories: BudgetVsActualCategory[];
+  hasOverspending: boolean;
+}
+
