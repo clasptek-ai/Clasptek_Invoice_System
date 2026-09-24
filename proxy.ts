@@ -13,7 +13,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { updateSupabaseSession } from '@/lib/supabase/middleware';
 
 // Routes that do NOT require authentication
-const PUBLIC_ROUTES = ['/login', '/apply', '/verify-certificate'];
+const PUBLIC_ROUTES = ['/login', '/apply', '/verify-certificate', '/applicant-portal'];
 
 // Routes that should bypass middleware entirely (legacy, static)
 const BYPASS_PATTERNS = [
