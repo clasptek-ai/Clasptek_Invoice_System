@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvoices, createInvoice } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/server';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || undefined;
+    const requestedTenantId = searchParams.get('tenantId') || undefined;
 
-    const invoices = await getInvoices(tenantId);
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'],
+      requestedTenantId,
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
+
+    const invoices = await getInvoices(session.tenantId);
     return NextResponse.json({ success: true, invoices });
   } catch (error) {
     console.error('API Error in GET /api/finance/invoices:', error);
@@ -17,8 +26,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff'],
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
 
     const body = await request.json();
 
@@ -30,8 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await createInvoice(body, {
-      id: user?.id,
-      role: 'Staff',
+      id: session.user.id,
+      role: session.role,
     });
 
     if (!result.success) {

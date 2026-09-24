@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateInvoiceStatus } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/server';
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff'],
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
+
     const { id } = await context.params;
     const body = await request.json();
 
@@ -22,12 +30,9 @@ export async function PATCH(
       );
     }
 
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
     const result = await updateInvoiceStatus(id, body.status, body.reason, {
-      id: user?.id,
-      role: 'Staff',
+      id: session.user.id,
+      role: session.role,
     });
 
     if (!result.success) {

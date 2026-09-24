@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPayslips, createPayslip, getPersonnelList } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/server';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || undefined;
+    const requestedTenantId = searchParams.get('tenantId') || undefined;
     const includePersonnel = searchParams.get('includePersonnel') === 'true';
 
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager'],
+      requestedTenantId,
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
+
     const [payslips, personnel] = await Promise.all([
-      getPayslips(tenantId),
-      includePersonnel ? getPersonnelList(tenantId) : Promise.resolve([]),
+      getPayslips(session.tenantId),
+      includePersonnel ? getPersonnelList(session.tenantId) : Promise.resolve([]),
     ]);
 
     return NextResponse.json({
@@ -26,8 +35,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager'],
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
 
     const body = await request.json();
 
@@ -39,8 +53,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await createPayslip(body, {
-      id: user?.id,
-      role: 'Finance Manager',
+      id: session.user.id,
+      role: session.role,
     });
 
     if (!result.success) {

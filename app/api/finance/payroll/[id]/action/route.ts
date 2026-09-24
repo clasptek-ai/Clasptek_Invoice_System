@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updatePayslipStatus } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/server';
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { session, errorResponse } = await requireAuth(request, {
+      allowedRoles: ['Super Admin', 'Finance Manager'],
+    });
+
+    if (errorResponse) {
+      return errorResponse;
+    }
+
     const { id } = await context.params;
     const body = await request.json();
 
@@ -22,9 +30,6 @@ export async function POST(
       );
     }
 
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
     const result = await updatePayslipStatus(
       id,
       body.action,
@@ -35,8 +40,8 @@ export async function POST(
         cancelReason: body.cancelReason,
       },
       {
-        id: user?.id,
-        role: 'Finance Manager',
+        id: session.user.id,
+        role: session.role,
       }
     );
 
