@@ -52,7 +52,8 @@ const suites = [
   { name: 'Phase 9D: Certificates & Training Completion Certification', file: 'scripts/test_phase9d_certificates_training.js' },
   { name: 'Phase 9E.1: Employee Self-Service (ESS) Certification', file: 'scripts/test_phase9e_employee_self_service.js' },
   { name: 'Phase 9E.2: Facilitator Workspace Certification', file: 'scripts/test_phase9e_facilitator_workspace.js' },
-  { name: 'Phase 9E.3: Applicant Portal & Application Tracking Certification', file: 'scripts/test_phase9e_applicant_portal.js' }
+  { name: 'Phase 9E.3: Applicant Portal & Application Tracking Certification', file: 'scripts/test_phase9e_applicant_portal.js' },
+  { name: 'Phase 9F: Visual Shell & Dashboard Remediation Certification', file: 'scripts/test_phase9f_visual_shell_dashboard.js' }
 ];
 
 let totalPassed = 0;

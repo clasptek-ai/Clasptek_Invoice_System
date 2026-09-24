@@ -5,7 +5,7 @@
  */
 
 import type { NavigationSection } from '@/types/navigation';
-import type { UserRole } from '@/types/auth';
+import { type UserRole, normalizeRole } from '@/types/auth';
 
 const ALL_STAFF: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff', 'Facilitator'];
 const FINANCE: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
@@ -344,13 +344,14 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
  * Returns navigation sections filtered by the active user role.
  * Items with no rolesAllowed are accessible to all authenticated users.
  */
-export function getNavigationForRole(role: UserRole | null): NavigationSection[] {
+export function getNavigationForRole(role: UserRole | string | null | undefined): NavigationSection[] {
   if (!role) return [];
+  const normalizedRole = normalizeRole(role);
 
   return NAVIGATION_REGISTRY.map((section) => ({
     ...section,
     items: section.items.filter(
-      (item) => !item.rolesAllowed || item.rolesAllowed.includes(role)
+      (item) => !item.rolesAllowed || item.rolesAllowed.includes(normalizedRole)
     ),
   })).filter((section) => section.items.length > 0);
 }

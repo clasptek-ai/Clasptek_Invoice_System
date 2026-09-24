@@ -17,7 +17,7 @@ import React, {
 } from 'react';
 
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { AuthContextValue, AuthState, TenantContext, UserProfile, UserRole } from '@/types/auth';
+import { type AuthContextValue, type AuthState, type TenantContext, type UserProfile, type UserRole, normalizeRole } from '@/types/auth';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           id: user.id,
           email: user.email ?? '',
           full_name: (user.user_metadata?.full_name as string) ?? null,
-          role: ((user.user_metadata?.role as UserRole) ?? 'Staff'),
+          role: normalizeRole(user.user_metadata?.role as string),
           tenant_id: (user.user_metadata?.tenant_id as string) ?? null,
           tenant_name: (user.user_metadata?.tenant_name as string) ?? 'Clasptek Main',
           is_active: true,
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         id: u.id,
         email: u.email ?? '',
         full_name: (u.user_metadata?.full_name as string) ?? null,
-        role: ((u.user_metadata?.role as UserRole) ?? 'Staff'),
+        role: normalizeRole(u.user_metadata?.role as string),
         tenant_id: (u.user_metadata?.tenant_id as string) ?? null,
         tenant_name: (u.user_metadata?.tenant_name as string) ?? 'Clasptek Main',
         is_active: true,

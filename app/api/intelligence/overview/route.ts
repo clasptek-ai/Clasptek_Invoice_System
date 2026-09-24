@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const scope = (searchParams.get('scope') as DateFilterScope) || 'all_time';
 
     const { session, errorResponse } = await requireAuth(request, {
-      allowedRoles: ['Super Admin', 'Finance Manager'],
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer', 'Staff', 'Facilitator'],
       requestedTenantId,
     });
 

@@ -29,6 +29,26 @@ export const ADMIN_ROLES: UserRole[] = ['Super Admin', 'Finance Manager'];
 export const FINANCE_ROLES: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
 export const STAFF_ROLES: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff', 'Facilitator'];
 
+export const CANONICAL_ROLES: Record<string, UserRole> = {
+  SUPER_ADMIN: 'Super Admin',
+  'SUPER ADMIN': 'Super Admin',
+  FINANCE_MANAGER: 'Finance Manager',
+  'FINANCE MANAGER': 'Finance Manager',
+  FINANCE_STAFF: 'Finance Staff',
+  'FINANCE STAFF': 'Finance Staff',
+  STAFF: 'Staff',
+  FACILITATOR: 'Facilitator',
+  FINANCE_VIEWER: 'Finance Viewer',
+  'FINANCE VIEWER': 'Finance Viewer',
+  STUDENT: 'Student',
+};
+
+export function normalizeRole(rawRole: string | null | undefined): UserRole {
+  if (!rawRole) return 'Staff';
+  const clean = rawRole.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return CANONICAL_ROLES[clean] || (CANONICAL_ROLES[rawRole.trim().toUpperCase()] ?? 'Staff');
+}
+
 // ─── User Profile ─────────────────────────────────────────────────────────────
 
 export interface UserProfile {
