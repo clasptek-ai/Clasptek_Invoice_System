@@ -9,6 +9,7 @@
 import type { IntakeApplication } from '@/types/admissions';
 import { StatusBadge } from '@/components/admissions/StatusBadge';
 import { APPLICATION_SOURCE_LABELS } from '@/types/admissions';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface ApplicationTableProps {
   applications: IntakeApplication[];
@@ -18,6 +19,7 @@ interface ApplicationTableProps {
   selectedId?: string | null;
   onSelect: (application: IntakeApplication) => void;
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -34,11 +36,8 @@ export function ApplicationTable({
   selectedId,
   onSelect,
   onPageChange,
+  onPageSizeChange,
 }: ApplicationTableProps) {
-  const totalPages = Math.ceil(totalCount / pageSize);
-  const fromRecord = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const toRecord = Math.min(currentPage * pageSize, totalCount);
-
   if (applications.length === 0) {
     return (
       <div className="cp-empty-state">
@@ -59,14 +58,15 @@ export function ApplicationTable({
 
   return (
     <div className="cp-card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div className="cp-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+      {/* Desktop & Tablet Table */}
+      <div className="cp-table-wrap cp-table-desktop" style={{ border: 'none', borderRadius: 0 }}>
         <table className="cp-table">
           <thead>
             <tr>
               <th scope="col">Application #</th>
               <th scope="col">Applicant</th>
               <th scope="col">Programme</th>
-              <th scope="col">Source</th>
+              <th scope="col" className="cp-col-secondary">Source</th>
               <th scope="col">Status</th>
               <th scope="col">Submitted</th>
               <th scope="col" style={{ textAlign: 'right' }}>Action</th>
@@ -123,7 +123,7 @@ export function ApplicationTable({
                   </td>
 
                   {/* Source */}
-                  <td style={{ whiteSpace: 'nowrap' }}>
+                  <td className="cp-col-secondary" style={{ whiteSpace: 'nowrap' }}>
                     <span className="cp-pill neutral">
                       {sourceLabel}
                     </span>
@@ -160,38 +160,106 @@ export function ApplicationTable({
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div style={{ padding: '12px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-        <div>
-          Showing <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{fromRecord}</span> to{' '}
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{toRecord}</span> of{' '}
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{totalCount}</span> applications
-        </div>
+      {/* Mobile Card Stack */}
+      <div className="cp-cards-mobile" style={{ padding: '12px' }}>
+        {applications.map((app) => {
+          const isSelected = selectedId === app.id;
+          const formattedDate = app.submitted_at
+            ? new Date(app.submitted_at).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : '—';
 
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              disabled={currentPage <= 1}
-              onClick={() => onPageChange(currentPage - 1)}
-              className="cp-btn sm secondary"
+          return (
+            <div
+              key={app.id}
+              className="cp-mobile-record-card"
+              style={{
+                cursor: 'pointer',
+                borderColor: isSelected ? 'var(--primary)' : undefined,
+              }}
+              onClick={() => onSelect(app)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && onSelect(app)}
+              aria-label={`View application for ${app.first_name} ${app.last_name}`}
             >
-              Previous
-            </button>
-            <span style={{ padding: '0 4px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={currentPage >= totalPages}
-              onClick={() => onPageChange(currentPage + 1)}
-              className="cp-btn sm secondary"
-            >
-              Next
-            </button>
-          </div>
-        )}
+              <div className="cp-mobile-record-header">
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {app.first_name} {app.last_name}
+                  </h4>
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {app.email || app.phone || 'No contact'}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {app.application_number}
+                </span>
+              </div>
+
+              <div className="cp-mobile-record-grid">
+                <div className="cp-mobile-record-field">
+                  <span className="cp-mobile-record-label">Programme</span>
+                  <span className="cp-mobile-record-value">{app.programme_name || 'General Application'}</span>
+                </div>
+                <div className="cp-mobile-record-field">
+                  <span className="cp-mobile-record-label">Status</span>
+                  <div>
+                    <StatusBadge status={app.status} />
+                  </div>
+                </div>
+                <div className="cp-mobile-record-field">
+                  <span className="cp-mobile-record-label">Submitted</span>
+                  <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>{formattedDate}</span>
+                </div>
+                <div className="cp-mobile-record-field">
+                  <span className="cp-mobile-record-label">Delivery</span>
+                  <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                    {MODE_LABELS[app.delivery_mode] || app.delivery_mode}
+                  </span>
+                </div>
+              </div>
+
+              <div className="cp-mobile-record-actions">
+                <button
+                  type="button"
+                  className="cp-btn sm secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(app);
+                  }}
+                  style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                >
+                  Review Application
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Standard Pagination Footer */}
+      <Pagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalRecords={totalCount}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        entityLabel="applications"
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import type { Enrolment, Cohort } from '@/types/academics';
 import { EnrolmentKpiStrip } from '@/components/enrolments/EnrolmentKpiStrip';
 import { EnrolmentFilters } from '@/components/enrolments/EnrolmentFilters';
 import { EnrolmentTable } from '@/components/enrolments/EnrolmentTable';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface EnrolmentsPageClientProps {
   initialEnrolments: Enrolment[];
@@ -21,6 +22,7 @@ interface EnrolmentsPageClientProps {
   currentCohort: string;
   currentStatus: string;
   currentPage: number;
+  pageSize: number;
 }
 
 export function EnrolmentsPageClient({
@@ -30,11 +32,31 @@ export function EnrolmentsPageClient({
   currentSearch,
   currentCohort,
   currentStatus,
-  currentPage: _currentPage,
+  currentPage,
+  pageSize,
 }: EnrolmentsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', String(newPage));
+      startTransition(() => router.push(`/enrolments?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newPageSize: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pageSize', String(newPageSize));
+      params.delete('page');
+      startTransition(() => router.push(`/enrolments?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
 
   const handleFilterUpdate = useCallback(
     (key: string, value: string) => {
@@ -120,6 +142,16 @@ export function EnrolmentsPageClient({
 
         {/* Register Table */}
         <EnrolmentTable enrolments={initialEnrolments} />
+
+        {/* Standard Pagination Footer */}
+        <Pagination
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          entityLabel="enrolments"
+        />
       </div>
     </div>
   );

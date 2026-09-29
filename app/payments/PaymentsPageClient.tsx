@@ -6,9 +6,15 @@
  * Faithful reproduction of legacy Clasptek UI, design tokens (.cp-*), and workflows.
  */
 
-import React, { useState } from 'react';
-import type { Payment, FinancialMetrics, PaymentMethod } from '@/types/finance';
+import React, { useState, useRef } from 'react';
+import type { Payment, FinancialMetrics, PaymentMethod, Invoice } from '@/types/finance';
+import type { FinanceSettingsData } from '@/types/settings';
 import { downloadSafeCsv } from '@/lib/utils/csv';
+import { CanonicalReceiptDocument } from '@/components/finance/CanonicalReceiptDocument';
+import { printCanonicalElement } from '@/components/finance/printCanonical';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
+
 
 interface TargetInvoiceOption {
   id: string;
@@ -22,8 +28,11 @@ interface TargetInvoiceOption {
 interface PaymentsPageClientProps {
   initialPayments: Payment[];
   targetInvoices: TargetInvoiceOption[];
+  allInvoices?: Invoice[];
+  financeSettings?: FinanceSettingsData | null;
   metrics: FinancialMetrics;
 }
+
 
 function fmtMoney(n: number): string {
   const v = Math.round(Number(n || 0));
@@ -51,6 +60,8 @@ function fmtDate(d?: string | null): string {
 export function PaymentsPageClient({
   initialPayments,
   targetInvoices,
+  allInvoices,
+  financeSettings,
   metrics,
 }: PaymentsPageClientProps) {
   const [payments, setPayments] = useState<Payment[]>(initialPayments);
@@ -58,6 +69,14 @@ export function PaymentsPageClient({
   const [selectedReceipt, setSelectedReceipt] = useState<Payment | null>(null);
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const receiptDocRef = useRef<HTMLDivElement>(null);
+
+  const matchingInvoice = selectedReceipt
+    ? allInvoices?.find(
+        i => i.id === selectedReceipt.invoiceId || i.invoiceDisplayNo === selectedReceipt.invoiceDisplayNo
+      ) || null
+    : null;
+
 
   // Form State for Recording Payment
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(targetInvoices[0]?.id || '');
@@ -151,6 +170,17 @@ export function PaymentsPageClient({
       (p.reference && p.reference.toLowerCase().includes(q)) ||
       p.paymentMethod.toLowerCase().includes(q)
     );
+  });
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedPayments,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredPayments, {
+    initialPageSize: 25,
+    resetDeps: [searchQuery],
   });
 
   const selectedInvDetail = targetInvoices.find(i => i.id === selectedInvoiceId);
@@ -279,66 +309,154 @@ export function PaymentsPageClient({
             </button>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Receipt #</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Payment Date</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Student / Client</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Target Invoice</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Method</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Reference</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Amount Paid</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Status</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPayments.map((p) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
-                      {p.receiptDisplayNo}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: 'var(--text-secondary, #475569)' }}>
-                      {fmtDate(p.paymentDate)}
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
-                      {p.studentName || 'Student'}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: 'var(--primary, #0284c7)', fontFamily: 'monospace', fontWeight: 600 }}>
-                      {p.invoiceDisplayNo || 'INV-REF'}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>
-                        {p.paymentMethod}
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Receipt #</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Payment Date</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Student / Client</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Target Invoice</th>
+                    <th className="cp-col-tertiary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Method</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Reference</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Amount Paid</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Status</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedPayments.map((p) => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
+                        {p.receiptDisplayNo}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary, #475569)' }}>
+                        {fmtDate(p.paymentDate)}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+                        {p.studentName || 'Student'}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: 'var(--primary, #0284c7)', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {p.invoiceDisplayNo || 'INV-REF'}
+                      </td>
+                      <td className="cp-col-tertiary" style={{ padding: '10px 14px' }}>
+                        <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>
+                          {p.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="cp-col-secondary" style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '11.5px', color: '#64748b' }}>
+                        {p.reference || '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
+                        {fmtMoney(p.amount)}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
+                          {p.reconciliationStatus}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                        <button
+                          className="cp-btn sm secondary"
+                          onClick={() => setSelectedReceipt(p)}
+                          style={{ padding: '4px 8px', fontSize: '11.5px' }}
+                        >
+                          Receipt
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack */}
+            <div className="cp-cards-mobile">
+              {paginatedPayments.map((p) => (
+                <div
+                  key={p.id}
+                  className="cp-mobile-record-card"
+                  onClick={() => setSelectedReceipt(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && setSelectedReceipt(p)}
+                  aria-label={`View receipt ${p.receiptDisplayNo}`}
+                >
+                  <div className="cp-mobile-record-header">
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {p.studentName || 'Student'}
+                      </h4>
+                      <div style={{ fontSize: '11.5px', color: 'var(--primary)', fontFamily: 'monospace', marginTop: '2px', fontWeight: 600 }}>
+                        {p.invoiceDisplayNo || 'INV-REF'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11.5px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                        {p.receiptDisplayNo}
                       </span>
-                    </td>
-                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '11.5px', color: '#64748b' }}>
-                      {p.reference || '—'}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                      {fmtMoney(p.amount)}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
+                      <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
                         {p.reconciliationStatus}
                       </span>
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <button
-                        className="cp-btn sm secondary"
-                        onClick={() => setSelectedReceipt(p)}
-                        style={{ padding: '4px 8px', fontSize: '11.5px' }}
-                      >
-                        Receipt
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-grid">
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Amount Paid</span>
+                      <span className="cp-mobile-record-value" style={{ color: '#059669', fontSize: '14px' }}>
+                        {fmtMoney(p.amount)}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Payment Date</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                        {fmtDate(p.paymentDate)}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Method</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                        {p.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Reference</span>
+                      <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 400 }}>
+                        {p.reference || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-actions">
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedReceipt(p);
+                      }}
+                      style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                    >
+                      View Canonical Receipt
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredPayments.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="payments"
+            />
+          </>
         )}
       </div>
 
@@ -490,73 +608,47 @@ export function PaymentsPageClient({
         </div>
       )}
 
-      {/* OFFICIAL RECEIPT MODAL */}
+      {/* CANONICAL RECEIPT MODAL */}
       {selectedReceipt && (
-        <div className="cp-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="cp-modal" style={{ background: '#fff', borderRadius: '8px', width: '500px', maxWidth: '95vw', padding: '24px', border: '1px solid #cbd5e1' }}>
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '0.05em', color: '#0f172a' }}>
-                CLASPTEK COACHING LIMITED
+        <div className="cp-modal-overlay">
+          <div className="cp-modal doc-modal">
+            <div className="cp-modal-header no-print">
+              <div className="cp-modal-title">
+                Receipt Preview #{selectedReceipt.receiptDisplayNo || selectedReceipt.receiptNo}
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                Official Tuition &amp; Service Fee Receipt
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Receipt Number</span>
-                <strong style={{ fontFamily: 'monospace' }}>{selectedReceipt.receiptDisplayNo}</strong>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Date Received</span>
-                <strong>{fmtDate(selectedReceipt.paymentDate)}</strong>
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>
-              <div style={{ marginBottom: '8px' }}>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Received From</span>
-                <strong style={{ fontSize: '15px' }}>{selectedReceipt.studentName || 'Student'}</strong>
-              </div>
-              <div style={{ marginBottom: '8px' }}>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>For Invoice</span>
-                <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0284c7' }}>
-                  {selectedReceipt.invoiceDisplayNo || 'INV-REF'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <div>
-                  <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Payment Channel</span>
-                  <span>{selectedReceipt.paymentMethod}</span>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Reference</span>
-                  <span style={{ fontFamily: 'monospace' }}>{selectedReceipt.reference || 'None'}</span>
-                </div>
-              </div>
-              <div style={{ paddingTop: '10px', borderTop: '1px dashed #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600 }}>Amount Confirmed:</span>
-                <strong style={{ fontSize: '18px', color: '#059669' }}>
-                  {fmtMoney(selectedReceipt.amount)}
-                </strong>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
-                type="button"
-                className="cp-btn secondary sm"
-                onClick={() => window.print()}
+                className="cp-modal-close"
+                onClick={() => setSelectedReceipt(null)}
+                aria-label="Close"
               >
-                🖨️ Print Receipt
+                &times;
               </button>
+            </div>
+
+            <div className="cp-modal-body cp-doc-scroll-wrap">
+              <div ref={receiptDocRef}>
+                <CanonicalReceiptDocument
+                  payment={selectedReceipt}
+                  invoice={matchingInvoice}
+                  financeSettings={financeSettings}
+                />
+              </div>
+            </div>
+
+            <div className="cp-modal-footer no-print">
               <button
                 type="button"
-                className="cp-btn secondary sm"
+                className="cp-btn secondary"
                 onClick={() => setSelectedReceipt(null)}
               >
                 Close
+              </button>
+              <button
+                type="button"
+                className="cp-btn accent"
+                onClick={() => printCanonicalElement(receiptDocRef.current)}
+              >
+                🖨️ Print Official Receipt
               </button>
             </div>
           </div>
@@ -565,3 +657,4 @@ export function PaymentsPageClient({
     </div>
   );
 }
+

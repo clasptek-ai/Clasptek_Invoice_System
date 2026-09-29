@@ -14,8 +14,8 @@ const ENQUIRY_STATUSES: { value: string; label: string }[] = [
   { value: 'NEW', label: 'New' },
   { value: 'CONTACTED', label: 'Contacted' },
   { value: 'INTERESTED', label: 'Interested' },
-  { value: 'APPLIED', label: 'Applied' },
-  { value: 'OFFERED', label: 'Offered' },
+  { value: 'INVOICE_REQUESTED', label: 'Invoice Requested' },
+  { value: 'INVOICE_ISSUED', label: 'Invoice Issued' },
   { value: 'ENROLLED', label: 'Enrolled' },
   { value: 'LOST', label: 'Lost' },
 ];

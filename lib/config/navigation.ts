@@ -28,10 +28,10 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
     ],
   },
 
-  // ─── 2. ADMISSIONS & CRM ─────────────────────────────────────────────────────
+  // ─── 2. PROSPECTS & REGISTRATION ───────────────────────────────────────────
   {
     id: 'crm',
-    sectionTitle: 'ADMISSIONS & CRM',
+    sectionTitle: 'PROSPECTS & REGISTRATION',
     items: [
       {
         id: 'enquiries',
@@ -40,22 +40,6 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         icon: 'enquiries',
         rolesAllowed: ALL_STAFF,
         migrationPhase: 'Phase 3 — ACTIVE',
-      },
-      {
-        id: 'applications',
-        label: 'Candidate Applications',
-        href: '/applications',
-        icon: 'applications',
-        rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 3 — ACTIVE',
-      },
-      {
-        id: 'applicantPortal',
-        label: 'Applicant Tracking Portal',
-        href: '/applicant-portal',
-        icon: 'tracking',
-        rolesAllowed: ALL_STAFF,
-        migrationPhase: 'Phase 9E — ACTIVE',
       },
     ],
   },

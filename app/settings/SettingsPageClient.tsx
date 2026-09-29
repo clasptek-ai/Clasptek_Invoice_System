@@ -7,9 +7,10 @@
  */
 
 import React, { useState } from 'react';
-import { FinanceSettingsData, PaymentAccountData } from '@/lib/settings/queries';
+import type { FinanceSettingsData, PaymentAccountData } from '@/types/settings';
 import { Personnel } from '@/types/finance';
 import { UserRole } from '@/types/auth';
+
 
 interface SettingsProps {
   initialSettings: FinanceSettingsData;

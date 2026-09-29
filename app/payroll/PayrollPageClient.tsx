@@ -9,6 +9,8 @@
 import React, { useState } from 'react';
 import type { Payslip, Personnel, FinancialMetrics, AllowanceDeductionItem } from '@/types/finance';
 import { downloadSafeCsv } from '@/lib/utils/csv';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface PayrollPageClientProps {
   initialPayslips: Payslip[];
@@ -204,6 +206,17 @@ export function PayrollPageClient({
     return matchesQ && matchesType && matchesStatus && matchesPeriod;
   });
 
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedPayslips,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredPayslips, {
+    initialPageSize: 25,
+    resetDeps: [searchQuery, typeFilter, statusFilter, periodFilter],
+  });
+
   return (
     <div>
       {/* Feedback Banner */}
@@ -387,127 +400,237 @@ export function PayrollPageClient({
             </button>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Payslip #</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Period</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Employee Name</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Type</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Role / Dept</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Basic Pay</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Gross</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Deductions</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Net Pay</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Status</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPayslips.map((ps) => {
-                  let statusBg = '#f1f5f9';
-                  let statusColor = '#475569';
-                  if (ps.status === 'paid') {
-                    statusBg = '#ecfdf5';
-                    statusColor = '#059669';
-                  } else if (ps.status === 'approved') {
-                    statusBg = '#fffbeb';
-                    statusColor = '#d97706';
-                  } else if (ps.status === 'acknowledged') {
-                    statusBg = '#f3e8ff';
-                    statusColor = '#7e22ce';
-                  } else if (ps.status === 'issued') {
-                    statusBg = '#f0f9ff';
-                    statusColor = '#0284c7';
-                  }
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Payslip #</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Period</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Employee Name</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Type</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Role / Dept</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Basic Pay</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Gross</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Deductions</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Net Pay</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Status</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedPayslips.map((ps) => {
+                    let statusBg = '#f1f5f9';
+                    let statusColor = '#475569';
+                    if (ps.status === 'paid') {
+                      statusBg = '#ecfdf5';
+                      statusColor = '#059669';
+                    } else if (ps.status === 'approved') {
+                      statusBg = '#fffbeb';
+                      statusColor = '#d97706';
+                    } else if (ps.status === 'acknowledged') {
+                      statusBg = '#f3e8ff';
+                      statusColor = '#7e22ce';
+                    } else if (ps.status === 'issued') {
+                      statusBg = '#f0f9ff';
+                      statusColor = '#0284c7';
+                    }
 
-                  return (
-                    <tr key={ps.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
-                        {ps.payslipDisplayNo}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#64748b' }}>
-                        {ps.payPeriod}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                        {ps.employeeName}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <span style={{ fontSize: '11px', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: ps.employeeType === 'facilitator' ? '#fdf4ff' : '#f0fdf4', color: ps.employeeType === 'facilitator' ? '#a21caf' : '#15803d', fontWeight: 600 }}>
-                          {ps.employeeType}
+                    return (
+                      <tr key={ps.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
+                        <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
+                          {ps.payslipDisplayNo}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#64748b' }}>
+                          {ps.payPeriod}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
+                          {ps.employeeName}
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px' }}>
+                          <span style={{ fontSize: '11px', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: ps.employeeType === 'facilitator' ? '#fdf4ff' : '#f0fdf4', color: ps.employeeType === 'facilitator' ? '#a21caf' : '#15803d', fontWeight: 600 }}>
+                            {ps.employeeType}
+                          </span>
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px', color: '#475569', fontSize: '12px' }}>
+                          {ps.role} &bull; <span style={{ color: '#64748b' }}>{ps.department}</span>
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px', textAlign: 'right' }}>
+                          {fmtMoney(ps.basicPay)}
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>
+                          {fmtMoney(ps.grossPay)}
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px', textAlign: 'right', color: '#dc2626' }}>
+                          -{fmtMoney(ps.totalDeductions)}
+                        </td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
+                          {fmtMoney(ps.netPay)}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', background: statusBg, color: statusColor }}>
+                            {ps.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                            <button
+                              className="cp-btn sm secondary"
+                              onClick={() => setSelectedPayslip(ps)}
+                              style={{ padding: '3px 8px', fontSize: '11px' }}
+                            >
+                              Statement
+                            </button>
+
+                            {ps.status === 'issued' && (
+                              <button
+                                className="cp-btn sm secondary"
+                                onClick={() => handleStatusAction(ps.id, 'acknowledge')}
+                                style={{ padding: '3px 8px', fontSize: '11px', color: '#7e22ce' }}
+                                title="Acknowledge by employee"
+                              >
+                                Ack
+                              </button>
+                            )}
+
+                            {ps.status === 'acknowledged' && (
+                              <button
+                                className="cp-btn sm secondary"
+                                onClick={() => handleStatusAction(ps.id, 'approve')}
+                                style={{ padding: '3px 8px', fontSize: '11px', color: '#d97706' }}
+                                title="Approve by manager"
+                              >
+                                Approve
+                              </button>
+                            )}
+
+                            {ps.status === 'approved' && (
+                              <button
+                                className="cp-btn sm accent"
+                                onClick={() => handleStatusAction(ps.id, 'pay')}
+                                style={{ padding: '3px 8px', fontSize: '11px' }}
+                                title="Disburse / Mark Paid"
+                              >
+                                Pay
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack */}
+            <div className="cp-cards-mobile">
+              {paginatedPayslips.map((ps) => {
+                let statusBg = '#f1f5f9';
+                let statusColor = '#475569';
+                if (ps.status === 'paid') {
+                  statusBg = '#ecfdf5';
+                  statusColor = '#059669';
+                } else if (ps.status === 'approved') {
+                  statusBg = '#fffbeb';
+                  statusColor = '#d97706';
+                } else if (ps.status === 'acknowledged') {
+                  statusBg = '#f3e8ff';
+                  statusColor = '#7e22ce';
+                } else if (ps.status === 'issued') {
+                  statusBg = '#f0f9ff';
+                  statusColor = '#0284c7';
+                }
+
+                return (
+                  <div
+                    key={ps.id}
+                    className="cp-mobile-record-card"
+                    onClick={() => setSelectedPayslip(ps)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && setSelectedPayslip(ps)}
+                    aria-label={`View payslip ${ps.payslipDisplayNo}`}
+                  >
+                    <div className="cp-mobile-record-header">
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {ps.employeeName}
+                        </h4>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {ps.role} &bull; {ps.department}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {ps.payslipDisplayNo}
                         </span>
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#475569', fontSize: '12px' }}>
-                        {ps.role} &bull; <span style={{ color: '#64748b' }}>{ps.department}</span>
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                        {fmtMoney(ps.basicPay)}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>
-                        {fmtMoney(ps.grossPay)}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', color: '#dc2626' }}>
-                        -{fmtMoney(ps.totalDeductions)}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                        {fmtMoney(ps.netPay)}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', background: statusBg, color: statusColor }}>
+                        <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', background: statusBg, color: statusColor }}>
                           {ps.status}
                         </span>
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                          <button
-                            className="cp-btn sm secondary"
-                            onClick={() => setSelectedPayslip(ps)}
-                            style={{ padding: '3px 8px', fontSize: '11px' }}
-                          >
-                            Statement
-                          </button>
+                      </div>
+                    </div>
 
-                          {ps.status === 'issued' && (
-                            <button
-                              className="cp-btn sm secondary"
-                              onClick={() => handleStatusAction(ps.id, 'acknowledge')}
-                              style={{ padding: '3px 8px', fontSize: '11px', color: '#7e22ce' }}
-                              title="Acknowledge by employee"
-                            >
-                              Ack
-                            </button>
-                          )}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '6px',
+                        background: 'var(--surface-1, #f8fafc)',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block', textTransform: 'uppercase' }}>Gross</span>
+                        <strong>{fmtMoney(ps.grossPay)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block', textTransform: 'uppercase' }}>Deductions</span>
+                        <strong style={{ color: '#dc2626' }}>-{fmtMoney(ps.totalDeductions)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block', textTransform: 'uppercase' }}>Net Pay</span>
+                        <strong style={{ color: '#059669' }}>{fmtMoney(ps.netPay)}</strong>
+                      </div>
+                    </div>
 
-                          {ps.status === 'acknowledged' && (
-                            <button
-                              className="cp-btn sm secondary"
-                              onClick={() => handleStatusAction(ps.id, 'approve')}
-                              style={{ padding: '3px 8px', fontSize: '11px', color: '#d97706' }}
-                              title="Approve by manager"
-                            >
-                              Approve
-                            </button>
-                          )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                      <span>Period: {ps.payPeriod}</span>
+                      <span style={{ textTransform: 'capitalize' }}>{ps.employeeType}</span>
+                    </div>
 
-                          {ps.status === 'approved' && (
-                            <button
-                              className="cp-btn sm accent"
-                              onClick={() => handleStatusAction(ps.id, 'pay')}
-                              style={{ padding: '3px 8px', fontSize: '11px' }}
-                              title="Disburse / Mark Paid"
-                            >
-                              Pay
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    <div className="cp-mobile-record-actions">
+                      <button
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPayslip(ps);
+                        }}
+                        style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                      >
+                        View Statement
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredPayslips.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="payslips"
+            />
+          </>
         )}
       </div>
 

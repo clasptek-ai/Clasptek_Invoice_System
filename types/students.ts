@@ -5,6 +5,34 @@
 
 export type StudentStatus = 'ACTIVE' | 'COMPLETED' | 'SUSPENDED' | 'WITHDRAWN';
 
+export interface StudentAuditTrailEntry {
+  id: string;
+  timestamp: string;
+  actor_id: string;
+  actor_name: string;
+  actor_role: string;
+  field: string;
+  previous_value: unknown;
+  new_value: unknown;
+  reason: string;
+}
+
+export type DeduplicationMatchConfidence =
+  | 'EXACT_ID'
+  | 'EXACT_EMAIL'
+  | 'EXACT_PHONE'
+  | 'EMAIL_LASTNAME'
+  | 'PHONE_LASTNAME'
+  | 'NAME_ONLY'
+  | 'NONE';
+
+export interface DeduplicationMatchResult {
+  confidence: DeduplicationMatchConfidence;
+  isAmbiguous: boolean;
+  matchedStudent: Student | null;
+  matchReason: string;
+}
+
 export interface StudentMetadata {
   source?: string;
   middleName?: string | null;
@@ -23,6 +51,9 @@ export interface StudentMetadata {
   employmentStatus?: string | null;
   preferredSchedule?: string | null;
   emergencyContactRelationship?: string | null;
+  enquiry_id?: string | null;
+  notes?: string | null;
+  audit_trail?: StudentAuditTrailEntry[];
   [key: string]: unknown;
 }
 
@@ -107,6 +138,7 @@ export interface StudentDossierEnrolment {
 
 export interface StudentDossier {
   student: Student;
+  corporateSponsor?: { id: string; name: string; email?: string | null; phone?: string | null } | null;
   enrolments: StudentDossierEnrolment[];
   invoices: StudentDossierInvoice[];
   payments: StudentDossierPayment[];

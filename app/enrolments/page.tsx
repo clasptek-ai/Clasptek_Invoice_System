@@ -34,6 +34,8 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
   const cohort = params.cohort ?? 'ALL';
   const status = params.status ?? 'ALL';
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
+  const rawPageSize = parseInt(params.pageSize ?? '25', 10);
+  const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
 
   const [enrolmentsResult, cohortsResult] = await Promise.all([
     getEnrolments({
@@ -41,6 +43,7 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
       cohortId: cohort,
       status,
       page,
+      pageSize,
     }),
     getCohorts(),
   ]);
@@ -54,6 +57,7 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
       currentCohort={cohort}
       currentStatus={status}
       currentPage={page}
+      pageSize={pageSize}
     />
   );
 }

@@ -11,6 +11,8 @@
 import { redirect } from 'next/navigation';
 import { createServerClient } from '@/lib/supabase/server';
 import { getEnquiries, getProgrammes } from '@/lib/admissions/queries';
+import { getFinanceTenantId, getCustomersList } from '@/lib/finance/queries';
+import { getFinanceSettings, getPaymentAccounts } from '@/lib/settings/queries';
 import { EnquiriesPageClient } from './EnquiriesPageClient';
 import type { EnquiryFilters } from '@/types/admissions';
 
@@ -41,12 +43,24 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
   const search = (params.search ?? '').trim();
   const status = (params.status ?? '') as EnquiryFilters['status'];
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
+  const rawPageSize = parseInt(params.pageSize ?? '25', 10);
+  const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
   const initialOpenNew = params.new === '1' || params.action === 'new';
 
-  // 3. Fetch initial data and active programmes in parallel
-  const [{ data: enquiries, count, error }, programmes] = await Promise.all([
-    getEnquiries({ search, status, page }),
+  // 3. Fetch initial data, active programmes, and authoritative finance/payment settings in parallel
+  const tenantId = await getFinanceTenantId();
+  const [
+    { data: enquiries, count, error },
+    programmes,
+    customers,
+    financeSettings,
+    paymentAccounts,
+  ] = await Promise.all([
+    getEnquiries({ search, status, page, pageSize }),
     getProgrammes(),
+    getCustomersList(tenantId),
+    getFinanceSettings(tenantId),
+    getPaymentAccounts(tenantId),
   ]);
 
   if (error) {
@@ -61,7 +75,11 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
       currentSearch={search}
       currentStatus={status}
       currentPage={page}
+      pageSize={pageSize}
       programmes={programmes}
+      customers={customers}
+      financeSettings={financeSettings}
+      paymentAccounts={paymentAccounts}
       initialOpenNew={initialOpenNew}
       staffName={user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admissions'}
       initialError={

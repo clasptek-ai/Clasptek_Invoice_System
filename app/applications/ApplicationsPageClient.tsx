@@ -28,6 +28,7 @@ interface ApplicationsPageClientProps {
   currentProgramme: string;
   currentSource: string;
   currentPage: number;
+  pageSize?: number;
 }
 
 export function ApplicationsPageClient({
@@ -40,6 +41,7 @@ export function ApplicationsPageClient({
   currentProgramme,
   currentSource,
   currentPage,
+  pageSize = 25,
 }: ApplicationsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -71,6 +73,20 @@ export function ApplicationsPageClient({
       } else {
         params.delete('page');
       }
+      startTransition(() => router.push(`/applications?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (newSize !== 25) {
+        params.set('pageSize', String(newSize));
+      } else {
+        params.delete('pageSize');
+      }
+      params.delete('page');
       startTransition(() => router.push(`/applications?${params.toString()}`));
     },
     [router, searchParams]
@@ -156,28 +172,13 @@ export function ApplicationsPageClient({
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
               <path d="M9 14l2 2 4-4" />
             </svg>
-            Candidate Applications
+            Student Registration &amp; Intake
           </h1>
           <p className="cp-page-subtitle" style={{ fontSize: '13px', color: 'var(--text-muted, #64748B)', marginTop: '4px', margin: 0 }}>
-            Authoritative candidate admissions pipeline and intake queue. Review, screen, and admit applicants into training programmes.
+            Authoritative student intake pipeline and registration queue. Review, register, and link students into training centre programmes.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <a
-            href="/apply"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="cp-btn secondary"
-            id="btnOpenApplicantPortal"
-            style={{ fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-            Applicant Portal
-          </a>
           <a
             href="/apply"
             className="cp-btn primary"
@@ -219,9 +220,11 @@ export function ApplicationsPageClient({
         applications={applications}
         totalCount={totalCount}
         currentPage={currentPage}
+        pageSize={pageSize}
         selectedId={selectedApplication?.id}
         onSelect={(app) => setSelectedApplication(app)}
         onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
       />
 
       {/* Detail Drawer */}

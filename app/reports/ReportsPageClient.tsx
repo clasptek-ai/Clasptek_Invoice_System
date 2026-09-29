@@ -201,22 +201,85 @@ export function ReportsPageClient({ initialReports, financeMetrics }: ReportsPag
             <div className="cp-empty-desc" style={{ fontSize: '13px', color: '#64748b' }}>Try adjusting your dimension category or search filters.</div>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                  <th style={{ padding: '10px 14px' }}>Dimension</th>
-                  <th style={{ padding: '10px 14px' }}>Reference #</th>
-                  <th style={{ padding: '10px 14px' }}>Date</th>
-                  <th style={{ padding: '10px 14px' }}>Item Title</th>
-                  <th style={{ padding: '10px 14px' }}>Value</th>
-                  <th style={{ padding: '10px 14px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredReports.map(r => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 14px' }}>
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 14px' }}>Dimension</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px 14px' }}>Reference #</th>
+                    <th style={{ padding: '10px 14px' }}>Date</th>
+                    <th style={{ padding: '10px 14px' }}>Item Title</th>
+                    <th style={{ padding: '10px 14px' }}>Value</th>
+                    <th style={{ padding: '10px 14px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReports.map(r => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span
+                          style={{
+                            fontSize: '10.5px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background:
+                              r.category === 'FINANCE' ? '#ecfdf5' :
+                              r.category === 'ACADEMIC' ? '#f5f3ff' :
+                              r.category === 'TRAINING' ? '#fffbeb' :
+                              r.category === 'ADMISSIONS' ? '#f0f9ff' : '#fdf2f8',
+                            color:
+                              r.category === 'FINANCE' ? '#059669' :
+                              r.category === 'ACADEMIC' ? '#7c3aed' :
+                              r.category === 'TRAINING' ? '#d97706' :
+                              r.category === 'ADMISSIONS' ? '#0284c7' : '#db2777',
+                          }}
+                        >
+                          {r.category}
+                        </span>
+                      </td>
+                      <td className="cp-col-secondary" style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {r.referenceNo}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#64748b' }}>
+                        {r.date}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{r.title}</div>
+                        {r.subTitle && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.subTitle}</div>}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
+                        {r.primaryValue}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            background: '#f1f5f9',
+                            color: '#475569',
+                          }}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Vertical Cards */}
+            <div className="cp-cards-mobile">
+              {filteredReports.map((r) => (
+                <div key={r.id} className="cp-mobile-record-card">
+                  <div className="cp-mobile-record-header">
+                    <div>
                       <span
                         style={{
                           fontSize: '10.5px',
@@ -237,40 +300,46 @@ export function ReportsPageClient({ initialReports, financeMetrics }: ReportsPag
                       >
                         {r.category}
                       </span>
-                    </td>
-                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 600 }}>
-                      {r.referenceNo}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#64748b' }}>
-                      {r.date}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{r.title}</div>
-                      {r.subTitle && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.subTitle}</div>}
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
-                      {r.primaryValue}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          textTransform: 'uppercase',
-                          background: '#f1f5f9',
-                          color: '#475569',
-                        }}
-                      >
-                        {r.status}
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', marginTop: '4px' }}>
+                        {r.title}
+                      </div>
+                      {r.subTitle && <div style={{ fontSize: '11.5px', color: '#64748b' }}>{r.subTitle}</div>}
+                    </div>
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '10.5px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        background: '#f1f5f9',
+                        color: '#475569',
+                      }}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+
+                  <div className="cp-mobile-record-grid">
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Reference #</span>
+                      <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace' }}>{r.referenceNo}</span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Date</span>
+                      <span className="cp-mobile-record-value">{r.date}</span>
+                    </div>
+                    <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                      <span className="cp-mobile-record-label">Report Value</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
+                        {r.primaryValue}
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

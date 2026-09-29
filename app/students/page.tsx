@@ -33,11 +33,14 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   const search = (params.search ?? '').trim();
   const status = params.status ?? 'ALL';
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
+  const rawPageSize = parseInt(params.pageSize ?? '25', 10);
+  const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
 
   const result = await getStudents({
     search,
     status,
     page,
+    pageSize,
   });
 
   return (
@@ -47,6 +50,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
       currentSearch={search}
       currentStatus={status}
       currentPage={page}
+      pageSize={pageSize}
     />
   );
 }

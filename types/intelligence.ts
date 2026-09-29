@@ -100,6 +100,87 @@ export interface PayrollIntelligence {
   payslipCountsByStatus: Record<string, number>;
 }
 
+export interface LifecycleMetrics {
+  prospects: number;
+  enquiries: number;
+  followUps: number;
+  students: number;
+  enrolments: number;
+  training: number;
+  completion: number;
+  certificates: number;
+}
+
+export interface CrmPipelineMetrics {
+  newEnquiries: number;
+  contacted: number;
+  interested: number;
+  invoiceRequested: number;
+  invoiceIssued: number;
+  enrolled: number;
+  lost: number;
+  followUpsDueToday: number;
+  followUpsOverdue: number;
+  recentlyContacted: number;
+}
+
+export interface RecentStudentItem {
+  id: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface StudentActivityMetrics {
+  totalStudents: number;
+  activeStudents: number;
+  activeEnrolments: number;
+  recentlyAddedStudents: RecentStudentItem[];
+  completedTraining: number;
+  certificatesIssued: number;
+}
+
+export interface UpcomingSessionItem {
+  id: string;
+  sessionNumber: number;
+  title: string;
+  sessionDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  deliveryMode: string;
+  cohortName?: string;
+}
+
+export interface OverdueReceivableItem {
+  id: string;
+  invoiceNo: number;
+  invoiceDisplayNo: string;
+  studentName: string;
+  enrolmentNumber?: string;
+  programmeName?: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  dueDate: string;
+  daysOverdue: number;
+  status: string;
+}
+
+export interface RecentActivityItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  entityName?: string | null;
+  actorRole: string;
+  reason?: string | null;
+  createdAt: string;
+}
+
 export interface ManagementDashboardMetrics {
   admissions: AdmissionsIntelligence;
   academics: AcademicIntelligence;
@@ -107,6 +188,12 @@ export interface ManagementDashboardMetrics {
   meetings: MeetingIntelligence;
   finance: FinancialIntelligence;
   payroll: PayrollIntelligence;
+  lifecycle: LifecycleMetrics;
+  crmPipeline: CrmPipelineMetrics;
+  studentActivity: StudentActivityMetrics;
+  upcomingSessions: UpcomingSessionItem[];
+  overdueReceivablesList: OverdueReceivableItem[];
+  recentActivity: RecentActivityItem[];
   generatedAt: string;
   tenantId: string;
 }
@@ -122,3 +209,4 @@ export interface ReportItem {
   secondaryValue?: string | number;
   status: string;
 }
+

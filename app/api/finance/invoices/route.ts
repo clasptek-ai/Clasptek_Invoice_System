@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const requestedTenantId = searchParams.get('tenantId') || undefined;
 
     const { session, errorResponse } = await requireAuth(request, {
-      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'],
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer', 'Staff'],
       requestedTenantId,
     });
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { session, errorResponse } = await requireAuth(request, {
-      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff'],
+      allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'],
     });
 
     if (errorResponse) {

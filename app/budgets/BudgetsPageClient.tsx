@@ -325,104 +325,209 @@ export function BudgetsPageClient({
             </div>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Department</th>
-                  <th style={{ textAlign: 'right' }}>Budget Cap</th>
-                  <th style={{ textAlign: 'right' }}>Actual Spent</th>
-                  <th style={{ textAlign: 'right' }}>Variance</th>
-                  <th style={{ textAlign: 'center' }}>Status</th>
-                  <th>Utilization</th>
-                  <th style={{ textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.categories.map((c) => (
-                  <tr key={c.category}>
-                    <td style={{ fontWeight: 700 }}>{c.category}</td>
-                    <td>{c.department || 'Operations'}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      ₦{c.budgetAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td
-                      style={{
-                        textAlign: 'right',
-                        fontWeight: 700,
-                        color: c.isOverBudget ? 'var(--danger)' : 'inherit',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      ₦{c.actualAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td
-                      style={{
-                        textAlign: 'right',
-                        fontWeight: 800,
-                        color: c.variance >= 0 ? 'var(--success)' : 'var(--danger)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {c.variance >= 0 ? '+' : ''}₦{c.variance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span
-                        className={`cp-pill ${
-                          c.status === 'OVER_BUDGET'
-                            ? 'danger'
-                            : c.status === 'NEAR_LIMIT'
-                            ? 'pending'
-                            : 'paid'
-                        }`}
-                      >
-                        {c.status === 'OVER_BUDGET'
-                          ? 'OVER BUDGET'
-                          : c.status === 'NEAR_LIMIT'
-                          ? 'NEAR LIMIT'
-                          : 'UNDER BUDGET'}
-                      </span>
-                    </td>
-                    <td style={{ width: 140 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
-                        {c.utilizationPct}%
-                      </div>
-                      <div
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th className="cp-col-secondary">Department</th>
+                    <th style={{ textAlign: 'right' }}>Budget Cap</th>
+                    <th style={{ textAlign: 'right' }}>Actual Spent</th>
+                    <th className="cp-col-tertiary" style={{ textAlign: 'right' }}>Variance</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th className="cp-col-secondary">Utilization</th>
+                    <th style={{ textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.categories.map((c) => (
+                    <tr key={c.category}>
+                      <td style={{ fontWeight: 700 }}>{c.category}</td>
+                      <td className="cp-col-secondary">{c.department || 'Operations'}</td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        ₦{c.budgetAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
                         style={{
-                          height: 6,
-                          background: 'var(--surface-2)',
-                          borderRadius: 3,
-                          overflow: 'hidden',
+                          textAlign: 'right',
+                          fontWeight: 700,
+                          color: c.isOverBudget ? 'var(--danger)' : 'inherit',
+                          whiteSpace: 'nowrap',
                         }}
                       >
+                        ₦{c.actualAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
+                        className="cp-col-tertiary"
+                        style={{
+                          textAlign: 'right',
+                          fontWeight: 800,
+                          color: c.variance >= 0 ? 'var(--success)' : 'var(--danger)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {c.variance >= 0 ? '+' : ''}₦{c.variance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <span
+                          className={`cp-pill ${
+                            c.status === 'OVER_BUDGET'
+                              ? 'danger'
+                              : c.status === 'NEAR_LIMIT'
+                              ? 'pending'
+                              : 'paid'
+                          }`}
+                        >
+                          {c.status === 'OVER_BUDGET'
+                            ? 'OVER BUDGET'
+                            : c.status === 'NEAR_LIMIT'
+                            ? 'NEAR LIMIT'
+                            : 'UNDER BUDGET'}
+                        </span>
+                      </td>
+                      <td className="cp-col-secondary" style={{ width: 140 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2 }}>
+                          {c.utilizationPct}%
+                        </div>
                         <div
                           style={{
-                            height: '100%',
-                            width: `${Math.min(100, c.utilizationPct)}%`,
-                            background:
-                              c.utilizationPct > 100
-                                ? 'var(--danger)'
-                                : c.utilizationPct >= 80
-                                ? 'var(--warning)'
-                                : 'var(--success)',
+                            height: 6,
+                            background: 'var(--surface-2)',
+                            borderRadius: 3,
+                            overflow: 'hidden',
                           }}
-                        />
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${Math.min(100, c.utilizationPct)}%`,
+                              background:
+                                c.utilizationPct > 100
+                                  ? 'var(--danger)'
+                                  : c.utilizationPct >= 80
+                                  ? 'var(--warning)'
+                                  : 'var(--success)',
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button
+                          className="cp-btn sm secondary"
+                          onClick={() => handleOpenDrilldown(c.category)}
+                        >
+                          🔍 Transactions
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Vertical Cards */}
+            <div className="cp-cards-mobile">
+              {summary.categories.map((c) => (
+                <div key={c.category} className="cp-mobile-record-card">
+                  <div className="cp-mobile-record-header">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                        {c.category}
                       </div>
-                    </td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button
-                        className="cp-btn sm secondary"
-                        onClick={() => handleOpenDrilldown(c.category)}
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {c.department || 'Operations'}
+                      </div>
+                    </div>
+                    <span
+                      className={`cp-pill ${
+                        c.status === 'OVER_BUDGET'
+                          ? 'danger'
+                          : c.status === 'NEAR_LIMIT'
+                          ? 'pending'
+                          : 'paid'
+                      }`}
+                    >
+                      {c.status === 'OVER_BUDGET'
+                        ? 'OVER'
+                        : c.status === 'NEAR_LIMIT'
+                        ? 'NEAR'
+                        : 'OK'}
+                    </span>
+                  </div>
+
+                  {/* Utilization Progress Bar */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, marginBottom: '3px' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Utilization</span>
+                      <span style={{ color: c.utilizationPct > 100 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                        {c.utilizationPct}%
+                      </span>
+                    </div>
+                    <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(100, c.utilizationPct)}%`,
+                          background:
+                            c.utilizationPct > 100
+                              ? 'var(--danger)'
+                              : c.utilizationPct >= 80
+                              ? 'var(--warning)'
+                              : 'var(--success)',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-grid">
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Budget Cap</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 700 }}>
+                        ₦{c.budgetAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Actual Spent</span>
+                      <span
+                        className="cp-mobile-record-value"
+                        style={{
+                          fontWeight: 700,
+                          color: c.isOverBudget ? 'var(--danger)' : 'var(--text-primary)',
+                        }}
                       >
-                        🔍 Transactions
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        ₦{c.actualAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                      <span className="cp-mobile-record-label">Variance</span>
+                      <span
+                        className="cp-mobile-record-value"
+                        style={{
+                          fontWeight: 800,
+                          color: c.variance >= 0 ? 'var(--success)' : 'var(--danger)',
+                        }}
+                      >
+                        {c.variance >= 0 ? '+' : ''}₦{c.variance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-actions">
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={() => handleOpenDrilldown(c.category)}
+                      style={{ flex: 1, justifyContent: 'center' }}
+                    >
+                      🔍 Transactions
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

@@ -10,6 +10,8 @@ import React, { useState, useMemo } from 'react';
 import type { CertificateEligibilityCandidate, Certificate } from '@/types/certificates';
 import type { UserRole } from '@/types/auth';
 import { CertificateDocument } from '@/components/certificates/CertificateDocument';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface CohortItem {
   id: string;
@@ -107,6 +109,17 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
       return true;
     });
   }, [candidates, cohortFilter, eligibilityFilter, search]);
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedCandidates,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredList, {
+    initialPageSize: 25,
+    resetDeps: [candidates, cohortFilter, eligibilityFilter, search],
+  });
 
   // Action handlers
   const handleConfirmVerify = async () => {
@@ -519,194 +532,311 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
             </div>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Enrolment #
-                  </th>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Candidate
-                  </th>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Programme &amp; Cohort
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 14px',
-                      fontSize: '11.5px',
-                      color: '#475569',
-                      fontWeight: 700,
-                      textAlign: 'center',
-                    }}
-                  >
-                    Delivered
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 14px',
-                      fontSize: '11.5px',
-                      color: '#475569',
-                      fontWeight: 700,
-                      textAlign: 'center',
-                    }}
-                  >
-                    Attendance %
-                  </th>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Eligibility Status
-                  </th>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Completion Sign-off
-                  </th>
-                  <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                    Certificate
-                  </th>
-                  <th
-                    style={{
-                      padding: '12px 14px',
-                      fontSize: '11.5px',
-                      color: '#475569',
-                      fontWeight: 700,
-                      textAlign: 'center',
-                    }}
-                  >
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredList.map((en) => {
-                  const isEligible = en.isAttendanceEligible;
-                  const isVerified = en.isVerified;
-
-                  return (
-                    <tr
-                      key={en.enrolmentId}
-                      style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Enrolment #
+                    </th>
+                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Candidate
+                    </th>
+                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Programme &amp; Cohort
+                    </th>
+                    <th
+                      className="cp-col-secondary"
+                      style={{
+                        padding: '12px 14px',
+                        fontSize: '11.5px',
+                        color: '#475569',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                      }}
                     >
-                      <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
-                        {en.enrolmentNumber}
-                      </td>
+                      Delivered
+                    </th>
+                    <th
+                      style={{
+                        padding: '12px 14px',
+                        fontSize: '11.5px',
+                        color: '#475569',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                      }}
+                    >
+                      Attendance %
+                    </th>
+                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Eligibility Status
+                    </th>
+                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Completion Sign-off
+                    </th>
+                    <th className="cp-col-secondary" style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                      Certificate
+                    </th>
+                    <th
+                      style={{
+                        padding: '12px 14px',
+                        fontSize: '11.5px',
+                        color: '#475569',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                      }}
+                    >
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedCandidates.map((en) => {
+                    const isEligible = en.isAttendanceEligible;
+                    const isVerified = en.isVerified;
 
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontWeight: 700, color: '#14213D' }}>{en.studentName}</div>
-                        <div style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>
-                          {en.studentNumber || en.studentEmail || ''}
+                    return (
+                      <tr
+                        key={en.enrolmentId}
+                        style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+                      >
+                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
+                          {en.enrolmentNumber}
+                        </td>
+
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 700, color: '#14213D' }}>{en.studentName}</div>
+                          <div style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace' }}>
+                            {en.studentNumber || en.studentEmail || ''}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 600, color: '#1E293B' }}>{en.programmeName}</div>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>{en.cohortName}</div>
+                        </td>
+
+                        <td className="cp-col-secondary" style={{ padding: '12px 14px', textAlign: 'center', fontSize: '12px' }}>
+                          {en.totalDeliveredSessions} sessions
+                        </td>
+
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              color: en.attendancePct >= 80 ? '#059669' : '#DC2626',
+                            }}
+                          >
+                            {en.attendancePct}%
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '12px 14px' }}>
+                          <span
+                            className={`cp-pill ${
+                              isEligible ? 'paid' : en.totalDeliveredSessions === 0 ? 'draft' : 'danger'
+                            }`}
+                            style={{ fontSize: '10.5px' }}
+                          >
+                            {isEligible
+                              ? '✔ ELIGIBLE (≥80%)'
+                              : en.totalDeliveredSessions === 0
+                              ? 'INSUFFICIENT SESSIONS'
+                              : 'BELOW 80%'}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '12px 14px' }}>
+                          <span className={`cp-pill ${isVerified ? 'paid' : 'draft'}`} style={{ fontSize: '10.5px' }}>
+                            {isVerified ? '✔ VERIFIED' : 'PENDING'}
+                          </span>
+                        </td>
+
+                        <td className="cp-col-secondary" style={{ padding: '12px 14px' }}>
+                          {en.hasActiveCertificate && en.activeCertificateNumber ? (
+                            <span className="cp-pill paid" style={{ fontSize: '10px' }}>
+                              {en.activeCertificateNumber}
+                            </span>
+                          ) : (
+                            <span className="cp-pill draft" style={{ fontSize: '10px' }}>
+                              NONE
+                            </span>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px' }}>
+                            {!isVerified ? (
+                              isEligible ? (
+                                <button
+                                  className="cp-btn sm paid"
+                                  onClick={() => setVerifyCandidate(en)}
+                                  title="Verify completion based on attendance"
+                                >
+                                  ✔ Verify
+                                </button>
+                              ) : isAdminOrStaff ? (
+                                <button
+                                  className="cp-btn sm secondary"
+                                  style={{ color: '#D97706', borderColor: '#FDE68A' }}
+                                  onClick={() => {
+                                    setOverrideCandidate(en);
+                                    setOverrideReason('');
+                                    setErrorMessage(null);
+                                  }}
+                                  title="Grant administrative override"
+                                >
+                                  Override
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Pending</span>
+                              )
+                            ) : !en.hasActiveCertificate ? (
+                              isAdminOrStaff ? (
+                                <button
+                                  className="cp-btn sm accent"
+                                  onClick={() => handleOpenIssueModal(en)}
+                                  title="Issue official certificate of completion"
+                                >
+                                  + Issue Cert
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: '#059669' }}>Verified</span>
+                              )
+                            ) : (
+                              <button
+                                className="cp-btn sm secondary"
+                                onClick={() => en.activeCertificateId && handleViewCert(en.activeCertificateId)}
+                                title="View issued certificate"
+                              >
+                                View Cert
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack */}
+            <div className="cp-cards-mobile" style={{ padding: '12px' }}>
+              {paginatedCandidates.map((en) => {
+                const isEligible = en.isAttendanceEligible;
+                const isVerified = en.isVerified;
+
+                return (
+                  <div key={en.enrolmentId} className="cp-mobile-record-card">
+                    <div className="cp-mobile-record-header">
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {en.studentName}
+                        </h4>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {en.programmeName} &bull; {en.cohortName}
                         </div>
-                      </td>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {en.enrolmentNumber}
+                        </span>
+                        <span className={`cp-pill ${isVerified ? 'paid' : 'draft'}`} style={{ fontSize: '10px' }}>
+                          {isVerified ? '✔ VERIFIED' : 'PENDING'}
+                        </span>
+                      </div>
+                    </div>
 
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontWeight: 600, color: '#1E293B' }}>{en.programmeName}</div>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>{en.cohortName}</div>
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center', fontSize: '12px' }}>
-                        {en.totalDeliveredSessions} sessions
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                    <div className="cp-mobile-record-grid">
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Attendance %</span>
                         <span
+                          className="cp-mobile-record-value"
                           style={{
-                            fontWeight: 800,
-                            fontSize: '13px',
+                            fontSize: '14px',
                             color: en.attendancePct >= 80 ? '#059669' : '#DC2626',
                           }}
                         >
                           {en.attendancePct}%
                         </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px' }}>
-                        <span
-                          className={`cp-pill ${
-                            isEligible ? 'paid' : en.totalDeliveredSessions === 0 ? 'draft' : 'danger'
-                          }`}
-                          style={{ fontSize: '10.5px' }}
-                        >
-                          {isEligible
-                            ? '✔ ELIGIBLE (≥80%)'
-                            : en.totalDeliveredSessions === 0
-                            ? 'INSUFFICIENT SESSIONS'
-                            : 'BELOW 80%'}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px' }}>
-                        <span className={`cp-pill ${isVerified ? 'paid' : 'draft'}`} style={{ fontSize: '10.5px' }}>
-                          {isVerified ? '✔ VERIFIED' : 'PENDING'}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px' }}>
-                        {en.hasActiveCertificate && en.activeCertificateNumber ? (
-                          <span className="cp-pill paid" style={{ fontSize: '10px' }}>
-                            {en.activeCertificateNumber}
+                      </div>
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Eligibility</span>
+                        <div>
+                          <span
+                            className={`cp-pill ${
+                              isEligible ? 'paid' : en.totalDeliveredSessions === 0 ? 'draft' : 'danger'
+                            }`}
+                            style={{ fontSize: '10px' }}
+                          >
+                            {isEligible ? 'Eligible' : 'Below 80%'}
                           </span>
-                        ) : (
-                          <span className="cp-pill draft" style={{ fontSize: '10px' }}>
-                            NONE
-                          </span>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
-                          {!isVerified ? (
-                            isEligible ? (
-                              <button
-                                className="cp-btn sm paid"
-                                onClick={() => setVerifyCandidate(en)}
-                                title="Verify completion based on attendance"
-                              >
-                                ✔ Verify
-                              </button>
-                            ) : isAdminOrStaff ? (
-                              <button
-                                className="cp-btn sm secondary"
-                                style={{ color: '#D97706', borderColor: '#FDE68A' }}
-                                onClick={() => {
-                                  setOverrideCandidate(en);
-                                  setOverrideReason('');
-                                  setErrorMessage(null);
-                                }}
-                                title="Grant administrative override"
-                              >
-                                Override
-                              </button>
-                            ) : (
-                              <span style={{ fontSize: '11px', color: '#94A3B8' }}>Pending</span>
-                            )
-                          ) : !en.hasActiveCertificate ? (
-                            isAdminOrStaff ? (
-                              <button
-                                className="cp-btn sm accent"
-                                onClick={() => handleOpenIssueModal(en)}
-                                title="Issue official certificate of completion"
-                              >
-                                + Issue Cert
-                              </button>
-                            ) : (
-                              <span style={{ fontSize: '11px', color: '#059669' }}>Verified</span>
-                            )
-                          ) : (
-                            <button
-                              className="cp-btn sm secondary"
-                              onClick={() => en.activeCertificateId && handleViewCert(en.activeCertificateId)}
-                              title="View issued certificate"
-                            >
-                              View Cert
-                            </button>
-                          )}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+
+                    <div className="cp-mobile-record-actions">
+                      {!isVerified ? (
+                        isEligible ? (
+                          <button
+                            className="cp-btn sm paid"
+                            onClick={() => setVerifyCandidate(en)}
+                            style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                          >
+                            ✔ Verify Completion
+                          </button>
+                        ) : isAdminOrStaff ? (
+                          <button
+                            className="cp-btn sm secondary"
+                            style={{ color: '#D97706', borderColor: '#FDE68A', padding: '4px 12px', fontSize: '11.5px' }}
+                            onClick={() => {
+                              setOverrideCandidate(en);
+                              setOverrideReason('');
+                              setErrorMessage(null);
+                            }}
+                          >
+                            Override
+                          </button>
+                        ) : null
+                      ) : !en.hasActiveCertificate ? (
+                        isAdminOrStaff ? (
+                          <button
+                            className="cp-btn sm accent"
+                            onClick={() => handleOpenIssueModal(en)}
+                            style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                          >
+                            + Issue Certificate
+                          </button>
+                        ) : null
+                      ) : (
+                        <button
+                          className="cp-btn sm secondary"
+                          onClick={() => en.activeCertificateId && handleViewCert(en.activeCertificateId)}
+                          style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                        >
+                          View Certificate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredList.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="candidates"
+            />
+          </>
         )}
       </div>
 

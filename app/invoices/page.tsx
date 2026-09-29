@@ -1,5 +1,6 @@
 import React from 'react';
 import { getInvoices, getCustomersList, getFinancialMetrics, getFinanceTenantId } from '@/lib/finance/queries';
+import { getFinanceSettings, getPaymentAccounts } from '@/lib/settings/queries';
 import { createServerClient } from '@/lib/supabase/server';
 import { InvoicesPageClient } from './InvoicesPageClient';
 
@@ -12,7 +13,7 @@ export default async function InvoicesPage() {
   const tenantId = await getFinanceTenantId();
   const supabase = await createServerClient();
 
-  const [invoices, customers, metrics, programmesRes] = await Promise.all([
+  const [invoices, customers, metrics, programmesRes, financeSettings, paymentAccounts] = await Promise.all([
     getInvoices(tenantId),
     getCustomersList(tenantId),
     getFinancialMetrics(tenantId),
@@ -21,6 +22,8 @@ export default async function InvoicesPage() {
       .select('id, code, name, tuition_fee')
       .eq('tenant_id', tenantId)
       .eq('status', 'active'),
+    getFinanceSettings(tenantId),
+    getPaymentAccounts(tenantId),
   ]);
 
   const programmes = (programmesRes.data || []).map(p => ({
@@ -37,7 +40,10 @@ export default async function InvoicesPage() {
         programmes={programmes}
         customers={customers}
         metrics={metrics}
+        financeSettings={financeSettings}
+        paymentAccounts={paymentAccounts}
       />
     </div>
   );
 }
+

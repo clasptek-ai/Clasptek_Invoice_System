@@ -10,7 +10,7 @@
  * - Immutable financial audit logging into `finance_audit_log`
  */
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient } from '../supabase/server';
 import type {
   Invoice,
   InvoiceItem,
@@ -21,7 +21,9 @@ import type {
   FinancialMetrics,
   FinanceAuditLogEntry,
   PaymentMethod,
-} from '@/types/finance';
+  PaymentAccountData,
+} from '../../types/finance';
+import { DEFAULT_PAYMENT_ACCOUNT } from '../../types/finance';
 
 const FALLBACK_TENANT_ID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 
@@ -116,13 +118,13 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
   const rawPayments = paymentsRes.data || [];
   const rawProgrammes = programmesRes.data || [];
 
-  const programmeMap = new Map(rawProgrammes.map(p => [p.id, p.name]));
+  const programmeMap = new Map(rawProgrammes.map((p: any) => [p.id, p.name]));
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  return rawInvoices.map((inv) => {
+  return rawInvoices.map((inv: any) => {
     // Reconcile payments applied to this invoice
-    const invPayments = rawPayments.filter(p => p.invoice_id === inv.id);
-    const paid = invPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const invPayments = rawPayments.filter((p: any) => p.invoice_id === inv.id);
+    const paid = invPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
     const total = Number(inv.total_amount || 0);
     const balance = Math.max(0, total - paid);
 
@@ -140,6 +142,8 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
       }
     }
 
+    const meta = parseInvoiceMetadata(inv.installment_details);
+
     return {
       id: inv.id,
       tenantId: inv.tenant_id,
@@ -151,6 +155,7 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
       studentName: inv.student_name,
       studentEmail: inv.student_email,
       studentPhone: inv.student_phone,
+      parentName: meta.parentName,
       invoiceDate: inv.invoice_date,
       dueDate: inv.due_date,
       paymentPlan: inv.payment_plan,
@@ -162,6 +167,13 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
       incomeCategory: inv.income_category || 'Student Tuition',
       status: computedStatus,
       installmentDetails: inv.installment_details || [],
+      notes: meta.notes,
+      comments: meta.comments,
+      termsAndConditions: meta.termsAndConditions,
+      paymentAccountSnapshot: meta.paymentAccountSnapshot,
+      trainingMode: meta.trainingMode,
+      duration: meta.duration,
+      schedule: meta.schedule,
       source: inv.source,
       createdAt: inv.created_at,
       createdBy: inv.created_by,
@@ -170,6 +182,42 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
       balanceAmount: balance,
     };
   });
+}
+
+function parseInvoiceMetadata(installmentDetails: any) {
+  let notes: string | null = null;
+  let comments: string | null = null;
+  let termsAndConditions: string | null = null;
+  let paymentAccountSnapshot: PaymentAccountData | null = null;
+  let parentName: string | null = null;
+  let trainingMode: string | null = null;
+  let duration: string | null = null;
+  let schedule: string | null = null;
+
+  if (Array.isArray(installmentDetails)) {
+    const meta = installmentDetails.find((d: any) => d && d.type === 'meta_snapshot');
+    if (meta) {
+      notes = meta.notes || null;
+      comments = meta.comments || null;
+      termsAndConditions = meta.termsAndConditions || null;
+      paymentAccountSnapshot = meta.paymentAccountSnapshot || null;
+      parentName = meta.parentName || null;
+      trainingMode = meta.trainingMode || null;
+      duration = meta.duration || null;
+      schedule = meta.schedule || null;
+    }
+  }
+
+  return {
+    notes: notes || 'Please note that tuition includes all instructional materials, completion credentials, and lab access.',
+    comments,
+    termsAndConditions: termsAndConditions || 'Payment is due according to the schedule specified above. Certificates and course completion verification are issued upon full settlement of tuition fees.',
+    paymentAccountSnapshot: paymentAccountSnapshot || DEFAULT_PAYMENT_ACCOUNT,
+    parentName,
+    trainingMode: trainingMode || 'Live Interactive Onsite Class',
+    duration: duration || '5 Months',
+    schedule: schedule || 'Weekdays (Tue & Thu 10am - 1pm)',
+  };
 }
 
 /**
@@ -210,9 +258,9 @@ export async function getInvoiceById(id: string, tenantId?: string): Promise<Inv
   const rawPayments = paymentsRes.data || [];
   const rawItems = itemsRes.data || [];
   const rawProgrammes = programmesRes.data || [];
-  const programmeMap = new Map(rawProgrammes.map(p => [p.id, p.name]));
+  const programmeMap = new Map(rawProgrammes.map((p: any) => [p.id, p.name]));
 
-  const paid = rawPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const paid = rawPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
   const total = Number(inv.total_amount || 0);
   const balance = Math.max(0, total - paid);
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -230,7 +278,7 @@ export async function getInvoiceById(id: string, tenantId?: string): Promise<Inv
     }
   }
 
-  const items: InvoiceItem[] = rawItems.map(it => ({
+  const items: InvoiceItem[] = rawItems.map((it: any) => ({
     id: it.id,
     tenantId: it.tenant_id,
     invoiceId: it.invoice_id,
@@ -241,6 +289,8 @@ export async function getInvoiceById(id: string, tenantId?: string): Promise<Inv
     lineTotal: Number(it.line_total || 0),
     createdAt: it.created_at,
   }));
+
+  const meta = parseInvoiceMetadata(inv.installment_details);
 
   return {
     id: inv.id,
@@ -253,6 +303,7 @@ export async function getInvoiceById(id: string, tenantId?: string): Promise<Inv
     studentName: inv.student_name,
     studentEmail: inv.student_email,
     studentPhone: inv.student_phone,
+    parentName: meta.parentName,
     invoiceDate: inv.invoice_date,
     dueDate: inv.due_date,
     paymentPlan: inv.payment_plan,
@@ -264,6 +315,13 @@ export async function getInvoiceById(id: string, tenantId?: string): Promise<Inv
     incomeCategory: inv.income_category || 'Student Tuition',
     status: computedStatus,
     installmentDetails: inv.installment_details || [],
+    notes: meta.notes,
+    comments: meta.comments,
+    termsAndConditions: meta.termsAndConditions,
+    paymentAccountSnapshot: meta.paymentAccountSnapshot,
+    trainingMode: meta.trainingMode,
+    duration: meta.duration,
+    schedule: meta.schedule,
     source: inv.source,
     createdAt: inv.created_at,
     createdBy: inv.created_by,
@@ -282,8 +340,10 @@ export async function createInvoice(
     studentName: string;
     studentEmail?: string;
     studentPhone?: string;
+    parentName?: string;
     programmeId: string;
     customerId?: string;
+    enquiryId?: string;
     invoiceDate?: string;
     dueDate?: string;
     paymentPlan?: 'full' | 'installment';
@@ -292,7 +352,21 @@ export async function createInvoice(
     discountPct?: number;
     discountAmount?: number;
     incomeCategory?: string;
-    items?: Array<{ description: string; amount: number }>;
+    notes?: string;
+    comments?: string;
+    termsAndConditions?: string;
+    paymentAccountId?: string;
+    paymentAccountSnapshot?: PaymentAccountData;
+    trainingMode?: string;
+    duration?: string;
+    schedule?: string;
+    items?: Array<{
+      description: string;
+      quantity?: number;
+      unitPrice?: number;
+      discountAmount?: number;
+      amount: number;
+    }>;
   },
   actor?: { id?: string; role?: string }
 ): Promise<{ success: boolean; invoice?: Invoice; error?: string }> {
@@ -318,13 +392,82 @@ export async function createInvoice(
     const invoiceDate = payload.invoiceDate || todayStr;
     const dueDate = payload.dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    // Resolve or establish canonical Customer link
+    let resolvedCustomerId = payload.customerId || null;
+    if (!resolvedCustomerId && (payload.studentEmail || payload.studentPhone || payload.studentName)) {
+      try {
+        let custQuery = supabase
+          .from('customers')
+          .select('id')
+          .eq('tenant_id', tenantId);
+
+        if (payload.studentEmail?.trim()) {
+          custQuery = custQuery.eq('email', payload.studentEmail.trim());
+        } else if (payload.studentPhone?.trim()) {
+          custQuery = custQuery.eq('phone', payload.studentPhone.trim());
+        } else {
+          custQuery = custQuery.eq('name', payload.studentName.trim());
+        }
+
+        const { data: matchedCust } = await custQuery.limit(1).maybeSingle();
+        if (matchedCust?.id) {
+          resolvedCustomerId = matchedCust.id;
+        } else {
+          const newCustId = `cust_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const { error: custErr } = await supabase.from('customers').insert({
+            id: newCustId,
+            tenant_id: tenantId,
+            name: payload.studentName.trim(),
+            email: payload.studentEmail?.trim() || null,
+            phone: payload.studentPhone?.trim() || null,
+            total_invoiced: totalAmount,
+            total_paid: 0,
+            outstanding_balance: totalAmount,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          if (!custErr) {
+            resolvedCustomerId = newCustId;
+          }
+        }
+      } catch (cErr) {
+        console.warn('Customer resolution notice:', cErr);
+      }
+    }
+
+    const paymentAccountSnapshot = payload.paymentAccountSnapshot || DEFAULT_PAYMENT_ACCOUNT;
+    const invoiceNotes =
+      payload.notes?.trim() ||
+      'Please note that tuition includes all instructional materials, completion credentials, and lab access.';
+    const termsAndConditions =
+      payload.termsAndConditions?.trim() ||
+      'Payment is due according to the schedule specified above. Certificates and course completion verification are issued upon full settlement of tuition fees.';
+    const comments =
+      payload.comments?.trim() ||
+      (payload.enquiryId ? `Generated from Enquiry lead record #${payload.enquiryId}` : null);
+
+    const installmentDetails = [
+      ...(payload.enquiryId ? [{ enquiry_id: payload.enquiryId, linked_at: new Date().toISOString() }] : []),
+      {
+        type: 'meta_snapshot',
+        notes: invoiceNotes,
+        comments,
+        termsAndConditions,
+        paymentAccountSnapshot,
+        parentName: payload.parentName || null,
+        trainingMode: payload.trainingMode || null,
+        duration: payload.duration || null,
+        schedule: payload.schedule || null,
+      },
+    ];
+
     const row = {
       id: invoiceId,
       tenant_id: tenantId,
       invoice_no: invoiceNo,
       invoice_display_no: invoiceDisplayNo,
       programme_id: payload.programmeId,
-      customer_id: payload.customerId || null,
+      customer_id: resolvedCustomerId,
       student_name: payload.studentName.trim(),
       student_email: payload.studentEmail?.trim() || null,
       student_phone: payload.studentPhone?.trim() || null,
@@ -338,8 +481,8 @@ export async function createInvoice(
       total_amount: totalAmount,
       income_category: payload.incomeCategory || 'Student Tuition',
       status: 'unpaid', // Must be 'unpaid' per check constraint
-      installment_details: [],
-      source: 'APP',
+      installment_details: installmentDetails,
+      source: payload.enquiryId ? `ENQUIRY:${payload.enquiryId}` : 'APP',
       created_at: new Date().toISOString(),
       created_by: actor?.id || null,
       updated_at: new Date().toISOString(),
@@ -360,9 +503,9 @@ export async function createInvoice(
         tenant_id: tenantId,
         invoice_id: invoiceId,
         item_description: it.description,
-        quantity: 1,
-        unit_price: it.amount,
-        discount_amount: 0,
+        quantity: it.quantity !== undefined ? it.quantity : 1,
+        unit_price: it.unitPrice !== undefined ? it.unitPrice : it.amount,
+        discount_amount: it.discountAmount !== undefined ? it.discountAmount : 0,
         line_total: it.amount,
         created_at: new Date().toISOString(),
       }));
@@ -395,6 +538,47 @@ export async function createInvoice(
       actorRole: actor?.role || 'Staff',
       source: 'nextjs_finance_app',
     });
+
+    // Traceable admissions timeline integration & enquiry note synchronization
+    if (payload.enquiryId) {
+      try {
+        const timelineId = `tl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await supabase.from('customer_timeline').insert({
+          id: timelineId,
+          tenant_id: tenantId,
+          customer_id: row.customer_id || null,
+          enquiry_id: payload.enquiryId,
+          event_type: 'INVOICE_GENERATED',
+          title: `Invoice Issued (${invoiceDisplayNo})`,
+          description: `Generated tuition invoice ${invoiceDisplayNo} for ₦${totalAmount.toLocaleString()} (${row.payment_plan === 'installment' ? 'Installment plan' : 'Full payment'}).`,
+          contact_method: 'INVOICE',
+          outcome: 'ISSUED',
+          reference_id: invoiceId,
+          actor_name: actor?.role || 'Admissions Staff',
+          created_at: new Date().toISOString(),
+        });
+
+        // Synchronize note to public.enquiries table
+        const { data: enqData } = await supabase
+          .from('enquiries')
+          .select('notes')
+          .eq('id', payload.enquiryId)
+          .maybeSingle();
+
+        if (enqData) {
+          const existingNotes = enqData.notes || '';
+          const timeStr = new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+          const invoiceNote = `[${timeStr}] Generated Invoice ${invoiceDisplayNo} (₦${totalAmount.toLocaleString()})`;
+          const updatedNotes = existingNotes ? `${existingNotes}\n\n${invoiceNote}` : invoiceNote;
+          await supabase
+            .from('enquiries')
+            .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
+            .eq('id', payload.enquiryId);
+        }
+      } catch (tErr) {
+        console.warn('Admissions timeline sync notice:', tErr);
+      }
+    }
 
     const created = await getInvoiceById(invoiceId, tenantId);
     return { success: true, invoice: created || undefined };
@@ -480,11 +664,11 @@ export async function getPayments(tenantId?: string): Promise<Payment[]> {
     return [];
   }
 
-  const invoiceMap = new Map(
-    (invoicesRes.data || []).map(i => [i.id, { displayNo: i.invoice_display_no, student: i.student_name }])
+  const invoiceMap = new Map<string, { displayNo: string; student: string }>(
+    (invoicesRes.data || []).map((i: any) => [i.id, { displayNo: i.invoice_display_no, student: i.student_name }])
   );
 
-  return (paymentsRes.data || []).map(p => {
+  return (paymentsRes.data || []).map((p: any) => {
     const inv = invoiceMap.get(p.invoice_id);
     return {
       id: p.id,
@@ -600,6 +784,52 @@ export async function recordPayment(
       source: 'nextjs_finance_app',
     });
 
+    // Traceable admissions payment synchronization
+    const enquiryIdFromSource = invoice.source?.startsWith('ENQUIRY:') ? invoice.source.replace('ENQUIRY:', '') : null;
+    const enquiryIdFromDetails = Array.isArray(invoice.installmentDetails)
+      ? (invoice.installmentDetails as Array<{ enquiry_id?: string }>).find(d => d?.enquiry_id)?.enquiry_id
+      : null;
+    const linkedEnquiryId = enquiryIdFromSource || enquiryIdFromDetails;
+
+    if (linkedEnquiryId) {
+      try {
+        const timelineId = `tl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await supabase.from('customer_timeline').insert({
+          id: timelineId,
+          tenant_id: tenantId,
+          customer_id: invoice.customerId || null,
+          enquiry_id: linkedEnquiryId,
+          event_type: 'PAYMENT_RECEIVED',
+          title: `Payment Received (${receiptDisplayNo})`,
+          description: `Applied payment of ₦${payAmount.toLocaleString()} via ${payload.paymentMethod} towards invoice ${invoice.invoiceDisplayNo}. Balance: ₦${Math.max(0, invoice.totalAmount - newTotalPaid).toLocaleString()}.`,
+          contact_method: 'RECEIPT',
+          outcome: newInvoiceStatus === 'paid' ? 'SETTLED' : 'PARTIAL_PAYMENT',
+          reference_id: paymentId,
+          actor_name: actor?.role || 'Finance Staff',
+          created_at: new Date().toISOString(),
+        });
+
+        const { data: enqData } = await supabase
+          .from('enquiries')
+          .select('notes')
+          .eq('id', linkedEnquiryId)
+          .maybeSingle();
+
+        if (enqData) {
+          const existingNotes = enqData.notes || '';
+          const timeStr = new Date().toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+          const payNote = `[${timeStr}] Recorded Payment ${receiptDisplayNo} of ₦${payAmount.toLocaleString()} (${newInvoiceStatus.toUpperCase()}) against ${invoice.invoiceDisplayNo}`;
+          const updatedNotes = existingNotes ? `${existingNotes}\n\n${payNote}` : payNote;
+          await supabase
+            .from('enquiries')
+            .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
+            .eq('id', linkedEnquiryId);
+        }
+      } catch (pErr) {
+        console.warn('Admissions payment sync notice:', pErr);
+      }
+    }
+
     const result: Payment = {
       id: paymentId,
       tenantId,
@@ -644,7 +874,7 @@ export async function getPayslips(tenantId?: string): Promise<Payslip[]> {
     return [];
   }
 
-  return (data || []).map(p => ({
+  return (data || []).map((p: any) => ({
     id: p.id,
     tenantId: p.tenant_id,
     payslipNo: p.payslip_no,
@@ -961,7 +1191,7 @@ export async function getPersonnelList(tenantId?: string): Promise<Personnel[]> 
     return [];
   }
 
-  return (data || []).map(p => ({
+  return (data || []).map((p: any) => ({
     id: p.id,
     tenantId: p.tenant_id,
     userId: p.user_id,
@@ -1005,7 +1235,7 @@ export async function getCustomersList(tenantId?: string): Promise<Customer[]> {
     return [];
   }
 
-  return (data || []).map(c => ({
+  return (data || []).map((c: any) => ({
     id: c.id,
     tenantId: c.tenant_id,
     name: c.name,

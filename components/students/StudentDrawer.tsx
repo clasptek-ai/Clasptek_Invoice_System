@@ -1,18 +1,26 @@
 /**
  * components/students/StudentDrawer.tsx — Phase 4
- * Exact legacy Clasptek 4-tab Student Profile & 360° Dossier.
- * Reference: index.html lines 37293–37430
+ * Authoritative Clasptek Student Profile & 360° Dossier.
+ * Features:
+ * - 5-tab dossier: Identity/Bio, Sponsor/Emergency, Academic/Enrolments, Finance, Audit History
+ * - Clear "Not yet enrolled" badge when enrolments.length === 0
+ * - "Edit Student Profile" modal trigger with audited reason
+ * - Immutable identifiers protection
  */
 
 'use client';
 
-import React, { useState } from 'react';
-import type { StudentDossier } from '@/types/students';
+import React, { useState, useEffect } from 'react';
+import type { Student, StudentDossier, StudentAuditTrailEntry } from '@/types/students';
+import { EditStudentModal } from './EditStudentModal';
+import { AddEnrolmentModal } from './AddEnrolmentModal';
 
 interface StudentDrawerProps {
   dossier: StudentDossier | null;
   isLoading?: boolean;
   onClose: () => void;
+  onStudentUpdated?: (updated: Student) => void;
+  onRefreshDossier?: () => void;
 }
 
 function fmtMoney(amount: number): string {
@@ -32,10 +40,62 @@ function fmtDate(iso: string | null): string {
   }
 }
 
-export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'bio' | 'sponsor' | 'academic' | 'finance'>('bio');
+export function StudentDrawer({
+  dossier,
+  isLoading,
+  onClose,
+  onStudentUpdated,
+  onRefreshDossier,
+}: StudentDrawerProps) {
+  const [activeTab, setActiveTab] = useState<'bio' | 'sponsor' | 'academic' | 'finance' | 'audit'>('bio');
+  const [currentDossier, setCurrentDossier] = useState<StudentDossier | null>(dossier);
+  const [currentStudent, setCurrentStudent] = useState<Student | null>(dossier?.student || null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEnrolModalOpen, setIsEnrolModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (dossier) {
+      setCurrentDossier(dossier);
+      if (dossier.student) {
+        setCurrentStudent(dossier.student);
+      }
+    }
+  }, [dossier]);
+
+  const refreshDossier = async () => {
+    const sId = currentStudent?.id || currentDossier?.student?.id;
+    if (!sId) return;
+    try {
+      const res = await fetch(`/api/students/${sId}/dossier`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.dossier) {
+          setCurrentDossier(json.dossier);
+          if (json.dossier.student) {
+            setCurrentStudent(json.dossier.student);
+            onStudentUpdated?.(json.dossier.student);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to reload student dossier', err);
+    }
+    onRefreshDossier?.();
+  };
 
   if (!dossier && !isLoading) return null;
+
+  const activeDossier = currentDossier || dossier;
+  const stu = currentStudent || activeDossier?.student;
+  const meta = (stu?.metadata as Record<string, unknown>) || {};
+  const auditTrail: StudentAuditTrailEntry[] = Array.isArray(meta.audit_trail)
+    ? (meta.audit_trail as StudentAuditTrailEntry[])
+    : [];
+
+  const handleSaveStudent = (updated: Student) => {
+    setCurrentStudent(updated);
+    onStudentUpdated?.(updated);
+  };
 
   return (
     <div className="cp-modal-overlay" style={{ zIndex: 1000 }} onClick={onClose}>
@@ -48,43 +108,67 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
             Loading student dossier...
           </div>
-        ) : dossier ? (
+        ) : activeDossier && stu ? (
           <>
             {/* Header */}
-            <div className="cp-modal-header no-print" style={{ alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <div className="cp-modal-title" style={{ fontSize: '20px', fontWeight: 800 }}>
-                    👨‍🎓 {dossier.student.first_name} {dossier.student.last_name}
+            <div className="cp-modal-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', padding: '16px 20px' }}>
+              <div style={{ flex: '1 1 280px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <div className="cp-modal-title" style={{ fontSize: '18px', fontWeight: 800 }}>
+                    👨‍🎓 {stu.first_name} {stu.last_name}
                   </div>
                   <span className="cp-pill paid" style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
-                    {dossier.student.student_number || 'STU-—'}
+                    {stu.student_number || 'STU-—'}
                   </span>
                   <span
                     className={`cp-pill ${
-                      dossier.student.status === 'ACTIVE'
+                      stu.status === 'ACTIVE'
                         ? 'active'
-                        : dossier.student.status === 'COMPLETED'
+                        : stu.status === 'COMPLETED'
                         ? 'paid'
                         : 'draft'
                     }`}
                   >
-                    {dossier.student.status}
+                    {stu.status}
                   </span>
+                  {/* Authoritative Enrolment State Derived from public.enrolments */}
+                  {activeDossier.enrolments.length === 0 ? (
+                    <span
+                      className="cp-pill draft"
+                      style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1' }}
+                    >
+                      Not yet enrolled
+                    </span>
+                  ) : (
+                    <span className="cp-pill active">
+                      Enrolled ({activeDossier.enrolments.length})
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Central CRM Student Dossier &middot; {dossier.student.email || 'No email'} &middot;{' '}
-                  {dossier.student.phone || 'No phone'}
+                  Central Student Dossier &middot; {stu.email || 'No email'} &middot;{' '}
+                  {stu.phone || 'No phone'}
                 </div>
               </div>
-              <button
-                type="button"
-                className="cp-modal-close"
-                id="btnCloseProfileDossier"
-                onClick={onClose}
-              >
-                &times;
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  className="cp-btn secondary"
+                  style={{ fontSize: '12px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onClick={() => setIsEditModalOpen(true)}
+                >
+                  ✏️ Edit Profile
+                </button>
+                <button
+                  type="button"
+                  className="cp-modal-close"
+                  id="btnCloseProfileDossier"
+                  onClick={onClose}
+                  aria-label="Close dossier"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             {/* Dossier Tabs Navigation */}
@@ -94,9 +178,11 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                 style={{
                   display: 'flex',
                   borderBottom: '1px solid var(--border, #E2E8F0)',
-                  background: '#F8FAFC',
-                  padding: '0 20px',
+                  background: 'var(--surface-1, #F8FAFC)',
+                  padding: '0 16px',
                   overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
                 }}
               >
                 <button
@@ -109,6 +195,8 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     borderBottom: `2px solid ${activeTab === 'bio' ? 'var(--primary, #0F172A)' : 'transparent'}`,
                     color: activeTab === 'bio' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
                   }}
@@ -125,6 +213,8 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     borderBottom: `2px solid ${activeTab === 'sponsor' ? 'var(--primary, #0F172A)' : 'transparent'}`,
                     color: activeTab === 'sponsor' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
                   }}
@@ -141,11 +231,13 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     borderBottom: `2px solid ${activeTab === 'academic' ? 'var(--primary, #0F172A)' : 'transparent'}`,
                     color: activeTab === 'academic' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
                   }}
                 >
-                  🎓 Academic &amp; Enrolments ({dossier.enrolments.length})
+                  🎓 Academic &amp; Enrolments ({activeDossier.enrolments.length})
                 </button>
                 <button
                   type="button"
@@ -157,85 +249,88 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
                     borderBottom: `2px solid ${activeTab === 'finance' ? 'var(--primary, #0F172A)' : 'transparent'}`,
                     color: activeTab === 'finance' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
                   }}
                 >
-                  💰 Financial Position ({fmtMoney(dossier.balanceDue)} Due)
+                  💳 Financial Position
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('audit')}
+                  style={{
+                    padding: '12px 16px',
+                    border: 'none',
+                    background: 'none',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    borderBottom: `2px solid ${activeTab === 'audit' ? 'var(--primary, #0F172A)' : 'transparent'}`,
+                    color: activeTab === 'audit' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
+                  }}
+                >
+                  📜 Audit History ({auditTrail.length})
                 </button>
               </div>
 
-              {/* Tab 1: Identity & Bio */}
+              {/* Tab 1: Bio */}
               {activeTab === 'bio' && (
                 <div style={{ padding: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-                    <div className="cp-card" style={{ padding: '14px' }}>
-                      <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '10px' }}>
-                        Personal Identification
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                    <div>
+                      <div className="cp-field-label">Full Name</div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>
+                        {stu.first_name} {meta.middleName ? String(meta.middleName) + ' ' : ''}{stu.last_name}
                       </div>
-                      <table style={{ width: '100%', fontSize: '12.5px', lineHeight: 2 }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)', width: '130px' }}>Full Name:</td>
-                            <td><strong>{dossier.student.first_name} {dossier.student.last_name}</strong></td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Middle Name:</td>
-                            <td>{dossier.student.metadata?.middleName || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Date of Birth:</td>
-                            <td>{fmtDate(dossier.student.metadata?.dateOfBirth || null)}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Gender:</td>
-                            <td>{dossier.student.gender || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Marital Status:</td>
-                            <td>{dossier.student.metadata?.maritalStatus || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>State of Origin:</td>
-                            <td>{dossier.student.metadata?.stateOfOrigin || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Nationality:</td>
-                            <td>{dossier.student.metadata?.nationality || 'Nigerian'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
-
-                    <div className="cp-card" style={{ padding: '14px' }}>
-                      <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '10px' }}>
-                        Contact &amp; Residence
+                    <div>
+                      <div className="cp-field-label">Student ID (Immutable)</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>
+                        {stu.student_number}
                       </div>
-                      <table style={{ width: '100%', fontSize: '12.5px', lineHeight: 2 }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)', width: '130px' }}>Phone:</td>
-                            <td><strong>{dossier.student.phone || '—'}</strong></td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Email:</td>
-                            <td>{dossier.student.email || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Address:</td>
-                            <td>{dossier.student.address || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Employment:</td>
-                            <td>{dossier.student.metadata?.employmentStatus || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Registered:</td>
-                            <td>{fmtDate(dossier.student.created_at)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
+                    <div>
+                      <div className="cp-field-label">Email Address</div>
+                      <div style={{ fontSize: '13px' }}>{stu.email || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Phone Number</div>
+                      <div style={{ fontSize: '13px' }}>{stu.phone || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Gender</div>
+                      <div style={{ fontSize: '13px' }}>{stu.gender || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Date of Birth</div>
+                      <div style={{ fontSize: '13px' }}>{fmtDate(meta.dateOfBirth as string)}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Nationality &amp; State</div>
+                      <div style={{ fontSize: '13px' }}>
+                        {String(meta.nationality || 'Nigerian')} {meta.stateOfOrigin ? `(${meta.stateOfOrigin} State)` : ''}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Marital Status</div>
+                      <div style={{ fontSize: '13px' }}>{String(meta.maritalStatus || '—')}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div className="cp-field-label">Residential Address</div>
+                      <div style={{ fontSize: '13px' }}>{stu.address || '—'}</div>
+                    </div>
+                    {Boolean(meta.notes) && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="cp-field-label">Administrative Notes</div>
+                        <div style={{ fontSize: '13px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                          {String(meta.notes)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -243,53 +338,69 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
               {/* Tab 2: Sponsor & Emergency */}
               {activeTab === 'sponsor' && (
                 <div style={{ padding: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-                    <div className="cp-card" style={{ padding: '14px' }}>
-                      <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '10px' }}>
-                        Sponsorship Information
+                  <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '12px' }}>
+                    Emergency Contact
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                    <div>
+                      <div className="cp-field-label">Emergency Contact Name</div>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px' }}>
+                        {stu.emergency_contact_name || '—'}
                       </div>
-                      <table style={{ width: '100%', fontSize: '12.5px', lineHeight: 2 }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)', width: '140px' }}>Sponsor Type:</td>
-                            <td><strong>{dossier.student.metadata?.sponsorType || 'Self'}</strong></td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Sponsor Name:</td>
-                            <td>{dossier.student.metadata?.sponsorName || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Sponsor Phone:</td>
-                            <td>{dossier.student.metadata?.sponsorPhone || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Sponsor Email:</td>
-                            <td>{dossier.student.metadata?.sponsorEmail || '—'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
-
-                    <div className="cp-card" style={{ padding: '14px' }}>
-                      <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '10px' }}>
-                        Emergency Contact / Next of Kin
+                    <div>
+                      <div className="cp-field-label">Emergency Phone</div>
+                      <div style={{ fontSize: '13.5px' }}>{stu.emergency_contact_phone || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Relationship</div>
+                      <div style={{ fontSize: '13.5px' }}>
+                        {String(meta.emergencyContactRelationship || '—')}
                       </div>
-                      <table style={{ width: '100%', fontSize: '12.5px', lineHeight: 2 }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)', width: '140px' }}>Contact Name:</td>
-                            <td><strong>{dossier.student.emergency_contact_name || '—'}</strong></td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Contact Phone:</td>
-                            <td>{dossier.student.emergency_contact_phone || '—'}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>Relationship:</td>
-                            <td>{dossier.student.metadata?.emergencyContactRelationship || 'Parent / Guardian'}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                    </div>
+                  </div>
+
+                  <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '12px' }}>
+                    Sponsorship &amp; Billing Entity
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                    <div style={{ gridColumn: '1 / -1', background: '#F8FAFC', padding: '12px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                      <div className="cp-field-label">Corporate Sponsor / Billing Customer</div>
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {activeDossier.corporateSponsor ? (
+                          <span>
+                            🏢 {activeDossier.corporateSponsor.name}{' '}
+                            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', fontWeight: 500, color: 'var(--text-muted)' }}>
+                              ({activeDossier.corporateSponsor.id})
+                            </span>
+                          </span>
+                        ) : stu.customer_id ? (
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>🏢 {stu.customer_id}</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>None (Self-Sponsored / Individual Student)</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        Preserves separation: Student is the learner; Corporate Sponsor is the institutional billing customer.
+                      </div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Type</div>
+                      <div style={{ fontSize: '13.5px' }}>{String(meta.sponsorType || (stu.customer_id ? 'Corporate' : 'Self'))}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Name</div>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px' }}>
+                        {activeDossier.corporateSponsor?.name || String(meta.sponsorName || '—')}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Phone</div>
+                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.phone || String(meta.sponsorPhone || '—')}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Email</div>
+                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.email || String(meta.sponsorEmail || '—')}</div>
                     </div>
                   </div>
                 </div>
@@ -298,44 +409,62 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
               {/* Tab 3: Academic & Enrolments */}
               {activeTab === 'academic' && (
                 <div style={{ padding: '20px' }}>
-                  {dossier.enrolments.length === 0 ? (
-                    <div className="cp-empty-state">
-                      <div className="cp-empty-icon">🎓</div>
-                      <div className="cp-empty-title">No enrolment records found</div>
-                      <div className="cp-empty-desc">This student has not been enrolled in any training programme cohorts yet.</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div className="cp-section-title" style={{ fontSize: '14px', margin: 0 }}>
+                      Enrolled Programmes &amp; Cohorts
+                    </div>
+                    {activeDossier.enrolments.length > 0 && (
+                      <button
+                        type="button"
+                        className="cp-btn primary"
+                        style={{ fontSize: '12px', padding: '6px 14px' }}
+                        onClick={() => setIsEnrolModalOpen(true)}
+                      >
+                        + Enrol in Additional Programme/Cohort
+                      </button>
+                    )}
+                  </div>
+                  {activeDossier.enrolments.length === 0 ? (
+                    <div style={{ padding: '28px 20px', textAlign: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', fontSize: '14px' }}>
+                        Not yet enrolled in a programme.
+                      </div>
+                      <div style={{ fontSize: '12px', marginBottom: '16px', maxWidth: '400px', margin: '0 auto 16px auto' }}>
+                        Student registration exists independently. Enrolment into a programme cohort requires separate assignment.
+                      </div>
+                      <button
+                        type="button"
+                        className="cp-btn primary"
+                        style={{ fontSize: '13px', padding: '8px 18px' }}
+                        onClick={() => setIsEnrolModalOpen(true)}
+                      >
+                        + Enrol in Programme/Cohort
+                      </button>
                     </div>
                   ) : (
-                    <div className="cp-table-wrap">
+                    <div className="cp-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                       <table className="cp-table">
                         <thead>
                           <tr>
                             <th>Enrolment #</th>
                             <th>Programme</th>
                             <th>Cohort</th>
-                            <th style={{ textAlign: 'right' }}>Agreed Tuition</th>
                             <th>Enrolment Date</th>
-                            <th style={{ textAlign: 'center' }}>Attendance</th>
+                            <th>Tuition Fee</th>
                             <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {dossier.enrolments.map((en) => (
-                            <tr key={en.id}>
+                          {activeDossier.enrolments.map((enr) => (
+                            <tr key={enr.id}>
                               <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                                {en.enrolment_number}
+                                {enr.enrolment_number}
                               </td>
-                              <td style={{ fontWeight: 600 }}>{en.programme_name}</td>
-                              <td>{en.cohort_name}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                                {fmtMoney(en.agreed_tuition_fee)}
-                              </td>
-                              <td>{fmtDate(en.enrolment_date)}</td>
-                              <td style={{ textAlign: 'center' }}>{en.attendance_pct}%</td>
-                              <td>
-                                <span className={`cp-pill ${en.status === 'ACTIVE' ? 'active' : 'paid'}`}>
-                                  {en.status}
-                                </span>
-                              </td>
+                              <td style={{ fontWeight: 600 }}>{enr.programme_name}</td>
+                              <td>{enr.cohort_name}</td>
+                              <td>{fmtDate(enr.enrolment_date)}</td>
+                              <td style={{ fontWeight: 600 }}>{fmtMoney(enr.agreed_tuition_fee)}</td>
+                              <td><span className="cp-pill active">{enr.status}</span></td>
                             </tr>
                           ))}
                         </tbody>
@@ -348,17 +477,17 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
               {/* Tab 4: Financial Position */}
               {activeTab === 'finance' && (
                 <div style={{ padding: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '18px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '18px' }}>
                     <div className="cp-kpi-card" style={{ padding: '12px 14px' }}>
                       <div className="cp-kpi-label">Total Invoiced</div>
                       <div className="cp-kpi-val" style={{ fontSize: '18px', color: 'var(--primary)' }}>
-                        {fmtMoney(dossier.totalInvoiced)}
+                        {fmtMoney(activeDossier.totalInvoiced)}
                       </div>
                     </div>
                     <div className="cp-kpi-card" style={{ padding: '12px 14px' }}>
                       <div className="cp-kpi-label">Total Paid</div>
                       <div className="cp-kpi-val" style={{ fontSize: '18px', color: 'var(--success)' }}>
-                        {fmtMoney(dossier.totalPaid)}
+                        {fmtMoney(activeDossier.totalPaid)}
                       </div>
                     </div>
                     <div className="cp-kpi-card" style={{ padding: '12px 14px' }}>
@@ -367,10 +496,10 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                         className="cp-kpi-val"
                         style={{
                           fontSize: '18px',
-                          color: dossier.balanceDue > 0 ? 'var(--warning)' : 'var(--success)',
+                          color: activeDossier.balanceDue > 0 ? 'var(--warning)' : 'var(--success)',
                         }}
                       >
-                        {fmtMoney(dossier.balanceDue)}
+                        {fmtMoney(activeDossier.balanceDue)}
                       </div>
                     </div>
                   </div>
@@ -378,12 +507,12 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                   <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '10px' }}>
                     Invoices &amp; Billing History
                   </div>
-                  {dossier.invoices.length === 0 ? (
+                  {activeDossier.invoices.length === 0 ? (
                     <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginBottom: '18px' }}>
                       No invoices issued for this student.
                     </div>
                   ) : (
-                    <div className="cp-table-wrap" style={{ marginBottom: '18px' }}>
+                    <div className="cp-table-wrap" style={{ marginBottom: '18px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                       <table className="cp-table">
                         <thead>
                           <tr>
@@ -395,7 +524,7 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                           </tr>
                         </thead>
                         <tbody>
-                          {dossier.invoices.map((inv) => (
+                          {activeDossier.invoices.map((inv) => (
                             <tr key={inv.id}>
                               <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{inv.invoice_number}</td>
                               <td>{fmtDate(inv.issue_date)}</td>
@@ -412,12 +541,12 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                   <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '10px' }}>
                     Receipts &amp; Payments
                   </div>
-                  {dossier.payments.length === 0 ? (
+                  {activeDossier.payments.length === 0 ? (
                     <div style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
                       No payment receipts recorded for this student.
                     </div>
                   ) : (
-                    <div className="cp-table-wrap">
+                    <div className="cp-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                       <table className="cp-table">
                         <thead>
                           <tr>
@@ -428,7 +557,7 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                           </tr>
                         </thead>
                         <tbody>
-                          {dossier.payments.map((p) => (
+                          {activeDossier.payments.map((p) => (
                             <tr key={p.id}>
                               <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{p.receipt_number}</td>
                               <td>{fmtDate(p.payment_date)}</td>
@@ -436,6 +565,70 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                                 {fmtMoney(p.amount)}
                               </td>
                               <td><span className="cp-pill paid">{p.method}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 5: Authoritative Audit History */}
+              {activeTab === 'audit' && (
+                <div style={{ padding: '20px' }}>
+                  <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '6px' }}>
+                    Authoritative Profile Audit Trail
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                    Chronological, immutable record of administrative corrections with actor stamps and mandatory reasons.
+                  </p>
+
+                  {auditTrail.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', background: '#F8FAFC', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                      No administrative profile modifications recorded yet. Record is in original registered state.
+                    </div>
+                  ) : (
+                    <div className="cp-table-wrap" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                      <table className="cp-table">
+                        <thead>
+                          <tr>
+                            <th>Timestamp</th>
+                            <th>Field Changed</th>
+                            <th>Previous Value</th>
+                            <th>New Value</th>
+                            <th>Modified By</th>
+                            <th>Reason for Change</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditTrail.map((entry) => (
+                            <tr key={entry.id}>
+                              <td style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                                {fmtDate(entry.timestamp)}{' '}
+                                {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                                {entry.field}
+                              </td>
+                              <td style={{ fontSize: '12px', color: '#991B1B', maxWidth: '140px', wordBreak: 'break-all' }}>
+                                {typeof entry.previous_value === 'object' && entry.previous_value !== null
+                                  ? JSON.stringify(entry.previous_value)
+                                  : String(entry.previous_value ?? '—')}
+                              </td>
+                              <td style={{ fontSize: '12px', color: '#166534', fontWeight: 600, maxWidth: '140px', wordBreak: 'break-all' }}>
+                                {typeof entry.new_value === 'object' && entry.new_value !== null
+                                  ? JSON.stringify(entry.new_value)
+                                  : String(entry.new_value ?? '—')}
+                              </td>
+                              <td style={{ fontSize: '12px' }}>
+                                <strong>{entry.actor_name}</strong>
+                                <br />
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{entry.actor_role}</span>
+                              </td>
+                              <td style={{ fontSize: '12px', fontStyle: 'italic', maxWidth: '200px' }}>
+                                &ldquo;{entry.reason}&rdquo;
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -452,6 +645,27 @@ export function StudentDrawer({ dossier, isLoading, onClose }: StudentDrawerProp
                 Close Dossier
               </button>
             </div>
+
+            {/* Edit Student Modal */}
+            {isEditModalOpen && (
+              <EditStudentModal
+                isOpen={isEditModalOpen}
+                student={stu}
+                onClose={() => setIsEditModalOpen(false)}
+                onSaved={handleSaveStudent}
+              />
+            )}
+
+            {/* Add Enrolment Modal */}
+            {isEnrolModalOpen && stu && (
+              <AddEnrolmentModal
+                isOpen={isEnrolModalOpen}
+                student={stu}
+                existingEnrolmentCohortIds={activeDossier.enrolments.map((e) => (e as any).cohort_id).filter(Boolean)}
+                onClose={() => setIsEnrolModalOpen(false)}
+                onEnrolled={refreshDossier}
+              />
+            )}
           </>
         ) : null}
       </div>

@@ -62,12 +62,16 @@ export interface Invoice {
   totalAmount: number;
   incomeCategory: string;
   status: InvoiceStatus;
-  installmentDetails?: Array<{
-    dueDate: string;
-    amount: number;
-    description: string;
-    isPaid?: boolean;
-  }>;
+  installmentDetails?: Array<any>;
+  parentName?: string | null;
+  notes?: string | null;
+  comments?: string | null;
+  termsAndConditions?: string | null;
+  paymentAccountId?: string | null;
+  paymentAccountSnapshot?: PaymentAccountData | null;
+  trainingMode?: string | null;
+  duration?: string | null;
+  schedule?: string | null;
   source: string;
   createdAt: string;
   createdBy?: string | null;
@@ -417,4 +421,61 @@ export interface BudgetVsActualSummary {
   nearLimitCategories: BudgetVsActualCategory[];
   hasOverspending: boolean;
 }
+
+// ─── Settings & Payment Accounts Contracts ────────────────────────────────────
+
+export interface FinanceSettingsData {
+  companyName: string;
+  tradingName: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+  taxId: string;
+  registrationNumber: string;
+  invoiceFooter: string;
+  defaultTerms: string;
+  defaultInstructions?: string;
+}
+
+export interface PaymentAccountData {
+  id: string;
+  tenantId: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  accountType: string;
+  currency: string;
+  isDefault: boolean;
+  isActive: boolean;
+  instructions?: string | null;
+}
+
+export const DEFAULT_FINANCE_SETTINGS: FinanceSettingsData = {
+  companyName: 'CLASPTEK COACHING LIMITED',
+  tradingName: 'Clasptek Coaching Limited',
+  address: '1, Baptist Close Off Access Ibiyemi Avenue, Access International School Bus-stop, Magboro, Ogun 110115 NG',
+  phone: '+2347041316925',
+  email: 'info@clasptek.org',
+  website: 'https://clasptek.org',
+  taxId: 'TIN-9842104-001',
+  registrationNumber: 'RC-1849201',
+  invoiceFooter: 'Thank you for choosing Clasptek Coaching Limited! Learn | Lead | Impact — clasptek.org',
+  defaultTerms: 'Payment is due according to the schedule specified above. Certificates and course completion verification are issued upon full settlement of tuition fees.',
+  defaultInstructions: 'Please use invoice number as your payment reference.',
+};
+
+export const DEFAULT_PAYMENT_ACCOUNT: PaymentAccountData = {
+  id: 'acc_gtb_primary',
+  tenantId: 'clasptek_training_operations',
+  accountName: 'Clasptek Coaching Limited',
+  bankName: 'Sterling Bank',
+  accountNumber: '0098457631',
+  accountType: 'Corporate Current',
+  currency: 'NGN',
+  isDefault: true,
+  isActive: true,
+  instructions: 'Please use invoice number as your payment reference.',
+};
+
 

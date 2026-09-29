@@ -9,6 +9,8 @@
 import React, { useState, useMemo } from 'react';
 import { AuditRecord } from '@/lib/audit/queries';
 import { downloadSafeCsv } from '@/lib/utils/csv';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface AuditLogProps {
   initialLogs: AuditRecord[];
@@ -42,6 +44,17 @@ export function AuditLogPageClient({ initialLogs }: AuditLogProps) {
       return true;
     });
   }, [logs, filterAction, searchTerm]);
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedLogs,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredLogs, {
+    initialPageSize: 25,
+    resetDeps: [logs, filterAction, searchTerm],
+  });
 
   // Export CSV using certified formula injection defense
   const handleExportCsv = () => {
@@ -116,17 +129,17 @@ export function AuditLogPageClient({ initialLogs }: AuditLogProps) {
           </div>
         </div>
 
-        {/* Audit Table */}
-        <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
+        {/* Desktop & Tablet Audit Table */}
+        <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
           <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
                 <th style={{ padding: '10px' }}>Timestamp</th>
                 <th style={{ padding: '10px' }}>Action</th>
-                <th style={{ padding: '10px' }}>Entity</th>
+                <th className="cp-col-secondary" style={{ padding: '10px' }}>Entity</th>
                 <th style={{ padding: '10px' }}>Reference</th>
                 <th style={{ padding: '10px' }}>Actor</th>
-                <th style={{ padding: '10px' }}>Role</th>
+                <th className="cp-col-tertiary" style={{ padding: '10px' }}>Role</th>
               </tr>
             </thead>
             <tbody>
@@ -137,7 +150,7 @@ export function AuditLogPageClient({ initialLogs }: AuditLogProps) {
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((a) => (
+                paginatedLogs.map((a) => (
                   <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '10px', fontFamily: 'monospace', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
                       {new Date(a.createdAt).toLocaleString('en-GB')}
@@ -145,14 +158,14 @@ export function AuditLogPageClient({ initialLogs }: AuditLogProps) {
                     <td style={{ padding: '10px', fontWeight: 700, color: 'var(--primary)' }}>
                       {a.action}
                     </td>
-                    <td style={{ padding: '10px' }}>{a.entityType || 'General'}</td>
+                    <td className="cp-col-secondary" style={{ padding: '10px' }}>{a.entityType || 'General'}</td>
                     <td style={{ padding: '10px', fontFamily: 'monospace', fontSize: '11.5px' }}>
                       {a.entityId || 'N/A'} {a.entityName ? `(${a.entityName})` : ''}
                     </td>
                     <td style={{ padding: '10px' }}>
                       {a.actorId ? `User (${a.actorId.slice(0, 8)})` : 'System'}
                     </td>
-                    <td style={{ padding: '10px' }}>
+                    <td className="cp-col-tertiary" style={{ padding: '10px' }}>
                       <span
                         className="cp-pill"
                         style={{
@@ -173,6 +186,70 @@ export function AuditLogPageClient({ initialLogs }: AuditLogProps) {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Vertical Cards */}
+        <div className="cp-cards-mobile">
+          {filteredLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+              No audit records matching the current filter.
+            </div>
+          ) : (
+            paginatedLogs.map((a) => (
+              <div key={a.id} className="cp-mobile-record-card">
+                <div className="cp-mobile-record-header">
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--primary)' }}>
+                      {a.action}
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {new Date(a.createdAt).toLocaleString('en-GB')}
+                    </div>
+                  </div>
+                  <span
+                    className="cp-pill"
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '10.5px',
+                      fontWeight: 700,
+                      background: '#EFF6FF',
+                      color: '#1D4ED8',
+                    }}
+                  >
+                    {a.actorRole || 'Staff'}
+                  </span>
+                </div>
+
+                <div className="cp-mobile-record-grid">
+                  <div className="cp-mobile-record-field">
+                    <span className="cp-mobile-record-label">Entity</span>
+                    <span className="cp-mobile-record-value">{a.entityType || 'General'}</span>
+                  </div>
+                  <div className="cp-mobile-record-field">
+                    <span className="cp-mobile-record-label">Actor</span>
+                    <span className="cp-mobile-record-value">{a.actorId ? `User (${a.actorId.slice(0, 8)})` : 'System'}</span>
+                  </div>
+                  <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                    <span className="cp-mobile-record-label">Reference</span>
+                    <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                      {a.entityId || 'N/A'} {a.entityName ? `(${a.entityName})` : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Standard Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalRecords={filteredLogs.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          entityLabel="logs"
+        />
       </div>
     </div>
   );

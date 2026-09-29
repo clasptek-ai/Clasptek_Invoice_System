@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
       'NEW',
       'CONTACTED',
       'INTERESTED',
-      'APPLIED',
-      'OFFERED',
+      'INVOICE_REQUESTED',
+      'INVOICE_ISSUED',
       'ENROLLED',
       'LOST',
     ];

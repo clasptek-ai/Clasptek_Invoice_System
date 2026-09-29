@@ -1,5 +1,6 @@
 import React from 'react';
 import { getPayments, getInvoices, getFinancialMetrics, getFinanceTenantId } from '@/lib/finance/queries';
+import { getFinanceSettings } from '@/lib/settings/queries';
 import { PaymentsPageClient } from './PaymentsPageClient';
 
 export const metadata = {
@@ -10,10 +11,11 @@ export const metadata = {
 export default async function PaymentsPage() {
   const tenantId = await getFinanceTenantId();
 
-  const [payments, allInvoices, metrics] = await Promise.all([
+  const [payments, allInvoices, metrics, financeSettings] = await Promise.all([
     getPayments(tenantId),
     getInvoices(tenantId),
     getFinancialMetrics(tenantId),
+    getFinanceSettings(tenantId),
   ]);
 
   const targetInvoices = allInvoices
@@ -32,8 +34,11 @@ export default async function PaymentsPage() {
       <PaymentsPageClient
         initialPayments={payments}
         targetInvoices={targetInvoices}
+        allInvoices={allInvoices}
+        financeSettings={financeSettings}
         metrics={metrics}
       />
     </div>
   );
 }
+

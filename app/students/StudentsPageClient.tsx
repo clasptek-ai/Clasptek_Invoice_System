@@ -12,6 +12,7 @@ import type { StudentSummary, StudentDossier } from '@/types/students';
 import { StudentTable } from '@/components/students/StudentTable';
 import { StudentFilters } from '@/components/students/StudentFilters';
 import { StudentDrawer } from '@/components/students/StudentDrawer';
+import { Pagination } from '@/components/tables/Pagination';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 
 interface StudentsPageClientProps {
@@ -20,14 +21,16 @@ interface StudentsPageClientProps {
   currentSearch: string;
   currentStatus: string;
   currentPage: number;
+  pageSize: number;
 }
 
 export function StudentsPageClient({
   initialStudents,
-  totalCount: _totalCount,
+  totalCount,
   currentSearch,
-  currentStatus: _currentStatus,
-  currentPage: _currentPage,
+  currentStatus,
+  currentPage,
+  pageSize,
 }: StudentsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,6 +40,25 @@ export function StudentsPageClient({
   const [dossier, setDossier] = useState<StudentDossier | null>(null);
   const [isLoadingDossier, setIsLoadingDossier] = useState<boolean>(false);
 
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('page', String(newPage));
+      startTransition(() => router.push(`/students?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newPageSize: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('pageSize', String(newPageSize));
+      params.delete('page');
+      startTransition(() => router.push(`/students?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
+
   const handleSearchChange = useCallback(
     (search: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -44,6 +66,20 @@ export function StudentsPageClient({
         params.set('search', search.trim());
       } else {
         params.delete('search');
+      }
+      params.delete('page');
+      startTransition(() => router.push(`/students?${params.toString()}`));
+    },
+    [router, searchParams]
+  );
+
+  const handleStatusChange = useCallback(
+    (status: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (status && status !== 'ALL') {
+        params.set('status', status);
+      } else {
+        params.delete('status');
       }
       params.delete('page');
       startTransition(() => router.push(`/students?${params.toString()}`));
@@ -104,19 +140,19 @@ export function StudentsPageClient({
   }, [initialStudents]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
       <div className="cp-card">
         {/* Card Header matching legacy index.html line 24670 */}
-        <div className="cp-card-header" style={{ flexWrap: 'wrap', gap: '10px' }}>
-          <div>
-            <div className="cp-section-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="cp-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ minWidth: '220px', flex: '1 1 auto' }}>
+            <div className="cp-section-title" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0F172A)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span aria-hidden="true">👥</span> Student &amp; Client Directory
             </div>
             <div className="cp-section-desc" style={{ fontSize: '13px', color: 'var(--text-muted, #64748B)', marginTop: '3px' }}>
               Single source of truth for student journey, billing history, receipts, cohort enrolments, and balance tracking.
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <a
               href="/apply"
               className="cp-btn sm primary"
@@ -137,8 +173,13 @@ export function StudentsPageClient({
           </div>
         </div>
 
-        {/* Search input filter */}
-        <StudentFilters currentSearch={currentSearch} onSearchChange={handleSearchChange} />
+        {/* Search & status filter toolbar */}
+        <StudentFilters
+          currentSearch={currentSearch}
+          currentStatus={currentStatus}
+          onSearchChange={handleSearchChange}
+          onStatusChange={handleStatusChange}
+        />
 
         {/* Directory Table */}
         <StudentTable
@@ -146,6 +187,16 @@ export function StudentsPageClient({
           onOpenProfile={handleOpenProfile}
           onEditStudent={handleOpenProfile}
           onOpen360={handleOpenProfile}
+        />
+
+        {/* Standard Pagination Footer */}
+        <Pagination
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          entityLabel="students"
         />
       </div>
 
@@ -155,6 +206,9 @@ export function StudentsPageClient({
           dossier={dossier}
           isLoading={isLoadingDossier}
           onClose={handleCloseDrawer}
+          onStudentUpdated={() => {
+            startTransition(() => router.refresh());
+          }}
         />
       )}
     </div>

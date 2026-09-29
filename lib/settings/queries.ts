@@ -35,17 +35,17 @@ export interface PaymentAccountData {
 }
 
 export const DEFAULT_FINANCE_SETTINGS: FinanceSettingsData = {
-  companyName: 'Clasptek Coaching Limited',
-  tradingName: 'Clasptek',
-  address: 'Plot 12, Commercial Avenue, Victoria Island, Lagos, Nigeria',
-  phone: '+234 800 CLASPTEK',
-  email: 'finance@clasptek.org',
+  companyName: 'CLASPTEK COACHING LIMITED',
+  tradingName: 'Clasptek Coaching Limited',
+  address: '1, Baptist Close Off Access Ibiyemi Avenue, Access International School Bus-stop, Magboro, Ogun 110115 NG',
+  phone: '+2347041316925',
+  email: 'info@clasptek.org',
   website: 'https://clasptek.org',
-  taxId: 'TIN-98234710',
-  registrationNumber: 'RC-1849204',
-  invoiceFooter: 'Thank you for choosing Clasptek for professional executive learning.',
-  defaultTerms: 'Payment is due within 14 calendar days from invoice issue date. Access to cohort materials requires minimum 60% tuition commitment.',
-  defaultInstructions: 'Please quote your Invoice Number as the transaction payment reference.',
+  taxId: 'TIN-9842104-001',
+  registrationNumber: 'RC-1849201',
+  invoiceFooter: 'Thank you for choosing Clasptek Coaching Limited! Learn | Lead | Impact — clasptek.org',
+  defaultTerms: 'Payment is due according to the schedule specified above. Certificates and course completion verification are issued upon full settlement of tuition fees.',
+  defaultInstructions: 'Please use invoice number as your payment reference.',
 };
 
 /**

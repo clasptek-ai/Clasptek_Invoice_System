@@ -44,7 +44,16 @@ export async function PATCH(
       );
     }
 
-    const { error: updateErr } = await updateEnquiryStatus(id, newStatus);
+    const staffName =
+      (user.user_metadata?.full_name as string) ||
+      (user.user_metadata?.name as string) ||
+      user.email ||
+      'Admissions Staff';
+
+    const { error: updateErr } = await updateEnquiryStatus(id, newStatus, {
+      actorName: staffName,
+      reason: (body.reason as string) || `Status updated to ${newStatus}`,
+    });
     if (updateErr) {
       return NextResponse.json({ error: updateErr }, { status: 500 });
     }

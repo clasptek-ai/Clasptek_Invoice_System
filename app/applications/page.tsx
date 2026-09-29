@@ -16,8 +16,8 @@ import type { ApplicationStatus, ApplicationSource } from '@/types/admissions';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Intake Applications — Clasptek Portal',
-  description: 'Admissions intake management, identity resolution, and student conversion pipeline.',
+  title: 'Student Registration & Intake — Clasptek Portal',
+  description: 'Student registration intake management, identity resolution, and student conversion pipeline.',
 };
 
 interface PageProps {
@@ -42,6 +42,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
   const programme = params.programme ?? '';
   const source = (params.source ?? 'ALL') as ApplicationSource | 'ALL';
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
+  const rawPageSize = parseInt(params.pageSize ?? '25', 10);
+  const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
 
   // 3. Parallel fetch data server-side
   const [appsResult, statusCounts, programmes] = await Promise.all([
@@ -51,6 +53,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       programmeId: programme,
       source,
       page,
+      pageSize,
     }),
     getApplicationStatusCounts(),
     getProgrammes(),
@@ -71,6 +74,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       currentProgramme={programme}
       currentSource={source}
       currentPage={page}
+      pageSize={pageSize}
     />
   );
 }

@@ -7,10 +7,10 @@
  *   public.crm_intake_counters
  *
  * DB-authoritative enquiry statuses (from CHECK constraint):
- *   NEW, CONTACTED, INTERESTED, APPLIED, OFFERED, ENROLLED, LOST
+ *   NEW, CONTACTED, INTERESTED, INVOICE_REQUESTED, INVOICE_ISSUED, ENROLLED, LOST
  *
- * LEGACY NOTE: The old UI referenced INVOICE_REQUESTED and INVOICE_ISSUED.
- * These do NOT exist in the database CHECK constraint and are NOT implemented here.
+ * Operational Enquiry Lifecycle:
+ *   NEW -> CONTACTED -> INTERESTED -> INVOICE_REQUESTED -> INVOICE_ISSUED -> ENROLLED -> LOST
  */
 
 // ─── Enquiry (public.enquiries — 11 columns) ────────────────────────────────
@@ -19,8 +19,8 @@ export type EnquiryStatus =
   | 'NEW'
   | 'CONTACTED'
   | 'INTERESTED'
-  | 'APPLIED'
-  | 'OFFERED'
+  | 'INVOICE_REQUESTED'
+  | 'INVOICE_ISSUED'
   | 'ENROLLED'
   | 'LOST';
 
@@ -39,25 +39,85 @@ export interface Enquiry {
   updated_at: string;
   /** Joined from programmes table (not a DB column on enquiries) */
   programme_name?: string | null;
+  /** Reconciled authoritative financial summary */
+  financials?: EnquiryFinancials;
+  /** Authoritative Student registration linkage */
+  is_registered_student?: boolean;
+  linked_student_id?: string | null;
+  linked_student_number?: string | null;
+}
+
+// ─── Financial Status & Admissions History Types ──────────────────────────────
+
+export type EnquiryBillingStatus =
+  | 'NOT_INVOICED'
+  | 'INVOICE_REQUESTED'
+  | 'INVOICED'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'OVERDUE';
+
+export const ENQUIRY_BILLING_STATUS_LABELS: Record<EnquiryBillingStatus, string> = {
+  NOT_INVOICED: 'Not Invoiced',
+  INVOICE_REQUESTED: 'Invoice Requested',
+  INVOICED: 'Invoiced',
+  PARTIALLY_PAID: 'Partially Paid',
+  PAID: 'Paid',
+  OVERDUE: 'Overdue',
+};
+
+export interface EnquiryInvoiceSummary {
+  id: string;
+  invoiceNo: number;
+  invoiceDisplayNo: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  status: string;
+  dueDate: string;
+  invoiceDate: string;
+  createdAt: string;
+}
+
+export interface EnquiryFinancials {
+  billingStatus: EnquiryBillingStatus;
+  billingStatusLabel: string;
+  totalInvoiced: number;
+  amountPaid: number;
+  balanceDue: number;
+  invoicesCount: number;
+  invoices: EnquiryInvoiceSummary[];
+}
+
+export interface AdmissionsTimelineEvent {
+  id: string;
+  date: string;
+  activityType: string;
+  staffName: string;
+  description: string;
+  previousStatus?: string | null;
+  newStatus?: string | null;
+  relatedReference?: string | null;
+  timestamp: number;
 }
 
 /** Allowed forward transitions per status */
 export const ENQUIRY_TRANSITIONS: Record<EnquiryStatus, EnquiryStatus[]> = {
   NEW: ['CONTACTED', 'LOST'],
   CONTACTED: ['INTERESTED', 'LOST'],
-  INTERESTED: ['APPLIED', 'LOST'],
-  APPLIED: ['OFFERED', 'LOST'],
-  OFFERED: ['ENROLLED', 'LOST'],
+  INTERESTED: ['INVOICE_REQUESTED', 'LOST'],
+  INVOICE_REQUESTED: ['INVOICE_ISSUED', 'LOST'],
+  INVOICE_ISSUED: ['ENROLLED', 'LOST'],
   ENROLLED: [],
-  LOST: [],
+  LOST: ['CONTACTED'],
 };
 
 export const ENQUIRY_STATUS_LABELS: Record<EnquiryStatus, string> = {
   NEW: 'New Lead',
   CONTACTED: 'Contacted',
   INTERESTED: 'Interested',
-  APPLIED: 'Applied',
-  OFFERED: 'Offered',
+  INVOICE_REQUESTED: 'Invoice Requested',
+  INVOICE_ISSUED: 'Invoice Issued',
   ENROLLED: 'Enrolled',
   LOST: 'Lost',
 };
@@ -230,6 +290,7 @@ export interface EnquiryFilters {
   search: string;
   status: EnquiryStatus | 'all';
   page: number;
+  pageSize?: number;
 }
 
 export interface ApplicationFilters {
@@ -238,6 +299,7 @@ export interface ApplicationFilters {
   programmeId: string;
   source: ApplicationSource | 'ALL';
   page: number;
+  pageSize?: number;
 }
 
 // ─── Cohort (minimal, for conversion selector) ───────────────────────────────

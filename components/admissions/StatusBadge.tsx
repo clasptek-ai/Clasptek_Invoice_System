@@ -19,6 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
   NEW: 'New',
   CONTACTED: 'Contacted',
   INTERESTED: 'Interested',
+  INVOICE_REQUESTED: 'Invoice Requested',
+  INVOICE_ISSUED: 'Invoice Issued',
   APPLIED: 'Applied',
   OFFERED: 'Offered',
   ENROLLED: 'Enrolled',

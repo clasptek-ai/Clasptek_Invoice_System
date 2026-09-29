@@ -129,13 +129,24 @@ async function runApplicantPortalSuite() {
     assert.strictEqual(convertApi.includes("convert_intake_application"), true);
   });
 
-  // --- 7. NAVIGATION ACCESSIBILITY ---
-  console.log('\n--- Test Suite 7: Public Navigation & Portal Discovery ---');
+  // --- 7. OBSOLETE PORTAL REMOVAL & WORKFLOW STREAMLINING ---
+  console.log('\n--- Test Suite 7: Obsolete Portal Removal Verification ---');
 
-  it('Applicant Portal registered under Admissions & CRM in navigation config', () => {
+  it('Intake Tracking Portal removed from navigation config (Task ID: CLASPTEK-REMOVE-INTAKE-APPLICANT-PORTALS-001)', () => {
     const navConfig = fs.readFileSync(path.join(__dirname, '..', 'lib', 'config', 'navigation.ts'), 'utf8');
-    assert.strictEqual(navConfig.includes("href: '/applicant-portal'"), true);
-    assert.strictEqual(navConfig.includes("label: 'Applicant Tracking Portal'"), true);
+    assert.strictEqual(navConfig.includes("href: '/applicant-portal'"), false, 'Applicant portal link must be removed from navigation');
+    assert.strictEqual(navConfig.includes("label: 'Intake Tracking Portal'"), false, 'Intake Tracking Portal label must be removed from navigation');
+  });
+
+  it('Applicant Portal button removed from Student Registration & Intake page', () => {
+    const appsPage = fs.readFileSync(path.join(__dirname, '..', 'app', 'applications', 'ApplicationsPageClient.tsx'), 'utf8');
+    assert.strictEqual(appsPage.includes('btnOpenApplicantPortal'), false, 'btnOpenApplicantPortal must be removed');
+    assert.strictEqual(appsPage.includes('Applicant Portal'), false, 'Applicant Portal text must be removed');
+  });
+
+  it('/applicant-portal route safely redirects to /applications', () => {
+    const portalPage = fs.readFileSync(path.join(__dirname, '..', 'app', 'applicant-portal', 'page.tsx'), 'utf8');
+    assert.strictEqual(portalPage.includes("redirect('/applications')"), true, '/applicant-portal must redirect to /applications');
   });
 
   console.log('\n===============================================================');

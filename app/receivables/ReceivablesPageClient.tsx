@@ -10,6 +10,8 @@ import React, { useState, useMemo } from 'react';
 import { Invoice, ReceivablesAgeingBuckets, CollectionPriority, CollectionNote } from '@/types/finance';
 import { UserRole } from '@/types/auth';
 import { downloadSafeCsv } from '@/lib/utils/csv';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface ReceivablesClientProps {
   initialBuckets: ReceivablesAgeingBuckets;
@@ -71,6 +73,17 @@ export function ReceivablesPageClient({
       return true;
     });
   }, [invoices, search, selectedBucket]);
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedInvoices,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredInvoices, {
+    initialPageSize: 25,
+    resetDeps: [search, selectedBucket],
+  });
 
   const handleExportCsv = () => {
     const headers = [
@@ -291,52 +304,116 @@ export function ReceivablesPageClient({
             </div>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Due Date</th>
-                  <th>Student Name</th>
-                  <th>Phone</th>
-                  <th style={{ textAlign: 'right' }}>Total</th>
-                  <th style={{ textAlign: 'right' }}>Paid</th>
-                  <th style={{ textAlign: 'right' }}>Outstanding Due</th>
-                  <th>Ageing</th>
-                  <th>Priority Score</th>
-                  <th style={{ textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv) => (
-                  <tr key={inv.id}>
-                    <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                      #{inv.invoiceNo}
-                    </td>
-                    <td
-                      style={{
-                        color: inv.priority.priority === 'CRITICAL' ? 'var(--danger)' : 'inherit',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {inv.dueDate}
-                    </td>
-                    <td style={{ fontWeight: 700 }}>{inv.studentName}</td>
-                    <td>{inv.studentPhone || 'N/A'}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      ₦{inv.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ textAlign: 'right', color: 'var(--success)', whiteSpace: 'nowrap' }}>
-                      ₦{inv.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
-                      ₦{inv.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {inv.daysOverdue <= 0 ? 'Current' : `${inv.daysOverdue}d overdue`}
-                    </td>
-                    <td>
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Due Date</th>
+                    <th>Student Name</th>
+                    <th className="cp-col-secondary">Phone</th>
+                    <th className="cp-col-secondary" style={{ textAlign: 'right' }}>Total</th>
+                    <th className="cp-col-secondary" style={{ textAlign: 'right' }}>Paid</th>
+                    <th style={{ textAlign: 'right' }}>Outstanding Due</th>
+                    <th>Ageing</th>
+                    <th className="cp-col-tertiary">Priority Score</th>
+                    <th style={{ textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedInvoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                        #{inv.invoiceNo}
+                      </td>
+                      <td
+                        style={{
+                          color: inv.priority.priority === 'CRITICAL' ? 'var(--danger)' : 'inherit',
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {inv.dueDate}
+                      </td>
+                      <td style={{ fontWeight: 700 }}>
+                        {inv.studentName}
+                        {inv.studentPhone && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>
+                            {inv.studentPhone}
+                          </div>
+                        )}
+                      </td>
+                      <td className="cp-col-secondary">{inv.studentPhone || 'N/A'}</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        ₦{inv.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'right', color: 'var(--success)', whiteSpace: 'nowrap' }}>
+                        ₦{inv.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
+                        ₦{inv.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {inv.daysOverdue <= 0 ? 'Current' : `${inv.daysOverdue}d overdue`}
+                      </td>
+                      <td className="cp-col-tertiary">
+                        <span
+                          className={`cp-pill ${
+                            inv.priority.priority === 'CRITICAL'
+                              ? 'danger'
+                              : inv.priority.priority === 'HIGH'
+                              ? 'pending'
+                              : inv.priority.priority === 'MEDIUM'
+                              ? 'category-pill'
+                              : 'active'
+                          }`}
+                        >
+                          {inv.priority.priority} ({inv.priority.score}pts)
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button
+                          className="cp-btn sm secondary"
+                          onClick={() => handleOpenNotes(inv)}
+                          title="View / Add Collection Notes"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
+                          📝 Notes
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Stack */}
+            <div className="cp-cards-mobile">
+              {paginatedInvoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="cp-mobile-record-card"
+                  onClick={() => handleOpenNotes(inv)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleOpenNotes(inv)}
+                  aria-label={`View receivables notes for #${inv.invoiceNo}`}
+                >
+                  <div className="cp-mobile-record-header">
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {inv.studentName}
+                      </h4>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Due: {inv.dueDate} &bull; {inv.daysOverdue <= 0 ? 'Current' : `${inv.daysOverdue}d overdue`}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                        #{inv.invoiceNo}
+                      </span>
                       <span
                         className={`cp-pill ${
                           inv.priority.priority === 'CRITICAL'
@@ -347,25 +424,67 @@ export function ReceivablesPageClient({
                             ? 'category-pill'
                             : 'active'
                         }`}
+                        style={{ fontSize: '10px' }}
                       >
-                        {inv.priority.priority} ({inv.priority.score}pts)
+                        {inv.priority.priority}
                       </span>
-                    </td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button
-                        className="cp-btn sm secondary"
-                        onClick={() => handleOpenNotes(inv)}
-                        title="View / Add Collection Notes"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      >
-                        📝 Notes
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-grid">
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Outstanding Due</span>
+                      <span className="cp-mobile-record-value" style={{ color: 'var(--warning)', fontSize: '14px', fontWeight: 800 }}>
+                        ₦{inv.balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Total Invoiced</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                        ₦{inv.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Paid Amount</span>
+                      <span className="cp-mobile-record-value" style={{ color: 'var(--success)', fontWeight: 600 }}>
+                        ₦{inv.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Contact</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                        {inv.studentPhone || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="cp-mobile-record-actions">
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenNotes(inv);
+                      }}
+                      style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                    >
+                      📝 Collection Notes
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredInvoices.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="receivables"
+            />
+          </>
         )}
       </div>
 

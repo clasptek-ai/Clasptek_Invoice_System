@@ -1,19 +1,16 @@
 /**
- * app/applicant-portal/page.tsx — Server Component for Applicant Status & Admissions Portal
- * Phase 9E: User Workspaces Migration
- * Publicly accessible candidate self-service portal with zero-trust lookup.
+ * app/applicant-portal/page.tsx
+ * Task ID: CLASPTEK-REMOVE-INTAKE-APPLICANT-PORTALS-001
+ * 
+ * Applicant Portal & Application Tracking have been removed as they are obsolete
+ * in the Clasptek operating model. Any navigation here redirects to the canonical
+ * Student Registration & Intake pipeline.
  */
 
-import React from 'react';
-import { ApplicantPortalClient } from './ApplicantPortalClient';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'Applicant Status & Tracking — Clasptek Admissions',
-  description: 'Track vocational training application progress, admission decisions, and document verification in real time.',
-};
-
 export default function ApplicantPortalPage() {
-  return <ApplicantPortalClient />;
+  redirect('/applications');
 }

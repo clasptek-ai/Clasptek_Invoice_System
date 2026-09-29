@@ -704,7 +704,7 @@ export function AttendancePageClient({
               </div>
             )}
 
-            <div className="cp-table-wrap">
+            <div className="cp-table-wrap cp-table-desktop">
               <table className="cp-table">
                 <thead>
                   <tr>
@@ -817,6 +817,69 @@ export function AttendancePageClient({
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card Stack for Session Marking */}
+            <div className="cp-cards-mobile" style={{ marginTop: '12px' }}>
+              {enrolments.map((en) => {
+                const attRec = sessionAttendance.find((a) => a.enrolmentId === en.enrolmentId);
+                const currentStatus = attRec ? attRec.attendanceStatus : 'NOT_RECORDED';
+
+                let pillColor = 'draft';
+                if (currentStatus === 'PRESENT') pillColor = 'paid';
+                else if (currentStatus === 'LATE') pillColor = 'active';
+                else if (currentStatus === 'EXCUSED') pillColor = 'category-pill';
+                else if (currentStatus === 'ABSENT') pillColor = 'danger';
+
+                return (
+                  <div key={en.enrolmentId} className="cp-mobile-record-card" style={{ gap: '8px' }}>
+                    <div className="cp-mobile-record-header">
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {en.studentName}
+                        </h4>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {en.studentNumber}
+                        </div>
+                      </div>
+                      <span className={`cp-pill ${pillColor}`} style={{ fontWeight: 700, fontSize: 10 }}>
+                        {currentStatus.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <button
+                        className={`cp-btn sm ${currentStatus === 'PRESENT' ? 'paid' : 'secondary'}`}
+                        style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                        onClick={() => handleMarkAttendance(en.enrolmentId, 'PRESENT')}
+                      >
+                        Present
+                      </button>
+                      <button
+                        className={`cp-btn sm ${currentStatus === 'LATE' ? 'paid' : 'secondary'}`}
+                        style={{ flex: 1, padding: '6px 4px', fontSize: '11px', color: '#D97706' }}
+                        onClick={() => handleMarkAttendance(en.enrolmentId, 'LATE')}
+                      >
+                        Late
+                      </button>
+                      <button
+                        className={`cp-btn sm ${currentStatus === 'EXCUSED' ? 'paid' : 'secondary'}`}
+                        style={{ flex: 1, padding: '6px 4px', fontSize: '11px', color: '#2563EB' }}
+                        onClick={() => handleMarkAttendance(en.enrolmentId, 'EXCUSED')}
+                      >
+                        Excused
+                      </button>
+                      <button
+                        className={`cp-btn sm ${currentStatus === 'ABSENT' ? 'danger' : 'secondary'}`}
+                        style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                        onClick={() => handleMarkAttendance(en.enrolmentId, 'ABSENT')}
+                      >
+                        Absent
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </>
         )}
       </div>
@@ -832,18 +895,19 @@ export function AttendancePageClient({
           </div>
         </div>
 
-        <div className="cp-table-wrap">
+        {/* Desktop & Tablet Progression Table */}
+        <div className="cp-table-wrap cp-table-desktop">
           <table className="cp-table">
             <thead>
               <tr>
                 <th>Student ID</th>
                 <th>Student Name</th>
-                <th style={{ textAlign: 'center' }}>Present</th>
-                <th style={{ textAlign: 'center' }}>Late</th>
-                <th style={{ textAlign: 'center' }}>Excused</th>
-                <th style={{ textAlign: 'center' }}>Absent</th>
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Present</th>
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Late</th>
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Excused</th>
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Absent</th>
                 <th style={{ textAlign: 'center' }}>Attendance %</th>
-                <th style={{ textAlign: 'center' }}>Benchmark</th>
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Benchmark</th>
                 <th style={{ textAlign: 'center' }}>Certificate Eligibility</th>
               </tr>
             </thead>
@@ -874,14 +938,14 @@ export function AttendancePageClient({
                     <tr key={en.enrolmentId}>
                       <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{en.studentNumber}</td>
                       <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{en.studentName}</td>
-                      <td style={{ textAlign: 'center', color: 'var(--success)', fontWeight: 700 }}>{p}</td>
-                      <td style={{ textAlign: 'center', color: '#D97706', fontWeight: 700 }}>{l}</td>
-                      <td style={{ textAlign: 'center', color: '#2563EB', fontWeight: 600 }}>{ex}</td>
-                      <td style={{ textAlign: 'center', color: 'var(--danger)', fontWeight: 600 }}>{ab}</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'center', color: 'var(--success)', fontWeight: 700 }}>{p}</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'center', color: '#D97706', fontWeight: 700 }}>{l}</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'center', color: '#2563EB', fontWeight: 600 }}>{ex}</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'center', color: 'var(--danger)', fontWeight: 600 }}>{ab}</td>
                       <td style={{ textAlign: 'center', fontWeight: 800, fontSize: 13 }}>
                         {deliveredSessions.length === 0 ? '—' : `${pct}%`}
                       </td>
-                      <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>&ge; 80%</td>
+                      <td className="cp-col-secondary" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>&ge; 80%</td>
                       <td style={{ textAlign: 'center' }}>
                         <span
                           className={`cp-pill ${isEligible ? 'paid' : 'draft'}`}
@@ -896,6 +960,59 @@ export function AttendancePageClient({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Progression Card Stack */}
+        <div className="cp-cards-mobile">
+          {enrolments.map((en) => {
+            let p = 0, l = 0, ex = 0, ab = 0;
+            deliveredSessions.forEach((ds) => {
+              const r = attendance.find((a) => a.sessionId === ds.id && a.enrolmentId === en.enrolmentId);
+              if (r?.attendanceStatus === 'PRESENT') p++;
+              else if (r?.attendanceStatus === 'LATE') l++;
+              else if (r?.attendanceStatus === 'EXCUSED') ex++;
+              else if (r?.attendanceStatus === 'ABSENT') ab++;
+            });
+
+            const pct = deliveredSessions.length > 0
+              ? Math.round(((p + l + 0.5 * ex) / deliveredSessions.length) * 100)
+              : 0;
+            const isEligible = pct >= 80;
+
+            return (
+              <div key={en.enrolmentId} className="cp-mobile-record-card">
+                <div className="cp-mobile-record-header">
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {en.studentName}
+                    </h4>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{en.studentNumber}</div>
+                  </div>
+                  <span
+                    className={`cp-pill ${isEligible ? 'paid' : 'draft'}`}
+                    style={{ fontWeight: 700, fontSize: 10 }}
+                  >
+                    {deliveredSessions.length === 0 ? 'Pending' : isEligible ? 'Eligible' : 'Needs Improvement'}
+                  </span>
+                </div>
+
+                <div className="cp-mobile-record-grid">
+                  <div className="cp-mobile-record-field">
+                    <span className="cp-mobile-record-label">Attendance %</span>
+                    <span className="cp-mobile-record-value" style={{ fontSize: '15px', color: isEligible ? 'var(--success)' : 'var(--warning)' }}>
+                      {deliveredSessions.length === 0 ? '—' : `${pct}%`}
+                    </span>
+                  </div>
+                  <div className="cp-mobile-record-field">
+                    <span className="cp-mobile-record-label">Sessions Breakdown</span>
+                    <span className="cp-mobile-record-value" style={{ fontSize: '11px', fontWeight: 400 }}>
+                      P:{p} &bull; L:{l} &bull; Ex:{ex} &bull; Ab:{ab}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -11,6 +11,8 @@ import { Expense, ExpenseStatus, PaymentMethod } from '@/types/finance';
 import { UserRole } from '@/types/auth';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 import { AUTHORITATIVE_EXPENSE_TAXONOMY } from '@/lib/finance/taxonomy';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface ExpensesClientProps {
   initialExpenses: Expense[];
@@ -101,6 +103,17 @@ export function ExpensesPageClient({
       return true;
     });
   }, [expenses, search, selectedGroup]);
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedExpenses,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredExpenses, {
+    initialPageSize: 25,
+    resetDeps: [search, selectedGroup],
+  });
 
   // CSV Export with RFC-4180 formula injection defense
   const handleExportCsv = () => {
@@ -358,75 +371,161 @@ export function ExpensesPageClient({
             </div>
           </div>
         ) : (
-          <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-            <table className="cp-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Expense Group</th>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Beneficiary</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                  <th>Payment Method</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredExpenses.map((e) => (
-                  <tr key={e.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</td>
-                    <td style={{ fontWeight: 600 }}>{e.categoryGroup}</td>
-                    <td>{e.subCategory}</td>
-                    <td>
-                      {e.description}
-                      {e.reference && (
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 6 }}>
-                          ({e.reference})
+          <>
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+              <table className="cp-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th className="cp-col-secondary">Expense Group</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th className="cp-col-tertiary">Beneficiary</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                    <th className="cp-col-secondary">Payment Method</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedExpenses.map((e) => (
+                    <tr key={e.id}>
+                      <td style={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</td>
+                      <td className="cp-col-secondary" style={{ fontWeight: 600 }}>{e.categoryGroup}</td>
+                      <td>{e.subCategory}</td>
+                      <td>
+                        {e.description}
+                        {e.reference && (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 6 }}>
+                            ({e.reference})
+                          </span>
+                        )}
+                      </td>
+                      <td className="cp-col-tertiary">{e.beneficiary}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', whiteSpace: 'nowrap' }}>
+                        ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="cp-col-secondary">
+                        <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                          {e.paymentMethod}
                         </span>
-                      )}
-                    </td>
-                    <td>{e.beneficiary}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', whiteSpace: 'nowrap' }}>
-                      ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                        {e.paymentMethod}
+                      </td>
+                      <td>
+                        <span className={`cp-pill ${e.status}`}>
+                          {e.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {e.status === 'pending_approval' && canApprove && (
+                          <button
+                            className="cp-btn sm accent"
+                            onClick={() => handleApprove(e.id)}
+                            style={{ marginRight: 6 }}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
+                          <button
+                            className="cp-btn sm danger"
+                            onClick={() => setCancelModalData({ id: e.id, desc: e.description })}
+                            disabled={isPeriodLocked}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {e.status !== 'recorded' && e.status !== 'pending_approval' && '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Vertical Cards */}
+            <div className="cp-cards-mobile">
+              {paginatedExpenses.map((e) => (
+                <div key={e.id} className="cp-mobile-record-card">
+                  <div className="cp-mobile-record-header">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                        {e.subCategory}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {e.expenseDate} &middot; {e.categoryGroup}
+                      </div>
+                    </div>
+                    <span className={`cp-pill ${e.status}`}>
+                      {e.status.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                    {e.description}
+                    {e.reference && (
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 6 }}>
+                        ({e.reference})
                       </span>
-                    </td>
-                    <td>
-                      <span className={`cp-pill ${e.status}`}>
-                        {e.status.toUpperCase()}
+                    )}
+                  </div>
+
+                  <div className="cp-mobile-record-grid">
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Beneficiary</span>
+                      <span className="cp-mobile-record-value">{e.beneficiary || 'Internal'}</span>
+                    </div>
+                    <div className="cp-mobile-record-field">
+                      <span className="cp-mobile-record-label">Amount</span>
+                      <span className="cp-mobile-record-value" style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '13px' }}>
+                        ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    </td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    </div>
+                    <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                      <span className="cp-mobile-record-label">Payment Method</span>
+                      <span className="cp-mobile-record-value">{e.paymentMethod}</span>
+                    </div>
+                  </div>
+
+                  {((e.status === 'pending_approval' && canApprove) || ((e.status === 'recorded' || e.status === 'pending_approval') && canCancel)) && (
+                    <div className="cp-mobile-record-actions">
                       {e.status === 'pending_approval' && canApprove && (
                         <button
+                          type="button"
                           className="cp-btn sm accent"
                           onClick={() => handleApprove(e.id)}
-                          style={{ marginRight: 6 }}
+                          style={{ flex: 1, justifyContent: 'center' }}
                         >
                           Approve
                         </button>
                       )}
                       {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
                         <button
+                          type="button"
                           className="cp-btn sm danger"
                           onClick={() => setCancelModalData({ id: e.id, desc: e.description })}
                           disabled={isPeriodLocked}
+                          style={{ flex: 1, justifyContent: 'center' }}
                         >
                           Cancel
                         </button>
                       )}
-                      {e.status !== 'recorded' && e.status !== 'pending_approval' && '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={filteredExpenses.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="expenses"
+            />
+          </>
         )}
       </div>
 

@@ -11,6 +11,8 @@ import type { Certificate, CertificateEligibilityCandidate, PublicCertificateVer
 import type { UserRole } from '@/types/auth';
 import { CertificateDocument } from '@/components/certificates/CertificateDocument';
 import { DEFAULT_CERTIFICATE_TEMPLATES } from '@/lib/certificates/constants';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface Props {
   initialCertificates: Certificate[];
@@ -108,6 +110,28 @@ export const CertificatesClient: React.FC<Props> = ({
       return true;
     });
   }, [certificates, statusFilter, search]);
+
+  const {
+    currentPage: certPage,
+    pageSize: certPageSize,
+    paginatedItems: paginatedCertificates,
+    setPage: setCertPage,
+    setPageSize: setCertPageSize,
+  } = usePagination(filteredCertificates, {
+    initialPageSize: 25,
+    resetDeps: [search, statusFilter],
+  });
+
+  const {
+    currentPage: eligiblePage,
+    pageSize: eligiblePageSize,
+    paginatedItems: paginatedEligibleCandidates,
+    setPage: setEligiblePage,
+    setPageSize: setEligiblePageSize,
+  } = usePagination(eligibleCandidates, {
+    initialPageSize: 25,
+    resetDeps: [eligibleCandidates],
+  });
 
   // Handlers
   const handleOpenIssueModal = (candidate: CertificateEligibilityCandidate) => {
@@ -582,138 +606,222 @@ export const CertificatesClient: React.FC<Props> = ({
               </div>
             </div>
           ) : (
-            <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Certificate #
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Student Name
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Awarded Role &amp; Programme
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Issue Date
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Verification Token
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Status
-                    </th>
-                    <th
-                      style={{
-                        padding: '12px 14px',
-                        fontSize: '11.5px',
-                        color: '#475569',
-                        fontWeight: 700,
-                        textAlign: 'center',
-                      }}
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCertificates.map((cert) => {
-                    const isIssued = cert.status === 'ISSUED';
-                    const roleName = cert.certificateRoleSnapshot || 'Certified Professional';
-
-                    return (
-                      <tr
-                        key={cert.id}
-                        style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+            <>
+              {/* Desktop & Tablet Table */}
+              <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+                <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Certificate #
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Student Name
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Awarded Role &amp; Programme
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Issue Date
+                      </th>
+                      <th className="cp-col-secondary" style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Verification Token
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Status
+                      </th>
+                      <th
+                        style={{
+                          padding: '12px 14px',
+                          fontSize: '11.5px',
+                          color: '#475569',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                        }}
                       >
-                        <td
-                          style={{
-                            padding: '12px 14px',
-                            fontFamily: 'monospace',
-                            fontWeight: 800,
-                            color: '#14213D',
-                          }}
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedCertificates.map((cert) => {
+                      const isIssued = cert.status === 'ISSUED';
+                      const roleName = cert.certificateRoleSnapshot || 'Certified Professional';
+
+                      return (
+                        <tr
+                          key={cert.id}
+                          style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
                         >
-                          {cert.certificateNumber}
-                        </td>
-
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>
-                          {cert.studentNameSnapshot}
-                        </td>
-
-                        <td style={{ padding: '12px 14px' }}>
-                          <div style={{ fontWeight: 700, color: '#C1272D', fontSize: '12px' }}>{roleName}</div>
-                          <div style={{ fontSize: '11px', color: '#64748B' }}>{cert.programmeNameSnapshot}</div>
-                        </td>
-
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: '#475569' }}>
-                          {cert.issueDate}
-                        </td>
-
-                        <td style={{ padding: '12px 14px', fontSize: '11px', fontFamily: 'monospace' }}>
-                          <code
-                            style={{ backgroundColor: '#F1F5F9', padding: '3px 6px', borderRadius: '4px' }}
-                            title={cert.verificationToken}
+                          <td
+                            style={{
+                              padding: '12px 14px',
+                              fontFamily: 'monospace',
+                              fontWeight: 800,
+                              color: '#14213D',
+                            }}
                           >
-                            {cert.verificationToken.slice(0, 16)}...
-                          </code>
-                        </td>
+                            {cert.certificateNumber}
+                          </td>
 
-                        <td style={{ padding: '12px 14px' }}>
+                          <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>
+                            {cert.studentNameSnapshot}
+                          </td>
+
+                          <td style={{ padding: '12px 14px' }}>
+                            <div style={{ fontWeight: 700, color: '#C1272D', fontSize: '12px' }}>{roleName}</div>
+                            <div style={{ fontSize: '11px', color: '#64748B' }}>{cert.programmeNameSnapshot}</div>
+                          </td>
+
+                          <td style={{ padding: '12px 14px', fontSize: '12px', color: '#475569' }}>
+                            {cert.issueDate}
+                          </td>
+
+                          <td className="cp-col-secondary" style={{ padding: '12px 14px', fontSize: '11px', fontFamily: 'monospace' }}>
+                            <code
+                              style={{ backgroundColor: '#F1F5F9', padding: '3px 6px', borderRadius: '4px' }}
+                              title={cert.verificationToken}
+                            >
+                              {cert.verificationToken.slice(0, 16)}...
+                            </code>
+                          </td>
+
+                          <td style={{ padding: '12px 14px' }}>
+                            <span
+                              className={`cp-pill ${isIssued ? 'paid' : 'danger'}`}
+                              style={{ fontSize: '10.5px' }}
+                            >
+                              {cert.status}
+                            </span>
+                          </td>
+
+                          <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', gap: '6px' }}>
+                              <button
+                                className="cp-btn sm secondary"
+                                onClick={() => setSelectedCert(cert)}
+                                title="View & Print Certificate"
+                              >
+                                View / Print
+                              </button>
+                              {isAdminOrStaff &&
+                                (isIssued ? (
+                                  <button
+                                    className="cp-btn sm danger"
+                                    onClick={() => {
+                                      setRevokeCertTarget(cert);
+                                      setRevokeReason('');
+                                      setErrorMessage(null);
+                                    }}
+                                    title="Revoke Certificate"
+                                  >
+                                    Revoke
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="cp-btn sm secondary"
+                                    style={{ color: '#14213D', borderColor: '#CBD5E1' }}
+                                    onClick={() => {
+                                      setReissueCertTarget(cert);
+                                      setReissueReason('');
+                                      setReissueNameOverride('');
+                                      setErrorMessage(null);
+                                    }}
+                                    title="Reissue Certificate"
+                                  >
+                                    Reissue
+                                  </button>
+                                ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card Stack */}
+              <div className="cp-cards-mobile" style={{ padding: '12px' }}>
+                {paginatedCertificates.map((cert) => {
+                  const isIssued = cert.status === 'ISSUED';
+                  const roleName = cert.certificateRoleSnapshot || 'Certified Professional';
+
+                  return (
+                    <div
+                      key={cert.id}
+                      className="cp-mobile-record-card"
+                      onClick={() => setSelectedCert(cert)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && setSelectedCert(cert)}
+                      aria-label={`View certificate ${cert.certificateNumber}`}
+                    >
+                      <div className="cp-mobile-record-header">
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {cert.studentNameSnapshot}
+                          </h4>
+                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {roleName} &bull; {cert.programmeNameSnapshot}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                            {cert.certificateNumber}
+                          </span>
                           <span
                             className={`cp-pill ${isIssued ? 'paid' : 'danger'}`}
-                            style={{ fontSize: '10.5px' }}
+                            style={{ fontSize: '10px' }}
                           >
                             {cert.status}
                           </span>
-                        </td>
+                        </div>
+                      </div>
 
-                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            <button
-                              className="cp-btn sm secondary"
-                              onClick={() => setSelectedCert(cert)}
-                              title="View & Print Certificate"
-                            >
-                              View / Print
-                            </button>
-                            {isAdminOrStaff &&
-                              (isIssued ? (
-                                <button
-                                  className="cp-btn sm danger"
-                                  onClick={() => {
-                                    setRevokeCertTarget(cert);
-                                    setRevokeReason('');
-                                    setErrorMessage(null);
-                                  }}
-                                  title="Revoke Certificate"
-                                >
-                                  Revoke
-                                </button>
-                              ) : (
-                                <button
-                                  className="cp-btn sm secondary"
-                                  style={{ color: '#14213D', borderColor: '#CBD5E1' }}
-                                  onClick={() => {
-                                    setReissueCertTarget(cert);
-                                    setReissueReason('');
-                                    setReissueNameOverride('');
-                                    setErrorMessage(null);
-                                  }}
-                                  title="Reissue Certificate"
-                                >
-                                  Reissue
-                                </button>
-                              ))}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      <div className="cp-mobile-record-grid">
+                        <div className="cp-mobile-record-field">
+                          <span className="cp-mobile-record-label">Issue Date</span>
+                          <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>
+                            {cert.issueDate}
+                          </span>
+                        </div>
+                        <div className="cp-mobile-record-field">
+                          <span className="cp-mobile-record-label">Token ID</span>
+                          <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 400 }}>
+                            {cert.verificationToken.slice(0, 12)}...
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="cp-mobile-record-actions">
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCert(cert);
+                          }}
+                          style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                        >
+                          View / Print Certificate
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Standard Pagination */}
+              <Pagination
+                currentPage={certPage}
+                pageSize={certPageSize}
+                totalRecords={filteredCertificates.length}
+                onPageChange={setCertPage}
+                onPageSizeChange={setCertPageSize}
+                entityLabel="certificates"
+              />
+            </>
           )}
         </div>
       )}
@@ -748,84 +856,149 @@ export const CertificatesClient: React.FC<Props> = ({
               </div>
             </div>
           ) : (
-            <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
-              <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Enrolment #
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Candidate
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Programme &amp; Cohort
-                    </th>
-                    <th
-                      style={{
-                        padding: '12px 14px',
-                        fontSize: '11.5px',
-                        color: '#475569',
-                        fontWeight: 700,
-                        textAlign: 'center',
-                      }}
-                    >
-                      Attendance
-                    </th>
-                    <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                      Completion Status
-                    </th>
-                    <th
-                      style={{
-                        padding: '12px 14px',
-                        fontSize: '11.5px',
-                        color: '#475569',
-                        fontWeight: 700,
-                        textAlign: 'center',
-                      }}
-                    >
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {eligibleCandidates.map((c) => (
-                    <tr
-                      key={c.enrolmentId}
-                      style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
-                    >
-                      <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
-                        {c.enrolmentNumber}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>{c.studentName}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontWeight: 600 }}>{c.programmeName}</div>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>{c.cohortName}</div>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#059669' }}>
-                        {c.attendancePct}%
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span className="cp-pill paid" style={{ fontSize: '10.5px' }}>
+            <>
+              {/* Desktop & Tablet Table */}
+              <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
+                <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Enrolment #
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Candidate
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Programme &amp; Cohort
+                      </th>
+                      <th
+                        style={{
+                          padding: '12px 14px',
+                          fontSize: '11.5px',
+                          color: '#475569',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                        }}
+                      >
+                        Attendance
+                      </th>
+                      <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
+                        Completion Status
+                      </th>
+                      <th
+                        style={{
+                          padding: '12px 14px',
+                          fontSize: '11.5px',
+                          color: '#475569',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                        }}
+                      >
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedEligibleCandidates.map((c) => (
+                      <tr
+                        key={c.enrolmentId}
+                        style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+                      >
+                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
+                          {c.enrolmentNumber}
+                        </td>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>{c.studentName}</td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 600 }}>{c.programmeName}</div>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>{c.cohortName}</div>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#059669' }}>
+                          {c.attendancePct}%
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <span className="cp-pill paid" style={{ fontSize: '10.5px' }}>
+                            ✔ VERIFIED
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          {isAdminOrStaff && (
+                            <button
+                              className="cp-btn sm accent"
+                              onClick={() => handleOpenIssueModal(c)}
+                              title="Issue official certificate"
+                            >
+                              + Issue Certificate
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card Stack */}
+              <div className="cp-cards-mobile" style={{ padding: '12px' }}>
+                {paginatedEligibleCandidates.map((c) => (
+                  <div key={c.enrolmentId} className="cp-mobile-record-card">
+                    <div className="cp-mobile-record-header">
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {c.studentName}
+                        </h4>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {c.programmeName} &bull; {c.cohortName}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {c.enrolmentNumber}
+                        </span>
+                        <span className="cp-pill paid" style={{ fontSize: '10px' }}>
                           ✔ VERIFIED
                         </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {isAdminOrStaff && (
-                          <button
-                            className="cp-btn sm accent"
-                            onClick={() => handleOpenIssueModal(c)}
-                            title="Issue official certificate"
-                          >
-                            + Issue Certificate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
+
+                    <div className="cp-mobile-record-grid">
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Attendance Rate</span>
+                        <span className="cp-mobile-record-value" style={{ color: '#059669', fontSize: '14px' }}>
+                          {c.attendancePct}%
+                        </span>
+                      </div>
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Benchmark</span>
+                        <span className="cp-mobile-record-value" style={{ fontWeight: 400 }}>&ge; 80% Achieved</span>
+                      </div>
+                    </div>
+
+                    {isAdminOrStaff && (
+                      <div className="cp-mobile-record-actions">
+                        <button
+                          type="button"
+                          className="cp-btn sm accent"
+                          onClick={() => handleOpenIssueModal(c)}
+                          style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                        >
+                          + Issue Certificate
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Standard Pagination */}
+              <Pagination
+                currentPage={eligiblePage}
+                pageSize={eligiblePageSize}
+                totalRecords={eligibleCandidates.length}
+                onPageChange={setEligiblePage}
+                onPageSizeChange={setEligiblePageSize}
+                entityLabel="candidates"
+              />
+            </>
           )}
         </div>
       )}

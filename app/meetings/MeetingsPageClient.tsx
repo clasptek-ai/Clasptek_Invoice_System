@@ -9,6 +9,8 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Meeting, GoogleDriveStatus } from '@/types/meetings';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface MeetingsPageClientProps {
   initialMeetings: Meeting[];
@@ -102,6 +104,17 @@ export function MeetingsPageClient({
         (m.cohortCode && m.cohortCode.toLowerCase().includes(q))
     );
   }
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedMeetings,
+    setPage,
+    setPageSize,
+  } = usePagination(displayed, {
+    initialPageSize: 25,
+    resetDeps: [subTab, search],
+  });
 
   // Subtab switch
   const handleTabChange = (tab: string) => {
@@ -601,49 +614,67 @@ export function MeetingsPageClient({
       <div
         style={{
           display: 'flex',
-          gap: 8,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
           marginBottom: 16,
           borderBottom: '1px solid var(--border)',
           paddingBottom: 8,
           flexWrap: 'wrap',
         }}
       >
-        <button
-          className={`cp-btn sm ${subTab === 'all' ? 'primary' : 'ghost'} btnMeetingFilter`}
-          onClick={() => handleTabChange('all')}
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            paddingBottom: 2,
+            maxWidth: '100%',
+          }}
         >
-          All Meetings ({meetings.length})
-        </button>
-        <button
-          className={`cp-btn sm ${subTab === 'upcoming' ? 'primary' : 'ghost'} btnMeetingFilter`}
-          onClick={() => handleTabChange('upcoming')}
-        >
-          Upcoming ({upcomingMeetings.length})
-        </button>
-        <button
-          className={`cp-btn sm ${subTab === 'live' ? 'danger' : 'ghost'} btnMeetingFilter`}
-          style={liveMeetings.length > 0 ? { fontWeight: 700 } : {}}
-          onClick={() => handleTabChange('live')}
-        >
-          {liveMeetings.length > 0 && '● '}Live Now ({liveMeetings.length})
-        </button>
-        <button
-          className={`cp-btn sm ${subTab === 'recordings' ? 'primary' : 'ghost'} btnMeetingFilter`}
-          onClick={() => handleTabChange('recordings')}
-        >
-          Recordings ({recordingMeetings.length})
-        </button>
-        <button
-          className={`cp-btn sm ${subTab === 'completed' ? 'primary' : 'ghost'} btnMeetingFilter`}
-          onClick={() => handleTabChange('completed')}
-        >
-          Completed ({completedMeetings.length})
-        </button>
-        <div style={{ marginLeft: 'auto' }}>
+          <button
+            className={`cp-btn sm ${subTab === 'all' ? 'primary' : 'ghost'} btnMeetingFilter`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => handleTabChange('all')}
+          >
+            All Meetings ({meetings.length})
+          </button>
+          <button
+            className={`cp-btn sm ${subTab === 'upcoming' ? 'primary' : 'ghost'} btnMeetingFilter`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => handleTabChange('upcoming')}
+          >
+            Upcoming ({upcomingMeetings.length})
+          </button>
+          <button
+            className={`cp-btn sm ${subTab === 'live' ? 'danger' : 'ghost'} btnMeetingFilter`}
+            style={{ whiteSpace: 'nowrap', ...(liveMeetings.length > 0 ? { fontWeight: 700 } : {}) }}
+            onClick={() => handleTabChange('live')}
+          >
+            {liveMeetings.length > 0 && '● '}Live Now ({liveMeetings.length})
+          </button>
+          <button
+            className={`cp-btn sm ${subTab === 'recordings' ? 'primary' : 'ghost'} btnMeetingFilter`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => handleTabChange('recordings')}
+          >
+            Recordings ({recordingMeetings.length})
+          </button>
+          <button
+            className={`cp-btn sm ${subTab === 'completed' ? 'primary' : 'ghost'} btnMeetingFilter`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => handleTabChange('completed')}
+          >
+            Completed ({completedMeetings.length})
+          </button>
+        </div>
+
+        <div style={{ flex: '1 1 200px', maxWidth: 260, marginLeft: 'auto' }}>
           <input
             type="text"
             className="cp-input"
-            style={{ fontSize: 12, padding: '4px 10px', width: 220 }}
+            style={{ fontSize: 12, padding: '5px 10px', width: '100%' }}
             placeholder="Search meetings..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -664,7 +695,8 @@ export function MeetingsPageClient({
             </div>
           </div>
         ) : (
-          <div className="cp-table-wrap">
+          <>
+            <div className="cp-table-wrap">
             <table className="cp-table">
               <thead>
                 <tr>
@@ -677,7 +709,7 @@ export function MeetingsPageClient({
                 </tr>
               </thead>
               <tbody>
-                {displayed.map((m) => {
+                {paginatedMeetings.map((m) => {
                   const isLive = m.status === 'LIVE';
                   const isScheduled = m.status === 'SCHEDULED';
                   const isEnded = m.status === 'ENDED' || m.status === 'COMPLETED';
@@ -763,6 +795,17 @@ export function MeetingsPageClient({
               </tbody>
             </table>
           </div>
+
+            {/* Standard Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalRecords={displayed.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              entityLabel="meetings"
+            />
+          </>
         )}
       </div>
 

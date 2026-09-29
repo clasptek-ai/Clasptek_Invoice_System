@@ -164,10 +164,11 @@ export async function getStudentById(id: string): Promise<{ data: Student | null
 }
 
 export async function getStudentDossier(
-  studentId: string
+  studentId: string,
+  client?: any
 ): Promise<{ data: StudentDossier | null; error: string | null }> {
   try {
-    const supabase = await createServerClient();
+    const supabase = client || (await createServerClient());
 
     // 1. Fetch Student
     const { data: student, error: stuErr } = await supabase
@@ -200,8 +201,8 @@ export async function getStudentDossier(
     }
 
     const { data: invoicesRaw } = await invoicesQuery;
-    const invList = invoicesRaw || [];
-    const invIds = invList.map((i) => i.id);
+    const invList: Array<Record<string, unknown>> = invoicesRaw || [];
+    const invIds = invList.map((i: Record<string, unknown>) => String(i.id || ''));
 
     // 4. Fetch payments for those invoices
     let paymentsRaw: Array<Record<string, unknown>> = [];
@@ -243,13 +244,32 @@ export async function getStudentDossier(
       method: String(p.payment_method || 'TRANSFER'),
     }));
 
-    const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const totalInvoiced = invoices.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0);
+    const totalPaid = payments.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
     const balanceDue = Math.max(0, totalInvoiced - totalPaid);
+
+    // 5. Fetch linked Corporate Customer / Sponsor if present
+    let corporateSponsor: { id: string; name: string; email?: string | null; phone?: string | null } | null = null;
+    if (student.customer_id) {
+      const { data: custData } = await supabase
+        .from('customers')
+        .select('id, name, email, phone')
+        .eq('id', student.customer_id)
+        .single();
+      if (custData) {
+        corporateSponsor = {
+          id: String(custData.id),
+          name: String(custData.name),
+          email: custData.email ? String(custData.email) : null,
+          phone: custData.phone ? String(custData.phone) : null,
+        };
+      }
+    }
 
     return {
       data: {
         student: student as Student,
+        corporateSponsor,
         enrolments,
         invoices,
         payments,

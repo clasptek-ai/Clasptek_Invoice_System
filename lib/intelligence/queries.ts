@@ -13,6 +13,7 @@
 
 import { createServerClient } from '@/lib/supabase/server';
 import { getFinanceTenantId, getFinancialMetrics } from '@/lib/finance/queries';
+import { getReceivablesAgeing } from '@/lib/finance/receivables-queries';
 import { getMeetings } from '@/lib/meetings/queries';
 import type {
   ManagementDashboardMetrics,
@@ -22,6 +23,13 @@ import type {
   MeetingIntelligence,
   FinancialIntelligence,
   PayrollIntelligence,
+  LifecycleMetrics,
+  CrmPipelineMetrics,
+  StudentActivityMetrics,
+  RecentStudentItem,
+  UpcomingSessionItem,
+  OverdueReceivableItem,
+  RecentActivityItem,
   DateFilterScope,
   ReportItem,
 } from '@/types/intelligence';
@@ -80,20 +88,26 @@ export async function getManagementDashboardMetrics(
     financeMetrics,
     personnelRes,
     payslipsRes,
+    certificatesRes,
+    auditLogsRes,
+    receivablesAgeingData,
   ] = await Promise.all([
-    supabase.from('enquiries').select('id, status, created_at').eq('tenant_id', resolvedTenant),
+    supabase.from('enquiries').select('id, student_name, email, phone, programme_id, status, created_at').eq('tenant_id', resolvedTenant),
     supabase.from('crm_intake_applications').select('id, status, created_at').eq('tenant_id', resolvedTenant),
-    supabase.from('students').select('id, is_active, created_at').eq('tenant_id', resolvedTenant),
-    supabase.from('enrolments').select('id, status, programme_id, cohort_id, created_at').eq('tenant_id', resolvedTenant),
-    supabase.from('programmes').select('id, code, name, tuition_fee').eq('tenant_id', resolvedTenant),
-    supabase.from('cohorts').select('id, cohort_code, name, status').eq('tenant_id', resolvedTenant),
-    supabase.from('training_sessions').select('id, status, session_date').eq('tenant_id', resolvedTenant),
+    supabase.from('students').select('id, student_number, first_name, last_name, email, status, created_at').eq('tenant_id', resolvedTenant),
+    supabase.from('enrolments').select('id, student_name, enrolment_number, status, programme_id, cohort_id, agreed_tuition_fee, certificate_issued, created_at').eq('tenant_id', resolvedTenant),
+    supabase.from('programmes').select('id, code, name, tuition_fee, status').eq('tenant_id', resolvedTenant),
+    supabase.from('cohorts').select('id, cohort_code, name, status, start_date, end_date').eq('tenant_id', resolvedTenant),
+    supabase.from('training_sessions').select('id, cohort_id, session_number, title, session_date, start_time, end_time, status, delivery_mode').eq('tenant_id', resolvedTenant).order('session_date', { ascending: true }),
     supabase.from('attendance').select('id, status, marked_at').eq('tenant_id', resolvedTenant),
     supabase.from('facilitator_reports').select('id, status, created_at').eq('tenant_id', resolvedTenant),
     getMeetings(),
     getFinancialMetrics(resolvedTenant),
     supabase.from('personnel').select('id, employee_type, employment_status').eq('tenant_id', resolvedTenant),
     supabase.from('payslips').select('id, status, net_pay, pay_period').eq('tenant_id', resolvedTenant),
+    supabase.from('certificates').select('id, status, certificate_number, created_at').eq('tenant_id', resolvedTenant),
+    supabase.from('finance_audit_log').select('id, action, entity_type, entity_id, entity_name, actor_role, reason, created_at').eq('tenant_id', resolvedTenant).order('created_at', { ascending: false }).limit(25),
+    getReceivablesAgeing(resolvedTenant),
   ]);
 
   // 1. Admissions Intelligence
@@ -140,8 +154,9 @@ export async function getManagementDashboardMetrics(
   const programmes = programmesRes.data || [];
   const cohorts = cohortsRes.data || [];
 
-  const activeStudents = students.filter(s => s.is_active !== false).length;
-  const activeEnrolments = enrolments.filter(e => e.status === 'ENROLLED' || e.status === 'IN_PROGRESS' || e.status === 'ACTIVE').length;
+  const activeStudents = students.filter(s => (s.status || '').toUpperCase() === 'ACTIVE' || (s.status || '').toUpperCase() !== 'WITHDRAWN').length;
+  const activeEnrolments = enrolments.filter(e => e.status === 'ENROLLED' || e.status === 'IN_PROGRESS' || e.status === 'ACTIVE' || e.status === 'CONFIRMED').length;
+  const completedEnrolments = enrolments.filter(e => (e.status || '').toUpperCase() === 'COMPLETED').length;
 
   const enrolmentStatusBreakdown: Record<string, number> = {};
   enrolments.forEach(e => {
@@ -275,6 +290,134 @@ export async function getManagementDashboardMetrics(
     payslipCountsByStatus,
   };
 
+  // 7. Lifecycle & Customer Journey Metrics
+  const rawCerts = certificatesRes.data || [];
+  const certsIssuedCount = rawCerts.filter(c => (c.status || '').toUpperCase() === 'ISSUED').length;
+  const certsFromEnr = enrolments.filter(e => e.certificate_issued === true).length;
+  const totalCertificates = Math.max(certsIssuedCount, certsFromEnr);
+
+  const newEnquiries = enqStatusMap['NEW'] || 0;
+  const contacted = enqStatusMap['CONTACTED'] || 0;
+  const interested = enqStatusMap['INTERESTED'] || 0;
+  const invoiceRequested = enqStatusMap['INVOICE_REQUESTED'] || 0;
+  const invoiceIssued = enqStatusMap['INVOICE_ISSUED'] || 0;
+  const enrolled = enqStatusMap['ENROLLED'] || 0;
+  const lost = enqStatusMap['LOST'] || 0;
+
+  const nowTime = Date.now();
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+
+  const followUpsDueToday = enquiries.filter(e => {
+    const st = (e.status || '').toUpperCase();
+    return (st === 'NEW' || st === 'CONTACTED') && (e.created_at || '').slice(0, 10) === todayDateStr;
+  }).length;
+
+  const followUpsOverdue = enquiries.filter(e => {
+    const st = (e.status || '').toUpperCase();
+    if (st !== 'NEW') return false;
+    const createdTime = new Date(e.created_at).getTime();
+    return (nowTime - createdTime) > 48 * 3600 * 1000;
+  }).length;
+
+  const recentlyContacted = contacted + interested;
+
+  const lifecycle: LifecycleMetrics = {
+    prospects: totalEnquiries,
+    enquiries: totalEnquiries,
+    followUps: contacted + interested + (newEnquiries > 0 ? newEnquiries : 0),
+    students: students.length,
+    enrolments: enrolments.length,
+    training: totalSessions,
+    completion: completedEnrolments > 0 ? completedEnrolments : completedSessions,
+    certificates: totalCertificates,
+  };
+
+  // 8. CRM Pipeline Metrics
+  const crmPipeline: CrmPipelineMetrics = {
+    newEnquiries,
+    contacted,
+    interested,
+    invoiceRequested,
+    invoiceIssued,
+    enrolled,
+    lost,
+    followUpsDueToday,
+    followUpsOverdue,
+    recentlyContacted,
+  };
+
+  // 9. Student Activity Metrics
+  const recentlyAddedStudents: RecentStudentItem[] = [...students]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5)
+    .map(s => ({
+      id: s.id,
+      studentNumber: s.student_number || 'STU-—',
+      firstName: s.first_name || '',
+      lastName: s.last_name || '',
+      email: s.email,
+      status: s.status || 'ACTIVE',
+      createdAt: s.created_at,
+    }));
+
+  const studentActivity: StudentActivityMetrics = {
+    totalStudents: students.length,
+    activeStudents,
+    activeEnrolments,
+    recentlyAddedStudents,
+    completedTraining: completedEnrolments > 0 ? completedEnrolments : completedSessions,
+    certificatesIssued: totalCertificates,
+  };
+
+  // 10. Upcoming Sessions
+  const cohortsMap = new Map((cohortsRes.data || []).map(c => [c.id, c.name]));
+  const upcomingSessions: UpcomingSessionItem[] = sessions
+    .filter(s => s.status === 'SCHEDULED' || s.session_date >= todayDateStr)
+    .slice(0, 10)
+    .map(s => ({
+      id: s.id,
+      sessionNumber: Number(s.session_number || 1),
+      title: s.title,
+      sessionDate: s.session_date,
+      startTime: s.start_time || '10:00',
+      endTime: s.end_time || '12:00',
+      status: s.status,
+      deliveryMode: s.delivery_mode || 'HYBRID',
+      cohortName: cohortsMap.get(s.cohort_id) || 'General Cohort',
+    }));
+
+  // 11. Overdue Receivables List
+  const programmesMap = new Map((programmesRes.data || []).map(p => [p.id, p.name]));
+  const overdueReceivablesList: OverdueReceivableItem[] = (receivablesAgeingData?.outstandingInvoices || [])
+    .filter(inv => inv.daysOverdue > 0)
+    .sort((a, b) => b.balanceAmount - a.balanceAmount)
+    .map(inv => ({
+      id: inv.id,
+      invoiceNo: inv.invoiceNo,
+      invoiceDisplayNo: inv.invoiceDisplayNo,
+      studentName: inv.studentName,
+      programmeName: inv.programmeId ? programmesMap.get(inv.programmeId) : undefined,
+      totalAmount: inv.totalAmount,
+      paidAmount: inv.paidAmount,
+      balanceAmount: inv.balanceAmount,
+      dueDate: inv.dueDate,
+      daysOverdue: inv.daysOverdue,
+      status: inv.status,
+    }));
+
+  // 12. Recent Activity & Governance
+  const rawAudit = auditLogsRes.data || [];
+  const recentActivity: RecentActivityItem[] = rawAudit.slice(0, 15).map(a => ({
+    id: a.id,
+    action: a.action,
+    entityType: a.entity_type,
+    entityId: a.entity_id,
+    entityName: a.entity_name,
+    actorRole: a.actor_role,
+    reason: a.reason,
+    createdAt: a.created_at,
+  }));
+
   return {
     admissions,
     academics,
@@ -282,6 +425,12 @@ export async function getManagementDashboardMetrics(
     meetings: meetingsIntel,
     finance,
     payroll,
+    lifecycle,
+    crmPipeline,
+    studentActivity,
+    upcomingSessions,
+    overdueReceivablesList,
+    recentActivity,
     generatedAt: new Date().toISOString(),
     tenantId: resolvedTenant,
   };

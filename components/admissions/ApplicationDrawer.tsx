@@ -156,7 +156,7 @@ export function ApplicationDrawer({
               </svg>
               Programme &amp; Preferences
             </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', fontSize: '12px' }}>
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Programme</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{application.programme_name || '—'}</span>
@@ -195,7 +195,7 @@ export function ApplicationDrawer({
               </svg>
               Personal Information
             </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', fontSize: '12px' }}>
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Date of Birth</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatDate(application.date_of_birth)}</span>
@@ -220,7 +220,7 @@ export function ApplicationDrawer({
                 <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Employment</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{application.employment_status || '—'}</span>
               </div>
-              <div style={{ gridColumn: 'span 3' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Residential Address</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{application.address || '—'}</span>
               </div>
@@ -238,7 +238,7 @@ export function ApplicationDrawer({
               </svg>
               Sponsorship &amp; Referral
             </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', fontSize: '12px' }}>
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Sponsor Type</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{application.sponsor_type || 'Self'}</span>

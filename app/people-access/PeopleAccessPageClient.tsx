@@ -10,6 +10,8 @@ import React, { useState, useMemo } from 'react';
 import { AdminPersonnel, AdminUser } from '@/lib/admin/personnel-queries';
 import { UserRole, USER_ROLES } from '@/types/auth';
 import { downloadSafeCsv } from '@/lib/utils/csv';
+import { usePagination } from '@/lib/hooks/usePagination';
+import { Pagination } from '@/components/tables/Pagination';
 
 interface PeopleAccessProps {
   initialPersonnel: AdminPersonnel[];
@@ -87,6 +89,28 @@ export function PeopleAccessPageClient({
       return true;
     });
   }, [personnelList, filterType, filterStatus, searchPersonnel]);
+
+  const {
+    currentPage: personnelPage,
+    pageSize: personnelPageSize,
+    paginatedItems: paginatedPersonnel,
+    setPage: setPersonnelPage,
+    setPageSize: setPersonnelPageSize,
+  } = usePagination(filteredPersonnel, {
+    initialPageSize: 25,
+    resetDeps: [filterType, filterStatus, searchPersonnel],
+  });
+
+  const {
+    currentPage: usersPage,
+    pageSize: usersPageSize,
+    paginatedItems: paginatedUsers,
+    setPage: setUsersPage,
+    setPageSize: setUsersPageSize,
+  } = usePagination(userList, {
+    initialPageSize: 25,
+    resetDeps: [userList],
+  });
 
   // Notifications
   const notify = (type: 'success' | 'error', text: string) => {
@@ -572,13 +596,13 @@ export function PeopleAccessPageClient({
                     <th style={{ padding: '10px' }}>Official Work Email</th>
                     <th style={{ padding: '10px' }}>Assigned Role</th>
                     <th style={{ padding: '10px' }}>Account Status</th>
-                    <th style={{ padding: '10px' }}>Last Login</th>
-                    <th style={{ padding: '10px' }}>Personnel Link</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px' }}>Last Login</th>
+                    <th className="cp-col-tertiary" style={{ padding: '10px' }}>Personnel Link</th>
                     {isSuperAdmin && <th style={{ padding: '10px', textAlign: 'center' }}>Governance Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {userList.map((u) => {
+                  {paginatedUsers.map((u) => {
                     const isDeact = u.status === 'deactivated';
                     const isSusp = u.status === 'suspended';
                     return (
@@ -615,10 +639,10 @@ export function PeopleAccessPageClient({
                             {u.status.toUpperCase()}
                           </span>
                         </td>
-                        <td style={{ padding: '10px', color: 'var(--text-secondary)', fontSize: '11.5px' }}>
+                        <td className="cp-col-secondary" style={{ padding: '10px', color: 'var(--text-secondary)', fontSize: '11.5px' }}>
                           {u.lastLoginAt ? u.lastLoginAt.slice(0, 10) : 'Never'}
                         </td>
-                        <td style={{ padding: '10px', fontSize: '11.5px' }}>
+                        <td className="cp-col-tertiary" style={{ padding: '10px', fontSize: '11.5px' }}>
                           {u.personnelName ? (
                             <span>{u.personnelName} ({u.personnelEmployeeId || 'EMP'})</span>
                           ) : (
@@ -663,6 +687,16 @@ export function PeopleAccessPageClient({
                 </tbody>
               </table>
             </div>
+
+            {/* Standard Users Pagination */}
+            <Pagination
+              currentPage={usersPage}
+              pageSize={usersPageSize}
+              totalRecords={userList.length}
+              onPageChange={setUsersPage}
+              onPageSizeChange={setUsersPageSize}
+              entityLabel="users"
+            />
           </div>
         )}
 
@@ -718,18 +752,18 @@ export function PeopleAccessPageClient({
               </div>
             </div>
 
-            {/* Personnel Table */}
-            <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
+            {/* Personnel Table (Desktop & Tablet) */}
+            <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
                     <th style={{ padding: '10px' }}>Personnel ID</th>
                     <th style={{ padding: '10px' }}>Full Name &amp; Contact</th>
                     <th style={{ padding: '10px' }}>Type</th>
-                    <th style={{ padding: '10px' }}>Department / Subject</th>
+                    <th className="cp-col-tertiary" style={{ padding: '10px' }}>Department / Subject</th>
                     <th style={{ padding: '10px' }}>Role / Designation</th>
-                    <th style={{ padding: '10px' }}>Bank &amp; Account #</th>
-                    <th style={{ padding: '10px', textAlign: 'right' }}>Base / Fee</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px' }}>Bank &amp; Account #</th>
+                    <th className="cp-col-secondary" style={{ padding: '10px', textAlign: 'right' }}>Base / Fee</th>
                     <th style={{ padding: '10px' }}>Status</th>
                     {canManage && <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>}
                   </tr>
@@ -742,7 +776,7 @@ export function PeopleAccessPageClient({
                       </td>
                     </tr>
                   ) : (
-                    filteredPersonnel.map((p) => {
+                    paginatedPersonnel.map((p) => {
                       const isDeact = p.employmentStatus === 'deactivated';
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', opacity: isDeact ? 0.6 : 1 }}>
@@ -770,13 +804,13 @@ export function PeopleAccessPageClient({
                               {p.employeeType.toUpperCase()}
                             </span>
                           </td>
-                          <td style={{ padding: '10px' }}>{p.department}</td>
+                          <td className="cp-col-tertiary" style={{ padding: '10px' }}>{p.department}</td>
                           <td style={{ padding: '10px' }}>{p.jobTitle}</td>
-                          <td style={{ padding: '10px', fontSize: '11.5px' }}>
+                          <td className="cp-col-secondary" style={{ padding: '10px', fontSize: '11.5px' }}>
                             <div style={{ fontWeight: 600 }}>{p.bankName || 'GTBank'}</div>
                             <div style={{ color: 'var(--text-secondary)' }}>{p.accountNumber || '—'}</div>
                           </td>
-                          <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>
+                          <td className="cp-col-secondary" style={{ padding: '10px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>
                             {p.employeeType === 'facilitator'
                               ? `₦${(p.facilitatorRate || 0).toLocaleString()}/session`
                               : `₦${(p.basicPay || 0).toLocaleString()}`}
@@ -849,6 +883,102 @@ export function PeopleAccessPageClient({
                 </tbody>
               </table>
             </div>
+
+            {/* Personnel Mobile Cards */}
+            <div className="cp-cards-mobile">
+              {paginatedPersonnel.map((p) => {
+                const isDeact = p.employmentStatus === 'deactivated';
+                return (
+                  <div key={p.id} className="cp-mobile-record-card">
+                    <div className="cp-mobile-record-header">
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                          {p.fullName}
+                        </div>
+                        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--primary)', fontWeight: 700 }}>
+                          {p.employeeId} &middot; {p.jobTitle}
+                        </div>
+                      </div>
+                      <span
+                        className="cp-pill"
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          background: p.employmentStatus === 'active' ? '#DEF7EC' : '#FDE8E8',
+                          color: p.employmentStatus === 'active' ? '#03543F' : '#9B1C1C',
+                        }}
+                      >
+                        {p.employmentStatus.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="cp-mobile-record-grid">
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Type &amp; Dept</span>
+                        <span className="cp-mobile-record-value">{p.employeeType.toUpperCase()} &middot; {p.department}</span>
+                      </div>
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Compensation</span>
+                        <span className="cp-mobile-record-value" style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                          {p.employeeType === 'facilitator'
+                            ? `₦${(p.facilitatorRate || 0).toLocaleString()}/sess`
+                            : `₦${(p.basicPay || 0).toLocaleString()}`}
+                        </span>
+                      </div>
+                      <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                        <span className="cp-mobile-record-label">Contact</span>
+                        <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                          {p.email} {p.phone ? `· ${p.phone}` : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {canManage && (
+                      <div className="cp-mobile-record-actions">
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={() => openEditModal(p)}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          Edit Profile
+                        </button>
+                        {!p.userId && (
+                          <button
+                            type="button"
+                            className="cp-btn sm accent"
+                            onClick={() => handleCreateLogin(p)}
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          >
+                            Create Login
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={`cp-btn sm ${isDeact ? 'success' : 'danger'}`}
+                          onClick={() => handleTogglePersonnelStatus(p, isDeact ? 'active' : 'deactivated')}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          {isDeact ? 'Reactivate' : 'Deactivate'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Standard Personnel Pagination */}
+            <Pagination
+              currentPage={personnelPage}
+              pageSize={personnelPageSize}
+              totalRecords={filteredPersonnel.length}
+              onPageChange={setPersonnelPage}
+              onPageSizeChange={setPersonnelPageSize}
+              entityLabel="personnel"
+            />
           </div>
         )}
 
