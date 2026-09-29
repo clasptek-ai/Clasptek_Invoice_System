@@ -356,7 +356,7 @@ export function DashboardClient() {
     onPageChange: onRecPageChange,
     onPageSizeChange: onRecPageSizeChange,
   } = usePagination<OverdueReceivableItem>(overdueInvoicesList, {
-    initialPageSize: 10,
+    initialPageSize: 25,
     resetDeps: [overdueInvoicesList],
   });
 

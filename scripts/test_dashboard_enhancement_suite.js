@@ -195,6 +195,7 @@ async function runDashboardEnhancementSuite() {
     assert(dashContent.includes('usePagination'), 'Must use universal usePagination hook');
     assert(dashContent.includes('<Pagination'), 'Must render universal Pagination component');
     assert(dashContent.includes('pageSizeOptions={[10, 25, 50, 100]}'), 'Must configure 10, 25, 50, 100 page size options');
+    assert(dashContent.includes('initialPageSize: 25'), 'Must configure default page size to 25');
     assert(dashContent.includes('entityLabel="invoices"'), 'Must configure invoices entity label');
   });
 
