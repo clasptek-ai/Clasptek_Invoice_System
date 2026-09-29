@@ -796,6 +796,128 @@
         border-left: none;
       }
     }
+
+    /* Admissions & Candidate Intake Dedicated Full-Page Workspace */
+    .cp-admissions-workspace {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 0 40px 0;
+    }
+    .cp-admissions-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0F172A;
+      cursor: pointer;
+      margin-bottom: 16px;
+      padding: 8px 16px;
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .cp-admissions-back-btn:hover {
+      background: #F1F5F9;
+      border-color: #0284C7;
+      color: #0284C7;
+    }
+    .cp-intake-stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 16px 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cp-stepper-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      z-index: 1;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .cp-stepper-step.disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .cp-stepper-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #E2E8F0;
+      color: #64748B;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    .cp-stepper-step.active .cp-stepper-badge {
+      background: #0284C7;
+      color: #FFFFFF;
+      box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.18);
+    }
+    .cp-stepper-step.completed .cp-stepper-badge {
+      background: #10B981;
+      color: #FFFFFF;
+    }
+    .cp-stepper-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748B;
+      transition: color 0.15s ease;
+    }
+    .cp-stepper-step.active .cp-stepper-label {
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .cp-stepper-step.completed .cp-stepper-label {
+      font-weight: 700;
+      color: #0F172A;
+    }
+    .cp-stepper-line {
+      flex: 1;
+      height: 2px;
+      background: #E2E8F0;
+      margin: 0 12px;
+      min-width: 16px;
+      transition: background 0.2s ease;
+    }
+    .cp-stepper-line.completed {
+      background: #10B981;
+    }
+    .cp-intake-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .cp-col-span-2 {
+      grid-column: span 2;
+    }
+    .cp-journey-stage-card {
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .cp-journey-stage-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary) !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    }
     .cp-modal-header {
       padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center; background: var(--surface-1);
@@ -1115,6 +1237,26 @@
       }
       .cp-btn.sm {
         min-height: 32px;
+      }
+      .cp-intake-stepper {
+        padding: 12px 14px;
+        gap: 12px;
+        justify-content: flex-start;
+      }
+      .cp-stepper-line {
+        display: none;
+      }
+      .cp-stepper-step {
+        gap: 6px;
+      }
+      .cp-stepper-label {
+        font-size: 11px;
+      }
+      .cp-intake-form-grid {
+        grid-template-columns: 1fr;
+      }
+      .cp-col-span-2 {
+        grid-column: span 1;
       }
     }
 
@@ -17294,12 +17436,31 @@ async function submitAuthoritativeApplication(payload, source = 'WEB_INTAKE', so
   }
 
   // 7. Atomic Application Number Generation
-  const applicationNumber = getAuthoritativeNextApplicationNumber(tenantId);
+  let applicationNumber = getAuthoritativeNextApplicationNumber(tenantId);
   const appId = 'app_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
   // 8. Conditional CRM Enquiry Association
-  let linkedEnquiryId = null;
-  if (idResolution.outcome === 'NEW_APPLICANT') {
+  let linkedEnquiryId = payload.enquiryId || payload.enquiry_id || null;
+  if (!linkedEnquiryId && Array.isArray(state.enquiries)) {
+    const existingEnq = state.enquiries.find(e => e && e.email && normalized.email && e.email.toLowerCase() === normalized.email.toLowerCase());
+    if (existingEnq) {
+      linkedEnquiryId = existingEnq.id;
+    }
+  }
+
+  if (linkedEnquiryId) {
+    const targetEnq = (state.enquiries || []).find(e => e && e.id === linkedEnquiryId);
+    if (targetEnq) {
+      targetEnq.status = 'APPLIED';
+      targetEnq.updatedAt = new Date().toISOString();
+      if (!targetEnq.notes) targetEnq.notes = '';
+      targetEnq.notes = `Application reference: ${applicationNumber}. ${targetEnq.notes}`.trim();
+      if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord && supabaseClient && supabaseClient.isConfigured()) {
+        await dbRepo.saveRecord(STORE_KEY_ENQUIRIES, targetEnq);
+      }
+      await safeSet(STORE_KEY_ENQUIRIES, state.enquiries);
+    }
+  } else if (idResolution.outcome === 'NEW_APPLICANT') {
     if (!state.counters) state.counters = {};
     const enqCount = Number(state.counters.enquiry || 1001);
     state.counters.enquiry = enqCount + 1;
@@ -22069,7 +22230,7 @@ function render(container) {
     programmes: 'Programmes',
     // Admissions & CRM / Training Operations
     applications: 'Candidate Applications',
-    apply: 'New Application',
+    apply: 'Admissions & Candidate Intake',
     applicantPortal: 'Applicant Portal',
     cohorts: 'Cohorts & Schedules',
     enrolments: 'Course Enrollments', // phase 5: enrolments: 'Enrolments'
@@ -22906,6 +23067,119 @@ function renderDashboardTab(container) {
     </div>
 
     <!-- ===============================================================
+         CUSTOMER JOURNEY & ADMISSIONS LIFECYCLE
+         Visual 7-stage end-to-end prospect-to-certificate progression.
+         =============================================================== -->
+    <div class="cp-card" style="margin-bottom:20px; border-top:3px solid var(--primary); background:#FFFFFF; padding:18px 20px;">
+      <div class="cp-card-header" style="flex-wrap:wrap; gap:10px; margin-bottom:14px; border-bottom:1px solid #E2E8F0; padding-bottom:10px;">
+        <div>
+          <div class="cp-section-title" style="font-size:16px; font-weight:800; color:var(--primary); display:flex; align-items:center; gap:8px;">
+            <span>🧭</span> Customer Journey &amp; Admissions Lifecycle
+          </div>
+          <div class="cp-section-desc" style="font-size:12px; color:var(--text-secondary);">
+            End-to-end progression from prospect interest, through follow-up, admissions application, student registration, training attendance, to completion and certificate issuance.
+          </div>
+        </div>
+      </div>
+
+      <!-- 7-Stage Connected Grid -->
+      <div class="cp-journey-lifecycle-strip" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+        
+        <!-- 01 Enquiry / Lead -->
+        <div class="cp-journey-stage-card" data-route="enquiries" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#E2E8F0; color:#475569;">01</span>
+            <span class="cp-pill draft" style="font-size:9.5px; padding:1px 6px;">${pipe.newEnquiries || (state.enquiries || []).length} Leads</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Enquiry / Lead</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Inbound Interest</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#enquiries</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 02 Follow-up & Outreach -->
+        <div class="cp-journey-stage-card" data-route="enquiries" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#FEF3C7; color:#B45309;">02</span>
+            <span class="cp-pill partial" style="font-size:9.5px; padding:1px 6px;">${followUpRequired} Action</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Follow-up &amp; Outreach</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Active Engagement</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#enquiries</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 03 Candidate Application -->
+        <div class="cp-journey-stage-card" data-route="applications" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#E0E7FF; color:#4338CA;">03</span>
+            <span class="cp-pill active" style="font-size:9.5px; padding:1px 6px;">${(state.intakeApplications || []).length} Apps</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Candidate Application</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Admissions Intake</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#applications</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 04 Student & Client -->
+        <div class="cp-journey-stage-card" data-route="studentAccounts" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#DCFCE7; color:#15803D;">04</span>
+            <span class="cp-pill paid" style="font-size:9.5px; padding:1px 6px;">${countActiveStudents} Students</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Student &amp; Client</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Canonical Record</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#students</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 05 Course Enrollment -->
+        <div class="cp-journey-stage-card" data-route="enrolments" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#F3E8FF; color:#7E22CE;">05</span>
+            <span class="cp-pill active" style="font-size:9.5px; padding:1px 6px;">${(state.enrolments || []).length} Enrolled</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Course Enrollment</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Programme Registrations</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#enrolments</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 06 Training & Attendance -->
+        <div class="cp-journey-stage-card" data-route="attendance" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#ECFDF5; color:#065F46;">06</span>
+            <span class="cp-pill paid" style="font-size:9.5px; padding:1px 6px;">${countSessionsDelivered} Sessions</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Training &amp; Attendance</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">80% Attendance Benchmark</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#attendance</span> &rarr;
+          </div>
+        </div>
+
+        <!-- 07 Completion & Certificate -->
+        <div class="cp-journey-stage-card" data-route="certificates" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#FEF9C3; color:#854D0E;">07</span>
+            <span class="cp-pill paid" style="font-size:9.5px; padding:1px 6px;">${tk.verifiedCompletions || (state.certificates || []).length} Completed</span>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Completion &amp; Credential</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Issued Certificates</div>
+          <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
+            <span>#certificates</span> &rarr;
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===============================================================
          MANAGEMENT ATTENTION CENTRE
          =============================================================== -->
     <div class="cp-card" style="border-left: 4px solid var(--accent); margin-bottom:20px; background:#FCFDFF;">
@@ -23314,6 +23588,17 @@ function renderDashboardTab(container) {
   document.getElementById('btnGoPayroll').addEventListener('click', () => { state.tab = 'payslips'; render(); });
   document.getElementById('btnViewReceivables').addEventListener('click', () => { state.tab = 'receivables'; render(); });
   document.getElementById('btnViewAuditLog').addEventListener('click', () => { state.tab = 'auditLog'; render(); });
+
+  // Customer Journey Lifecycle stage click navigation
+  container.querySelectorAll('.cp-journey-stage-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const route = card.dataset.route;
+      if (route && canAccessTab(route)) {
+        state.tab = route;
+        render();
+      }
+    });
+  });
 
   // Management Attention Centre action buttons
   container.querySelectorAll('.btn-alt-action').forEach(btn => {
@@ -24201,22 +24486,63 @@ function renderEnquiriesTab(container) {
 
                 const fin = getEnquiryFinancialStatus(e);
                 const nextAct = getEnquiryNextAction(e);
+
+                const allApps = Array.isArray(state.intakeApplications) ? state.intakeApplications : [];
+                const linkedApp = allApps.find(a =>
+                  (a.enquiryId && a.enquiryId === e.id) ||
+                  (a.enquiry_id && a.enquiry_id === e.id) ||
+                  (displayEmail && a.email && a.email.toLowerCase() === displayEmail.toLowerCase())
+                );
+
+                const enqTimeline = Array.isArray(e.timeline) ? e.timeline : [];
+                const lastT = enqTimeline.length > 0 ? enqTimeline[enqTimeline.length - 1] : null;
+                const lastFollowUpText = lastT
+                  ? `${fmtDate(lastT.timestamp || lastT.date)} (${lastT.method || 'Outreach'})`
+                  : (e.updatedAt && e.updatedAt !== displayDate ? fmtDate(e.updatedAt) : 'No follow-up recorded');
+
                 return `
                   <tr>
                     <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenEnquiryDetail" data-id="${escapeHtml(asSafeString(e.id))}">
                       ${escapeHtml(displayName)}
                       <div style="font-size:11px; font-weight:400; color:var(--text-muted);">${escapeHtml(displayPhone)} &middot; ${escapeHtml(displayEmail)}</div>
+                      ${linkedApp ? `
+                        <div style="margin-top:3px;">
+                          <span class="cp-pill active btnViewLinkedApp" data-id="${escapeHtml(asSafeString(e.id))}" data-app-id="${escapeHtml(asSafeString(linkedApp.id))}" style="font-size:9.5px; cursor:pointer;" title="View linked candidate application">
+                            &#x1F4CB; App: ${escapeHtml(linkedApp.applicationNumber || 'Linked')}
+                          </span>
+                        </div>
+                      ` : ''}
                     </td>
                     <td style="font-weight:600;">${escapeHtml(displayProg)}</td>
                     <td><span class="cp-pill category-pill">${escapeHtml(displaySource)}</span></td>
-                    <td>${fmtDate(displayDate)}</td>
+                    <td>
+                      <div>${fmtDate(displayDate)}</div>
+                      <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">
+                        Follow-up: <span style="font-weight:500; color:var(--text-secondary);">${escapeHtml(lastFollowUpText)}</span>
+                      </div>
+                    </td>
                     <td>${escapeHtml(displayStaff)}</td>
                     <td><span class="cp-pill ${escapeHtml(displayStatus.toLowerCase())}">${escapeHtml(displayStatus)}</span></td>
                     <td><span class="cp-pill ${fin.pillClass}">${fin.label}</span></td>
                     <td style="text-align:center;">
-                      <button class="cp-btn sm ${nextAct.btnClass} btnNextAction" data-id="${escapeHtml(asSafeString(e.id))}" data-action="${nextAct.action}">
-                        ${nextAct.label}
-                      </button>
+                      ${linkedApp ? `
+                        <button class="cp-btn sm secondary btnViewLinkedApp" data-id="${escapeHtml(asSafeString(e.id))}" data-app-id="${escapeHtml(asSafeString(linkedApp.id))}" style="font-weight:600; white-space:nowrap;" title="View candidate application record">
+                          &#x1F4CB; View Application
+                        </button>
+                      ` : (displayStatus === 'CONTACTED' || displayStatus === 'INTERESTED') ? `
+                        <div style="display:inline-flex; gap:5px; align-items:center; justify-content:center;">
+                          <button class="cp-btn sm accent btnStartCandidateApp" data-id="${escapeHtml(asSafeString(e.id))}" style="font-weight:700; white-space:nowrap;" title="Initiate admissions candidate application">
+                            &#x270D;&#xFE0F; Start Application
+                          </button>
+                          <button class="cp-btn sm secondary btnNextAction" data-id="${escapeHtml(asSafeString(e.id))}" data-action="${nextAct.action}">
+                            ${nextAct.label}
+                          </button>
+                        </div>
+                      ` : `
+                        <button class="cp-btn sm ${nextAct.btnClass} btnNextAction" data-id="${escapeHtml(asSafeString(e.id))}" data-action="${nextAct.action}">
+                          ${nextAct.label}
+                        </button>
+                      `}
                     </td>
                   </tr>
                 `;
@@ -24261,6 +24587,30 @@ function renderEnquiriesTab(container) {
     el.addEventListener('click', () => {
       const enq = enquiriesList.find(e => asSafeString(e.id) === el.dataset.id);
       if (enq) openModal('enquiryDetail', { enquiry: enq });
+    });
+  });
+
+  container.querySelectorAll('.btnStartCandidateApp').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const enq = enquiriesList.find(e => asSafeString(e.id) === btn.dataset.id);
+      if (!enq) return;
+      state.pendingApplicationFromEnquiry = enq;
+      state.tab = 'apply';
+      render();
+    });
+  });
+
+  container.querySelectorAll('.btnViewLinkedApp').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const appId = btn.dataset.appId;
+      state.tab = 'applications';
+      render();
+      if (appId) {
+        const appRecord = (state.intakeApplications || []).find(a => a.id === appId);
+        if (appRecord) openModal('applicationDetail', { application: appRecord });
+      }
     });
   });
 
@@ -27746,9 +28096,6 @@ function renderApplicationsTab(container) {
         </div>
       </div>
       <div style="display:flex; gap:10px;">
-        <button class="cp-btn secondary" id="btnOpenApplicantPortal" style="font-weight:600;">
-          &#x1F310; Applicant Portal
-        </button>
         <button class="cp-btn primary" id="btnEnterStaffApplication" style="font-weight:700;">
           + New Application
         </button>
@@ -27912,7 +28259,7 @@ function renderApplicationsTab(container) {
   });
 
   container.querySelector('#btnEnterStaffApplication')?.addEventListener('click', () => {
-    openModal('applicantIntake');
+    navigateTab('apply');
   });
 
   container.querySelector('#appFilterSearch')?.addEventListener('input', (e) => {
@@ -29086,7 +29433,1267 @@ function renderCandidateApplicationDrawer(container, options = {}) {
 }
 
 function renderApplicantIntakePortal(container, options = {}) {
-  return renderCandidateApplicationDrawer(container, options);
+  if (!container) return;
+
+  const activeProgrammes = (state.programmes || []).filter(
+    p => isRecordForCurrentTenant(p) && (!p.status || String(p.status).toLowerCase() === 'active')
+  );
+  const isStaff = (typeof isStaffUser === 'function' && isStaffUser()) || (state.auth?.user?.role && ['super admin', 'admin', 'staff', 'finance manager'].includes((state.auth.user.role || '').toLowerCase()));
+
+  // Modes: 'form' (Multi-Step Admissions Workspace) or 'google_forms' (Google Forms / Sheets Ingestion)
+  let activeMode = options.initialMode || 'form';
+  let currentStep = 1;
+  const maxStep = 5;
+  const visitedSteps = new Set([1]);
+  let parsedGoogleSubmissions = [];
+  let submittedApplication = null;
+  let draftStatusMsg = '';
+
+  // In-memory form model preserving all entered data across step transitions
+  const formData = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: 'MALE',
+    maritalStatus: 'Single',
+    stateOfOrigin: '',
+    address: '',
+    programmeId: '',
+    deliveryMode: 'IN_PERSON',
+    preferredSchedule: 'WEEKDAY',
+    expertiseLevel: 'BEGINNER',
+    agreedTuitionFee: '',
+    preferredStartDate: '',
+    preferredDuration: '',
+    sponsorType: 'Self-sponsored',
+    sponsorName: '',
+    sponsorPhone: '',
+    sponsorEmail: '',
+    claimedStudentNumber: '',
+    employmentStatus: 'Employed',
+    referralSource: 'Website',
+    notes: '',
+    honeypot: '',
+    consentAcknowledged: false,
+    enquiryId: null
+  };
+
+  if (state.pendingApplicationFromEnquiry) {
+    const pEnq = state.pendingApplicationFromEnquiry;
+    const rawName = (pEnq.name || pEnq.studentName || '').trim();
+    const parts = rawName.split(' ');
+    if (parts.length > 1) {
+      formData.firstName = parts[0];
+      formData.lastName = parts.slice(1).join(' ');
+    } else {
+      formData.firstName = rawName;
+    }
+    formData.email = pEnq.email || '';
+    formData.phone = pEnq.phone || '';
+    if (pEnq.programmeId) {
+      formData.programmeId = pEnq.programmeId;
+    } else if (pEnq.programmeName || pEnq.programme) {
+      const matchP = activeProgrammes.find(p => (p.name || '').toLowerCase() === (pEnq.programmeName || pEnq.programme || '').toLowerCase());
+      if (matchP) formData.programmeId = matchP.id;
+    }
+    formData.enquiryId = pEnq.id;
+    if (pEnq.source) formData.referralSource = pEnq.source;
+    if (pEnq.notes) formData.notes = pEnq.notes;
+    state.pendingApplicationFromEnquiry = null;
+  }
+
+  // Helper to read current DOM inputs into formData
+  function syncDomToFormData() {
+    const getVal = (id) => {
+      const el = container.querySelector('#' + id);
+      return el ? el.value.trim() : null;
+    };
+    const getRawVal = (id) => {
+      const el = container.querySelector('#' + id);
+      return el ? el.value : null;
+    };
+    const getChecked = (id) => {
+      const el = container.querySelector('#' + id);
+      return el ? el.checked : null;
+    };
+
+    if (currentStep === 1) {
+      const fn = getVal('appWkFirstName'); if (fn !== null) formData.firstName = fn;
+      const ln = getVal('appWkLastName'); if (ln !== null) formData.lastName = ln;
+      const em = getVal('appWkEmail'); if (em !== null) formData.email = em;
+      const ph = getVal('appWkPhone'); if (ph !== null) formData.phone = ph;
+      const dob = getRawVal('appWkDob'); if (dob !== null) formData.dateOfBirth = dob;
+      const gen = getRawVal('appWkGender'); if (gen !== null) formData.gender = gen;
+      const mar = getRawVal('appWkMarital'); if (mar !== null) formData.maritalStatus = mar;
+      const st = getVal('appWkState'); if (st !== null) formData.stateOfOrigin = st;
+      const addr = getVal('appWkAddress'); if (addr !== null) formData.address = addr;
+    } else if (currentStep === 2) {
+      const prog = getRawVal('appWkProgramme'); if (prog !== null) formData.programmeId = prog;
+      const sched = getRawVal('appWkSchedule'); if (sched !== null) formData.preferredSchedule = sched;
+      const mode = getRawVal('appWkDeliveryMode'); if (mode !== null) formData.deliveryMode = mode;
+      const exp = getRawVal('appWkExpertise'); if (exp !== null) formData.expertiseLevel = exp;
+      const fee = getRawVal('appWkTuitionFee'); if (fee !== null) formData.agreedTuitionFee = fee;
+      const sdate = getRawVal('appWkStartDate'); if (sdate !== null) formData.preferredStartDate = sdate;
+      const dur = getVal('appWkDuration'); if (dur !== null) formData.preferredDuration = dur;
+    } else if (currentStep === 3) {
+      const emp = getRawVal('appWkEmployment'); if (emp !== null) formData.employmentStatus = emp;
+      const ref = getRawVal('appWkReferral'); if (ref !== null) formData.referralSource = ref;
+      const cs = getVal('appWkClaimedStudentNumber'); if (cs !== null) formData.claimedStudentNumber = cs;
+      const nts = getVal('appWkNotes'); if (nts !== null) formData.notes = nts;
+    } else if (currentStep === 4) {
+      const spType = getRawVal('appWkSponsorType'); if (spType !== null) formData.sponsorType = spType;
+      const spName = getVal('appWkSponsorName'); if (spName !== null) formData.sponsorName = spName;
+      const spPhone = getVal('appWkSponsorPhone'); if (spPhone !== null) formData.sponsorPhone = spPhone;
+      const spEmail = getVal('appWkSponsorEmail'); if (spEmail !== null) formData.sponsorEmail = spEmail;
+      const hp = getVal('appWkHp'); if (hp !== null) formData.honeypot = hp;
+      const cst = getChecked('appWkConsent'); if (cst !== null) formData.consentAcknowledged = cst;
+    }
+  }
+
+  // Validate current step before advancing
+  function validateStep(step) {
+    syncDomToFormData();
+    if (step === 1) {
+      if (!formData.firstName) return 'Please enter the applicant\'s first name.';
+      if (!formData.lastName) return 'Please enter the applicant\'s last name.';
+      if (!formData.email || !/^\S+@\S+\.\S+$/.test(formData.email)) return 'Please enter a valid email address.';
+      if (!formData.phone || formData.phone.length < 7) return 'Please enter a valid telephone number.';
+      return null;
+    }
+    if (step === 2) {
+      if (!formData.programmeId) return 'Please select a training programme to proceed.';
+      return null;
+    }
+    if (step === 3) {
+      return null;
+    }
+    if (step === 4) {
+      if (!formData.consentAcknowledged) return 'Please acknowledge the admissions declaration and consent before submitting.';
+      return null;
+    }
+    return null;
+  }
+
+  function renderView() {
+    container.innerHTML = `
+      <div class="cp-admissions-workspace">
+        <!-- Top Navigation -->
+        <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <button type="button" class="cp-admissions-back-btn" id="btnWkBackToApplications" aria-label="Back to Candidate Applications">
+            <span style="font-size:16px; line-height:1;">&larr;</span> Back to Candidate Applications
+          </button>
+          <div style="font-size:12px; color:var(--text-muted); font-weight:600;">
+            Route: <code style="background:#F1F5F9; padding:2px 6px; border-radius:4px; font-size:11px;">#apply</code>
+          </div>
+        </div>
+
+        <!-- Page Header -->
+        <div class="cp-card" style="padding:22px 26px; margin-bottom:24px; background:linear-gradient(135deg, #0F172A 0%, #1E293B 100%); color:#FFFFFF; border:1px solid #334155; border-radius:12px; box-shadow:0 4px 16px rgba(15, 23, 42, 0.12);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#38BDF8; margin-bottom:4px;">
+                Candidate Applications &bull; Admissions &amp; Candidate Intake
+              </div>
+              <h1 class="cp-page-title" style="font-size:24px; font-weight:800; color:#F8FAFC; margin:0 0 6px 0; letter-spacing:-0.5px;">
+                Admissions &amp; Candidate Intake
+              </h1>
+              <p class="cp-page-subtitle" style="font-size:13.5px; color:#94A3B8; margin:0; max-width:680px; line-height:1.4;">
+                Complete a new candidate application for admission into a Clasptek training programme.
+              </p>
+            </div>
+
+            <!-- Mode Switcher -->
+            <div style="display:flex; background:rgba(255,255,255,0.08); padding:4px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); gap:4px;">
+              <button type="button" class="cp-btn sm ${activeMode === 'form' ? 'active' : ''}" id="btnWkModeForm" style="${activeMode === 'form' ? 'background:#0284C7; color:#FFFFFF; font-weight:700;' : 'background:transparent; color:#94A3B8; font-weight:600; border:none;'} border-radius:6px; cursor:pointer; padding:6px 14px;">
+                ✍️ Multi-Step Form
+              </button>
+              <button type="button" class="cp-btn sm ${activeMode === 'google_forms' ? 'active' : ''}" id="btnWkModeGoogleForms" style="${activeMode === 'google_forms' ? 'background:#0284C7; color:#FFFFFF; font-weight:700;' : 'background:transparent; color:#94A3B8; font-weight:600; border:none;'} border-radius:6px; cursor:pointer; padding:6px 14px;">
+                📊 Google Forms / Sheets
+              </button>
+            </div>
+          </div>
+
+          <!-- Formal Intake Stage Notice -->
+          <div style="margin-top:16px; padding:8px 12px; background:rgba(56, 189, 248, 0.08); border-left:3px solid #38BDF8; border-radius:4px; font-size:12px; color:#BAE6FD; display:flex; align-items:center; gap:8px;">
+            <span>ℹ️</span>
+            <span><strong>Formal Application Stage:</strong> This admissions workspace records authoritative candidate dossiers for review, screening, and conversion prior to cohort enrollment.</span>
+          </div>
+        </div>
+
+        ${submittedApplication ? renderConfirmationScreen() : (activeMode === 'form' ? renderMultiStepWorkspace() : renderGoogleFormsWorkspace())}
+      </div>
+    `;
+
+    attachEvents();
+  }
+
+  function renderMultiStepWorkspace() {
+    return `
+      <!-- Multi-Step Application Progress Indicator -->
+      <div class="cp-intake-stepper" role="navigation" aria-label="Application Progress">
+        <div class="cp-stepper-step ${currentStep === 1 ? 'active' : (visitedSteps.has(1) && currentStep > 1 ? 'completed' : '')}" data-step="1">
+          <span class="cp-stepper-badge">${visitedSteps.has(1) && currentStep > 1 ? '✔' : '1'}</span>
+          <span class="cp-stepper-label">Applicant Details</span>
+        </div>
+        <div class="cp-stepper-line ${currentStep > 1 ? 'completed' : ''}"></div>
+        
+        <div class="cp-stepper-step ${currentStep === 2 ? 'active' : (visitedSteps.has(2) && currentStep > 2 ? 'completed' : (visitedSteps.has(2) ? '' : 'disabled'))}" data-step="2">
+          <span class="cp-stepper-badge">${visitedSteps.has(2) && currentStep > 2 ? '✔' : '2'}</span>
+          <span class="cp-stepper-label">Programme Selection</span>
+        </div>
+        <div class="cp-stepper-line ${currentStep > 2 ? 'completed' : ''}"></div>
+        
+        <div class="cp-stepper-step ${currentStep === 3 ? 'active' : (visitedSteps.has(3) && currentStep > 3 ? 'completed' : (visitedSteps.has(3) ? '' : 'disabled'))}" data-step="3">
+          <span class="cp-stepper-badge">${visitedSteps.has(3) && currentStep > 3 ? '✔' : '3'}</span>
+          <span class="cp-stepper-label">Background &amp; Experience</span>
+        </div>
+        <div class="cp-stepper-line ${currentStep > 3 ? 'completed' : ''}"></div>
+        
+        <div class="cp-stepper-step ${currentStep === 4 ? 'active' : (visitedSteps.has(4) && currentStep > 4 ? 'completed' : (visitedSteps.has(4) ? '' : 'disabled'))}" data-step="4">
+          <span class="cp-stepper-badge">${visitedSteps.has(4) && currentStep > 4 ? '✔' : '4'}</span>
+          <span class="cp-stepper-label">Additional Information</span>
+        </div>
+        <div class="cp-stepper-line ${currentStep > 4 ? 'completed' : ''}"></div>
+        
+        <div class="cp-stepper-step ${currentStep === 5 ? 'active' : (visitedSteps.has(5) ? 'completed' : 'disabled')}" data-step="5">
+          <span class="cp-stepper-badge">5</span>
+          <span class="cp-stepper-label">Review &amp; Submit</span>
+        </div>
+      </div>
+
+      <!-- Error Alert Banner -->
+      <div id="appWkError" style="display:none; background:#FEF2F2; border-left:4px solid #EF4444; border-radius:6px; padding:12px 16px; margin-bottom:18px; color:#991B1B; font-size:13px; font-weight:600;"></div>
+
+      <!-- Step Content Area -->
+      <div class="cp-card" style="padding:26px 30px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.04); margin-bottom:24px;">
+        ${renderCurrentStepContent()}
+
+        <!-- Form Navigation Controls -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:28px; padding-top:20px; border-top:1px solid #E2E8F0; flex-wrap:wrap; gap:12px;">
+          <div>
+            ${currentStep > 1 ? `
+              <button type="button" class="cp-btn secondary" id="btnWkPrevStep" style="font-weight:700;">
+                &larr; Previous Step
+              </button>
+            ` : `
+              <button type="button" class="cp-btn secondary" id="btnWkCancel" style="color:var(--text-muted);">
+                Cancel &amp; Return
+              </button>
+            `}
+          </div>
+
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div id="wkDraftStatus" style="font-size:12px; color:#10B981; font-weight:700;">${draftStatusMsg || ''}</div>
+            <button type="button" class="cp-btn secondary" id="btnWkSaveDraft" style="font-weight:600;" title="Save current progress in this session">
+              💾 Save Draft
+            </button>
+            ${currentStep < 5 ? `
+              <button type="button" class="cp-btn primary" id="btnWkNextStep" style="font-weight:700; min-width:140px;">
+                Continue &rarr;
+              </button>
+            ` : `
+              <button type="button" class="cp-btn primary" id="btnWkSubmitApp" style="font-weight:800; min-width:190px; background:#0F172A; border-color:#0F172A;">
+                ✔ Submit Official Application
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCurrentStepContent() {
+    if (currentStep === 1) {
+      return `
+        <div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:10px; border-bottom:1.5px solid #F1F5F9;">
+            <span style="background:#0284C7; color:#FFFFFF; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">1</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Applicant Information</h2>
+              <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Enter the legal personal and contact information of the applicant.</div>
+            </div>
+          </div>
+
+          <div class="cp-intake-form-grid">
+            <div class="cp-field">
+              <label for="appWkFirstName" style="font-weight:700; font-size:12.5px; color:#334155;">First Name <span style="color:#DC2626;">*</span></label>
+              <input type="text" id="appWkFirstName" required value="${escapeHtml(formData.firstName)}" placeholder="e.g. Victor" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkLastName" style="font-weight:700; font-size:12.5px; color:#334155;">Last Name <span style="color:#DC2626;">*</span></label>
+              <input type="text" id="appWkLastName" required value="${escapeHtml(formData.lastName)}" placeholder="e.g. Chukwuma" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkEmail" style="font-weight:700; font-size:12.5px; color:#334155;">Email Address <span style="color:#DC2626;">*</span></label>
+              <input type="email" id="appWkEmail" required value="${escapeHtml(formData.email)}" placeholder="applicant@example.com" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkPhone" style="font-weight:700; font-size:12.5px; color:#334155;">Phone Number <span style="color:#DC2626;">*</span></label>
+              <input type="tel" id="appWkPhone" required value="${escapeHtml(formData.phone)}" placeholder="+2348031112233" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkDob" style="font-weight:700; font-size:12.5px; color:#334155;">Date of Birth</label>
+              <input type="date" id="appWkDob" value="${escapeHtml(formData.dateOfBirth)}" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkGender" style="font-weight:700; font-size:12.5px; color:#334155;">Gender</label>
+              <select id="appWkGender" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="MALE" ${formData.gender === 'MALE' ? 'selected' : ''}>Male</option>
+                <option value="FEMALE" ${formData.gender === 'FEMALE' ? 'selected' : ''}>Female</option>
+                <option value="OTHER" ${formData.gender === 'OTHER' ? 'selected' : ''}>Other / Prefer not to say</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkMarital" style="font-weight:700; font-size:12.5px; color:#334155;">Marital Status</label>
+              <select id="appWkMarital" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="Single" ${formData.maritalStatus === 'Single' ? 'selected' : ''}>Single</option>
+                <option value="Married" ${formData.maritalStatus === 'Married' ? 'selected' : ''}>Married</option>
+                <option value="Other" ${formData.maritalStatus === 'Other' ? 'selected' : ''}>Other</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkState" style="font-weight:700; font-size:12.5px; color:#334155;">State of Origin</label>
+              <input type="text" id="appWkState" value="${escapeHtml(formData.stateOfOrigin)}" placeholder="e.g. Lagos, Anambra, Rivers" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field cp-col-span-2">
+              <label for="appWkAddress" style="font-weight:700; font-size:12.5px; color:#334155;">Residential Address</label>
+              <input type="text" id="appWkAddress" value="${escapeHtml(formData.address)}" placeholder="Street address, City, State" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (currentStep === 2) {
+      const selectedProg = activeProgrammes.find(p => p.id === formData.programmeId);
+      return `
+        <div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:10px; border-bottom:1.5px solid #F1F5F9;">
+            <span style="background:#0284C7; color:#FFFFFF; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">2</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Programme Selection</h2>
+              <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Select the target Clasptek curriculum, agreed terms, and delivery mode.</div>
+            </div>
+          </div>
+
+          <div class="cp-intake-form-grid">
+            <div class="cp-field cp-col-span-2">
+              <label for="appWkProgramme" style="font-weight:700; font-size:12.5px; color:#334155;">Programme / Course <span style="color:#DC2626;">*</span></label>
+              <select id="appWkProgramme" required style="width:100%; padding:10px 12px; border:1.5px solid #CBD5E1; border-radius:6px; font-size:14px; font-weight:700; color:#0F172A; background:#FFFFFF;">
+                <option value="">-- Select Active Training Programme --</option>
+                ${activeProgrammes.map(p => `
+                  <option value="${escapeHtml(p.id)}" ${formData.programmeId === p.id ? 'selected' : ''}>
+                    ${escapeHtml(p.name)} (${escapeHtml(p.code || 'CODE')}) &mdash; Standard Tuition: ${fmtMoney(p.tuitionFee)}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <!-- Dynamic Selected Programme Summary Box -->
+            <div class="cp-field cp-col-span-2" id="appWkProgSummaryBox" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:14px 18px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:#0284C7;">Curriculum Specifications</div>
+                  <div style="font-size:15px; font-weight:800; color:#0F172A; margin-top:2px;" id="appWkProgTitle">
+                    ${selectedProg ? escapeHtml(selectedProg.name) : 'No Programme Selected Yet'}
+                  </div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:11px; font-weight:700; color:#64748B;">Standard Tuition</div>
+                  <div style="font-size:16px; font-weight:800; color:#0F172A;" id="appWkProgFee">
+                    ${selectedProg ? fmtMoney(selectedProg.tuitionFee) : '₦0.00'}
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px; font-size:12px; color:#475569; line-height:1.4; border-top:1px dashed #CBD5E1; padding-top:8px;">
+                📌 <strong>Academic Benchmark:</strong> Clasptek Academy mandates a minimum <strong>80% attendance requirement</strong> across all scheduled modules for institutional qualification and certificate issuance.
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label for="appWkDeliveryMode" style="font-weight:700; font-size:12.5px; color:#334155;">Delivery Mode</label>
+              <select id="appWkDeliveryMode" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="IN_PERSON" ${formData.deliveryMode === 'IN_PERSON' ? 'selected' : ''}>In-Person Classroom</option>
+                <option value="HYBRID" ${formData.deliveryMode === 'HYBRID' ? 'selected' : ''}>Hybrid (Online + Campus)</option>
+                <option value="ONLINE" ${formData.deliveryMode === 'ONLINE' ? 'selected' : ''}>100% Online Instructor-Led</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkSchedule" style="font-weight:700; font-size:12.5px; color:#334155;">Preferred Schedule</label>
+              <select id="appWkSchedule" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="WEEKDAY" ${formData.preferredSchedule === 'WEEKDAY' ? 'selected' : ''}>Weekday Standard</option>
+                <option value="WEEKEND" ${formData.preferredSchedule === 'WEEKEND' ? 'selected' : ''}>Weekend Intensive</option>
+                <option value="EVENING" ${formData.preferredSchedule === 'EVENING' ? 'selected' : ''}>Evening Sessions</option>
+                <option value="FLEXIBLE" ${formData.preferredSchedule === 'FLEXIBLE' ? 'selected' : ''}>Flexible / Self-Paced</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkExpertise" style="font-weight:700; font-size:12.5px; color:#334155;">Expertise Level</label>
+              <select id="appWkExpertise" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="BEGINNER" ${formData.expertiseLevel === 'BEGINNER' ? 'selected' : ''}>Beginner (Zero / Fundamental)</option>
+                <option value="INTERMEDIATE" ${formData.expertiseLevel === 'INTERMEDIATE' ? 'selected' : ''}>Intermediate (Some Prior Coding)</option>
+                <option value="ADVANCED" ${formData.expertiseLevel === 'ADVANCED' ? 'selected' : ''}>Advanced (Professional Upskilling)</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkTuitionFee" style="font-weight:700; font-size:12.5px; color:#334155;">Agreed Tuition Snapshot (NGN)</label>
+              <input type="number" id="appWkTuitionFee" min="0" value="${escapeHtml(formData.agreedTuitionFee || (selectedProg ? selectedProg.tuitionFee : ''))}" placeholder="0.00" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkStartDate" style="font-weight:700; font-size:12.5px; color:#334155;">Preferred Start Date</label>
+              <input type="date" id="appWkStartDate" value="${escapeHtml(formData.preferredStartDate)}" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkDuration" style="font-weight:700; font-size:12.5px; color:#334155;">Target Duration</label>
+              <input type="text" id="appWkDuration" value="${escapeHtml(formData.preferredDuration)}" placeholder="e.g. 12 weeks, 3 months" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (currentStep === 3) {
+      return `
+        <div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:10px; border-bottom:1.5px solid #F1F5F9;">
+            <span style="background:#0284C7; color:#FFFFFF; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">3</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Background &amp; Experience</h2>
+              <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Capture candidate background, prior student identity, and career ambitions.</div>
+            </div>
+          </div>
+
+          <div class="cp-intake-form-grid">
+            <div class="cp-field">
+              <label for="appWkEmployment" style="font-weight:700; font-size:12.5px; color:#334155;">Employment Status</label>
+              <select id="appWkEmployment" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="Employed" ${formData.employmentStatus === 'Employed' ? 'selected' : ''}>Employed</option>
+                <option value="Self-Employed" ${formData.employmentStatus === 'Self-Employed' ? 'selected' : ''}>Self-Employed / Freelance</option>
+                <option value="Unemployed" ${formData.employmentStatus === 'Unemployed' ? 'selected' : ''}>Seeking Employment</option>
+                <option value="Student" ${formData.employmentStatus === 'Student' ? 'selected' : ''}>Current University Student</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkReferral" style="font-weight:700; font-size:12.5px; color:#334155;">Referral Channel</label>
+              <select id="appWkReferral" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="Website" ${formData.referralSource === 'Website' ? 'selected' : ''}>Clasptek Official Website</option>
+                <option value="Social Media" ${formData.referralSource === 'Social Media' ? 'selected' : ''}>LinkedIn / Social Media</option>
+                <option value="Alumni" ${formData.referralSource === 'Alumni' ? 'selected' : ''}>Alumni / Peer Recommendation</option>
+                <option value="Employer" ${formData.referralSource === 'Employer' ? 'selected' : ''}>Employer Recommendation</option>
+                <option value="Other" ${formData.referralSource === 'Other' ? 'selected' : ''}>Other Intake Channel</option>
+              </select>
+            </div>
+            <div class="cp-field cp-col-span-2">
+              <label for="appWkClaimedStudentNumber" style="font-weight:700; font-size:12.5px; color:#334155;">
+                Claimed Student ID <span style="font-weight:400; color:#64748B;">(Optional &mdash; for returning students or past alumni matching)</span>
+              </label>
+              <input type="text" id="appWkClaimedStudentNumber" value="${escapeHtml(formData.claimedStudentNumber)}" placeholder="e.g. STU-2026-0101" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field cp-col-span-2">
+              <label for="appWkNotes" style="font-weight:700; font-size:12.5px; color:#334155;">Candidate Notes / Career Aspirations</label>
+              <textarea id="appWkNotes" rows="3" placeholder="Describe the candidate's career goals, specific software stack interests, schedule accommodations, or background notes..." style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; resize:vertical;">${escapeHtml(formData.notes)}</textarea>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (currentStep === 4) {
+      return `
+        <div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:10px; border-bottom:1.5px solid #F1F5F9;">
+            <span style="background:#0284C7; color:#FFFFFF; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">4</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Contact &amp; Additional Information</h2>
+              <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Sponsorship arrangement and formal institutional admission declarations.</div>
+            </div>
+          </div>
+
+          <div class="cp-intake-form-grid">
+            <div class="cp-field">
+              <label for="appWkSponsorType" style="font-weight:700; font-size:12.5px; color:#334155;">Sponsorship Type</label>
+              <select id="appWkSponsorType" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;">
+                <option value="Self-sponsored" ${formData.sponsorType === 'Self-sponsored' ? 'selected' : ''}>Self-sponsored (Candidate Self)</option>
+                <option value="Corporate" ${formData.sponsorType === 'Corporate' ? 'selected' : ''}>Corporate / Employer Sponsored</option>
+                <option value="Government" ${formData.sponsorType === 'Government' ? 'selected' : ''}>Government Agency / Scholarship</option>
+                <option value="NGO" ${formData.sponsorType === 'NGO' ? 'selected' : ''}>NGO / Charitable Foundation</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label for="appWkSponsorName" style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Organization / Name</label>
+              <input type="text" id="appWkSponsorName" value="${escapeHtml(formData.sponsorName)}" placeholder="e.g. Acme Corp / Self" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkSponsorPhone" style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Contact Phone</label>
+              <input type="tel" id="appWkSponsorPhone" value="${escapeHtml(formData.sponsorPhone)}" placeholder="+234..." style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+            <div class="cp-field">
+              <label for="appWkSponsorEmail" style="font-weight:700; font-size:12.5px; color:#334155;">Sponsor Email Address</label>
+              <input type="email" id="appWkSponsorEmail" value="${escapeHtml(formData.sponsorEmail)}" placeholder="sponsor@organization.com" style="width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13.5px;" />
+            </div>
+
+            <!-- Honeypot -->
+            <div style="display:none;" aria-hidden="true">
+              <input type="text" id="appWkHp" name="hp_field" value="${escapeHtml(formData.honeypot)}" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <!-- Mandatory Formal Declaration & Admissions Consent -->
+            <div class="cp-field cp-col-span-2" style="margin-top:14px; background:#F8FAFC; border:1.5px solid #CBD5E1; border-radius:8px; padding:16px;">
+              <label for="appWkConsent" style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; font-size:13px; color:#0F172A; line-height:1.5;">
+                <input type="checkbox" id="appWkConsent" required ${formData.consentAcknowledged ? 'checked' : ''} style="margin-top:3px; width:17px; height:17px; accent-color:#0284C7;" />
+                <span>
+                  <strong>Admissions Declaration &amp; Institutional Governance Consent:</strong><br />
+                  <span style="color:#475569; font-size:12.5px;">
+                    I certify that all candidate information submitted in this application is complete, genuine, and accurate. I acknowledge that admission into Clasptek training programmes is subject to administrative screening, course availability, and institutional academic regulations.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (currentStep === 5) {
+      const prog = activeProgrammes.find(p => p.id === formData.programmeId);
+      return `
+        <div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:10px; border-bottom:1.5px solid #F1F5F9;">
+            <span style="background:#0F172A; color:#FFFFFF; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;">5</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:800; color:#0F172A; margin:0;">Review Admissions Dossier &amp; Submit</h2>
+              <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">Verify all candidate information before submitting into Clasptek Training Operations.</div>
+            </div>
+          </div>
+
+          <!-- Executive 4-Quadrant Review Dossier -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:18px; margin-bottom:24px;">
+            
+            <!-- Dossier 1: Applicant Details -->
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #E2E8F0; padding-bottom:6px;">
+                <div style="font-weight:800; font-size:13px; color:#0F172A; text-transform:uppercase; letter-spacing:0.5px;">
+                  1. Applicant Details
+                </div>
+                <button type="button" class="cp-btn sm secondary btnWkJumpStep" data-jump="1" style="font-size:11px; padding:2px 8px;">
+                  Edit
+                </button>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12.5px;">
+                <div><strong style="color:#64748B;">Full Name:</strong> <span style="font-weight:700; color:#0F172A;">${escapeHtml(formData.firstName)} ${escapeHtml(formData.lastName)}</span></div>
+                <div><strong style="color:#64748B;">Email:</strong> <span style="color:#0F172A;">${escapeHtml(formData.email)}</span></div>
+                <div><strong style="color:#64748B;">Phone:</strong> <span style="color:#0F172A;">${escapeHtml(formData.phone)}</span></div>
+                <div><strong style="color:#64748B;">Date of Birth:</strong> <span style="color:#0F172A;">${escapeHtml(formData.dateOfBirth || 'Not specified')}</span></div>
+                <div><strong style="color:#64748B;">Gender / Marital:</strong> <span style="color:#0F172A;">${escapeHtml(formData.gender)} &middot; ${escapeHtml(formData.maritalStatus)}</span></div>
+                <div><strong style="color:#64748B;">State of Origin:</strong> <span style="color:#0F172A;">${escapeHtml(formData.stateOfOrigin || 'Not specified')}</span></div>
+                <div><strong style="color:#64748B;">Address:</strong> <span style="color:#0F172A;">${escapeHtml(formData.address || 'Not specified')}</span></div>
+              </div>
+            </div>
+
+            <!-- Dossier 2: Programme Selection -->
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #E2E8F0; padding-bottom:6px;">
+                <div style="font-weight:800; font-size:13px; color:#0F172A; text-transform:uppercase; letter-spacing:0.5px;">
+                  2. Programme &amp; Schedule
+                </div>
+                <button type="button" class="cp-btn sm secondary btnWkJumpStep" data-jump="2" style="font-size:11px; padding:2px 8px;">
+                  Edit
+                </button>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12.5px;">
+                <div><strong style="color:#64748B;">Programme:</strong> <span style="font-weight:700; color:#0284C7;">${prog ? escapeHtml(prog.name) : 'None Selected'}</span></div>
+                <div><strong style="color:#64748B;">Course Code:</strong> <span style="font-family:var(--font-mono); color:#0F172A;">${prog ? escapeHtml(prog.code || 'CODE') : 'N/A'}</span></div>
+                <div><strong style="color:#64748B;">Agreed Tuition:</strong> <span style="font-weight:800; color:#10B981;">${fmtMoney(formData.agreedTuitionFee || (prog ? prog.tuitionFee : 0))}</span></div>
+                <div><strong style="color:#64748B;">Delivery Mode:</strong> <span style="color:#0F172A;">${escapeHtml(formData.deliveryMode)}</span></div>
+                <div><strong style="color:#64748B;">Schedule:</strong> <span style="color:#0F172A;">${escapeHtml(formData.preferredSchedule)}</span></div>
+                <div><strong style="color:#64748B;">Expertise Level:</strong> <span style="color:#0F172A;">${escapeHtml(formData.expertiseLevel)}</span></div>
+                <div><strong style="color:#64748B;">Attendance Benchmark:</strong> <span style="color:#0369A1; font-weight:600;">80% Mandatory Attendance</span></div>
+              </div>
+            </div>
+
+            <!-- Dossier 3: Background & Experience -->
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #E2E8F0; padding-bottom:6px;">
+                <div style="font-weight:800; font-size:13px; color:#0F172A; text-transform:uppercase; letter-spacing:0.5px;">
+                  3. Background &amp; Aspirations
+                </div>
+                <button type="button" class="cp-btn sm secondary btnWkJumpStep" data-jump="3" style="font-size:11px; padding:2px 8px;">
+                  Edit
+                </button>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12.5px;">
+                <div><strong style="color:#64748B;">Employment:</strong> <span style="color:#0F172A;">${escapeHtml(formData.employmentStatus)}</span></div>
+                <div><strong style="color:#64748B;">Referral:</strong> <span style="color:#0F172A;">${escapeHtml(formData.referralSource)}</span></div>
+                <div><strong style="color:#64748B;">Claimed Student ID:</strong> <span style="font-family:var(--font-mono); color:#0F172A;">${escapeHtml(formData.claimedStudentNumber || 'None (New Candidate)')}</span></div>
+                <div><strong style="color:#64748B;">Notes / Goals:</strong> <span style="color:#334155;">${escapeHtml(formData.notes || 'None provided')}</span></div>
+              </div>
+            </div>
+
+            <!-- Dossier 4: Contact & Sponsorship -->
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #E2E8F0; padding-bottom:6px;">
+                <div style="font-weight:800; font-size:13px; color:#0F172A; text-transform:uppercase; letter-spacing:0.5px;">
+                  4. Sponsorship &amp; Consent
+                </div>
+                <button type="button" class="cp-btn sm secondary btnWkJumpStep" data-jump="4" style="font-size:11px; padding:2px 8px;">
+                  Edit
+                </button>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12.5px;">
+                <div><strong style="color:#64748B;">Sponsor Type:</strong> <span style="color:#0F172A;">${escapeHtml(formData.sponsorType)}</span></div>
+                <div><strong style="color:#64748B;">Sponsor Name:</strong> <span style="color:#0F172A;">${escapeHtml(formData.sponsorName || 'Self')}</span></div>
+                <div><strong style="color:#64748B;">Sponsor Phone:</strong> <span style="color:#0F172A;">${escapeHtml(formData.sponsorPhone || 'N/A')}</span></div>
+                <div><strong style="color:#64748B;">Sponsor Email:</strong> <span style="color:#0F172A;">${escapeHtml(formData.sponsorEmail || 'N/A')}</span></div>
+                <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #CBD5E1;">
+                  <strong style="color:#15803D;">✔ Declaration Certified:</strong> <span style="color:#475569; font-size:11.5px;">Governance &amp; accuracy acknowledged</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Submission Ready Summary Callout -->
+          <div style="background:#EFF6FF; border:1.5px solid #93C5FD; border-radius:8px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:20px;">📋</span>
+              <div>
+                <div style="font-weight:800; font-size:13.5px; color:#1E40AF;">Ready for Authoritative Submission</div>
+                <div style="font-size:12px; color:#3B82F6;">Clicking below will register the candidate and generate an official Application Reference (APP-YYYY-XXXXXX).</div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="cp-pill" style="background:#DBEAFE; color:#1E40AF; font-size:11.5px; font-weight:700;">5/5 Sections Completed</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return '';
+  }
+
+  function renderGoogleFormsWorkspace() {
+    return `
+      <div class="cp-card" style="padding:26px 30px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.04);">
+        <div style="background:#F0F9FF; border:1px solid #BAE6FD; border-radius:8px; padding:16px 20px; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; color:#0369A1; margin-bottom:4px;">
+            <span>📊</span> Google Forms &amp; Sheets Direct Pipeline Ingestion
+          </div>
+          <div style="font-size:12.5px; color:#0C4A6E; line-height:1.5;">
+            Paste tabular rows copied directly from Google Sheets or CSV exports. Rows are automatically mapped to programme catalogue, deduplicated using immutable submission IDs, and ingested directly into Supabase.
+          </div>
+        </div>
+
+        <!-- Input Textarea -->
+        <div style="margin-bottom:18px;">
+          <label for="appWkGformsInput" style="font-weight:700; font-size:13px; color:#334155; display:block; margin-bottom:8px;">
+            Paste Tab-Separated Rows from Google Sheet (Include Headers)
+          </label>
+          <textarea id="appWkGformsInput" rows="7" placeholder="Timestamp&#9;Email Address&#9;Full Name&#9;Phone Number&#9;Programme&#9;Schedule&#10;2026-09-17 12:00:00&#9;candidate@example.com&#9;Adeola Bakare&#9;08012345678&#9;Full Stack Web Dev&#9;Weekday" style="width:100%; padding:12px; font-family:var(--font-mono); font-size:12px; border:1px solid #CBD5E1; border-radius:6px; resize:vertical;"></textarea>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+            <button type="button" class="cp-btn secondary sm" id="btnWkClearGforms">Clear Input</button>
+            <button type="button" class="cp-btn primary sm" id="btnWkParseGforms" style="font-weight:700;">
+              🔍 Parse &amp; Preview Rows
+            </button>
+          </div>
+        </div>
+
+        <!-- Parsed Preview Table -->
+        <div id="appWkGformsPreviewContainer" style="display:none; margin-bottom:24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-weight:800; font-size:14px; color:#0F172A;">
+              Parsed Intake Candidates (<span id="appWkGformsCount">0</span>)
+            </div>
+            <span id="appWkGformsDupBadge" class="cp-pill" style="display:none; background:#FEF3C7; color:#B45309; font-size:11.5px; font-weight:700;"></span>
+          </div>
+
+          <div style="max-height:280px; overflow-y:auto; border:1px solid #E2E8F0; border-radius:8px; margin-bottom:14px;">
+            <table class="cp-table" style="width:100%; font-size:12px; border-collapse:collapse;" id="appWkGformsTable">
+              <thead>
+                <tr style="background:#F8FAFC; border-bottom:1px solid #E2E8F0; text-align:left;">
+                  <th style="padding:10px 12px;">Submission ID</th>
+                  <th style="padding:10px 12px;">Applicant Name</th>
+                  <th style="padding:10px 12px;">Contact Info</th>
+                  <th style="padding:10px 12px;">Target Programme</th>
+                  <th style="padding:10px 12px;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="appWkGformsTableBody"></tbody>
+            </table>
+          </div>
+
+          <div id="appWkGformsResult" style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:6px; font-size:12.5px; font-weight:600;"></div>
+
+          <button type="button" class="cp-btn primary" id="btnWkImportGforms" style="width:100%; font-weight:800; padding:12px; font-size:14px;">
+            ✔ Ingest Submissions into Candidate Applications Pipeline
+          </button>
+        </div>
+
+        <!-- Google Apps Script Webhook Guide -->
+        <div style="border:1px solid #E2E8F0; border-radius:8px; overflow:hidden;">
+          <details style="background:#F8FAFC; padding:14px;">
+            <summary style="font-weight:700; font-size:12.5px; color:#334155; cursor:pointer; display:flex; align-items:center; gap:6px;">
+              <span>⚙️</span> Automated Real-Time Webhook Setup (Google Apps Script)
+            </summary>
+            <div style="padding-top:12px; font-size:12px; color:#475569; line-height:1.5;">
+              <p style="margin:0 0 8px 0;">To ingest Google Form responses automatically in real-time, attach an <code>onFormSubmit</code> trigger in your Google Form script editor:</p>
+              <pre style="background:#0F172A; color:#E2E8F0; padding:12px; border-radius:6px; overflow-x:auto; font-size:11px; margin:0 0 8px 0;"><code>function onFormSubmit(e) {
+  var secret = PropertiesService.getScriptProperties().getProperty('CLASPTEK_INTAKE_WEBHOOK_SECRET');
+  var payload = {
+    responseId: e.response.getId(),
+    timestamp: e.response.getTimestamp(),
+    email: e.response.getRespondentEmail(),
+    // Map your custom questions here...
+  };
+  UrlFetchApp.fetch('https://portal.clasptek.org/api/intake/google-forms', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'X-Clasptek-Webhook-Secret': secret },
+    payload: JSON.stringify(payload)
+  });
+}</code></pre>
+              <p style="margin:0; font-size:11.5px; color:#0369A1;">
+                <strong>Security Invariant:</strong> Store webhook secrets strictly in Google Apps Script Script Properties. Never expose secrets in spreadsheets.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderConfirmationScreen() {
+    return `
+      <div class="cp-card" style="padding:48px 24px; text-align:center; max-width:640px; margin:20px auto; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.06);">
+        <div style="width:68px; height:68px; background:#DCFCE7; color:#16A34A; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:36px; margin-bottom:20px;">
+          ✔
+        </div>
+        <h2 style="font-size:22px; font-weight:800; color:#0F172A; margin:0 0 8px 0;">Application Registered Successfully</h2>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:0 0 24px 0; max-width:440px; margin-left:auto; margin-right:auto; line-height:1.5;">
+          The candidate dossier has been safely ingested into Clasptek Training Operations. Authoritative admissions reference number:
+        </p>
+
+        <div style="background:#F8FAFC; border:2px dashed #94A3B8; border-radius:8px; padding:14px 24px; display:inline-flex; align-items:center; gap:16px; margin-bottom:28px;">
+          <div id="wkSuccessRefNo" style="font-family:var(--font-mono); font-size:24px; font-weight:800; color:#0F172A; letter-spacing:1px;">
+            ${escapeHtml(submittedApplication.applicationNumber || 'APP-2026-000000')}
+          </div>
+          <button type="button" class="cp-btn secondary sm" id="btnWkCopyRef" style="font-weight:700;">Copy</button>
+        </div>
+
+        <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+          <button type="button" class="cp-btn primary" id="btnWkBackToQueue" style="font-weight:700;">
+            📋 View in Candidate Applications
+          </button>
+          <button type="button" class="cp-btn secondary" id="btnWkSubmitAnother" style="font-weight:600;">
+            + Submit Another Application
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function attachEvents() {
+    // Back to Candidate Applications
+    container.querySelector('#btnWkBackToApplications')?.addEventListener('click', () => {
+      navigateTab('applications');
+    });
+
+    // Mode Switchers
+    container.querySelector('#btnWkModeForm')?.addEventListener('click', () => {
+      syncDomToFormData();
+      activeMode = 'form';
+      renderView();
+    });
+
+    container.querySelector('#btnWkModeGoogleForms')?.addEventListener('click', () => {
+      syncDomToFormData();
+      activeMode = 'google_forms';
+      renderView();
+    });
+
+    // Confirmation Screen Events
+    if (submittedApplication) {
+      container.querySelector('#btnWkBackToQueue')?.addEventListener('click', () => {
+        navigateTab('applications');
+      });
+
+      container.querySelector('#btnWkSubmitAnother')?.addEventListener('click', () => {
+        submittedApplication = null;
+        currentStep = 1;
+        visitedSteps.clear();
+        visitedSteps.add(1);
+        Object.keys(formData).forEach(k => {
+          if (typeof formData[k] === 'boolean') formData[k] = false;
+          else if (k === 'gender') formData[k] = 'MALE';
+          else if (k === 'maritalStatus') formData[k] = 'Single';
+          else if (k === 'deliveryMode') formData[k] = 'IN_PERSON';
+          else if (k === 'preferredSchedule') formData[k] = 'WEEKDAY';
+          else if (k === 'expertiseLevel') formData[k] = 'BEGINNER';
+          else if (k === 'sponsorType') formData[k] = 'Self-sponsored';
+          else if (k === 'employmentStatus') formData[k] = 'Employed';
+          else if (k === 'referralSource') formData[k] = 'Website';
+          else formData[k] = '';
+        });
+        renderView();
+      });
+
+      container.querySelector('#btnWkCopyRef')?.addEventListener('click', () => {
+        const ref = container.querySelector('#wkSuccessRefNo')?.textContent?.trim() || '';
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(ref);
+          alert('Application reference copied to clipboard!');
+        } else {
+          prompt('Application Reference Number:', ref);
+        }
+      });
+
+      return;
+    }
+
+    // Google Forms Mode Events
+    if (activeMode === 'google_forms') {
+      const gformsInput = container.querySelector('#appWkGformsInput');
+      const parseBtn = container.querySelector('#btnWkParseGforms');
+      const clearBtn = container.querySelector('#btnWkClearGforms');
+      const importBtn = container.querySelector('#btnWkImportGforms');
+      const previewBox = container.querySelector('#appWkGformsPreviewContainer');
+      const tableBody = container.querySelector('#appWkGformsTableBody');
+      const countSpan = container.querySelector('#appWkGformsCount');
+      const dupBadge = container.querySelector('#appWkGformsDupBadge');
+      const resultBox = container.querySelector('#appWkGformsResult');
+
+      parseBtn?.addEventListener('click', () => {
+        const raw = gformsInput ? gformsInput.value : '';
+        parsedGoogleSubmissions = parsePastedIntakeData(raw);
+
+        if (parsedGoogleSubmissions.length === 0) {
+          alert('No valid applicant rows found. Please paste data containing column headers (e.g. Full Name, Email, Phone, Programme).');
+          return;
+        }
+
+        countSpan.textContent = parsedGoogleSubmissions.length;
+        const dups = parsedGoogleSubmissions.filter(p => p.isDuplicate).length;
+        if (dups > 0) {
+          dupBadge.textContent = `${dups} duplicate${dups > 1 ? 's' : ''} detected`;
+          dupBadge.style.display = 'inline-block';
+        } else {
+          dupBadge.style.display = 'none';
+        }
+
+        tableBody.innerHTML = parsedGoogleSubmissions.map(item => `
+          <tr style="border-bottom:1px solid #F1F5F9; ${item.isDuplicate ? 'background:#FFFBEB;' : ''}">
+            <td style="padding:8px 10px; font-family:var(--font-mono); font-weight:700; color:#475569;">
+              ${escapeHtml(item.sourceSubmissionId.slice(0, 16))}...
+            </td>
+            <td style="padding:8px 10px; font-weight:700; color:#0F172A;">
+              ${escapeHtml(item.fullName)}
+            </td>
+            <td style="padding:8px 10px; color:#475569; font-size:11.5px;">
+              ${escapeHtml(item.email || '')} ${item.phone ? '&bull; ' + escapeHtml(item.phone) : ''}
+            </td>
+            <td style="padding:8px 10px; color:#0284C7; font-weight:600;">
+              ${escapeHtml(item.programmeName)}
+            </td>
+            <td style="padding:8px 10px;">
+              ${item.isDuplicate
+                ? '<span class="cp-pill" style="background:#FEF3C7; color:#B45309; font-size:10px; font-weight:700;">REPLAY / DUP</span>'
+                : '<span class="cp-pill" style="background:#DCFCE7; color:#15803D; font-size:10px; font-weight:700;">READY</span>'}
+            </td>
+          </tr>
+        `).join('');
+
+        previewBox.style.display = 'block';
+      });
+
+      clearBtn?.addEventListener('click', () => {
+        if (gformsInput) gformsInput.value = '';
+        if (previewBox) previewBox.style.display = 'none';
+        parsedGoogleSubmissions = [];
+      });
+
+      importBtn?.addEventListener('click', async () => {
+        if (parsedGoogleSubmissions.length === 0) return;
+        importBtn.disabled = true;
+        importBtn.textContent = 'Ingesting Submissions into Pipeline...';
+
+        let importedCount = 0;
+        let duplicateCount = 0;
+        let failedCount = 0;
+
+        for (const item of parsedGoogleSubmissions) {
+          try {
+            const payload = {
+              firstName: item.firstName,
+              lastName: item.lastName,
+              email: item.email,
+              phone: item.phone,
+              programmeId: item.programmeId,
+              deliveryMode: item.deliveryMode,
+              preferredSchedule: item.preferredSchedule,
+              expertiseLevel: item.expertiseLevel,
+              sponsorType: item.sponsorType,
+              claimedStudentNumber: item.claimedStudentNumber,
+              gender: item.gender,
+              address: item.address,
+              stateOfOrigin: item.stateOfOrigin,
+              notes: item.notes,
+              referralSource: 'Google Form',
+              consentAcknowledged: true,
+              applicant_data: item.raw
+            };
+
+            const res = await submitAuthoritativeApplication(payload, 'GOOGLE_FORM', item.sourceSubmissionId);
+            if (res.isReplay || res.isDuplicate) {
+              duplicateCount++;
+            } else {
+              importedCount++;
+            }
+          } catch (err) {
+            console.error('[Google Forms Intake] Ingestion error:', err);
+            failedCount++;
+          }
+        }
+
+        importBtn.disabled = false;
+        importBtn.textContent = '✔ Ingest Submissions into Candidate Applications Pipeline';
+
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          if (failedCount === 0) {
+            resultBox.style.background = '#DCFCE7';
+            resultBox.style.color = '#15803D';
+            resultBox.textContent = `✅ Successfully processed ${parsedGoogleSubmissions.length} submissions: ${importedCount} new candidates ingested, ${duplicateCount} duplicates skipped.`;
+          } else {
+            resultBox.style.background = '#FEF3C7';
+            resultBox.style.color = '#B45309';
+            resultBox.textContent = `⚠️ Ingestion completed: ${importedCount} imported, ${duplicateCount} duplicates skipped, ${failedCount} errors.`;
+          }
+        }
+      });
+
+      return;
+    }
+
+    // Step-Specific Change Handlers
+    if (currentStep === 2) {
+      const progSelect = container.querySelector('#appWkProgramme');
+      const tuitionInput = container.querySelector('#appWkTuitionFee');
+      const titleEl = container.querySelector('#appWkProgTitle');
+      const feeEl = container.querySelector('#appWkProgFee');
+
+      progSelect?.addEventListener('change', () => {
+        const sel = activeProgrammes.find(p => p.id === progSelect.value);
+        if (sel) {
+          if (tuitionInput) tuitionInput.value = sel.tuitionFee || '';
+          if (titleEl) titleEl.textContent = sel.name + (sel.code ? ` (${sel.code})` : '');
+          if (feeEl) feeEl.textContent = fmtMoney(sel.tuitionFee);
+        } else {
+          if (titleEl) titleEl.textContent = 'No Programme Selected Yet';
+          if (feeEl) feeEl.textContent = '₦0.00';
+        }
+      });
+    }
+
+    // Stepper header step jump clicks
+    container.querySelectorAll('.cp-stepper-step').forEach(stepEl => {
+      stepEl.addEventListener('click', () => {
+        const targetStep = parseInt(stepEl.getAttribute('data-step'), 10);
+        if (targetStep === currentStep) return;
+
+        if (targetStep < currentStep) {
+          syncDomToFormData();
+          currentStep = targetStep;
+          renderView();
+        } else {
+          // Advancing: validate current step first
+          const err = validateStep(currentStep);
+          if (err) {
+            showError(err);
+            return;
+          }
+          visitedSteps.add(currentStep);
+          currentStep = targetStep;
+          visitedSteps.add(currentStep);
+          renderView();
+        }
+      });
+    });
+
+    // Review Dossier quick "Edit" jump links
+    container.querySelectorAll('.btnWkJumpStep').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = parseInt(btn.getAttribute('data-jump'), 10);
+        if (target >= 1 && target <= 4) {
+          currentStep = target;
+          renderView();
+        }
+      });
+    });
+
+    // Cancel Button
+    container.querySelector('#btnWkCancel')?.addEventListener('click', () => {
+      navigateTab('applications');
+    });
+
+    // Previous Step Button
+    container.querySelector('#btnWkPrevStep')?.addEventListener('click', () => {
+      syncDomToFormData();
+      if (currentStep > 1) {
+        currentStep--;
+        renderView();
+      }
+    });
+
+    // Save Draft Button
+    container.querySelector('#btnWkSaveDraft')?.addEventListener('click', () => {
+      syncDomToFormData();
+      draftStatusMsg = `💾 Progress safely preserved in active session (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+      const statusEl = container.querySelector('#wkDraftStatus');
+      if (statusEl) {
+        statusEl.textContent = draftStatusMsg;
+        statusEl.style.color = '#10B981';
+      }
+    });
+
+    // Next Step Button
+    container.querySelector('#btnWkNextStep')?.addEventListener('click', () => {
+      const err = validateStep(currentStep);
+      if (err) {
+        showError(err);
+        return;
+      }
+      visitedSteps.add(currentStep);
+      if (currentStep < maxStep) {
+        currentStep++;
+        visitedSteps.add(currentStep);
+        renderView();
+      }
+    });
+
+    // Final Submit Application Button
+    container.querySelector('#btnWkSubmitApp')?.addEventListener('click', async () => {
+      // Validate all critical sections
+      const err1 = validateStep(1);
+      if (err1) { currentStep = 1; renderView(); showError(err1); return; }
+      const err2 = validateStep(2);
+      if (err2) { currentStep = 2; renderView(); showError(err2); return; }
+      const err4 = validateStep(4);
+      if (err4) { currentStep = 4; renderView(); showError(err4); return; }
+
+      const submitBtn = container.querySelector('#btnWkSubmitApp');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Registering Official Application...';
+      }
+
+      const selectedProg = activeProgrammes.find(p => p.id === formData.programmeId);
+      const agreedFee = formData.agreedTuitionFee ? Number(formData.agreedTuitionFee) : (selectedProg?.tuitionFee || 0);
+
+      const payload = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth || null,
+        gender: formData.gender,
+        maritalStatus: formData.maritalStatus,
+        stateOfOrigin: formData.stateOfOrigin,
+        address: formData.address,
+        programmeId: formData.programmeId,
+        expertiseLevel: formData.expertiseLevel,
+        preferredSchedule: formData.preferredSchedule,
+        deliveryMode: formData.deliveryMode,
+        preferredStartDate: formData.preferredStartDate || null,
+        preferredDuration: formData.preferredDuration,
+        agreedTuitionFee: agreedFee,
+        sponsorType: formData.sponsorType,
+        sponsorName: formData.sponsorName,
+        sponsorPhone: formData.sponsorPhone,
+        sponsorEmail: formData.sponsorEmail,
+        claimedStudentNumber: formData.claimedStudentNumber,
+        employmentStatus: formData.employmentStatus,
+        referralSource: formData.referralSource,
+        notes: formData.notes,
+        honeypot: formData.honeypot,
+        consentAcknowledged: formData.consentAcknowledged,
+        enquiryId: formData.enquiryId || null
+      };
+
+      try {
+        const source = isStaff ? 'STAFF_ENTRY' : 'WEB_INTAKE';
+        const res = await submitAuthoritativeApplication(payload, source);
+
+        submittedApplication = res;
+        renderView();
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '✔ Submit Official Application';
+        }
+        showError(err.message || 'Failed to submit application into Training Operations.');
+      }
+    });
+  }
+
+  function showError(msg) {
+    const errDiv = container.querySelector('#appWkError');
+    if (errDiv) {
+      errDiv.textContent = msg;
+      errDiv.style.display = 'block';
+      errDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      alert(msg);
+    }
+  }
+
+  // Google Forms Parser helper
+  function parsePastedIntakeData(rawText) {
+    if (!rawText || !rawText.trim()) return [];
+    const trimmed = rawText.trim();
+    
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr)) {
+          return arr.map((item, idx) => normalizeParsedRow(item, idx));
+        }
+      } catch (_) {}
+    }
+
+    const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+
+    const firstLine = lines[0];
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const delimiter = tabCount >= commaCount ? '\t' : ',';
+
+    function splitLine(line) {
+      if (delimiter === '\t') {
+        return line.split('\t').map(c => c.trim().replace(/^["']|["']$/g, ''));
+      }
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) {
+          result.push(cur.trim().replace(/^["']|["']$/g, ''));
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim().replace(/^["']|["']$/g, ''));
+      return result;
+    }
+
+    const headers = splitLine(lines[0]).map(h => h.toLowerCase().trim());
+    const dataRows = lines.slice(1);
+    const parsed = [];
+
+    dataRows.forEach((line, idx) => {
+      const cols = splitLine(line);
+      if (cols.length === 0 || cols.every(c => !c)) return;
+      const row = {};
+      headers.forEach((h, hIdx) => {
+        row[h] = cols[hIdx] || '';
+      });
+      parsed.push(normalizeParsedRow(row, idx));
+    });
+
+    return parsed;
+  }
+
+  function normalizeParsedRow(item, index) {
+    function findField(patterns) {
+      for (const [k, v] of Object.entries(item)) {
+        const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const p of patterns) {
+          const lowerP = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (lowerK.includes(lowerP) && String(v || '').trim()) {
+            return String(v).trim();
+          }
+        }
+      }
+      return '';
+    }
+
+    const responseId = findField(['responseid', 'submissionid', 'response_id', 'submission_id', 'id']);
+    const rawTimestamp = findField(['timestamp', 'submitted_at', 'date', 'created_at', 'time']);
+    const email = findField(['email', 'emailaddress', 'e-mail', 'mail']).toLowerCase();
+    const phone = findField(['phone', 'phonenumber', 'telephone', 'mobile', 'whatsapp', 'tel']);
+    
+    let fullName = findField(['fullname', 'full_name', 'name', 'applicantname', 'studentname']);
+    let firstName = findField(['firstname', 'first_name', 'fname']);
+    let lastName = findField(['lastname', 'last_name', 'lname', 'surname']);
+
+    if (!fullName && (firstName || lastName)) {
+      fullName = [firstName, lastName].filter(Boolean).join(' ');
+    } else if (fullName && (!firstName || !lastName)) {
+      const parts = fullName.split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || parts[0] || '';
+    }
+
+    const progStr = findField(['programme', 'program', 'course', 'training', 'track']);
+    let matchedProg = null;
+    if (progStr) {
+      const cleanProg = progStr.toLowerCase();
+      matchedProg = activeProgrammes.find(p => 
+        (p.name && p.name.toLowerCase().includes(cleanProg)) ||
+        (p.code && p.code.toLowerCase() === cleanProg) ||
+        cleanProg.includes((p.name || '').toLowerCase())
+      );
+    }
+    if (!matchedProg && activeProgrammes.length > 0) {
+      matchedProg = activeProgrammes[0];
+    }
+
+    let sourceSubmissionId = '';
+    if (responseId) {
+      sourceSubmissionId = responseId;
+    } else if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      sourceSubmissionId = 'CLP-GF-' + crypto.randomUUID();
+    } else {
+      sourceSubmissionId = 'CLP-GF-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+    }
+
+    const existingApps = state.intakeApplications || [];
+    const isDuplicate = existingApps.some(app => 
+      app.source_submission_id === sourceSubmissionId ||
+      app.sourceSubmissionId === sourceSubmissionId ||
+      (email && (app.email || '').toLowerCase() === email && phone && (app.phone || '').replace(/\D/g, '') === phone.replace(/\D/g, ''))
+    );
+
+    return {
+      sourceSubmissionId,
+      fullName: fullName || 'Candidate ' + (index + 1),
+      firstName: firstName || 'Candidate',
+      lastName: lastName || String(index + 1),
+      email: email || '',
+      phone: phone || '',
+      programmeId: matchedProg ? matchedProg.id : '',
+      programmeName: matchedProg ? matchedProg.name : (progStr || 'General Tech Programme'),
+      deliveryMode: 'IN_PERSON',
+      preferredSchedule: 'WEEKDAY',
+      expertiseLevel: 'BEGINNER',
+      sponsorType: 'Self-sponsored',
+      claimedStudentNumber: '',
+      gender: 'OTHER',
+      address: '',
+      stateOfOrigin: '',
+      notes: '',
+      isDuplicate,
+      raw: item
+    };
+  }
+
+  // Initial render of view
+  renderView();
 }
 
 // -----------------------------------------------------------------------------

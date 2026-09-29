@@ -485,7 +485,7 @@ CREATE TABLE IF NOT EXISTS public.enquiries (
     phone TEXT,
     programme_id TEXT REFERENCES public.programmes(id),
     source TEXT,
-    status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'INTERESTED', 'APPLIED', 'OFFERED', 'ENROLLED', 'LOST')),
+    status TEXT NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'INTERESTED', 'INVOICE_REQUESTED', 'INVOICE_ISSUED', 'ENROLLED', 'LOST')),
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
