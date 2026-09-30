@@ -328,6 +328,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError || !insertedStudent) {
+      if (resolvedCustomerId && resolvedCustomerId === `cust_${internalId}`) {
+        // Safe rollback: delete newly created customer ledger record to prevent orphan
+        await supabase.from('customers').delete().eq('id', resolvedCustomerId);
+      }
       console.error('[POST /api/students] Insert error:', insertError);
       return NextResponse.json(
         { error: insertError?.message || 'Failed to create student record in database.' },
