@@ -140,11 +140,11 @@ export function EnquiryDrawer({
       onOpenContactFollowUp?.(enquiry);
     };
   } else if (billingStatus === 'PAID') {
-    recommendationTitle = 'Proceed with Admissions Intake';
-    recommendationDesc = 'Tuition has been fully settled. Proceed to complete intake application and cohort enrolment.';
-    recommendationButtonLabel = 'Proceed with Admissions';
+    recommendationTitle = 'Proceed with Student Registration';
+    recommendationDesc = 'Tuition has been fully settled. Proceed to complete student details & registration and cohort enrolment.';
+    recommendationButtonLabel = 'Register Student';
     recommendationAction = () => {
-      window.location.href = `/applications?action=new&name=${encodeURIComponent(enquiry.student_name)}&email=${encodeURIComponent(enquiry.email || '')}&phone=${encodeURIComponent(enquiry.phone || '')}&programme=${encodeURIComponent(enquiry.programme_id || '')}&enquiryId=${enquiry.id}`;
+      setIsRegisterModalOpen(true);
     };
   } else if (billingStatus === 'OVERDUE') {
     recommendationTitle = 'Follow Up on Overdue Tuition';
@@ -155,7 +155,7 @@ export function EnquiryDrawer({
     };
   } else if (billingStatus === 'PARTIALLY_PAID') {
     recommendationTitle = 'Follow Up on Outstanding Balance';
-    recommendationDesc = `Candidate has paid ${formatNaira(fin?.amountPaid || 0)}. Remind them of balance due: ${formatNaira(fin?.balanceDue || 0)}.`;
+    recommendationDesc = `Prospect has paid ${formatNaira(fin?.amountPaid || 0)}. Remind them of balance due: ${formatNaira(fin?.balanceDue || 0)}.`;
     recommendationButtonLabel = 'Follow Up on Balance';
     recommendationAction = () => {
       onOpenContactFollowUp?.(enquiry);
@@ -169,12 +169,12 @@ export function EnquiryDrawer({
     };
   } else if (billingStatus === 'INVOICE_REQUESTED') {
     recommendationTitle = 'Generate Invoice';
-    recommendationDesc = `Candidate requested official tuition invoice for ${enquiry.programme_name || 'selected programme'}.`;
+    recommendationDesc = `Prospect requested official tuition invoice for ${enquiry.programme_name || 'selected programme'}.`;
     recommendationButtonLabel = 'Generate Invoice';
     recommendationAction = () => onGenerateInvoice?.(enquiry);
   } else if (enquiry.status === 'INTERESTED') {
     recommendationTitle = 'Generate Invoice';
-    recommendationDesc = `Candidate is interested in ${enquiry.programme_name || 'the programme'}. Generate tuition invoice to initiate intake.`;
+    recommendationDesc = `Prospect is interested in ${enquiry.programme_name || 'the programme'}. Generate tuition invoice to initiate intake.`;
     recommendationButtonLabel = 'Generate Invoice';
     recommendationAction = () => onGenerateInvoice?.(enquiry);
   } else if (enquiry.status === 'NEW') {
@@ -272,7 +272,7 @@ export function EnquiryDrawer({
             </h3>
             <div className="cp-card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748B)', display: 'block' }}>Candidate Name</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748B)', display: 'block' }}>Prospect Name</span>
                 <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary, #0F172A)' }}>
                   {enquiry.student_name}
                 </span>
@@ -726,7 +726,7 @@ export function EnquiryDrawer({
                   📞 Contact Prospect &amp; Log Follow-up
                 </div>
                 <div style={{ fontSize: '11.5px', color: 'var(--text-muted, #64748B)', marginTop: '2px' }}>
-                  Reach candidate via WhatsApp, phone, or email and record official outreach outcome.
+                  Reach prospect via WhatsApp, phone, or email and record official outreach outcome.
                 </div>
               </div>
               <button

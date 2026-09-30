@@ -191,7 +191,7 @@ export function ContactFollowUpModal({
               <span>Contact Prospect &amp; Log Follow-up</span>
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', margin: '4px 0 0 0' }}>
-              Directly reach candidate, document interaction outcome, and record follow-up history.
+              Directly reach prospect, document interaction outcome, and record follow-up history.
             </p>
           </div>
           <button

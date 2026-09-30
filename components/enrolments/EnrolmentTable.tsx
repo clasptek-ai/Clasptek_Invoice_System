@@ -25,7 +25,7 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
         <div className="cp-empty-icon" aria-hidden="true">📝</div>
         <div className="cp-empty-title">No enrolments match criteria</div>
         <div className="cp-empty-desc">
-          Enroll students from Candidate Applications or adjust filter parameters.
+          Enroll students from Student Directory or adjust filter parameters.
         </div>
       </div>
     );

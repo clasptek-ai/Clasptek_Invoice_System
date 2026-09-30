@@ -107,7 +107,7 @@ export function NewEnquiryModal({
     const trimmedPhone = phone.trim();
 
     if (!trimmedName || !trimmedPhone) {
-      setError('Please provide candidate full name and phone number.');
+      setError('Please provide prospect full name and phone number.');
       return;
     }
 
@@ -201,7 +201,7 @@ export function NewEnquiryModal({
           <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="cp-field" style={{ margin: 0 }}>
               <label htmlFor="enqName" style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                Candidate / Prospect Full Name *
+                Prospect Full Name *
               </label>
               <input
                 id="enqName"
@@ -266,7 +266,7 @@ export function NewEnquiryModal({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="candidate@example.com"
+                  placeholder="prospect@example.com"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
@@ -341,7 +341,7 @@ export function NewEnquiryModal({
 
             <div className="cp-field" style={{ margin: 0 }}>
               <label htmlFor="enqNotes" style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                Candidate Background &amp; Notes
+                Prospect Background &amp; Notes
               </label>
               <textarea
                 id="enqNotes"

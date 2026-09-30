@@ -12,6 +12,7 @@ import type { StudentSummary, StudentDossier } from '@/types/students';
 import { StudentTable } from '@/components/students/StudentTable';
 import { StudentFilters } from '@/components/students/StudentFilters';
 import { StudentDrawer } from '@/components/students/StudentDrawer';
+import { StudentRegistrationModal } from '@/components/students/StudentRegistrationModal';
 import { Pagination } from '@/components/tables/Pagination';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 
@@ -39,6 +40,7 @@ export function StudentsPageClient({
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [dossier, setDossier] = useState<StudentDossier | null>(null);
   const [isLoadingDossier, setIsLoadingDossier] = useState<boolean>(false);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState<boolean>(false);
 
   const handlePageChange = useCallback(
     (newPage: number) => {
@@ -153,14 +155,15 @@ export function StudentsPageClient({
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <a
-              href="/apply"
+            <button
+              type="button"
               className="cp-btn sm primary"
               id="btnAddNewStudent"
-              style={{ fontWeight: 700, textDecoration: 'none' }}
+              onClick={() => setIsAddStudentOpen(true)}
+              style={{ fontWeight: 700 }}
             >
               + Add Student
-            </a>
+            </button>
             <button
               type="button"
               className="cp-btn sm secondary"
@@ -207,6 +210,18 @@ export function StudentsPageClient({
           isLoading={isLoadingDossier}
           onClose={handleCloseDrawer}
           onStudentUpdated={() => {
+            startTransition(() => router.refresh());
+          }}
+        />
+      )}
+
+      {/* Authoritative Student Details & Registration Modal */}
+      {isAddStudentOpen && (
+        <StudentRegistrationModal
+          isOpen={isAddStudentOpen}
+          onClose={() => setIsAddStudentOpen(false)}
+          onSaved={() => {
+            setIsAddStudentOpen(false);
             startTransition(() => router.refresh());
           }}
         />
