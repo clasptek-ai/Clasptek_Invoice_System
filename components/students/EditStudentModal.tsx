@@ -44,8 +44,12 @@ export function EditStudentModal({
 
   const [email, setEmail] = useState(student.email || '');
   const [phone, setPhone] = useState(student.phone || '');
+  const [phone2, setPhone2] = useState(String(meta.phone2 || meta.alternativePhone || ''));
   const [address, setAddress] = useState(student.address || '');
+  const [location, setLocation] = useState(String(meta.location || ''));
+  const [state, setState] = useState(String(meta.state || meta.stateOfOrigin || ''));
 
+  const [hasSponsor, setHasSponsor] = useState(Boolean(meta.hasSponsor ?? (meta.sponsorName ? true : false)));
   const [emergencyContactName, setEmergencyContactName] = useState(student.emergency_contact_name || '');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(student.emergency_contact_phone || '');
   const [emergencyRelationship, setEmergencyRelationship] = useState(String(meta.emergencyContactRelationship || ''));
@@ -57,6 +61,10 @@ export function EditStudentModal({
   const [customers, setCustomers] = useState<Array<{ id: string; name: string; email?: string | null; phone?: string | null }>>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
 
+  const [registrationDate, setRegistrationDate] = useState(String(meta.registrationDate || ''));
+  const [referralSource, setReferralSource] = useState(String(meta.referralSource || ''));
+  const [studentExpertiseLevel, setStudentExpertiseLevel] = useState(String(meta.studentExpertiseLevel || meta.expertiseLevel || 'Beginner'));
+  const [employmentStatus, setEmploymentStatus] = useState(String(meta.employmentStatus || ''));
   const [status, setStatus] = useState<StudentStatus>(student.status || 'ACTIVE');
   const [notes, setNotes] = useState(String(meta.notes || ''));
 
@@ -121,16 +129,26 @@ export function EditStudentModal({
         status,
         metadata: {
           middleName: middleName.trim() || null,
+          phone2: phone2.trim() || null,
+          alternativePhone: phone2.trim() || null,
+          location: location.trim() || null,
+          state: state.trim() || null,
           dateOfBirth: dateOfBirth || null,
           maritalStatus: maritalStatus || null,
           nationality: nationality.trim() || null,
-          stateOfOrigin: stateOfOrigin.trim() || null,
+          stateOfOrigin: stateOfOrigin.trim() || state.trim() || null,
           religion: religion.trim() || null,
-          sponsorName: sponsorName.trim() || null,
-          sponsorType: sponsorType || null,
-          sponsorEmail: sponsorEmail.trim() || null,
-          sponsorPhone: sponsorPhone.trim() || null,
+          hasSponsor,
+          sponsorName: hasSponsor ? (sponsorName.trim() || null) : null,
+          sponsorType: hasSponsor ? sponsorType : 'Self',
+          sponsorEmail: hasSponsor ? (sponsorEmail.trim() || null) : null,
+          sponsorPhone: hasSponsor ? (sponsorPhone.trim() || null) : null,
           emergencyContactRelationship: emergencyRelationship.trim() || null,
+          registrationDate: registrationDate || null,
+          referralSource: referralSource.trim() || null,
+          studentExpertiseLevel: studentExpertiseLevel || null,
+          expertiseLevel: studentExpertiseLevel || null,
+          employmentStatus: employmentStatus || null,
           notes: notes.trim() || null,
         },
       };
@@ -263,8 +281,8 @@ export function EditStudentModal({
             [
               { key: 'personal', label: '1. Personal' },
               { key: 'contact', label: '2. Contact' },
-              { key: 'emergency', label: '3. Emergency & Sponsor' },
-              { key: 'administrative', label: '4. Administrative' },
+              { key: 'emergency', label: '3. Sponsor & Emergency' },
+              { key: 'administrative', label: '4. Registration & Profile' },
             ] as const
           ).map((tab) => (
             <button
@@ -418,12 +436,45 @@ export function EditStudentModal({
                 </div>
 
                 <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="edit-phone">Phone Number</label>
+                  <label htmlFor="edit-phone">Primary Phone Number</label>
                   <input
                     id="edit-phone"
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+
+                <div className="cp-field" style={{ margin: 0 }}>
+                  <label htmlFor="edit-phone2">Alternative Phone (Phone 2)</label>
+                  <input
+                    id="edit-phone2"
+                    type="text"
+                    value={phone2}
+                    onChange={(e) => setPhone2(e.target.value)}
+                    placeholder="Alternative contact number"
+                  />
+                </div>
+
+                <div className="cp-field" style={{ margin: 0 }}>
+                  <label htmlFor="edit-location">Location / City</label>
+                  <input
+                    id="edit-location"
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Ikeja, Port Harcourt"
+                  />
+                </div>
+
+                <div className="cp-field" style={{ margin: 0 }}>
+                  <label htmlFor="edit-state">State / Region</label>
+                  <input
+                    id="edit-state"
+                    type="text"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    placeholder="e.g. Lagos, Rivers"
                   />
                 </div>
 
@@ -440,11 +491,116 @@ export function EditStudentModal({
               </div>
             )}
 
-            {/* TAB 3: Emergency & Sponsor */}
+            {/* TAB 3: Sponsor & Emergency */}
             {activeTab === 'emergency' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                {/* Sponsorship Section */}
+                <div style={{ gridColumn: '1 / -1', background: 'var(--surface-1, #F8FAFC)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    🤝 Sponsorship &amp; Financial Ledger Entity
+                  </h4>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                    <div className="cp-field" style={{ margin: 0 }}>
+                      <label htmlFor="edit-has-sponsor">Has Sponsor?</label>
+                      <select
+                        id="edit-has-sponsor"
+                        value={hasSponsor ? 'yes' : 'no'}
+                        onChange={(e) => {
+                          const val = e.target.value === 'yes';
+                          setHasSponsor(val);
+                          if (!val) {
+                            setSponsorType('Self');
+                          }
+                        }}
+                      >
+                        <option value="no">No (Self-Sponsored / Individual Student)</option>
+                        <option value="yes">Yes (Corporate / Third-Party Sponsored)</option>
+                      </select>
+                    </div>
+
+                    <div className="cp-field" style={{ margin: 0 }}>
+                      <label htmlFor="edit-sp-type">Sponsor Type</label>
+                      <select
+                        id="edit-sp-type"
+                        value={sponsorType}
+                        onChange={(e) => setSponsorType(e.target.value)}
+                      >
+                        <option value="Self">Self Sponsored</option>
+                        <option value="Corporate">Corporate / Employer</option>
+                        <option value="Parent/Guardian">Parent / Guardian</option>
+                        <option value="Scholarship">Scholarship / Donor</option>
+                        <option value="Government">Government Agency</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="cp-field" style={{ margin: '0 0 12px 0' }}>
+                    <label htmlFor="edit-customer-id">Corporate Sponsor / Billing Customer (public.customers)</label>
+                    <select
+                      id="edit-customer-id"
+                      value={customerId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomerId(val);
+                        if (val) {
+                          setHasSponsor(true);
+                          setSponsorType('Corporate');
+                          const c = customers.find((cust) => cust.id === val);
+                          if (c) {
+                            setSponsorName(c.name);
+                            if (c.email) setSponsorEmail(c.email);
+                            if (c.phone) setSponsorPhone(c.phone);
+                          }
+                        }
+                      }}
+                      disabled={isLoadingCustomers}
+                    >
+                      <option value="">— Link Corporate Customer Profile —</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.email ? `(${c.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                    <div className="cp-field" style={{ margin: 0 }}>
+                      <label htmlFor="edit-sp-name">Sponsor Name / Organization</label>
+                      <input
+                        id="edit-sp-name"
+                        type="text"
+                        value={sponsorName}
+                        onChange={(e) => setSponsorName(e.target.value)}
+                        placeholder="Organization or individual sponsor"
+                      />
+                    </div>
+
+                    <div className="cp-field" style={{ margin: 0 }}>
+                      <label htmlFor="edit-sp-phone">Sponsor Phone Number</label>
+                      <input
+                        id="edit-sp-phone"
+                        type="text"
+                        value={sponsorPhone}
+                        onChange={(e) => setSponsorPhone(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="cp-field" style={{ margin: 0 }}>
+                      <label htmlFor="edit-sp-email">Sponsor Email Address</label>
+                      <input
+                        id="edit-sp-email"
+                        type="email"
+                        value={sponsorEmail}
+                        onChange={(e) => setSponsorEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Emergency Contact */}
-                <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
                     🚨 Emergency Contact
                   </h4>
@@ -479,99 +635,63 @@ export function EditStudentModal({
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Corporate Sponsor Linking */}
-                <div style={{ gridColumn: '1 / -1', background: 'var(--surface-1, #F8FAFC)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🏢 Corporate Sponsor / Billing Customer
-                  </h4>
-                  <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Associate an institutional customer profile for corporate tuition billing and account management.
-                  </p>
-
-                  <div className="cp-field" style={{ margin: 0 }}>
-                    <label htmlFor="edit-customer-id">Select Institutional Customer Profile</label>
-                    <select
-                      id="edit-customer-id"
-                      value={customerId}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCustomerId(val);
-                        if (val) {
-                          setSponsorType('Corporate');
-                          const c = customers.find((cust) => cust.id === val);
-                          if (c) {
-                            setSponsorName(c.name);
-                            if (c.email) setSponsorEmail(c.email);
-                            if (c.phone) setSponsorPhone(c.phone);
-                          }
-                        } else {
-                          setSponsorType('Self');
-                        }
-                      }}
-                      disabled={isLoadingCustomers}
-                    >
-                      <option value="">— No Corporate Sponsor (Self / Individual) —</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.email ? `(${c.email})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            {/* TAB 4: Registration & Profile */}
+            {activeTab === 'administrative' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                <div className="cp-field" style={{ margin: 0 }}>
+                  <label htmlFor="edit-reg-date">Registration Date</label>
+                  <input
+                    id="edit-reg-date"
+                    type="date"
+                    value={registrationDate}
+                    onChange={(e) => setRegistrationDate(e.target.value)}
+                  />
                 </div>
 
-                {/* Additional Sponsor Details */}
                 <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="edit-sp-type">Sponsor Type</label>
+                  <label htmlFor="edit-ref-source">Referral Source</label>
+                  <input
+                    id="edit-ref-source"
+                    type="text"
+                    value={referralSource}
+                    onChange={(e) => setReferralSource(e.target.value)}
+                    placeholder="e.g. Social Media, Website, Referral"
+                  />
+                </div>
+
+                <div className="cp-field" style={{ margin: 0 }}>
+                  <label htmlFor="edit-expertise">Student Expertise Level</label>
                   <select
-                    id="edit-sp-type"
-                    value={sponsorType}
-                    onChange={(e) => setSponsorType(e.target.value)}
+                    id="edit-expertise"
+                    value={studentExpertiseLevel}
+                    onChange={(e) => setStudentExpertiseLevel(e.target.value)}
                   >
-                    <option value="Self">Self Sponsored</option>
-                    <option value="Corporate">Corporate / Employer</option>
-                    <option value="Parent/Guardian">Parent / Guardian</option>
-                    <option value="Scholarship">Scholarship / Donor</option>
-                    <option value="Government">Government Agency</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Professional">Professional</option>
                   </select>
                 </div>
 
                 <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="edit-sp-name">Sponsor Name / Organization</label>
-                  <input
-                    id="edit-sp-name"
-                    type="text"
-                    value={sponsorName}
-                    onChange={(e) => setSponsorName(e.target.value)}
-                  />
+                  <label htmlFor="edit-employment">Employment Status</label>
+                  <select
+                    id="edit-employment"
+                    value={employmentStatus}
+                    onChange={(e) => setEmploymentStatus(e.target.value)}
+                  >
+                    <option value="">— Select Status —</option>
+                    <option value="Employed">Employed</option>
+                    <option value="Self-Employed">Self-Employed</option>
+                    <option value="Unemployed">Unemployed</option>
+                    <option value="Student">Student</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
 
-                <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="edit-sp-email">Sponsor Email</label>
-                  <input
-                    id="edit-sp-email"
-                    type="email"
-                    value={sponsorEmail}
-                    onChange={(e) => setSponsorEmail(e.target.value)}
-                  />
-                </div>
-
-                <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="edit-sp-phone">Sponsor Phone</label>
-                  <input
-                    id="edit-sp-phone"
-                    type="text"
-                    value={sponsorPhone}
-                    onChange={(e) => setSponsorPhone(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: Administrative */}
-            {activeTab === 'administrative' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label htmlFor="edit-status">Student Status</label>
                   <select

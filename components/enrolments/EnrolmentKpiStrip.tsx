@@ -54,7 +54,7 @@ export function EnrolmentKpiStrip({ enrolments, totalCount }: EnrolmentKpiStripP
         <div className="cp-kpi-val" style={{ fontSize: '20px', color: 'var(--primary)' }}>
           {completedCount}
         </div>
-        <div className="cp-kpi-sub">Graduated Candidates</div>
+        <div className="cp-kpi-sub">Graduated Students</div>
       </div>
     </div>
   );

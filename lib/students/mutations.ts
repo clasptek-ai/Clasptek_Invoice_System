@@ -221,14 +221,63 @@ export async function registerStudentFromEnquiry(
     audit_trail: [initialAudit],
   };
 
+  // Resolve or create canonical Customer record in public.customers
+  let resolvedCustomerId: string | null = null;
+  const cleanEmail = candidateData.email ? candidateData.email.trim().toLowerCase() : null;
+  const cleanPhone = candidateData.phone ? candidateData.phone.trim() : null;
+  const fullName = `${candidateData.firstName.trim()} ${candidateData.lastName.trim()}`.trim();
+
+  try {
+    if (cleanEmail || cleanPhone) {
+      let custQuery = supabase
+        .from('customers')
+        .select('id')
+        .eq('tenant_id', tenantId);
+
+      if (cleanEmail) {
+        custQuery = custQuery.eq('email', cleanEmail);
+      } else if (cleanPhone) {
+        custQuery = custQuery.eq('phone', cleanPhone);
+      }
+
+      const { data: matchedCust } = await custQuery.limit(1).maybeSingle();
+      if (matchedCust?.id) {
+        resolvedCustomerId = matchedCust.id;
+      }
+    }
+
+    if (!resolvedCustomerId) {
+      const newCustId = `cust_${internalId}`;
+      const { error: custErr } = await supabase.from('customers').insert({
+        id: newCustId,
+        tenant_id: tenantId,
+        name: fullName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        address: candidateData.address || null,
+        total_invoiced: 0,
+        total_paid: 0,
+        outstanding_balance: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      if (!custErr) {
+        resolvedCustomerId = newCustId;
+      }
+    }
+  } catch (custEx) {
+    console.warn('[registerStudentFromEnquiry] Customer linking notice:', custEx);
+  }
+
   const newStudentPayload = {
     id: internalId,
     tenant_id: tenantId,
+    customer_id: resolvedCustomerId,
     student_number: studentNumber,
     first_name: candidateData.firstName.trim(),
     last_name: candidateData.lastName.trim(),
-    email: candidateData.email ? candidateData.email.trim().toLowerCase() : null,
-    phone: candidateData.phone ? candidateData.phone.trim() : null,
+    email: cleanEmail,
+    phone: cleanPhone,
     gender: candidateData.gender || null,
     address: candidateData.address || null,
     emergency_contact_name: candidateData.emergencyContactName || null,
@@ -517,7 +566,19 @@ export async function updateStudentProfile(
       'maritalStatus',
       'nationality',
       'stateOfOrigin',
+      'state',
+      'location',
       'religion',
+      'alternativePhone',
+      'secondaryPhone',
+      'phone2',
+      'registeredAt',
+      'registrationDate',
+      'referralSource',
+      'expertiseLevel',
+      'employmentStatus',
+      'hasSponsor',
+      'sponsor',
       'sponsorName',
       'sponsorType',
       'sponsorEmail',
@@ -582,6 +643,23 @@ export async function updateStudentProfile(
       updated: false,
       error: updateErr?.message || 'Failed to update Student record.',
     };
+  }
+
+  // Synchronize customer identity details if name, email, or phone changed
+  try {
+    const custId = updatedRecord.customer_id;
+    if (custId && (updates.first_name || updates.last_name || updates.email || updates.phone || updates.address)) {
+      const custUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (updates.first_name || updates.last_name) {
+        custUpdates.name = `${updatedRecord.first_name || ''} ${updatedRecord.last_name || ''}`.trim();
+      }
+      if (updates.email !== undefined) custUpdates.email = updatedRecord.email;
+      if (updates.phone !== undefined) custUpdates.phone = updatedRecord.phone;
+      if (updates.address !== undefined) custUpdates.address = updatedRecord.address;
+      await supabase.from('customers').update(custUpdates).eq('id', custId).eq('tenant_id', tenantId);
+    }
+  } catch (custSyncErr) {
+    console.warn('[updateStudentProfile] Customer sync notice:', custSyncErr);
   }
 
   // Timeline event logging gracefully

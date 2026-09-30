@@ -36,16 +36,30 @@ export interface DeduplicationMatchResult {
 export interface StudentMetadata {
   source?: string;
   middleName?: string | null;
+  rawFullName?: string | null;
   dateOfBirth?: string | null;
   maritalStatus?: string | null;
   stateOfOrigin?: string | null;
+  state?: string | null;
+  location?: string | null;
+  alternativePhone?: string | null;
+  secondaryPhone?: string | null;
+  phone2?: string | null;
   nationality?: string | null;
   religion?: string | null;
+  hasSponsor?: boolean | string | null;
   sponsorName?: string | null;
   sponsorType?: string | null;
   sponsorEmail?: string | null;
   sponsorPhone?: string | null;
+  sponsor?: {
+    hasSponsor: boolean;
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  };
   registeredAt?: string | null;
+  registrationDate?: string | null;
   expertiseLevel?: string | null;
   referralSource?: string | null;
   employmentStatus?: string | null;

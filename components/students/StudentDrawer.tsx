@@ -47,7 +47,7 @@ export function StudentDrawer({
   onStudentUpdated,
   onRefreshDossier,
 }: StudentDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'bio' | 'sponsor' | 'academic' | 'finance' | 'audit'>('bio');
+  const [activeTab, setActiveTab] = useState<'bio' | 'profile' | 'sponsor' | 'academic' | 'finance' | 'audit'>('bio');
   const [currentDossier, setCurrentDossier] = useState<StudentDossier | null>(dossier);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(dossier?.student || null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -101,7 +101,7 @@ export function StudentDrawer({
     <div className="cp-modal-overlay" style={{ zIndex: 1000 }} onClick={onClose}>
       <div
         className="cp-modal"
-        style={{ maxWidth: '860px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}
+        style={{ maxWidth: '880px', width: '95%', maxHeight: '92vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading ? (
@@ -115,7 +115,7 @@ export function StudentDrawer({
               <div style={{ flex: '1 1 280px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <div className="cp-modal-title" style={{ fontSize: '18px', fontWeight: 800 }}>
-                    👨‍🎓 {stu.first_name} {stu.last_name}
+                    👨‍🎓 {stu.first_name} {meta.middleName ? String(meta.middleName) + ' ' : ''}{stu.last_name}
                   </div>
                   <span className="cp-pill paid" style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
                     {stu.student_number || 'STU-—'}
@@ -146,7 +146,7 @@ export function StudentDrawer({
                   )}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Central Student Dossier &middot; {stu.email || 'No email'} &middot;{' '}
+                  Central Student &amp; Client Directory &middot; {stu.email || 'No email'} &middot;{' '}
                   {stu.phone || 'No phone'}
                 </div>
               </div>
@@ -201,7 +201,25 @@ export function StudentDrawer({
                     color: activeTab === 'bio' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
                   }}
                 >
-                  👤 Identity &amp; Bio
+                  👤 Personal &amp; Contact
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('profile')}
+                  style={{
+                    padding: '12px 16px',
+                    border: 'none',
+                    background: 'none',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    borderBottom: `2px solid ${activeTab === 'profile' ? 'var(--primary, #0F172A)' : 'transparent'}`,
+                    color: activeTab === 'profile' ? 'var(--primary, #0F172A)' : 'var(--text-secondary, #64748B)',
+                  }}
+                >
+                  📋 Registration &amp; Profile
                 </button>
                 <button
                   type="button"
@@ -277,71 +295,207 @@ export function StudentDrawer({
                 </button>
               </div>
 
-              {/* Tab 1: Bio */}
+              {/* Tab 1: Bio — Personal & Contact Details */}
               {activeTab === 'bio' && (
-                <div style={{ padding: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                    <div>
-                      <div className="cp-field-label">Full Name</div>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>
-                        {stu.first_name} {meta.middleName ? String(meta.middleName) + ' ' : ''}{stu.last_name}
-                      </div>
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Section: Identity & Personal Details */}
+                  <div>
+                    <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                      Identity &amp; Personal Details
                     </div>
-                    <div>
-                      <div className="cp-field-label">Student ID (Immutable)</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>
-                        {stu.student_number}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Email Address</div>
-                      <div style={{ fontSize: '13px' }}>{stu.email || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Phone Number</div>
-                      <div style={{ fontSize: '13px' }}>{stu.phone || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Gender</div>
-                      <div style={{ fontSize: '13px' }}>{stu.gender || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Date of Birth</div>
-                      <div style={{ fontSize: '13px' }}>{fmtDate(meta.dateOfBirth as string)}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Nationality &amp; State</div>
-                      <div style={{ fontSize: '13px' }}>
-                        {String(meta.nationality || 'Nigerian')} {meta.stateOfOrigin ? `(${meta.stateOfOrigin} State)` : ''}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Marital Status</div>
-                      <div style={{ fontSize: '13px' }}>{String(meta.maritalStatus || '—')}</div>
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <div className="cp-field-label">Residential Address</div>
-                      <div style={{ fontSize: '13px' }}>{stu.address || '—'}</div>
-                    </div>
-                    {Boolean(meta.notes) && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="cp-field-label">Administrative Notes</div>
-                        <div style={{ fontSize: '13px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                          {String(meta.notes)}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                      <div>
+                        <div className="cp-field-label">Student Name (Derived)</div>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                          {stu.first_name} {meta.middleName ? String(meta.middleName) + ' ' : ''}{stu.last_name}
                         </div>
                       </div>
-                    )}
+                      <div>
+                        <div className="cp-field-label">Student ID (Immutable)</div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '14px' }}>
+                          {stu.student_number}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">First Name</div>
+                        <div style={{ fontSize: '13px' }}>{stu.first_name || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Middle Name</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.middleName || '—')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Last Name</div>
+                        <div style={{ fontSize: '13px' }}>{stu.last_name || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Gender</div>
+                        <div style={{ fontSize: '13px' }}>{stu.gender || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Date of Birth</div>
+                        <div style={{ fontSize: '13px' }}>{fmtDate(meta.dateOfBirth as string)}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Nationality</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.nationality || 'Nigerian')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">State of Origin / State</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.stateOfOrigin || meta.state || '—')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Religion</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.religion || '—')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Marital Status</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.maritalStatus || '—')}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Contact Details */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                    <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                      Contact Details
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                      <div>
+                        <div className="cp-field-label">Email Address</div>
+                        <div style={{ fontSize: '13px' }}>{stu.email || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Primary Phone Number</div>
+                        <div style={{ fontSize: '13px' }}>{stu.phone || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Alternative Phone (Phone 2)</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.phone2 || meta.alternativePhone || '—')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Location / City</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.location || '—')}</div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">State</div>
+                        <div style={{ fontSize: '13px' }}>{String(meta.state || meta.stateOfOrigin || '—')}</div>
+                      </div>
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="cp-field-label">Residential Address</div>
+                        <div style={{ fontSize: '13px' }}>{stu.address || '—'}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Tab 2: Sponsor & Emergency */}
+              {/* Tab 2: Profile — Registration & Student Profile */}
+              {activeTab === 'profile' && (
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div>
+                    <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                      Registration Information
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                      <div>
+                        <div className="cp-field-label">Registration Date</div>
+                        <div style={{ fontSize: '13.5px', fontWeight: 600 }}>
+                          {fmtDate((meta.registrationDate as string) || stu.created_at)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Referral Source</div>
+                        <div style={{ fontSize: '13.5px' }}>{String(meta.referralSource || '—')}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                    <div className="cp-section-title" style={{ fontSize: '13px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                      Student Profile &amp; Background
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
+                      <div>
+                        <div className="cp-field-label">Student Expertise Level</div>
+                        <div style={{ fontSize: '13.5px', fontWeight: 600 }}>
+                          {String(meta.studentExpertiseLevel || meta.expertiseLevel || 'Beginner')}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="cp-field-label">Employment Status</div>
+                        <div style={{ fontSize: '13.5px' }}>
+                          {String(meta.employmentStatus || '—')}
+                        </div>
+                      </div>
+                      {Boolean(meta.notes) && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div className="cp-field-label">Administrative Notes</div>
+                          <div style={{ fontSize: '13px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                            {String(meta.notes)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Sponsor & Emergency */}
               {activeTab === 'sponsor' && (
                 <div style={{ padding: '20px' }}>
                   <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '12px' }}>
-                    Emergency Contact
+                    Sponsorship &amp; Financial Ledger Entity
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                    <div style={{ gridColumn: '1 / -1', background: '#F8FAFC', padding: '12px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                      <div className="cp-field-label">Financial Customer Ledger Identity (public.customers)</div>
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {activeDossier.corporateSponsor ? (
+                          <span>
+                            🏢 {activeDossier.corporateSponsor.name}{' '}
+                            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', fontWeight: 500, color: 'var(--text-muted)' }}>
+                              ({activeDossier.corporateSponsor.id})
+                            </span>
+                          </span>
+                        ) : stu.customer_id ? (
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>🏢 {stu.customer_id}</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>None (Self-Sponsored / Individual Student)</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        Preserves institutional model: Student is the training identity; Customer is the financial ledger account.
+                      </div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Has Sponsor?</div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600 }}>{String(meta.hasSponsor || (meta.sponsorName ? 'Yes' : 'No'))}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Type</div>
+                      <div style={{ fontSize: '13.5px' }}>{String(meta.sponsorType || (stu.customer_id ? 'Corporate' : 'Self'))}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Name</div>
+                      <div style={{ fontWeight: 600, fontSize: '13.5px' }}>
+                        {activeDossier.corporateSponsor?.name || String(meta.sponsorName || '—')}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor Phone Number</div>
+                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.phone || String(meta.sponsorPhone || '—')}</div>
+                    </div>
+                    <div>
+                      <div className="cp-field-label">Sponsor's Email Address</div>
+                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.email || String(meta.sponsorEmail || '—')}</div>
+                    </div>
+                  </div>
+
+                  <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '12px' }}>
+                    Emergency Contact
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
                     <div>
                       <div className="cp-field-label">Emergency Contact Name</div>
                       <div style={{ fontWeight: 600, fontSize: '13.5px' }}>
@@ -359,54 +513,10 @@ export function StudentDrawer({
                       </div>
                     </div>
                   </div>
-
-                  <div className="cp-section-title" style={{ fontSize: '14px', marginBottom: '12px' }}>
-                    Sponsorship &amp; Billing Entity
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-                    <div style={{ gridColumn: '1 / -1', background: '#F8FAFC', padding: '12px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                      <div className="cp-field-label">Corporate Sponsor / Billing Customer</div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {activeDossier.corporateSponsor ? (
-                          <span>
-                            🏢 {activeDossier.corporateSponsor.name}{' '}
-                            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', fontWeight: 500, color: 'var(--text-muted)' }}>
-                              ({activeDossier.corporateSponsor.id})
-                            </span>
-                          </span>
-                        ) : stu.customer_id ? (
-                          <span style={{ fontFamily: 'var(--font-mono)' }}>🏢 {stu.customer_id}</span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>None (Self-Sponsored / Individual Student)</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Preserves separation: Student is the learner; Corporate Sponsor is the institutional billing customer.
-                      </div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Sponsor Type</div>
-                      <div style={{ fontSize: '13.5px' }}>{String(meta.sponsorType || (stu.customer_id ? 'Corporate' : 'Self'))}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Sponsor Name</div>
-                      <div style={{ fontWeight: 600, fontSize: '13.5px' }}>
-                        {activeDossier.corporateSponsor?.name || String(meta.sponsorName || '—')}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Sponsor Phone</div>
-                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.phone || String(meta.sponsorPhone || '—')}</div>
-                    </div>
-                    <div>
-                      <div className="cp-field-label">Sponsor Email</div>
-                      <div style={{ fontSize: '13.5px' }}>{activeDossier.corporateSponsor?.email || String(meta.sponsorEmail || '—')}</div>
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {/* Tab 3: Academic & Enrolments */}
+              {/* Tab 4: Academic & Enrolments */}
               {activeTab === 'academic' && (
                 <div style={{ padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
@@ -451,6 +561,8 @@ export function StudentDrawer({
                             <th>Cohort</th>
                             <th>Enrolment Date</th>
                             <th>Tuition Fee</th>
+                            <th>Attendance</th>
+                            <th>Certificate</th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -464,6 +576,16 @@ export function StudentDrawer({
                               <td>{enr.cohort_name}</td>
                               <td>{fmtDate(enr.enrolment_date)}</td>
                               <td style={{ fontWeight: 600 }}>{fmtMoney(enr.agreed_tuition_fee)}</td>
+                              <td>{enr.attendance_pct ? `${enr.attendance_pct}%` : '—'}</td>
+                              <td>
+                                {enr.certificate_issued ? (
+                                  <span className="cp-pill paid" title={enr.certificate_number || 'Issued'}>
+                                    🏆 {enr.certificate_number || 'Issued'}
+                                  </span>
+                                ) : (
+                                  <span className="cp-pill draft">Pending</span>
+                                )}
+                              </td>
                               <td><span className="cp-pill active">{enr.status}</span></td>
                             </tr>
                           ))}

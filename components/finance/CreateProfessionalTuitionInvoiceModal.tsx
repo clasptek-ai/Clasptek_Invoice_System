@@ -188,7 +188,7 @@ export function CreateProfessionalTuitionInvoiceModal({
     if (enquiry) {
       // Pre-fill from Enquiry with robust property fallbacks
       const resolvedName = (enquiry.student_name || (enquiry as any)?.name || (enquiry as any)?.studentName || '').trim();
-      setClientName(resolvedName || 'Prospective Candidate');
+      setClientName(resolvedName || 'Prospective Student / Client');
       setPhone(enquiry.phone || '');
       setEmail(enquiry.email || '');
       setParentName('');

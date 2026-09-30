@@ -189,15 +189,24 @@ export async function getStudentDossier(
       .select('id, enrolment_number, agreed_tuition_fee, enrolment_date, completion_attendance_pct, certificate_issued, certificate_number, status, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(name)')
       .eq('student_id', studentId);
 
-    // 3. Fetch invoices by name or email
+    // 3. Fetch invoices by customer_id, student_name, or student_email
     let invoicesQuery = supabase
       .from('invoices')
-      .select('id, invoice_no, total_amount, status, invoice_date, student_name, student_email');
+      .select('id, invoice_no, total_amount, status, invoice_date, student_name, student_email, customer_id');
 
+    const orClauses: string[] = [];
+    if (student.customer_id) {
+      orClauses.push(`customer_id.eq.${student.customer_id}`);
+    }
     if (fullName) {
-      invoicesQuery = invoicesQuery.or(`student_name.ilike.%${fullName}%,student_email.ilike.%${student.email || '___none___'}%`);
-    } else if (student.email) {
-      invoicesQuery = invoicesQuery.eq('student_email', student.email);
+      orClauses.push(`student_name.ilike.%${fullName}%`);
+    }
+    if (student.email) {
+      orClauses.push(`student_email.ilike.%${student.email}%`);
+    }
+
+    if (orClauses.length > 0) {
+      invoicesQuery = invoicesQuery.or(orClauses.join(','));
     }
 
     const { data: invoicesRaw } = await invoicesQuery;
@@ -227,14 +236,21 @@ export async function getStudentDossier(
       certificate_number: (e.certificate_number as string | null) || null,
     }));
 
-    const invoices = invList.map((inv: Record<string, unknown>) => ({
-      id: String(inv.id || ''),
-      invoice_number: String(inv.invoice_no || 'INV-—'),
-      amount: Number(inv.total_amount || 0),
-      balance: 0,
-      status: String(inv.status || 'UNPAID'),
-      issue_date: String(inv.invoice_date || ''),
-    }));
+    const invoices = invList.map((inv: Record<string, unknown>) => {
+      const invId = String(inv.id || '');
+      const paidForThisInv = paymentsRaw
+        .filter((p: Record<string, unknown>) => String(p.invoice_id) === invId)
+        .reduce((sum: number, p: Record<string, unknown>) => sum + Number(p.amount || 0), 0);
+      const invAmount = Number(inv.total_amount || 0);
+      return {
+        id: invId,
+        invoice_number: String(inv.invoice_no || 'INV-—'),
+        amount: invAmount,
+        balance: Math.max(0, invAmount - paidForThisInv),
+        status: String(inv.status || 'UNPAID'),
+        issue_date: String(inv.invoice_date || ''),
+      };
+    });
 
     const payments = paymentsRaw.map((p) => ({
       id: String(p.id || ''),

@@ -13284,19 +13284,29 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
       ...(previousValue.metadata || {}),
       ...(studentData.metadata || {}),
       middleName: studentData.middleName !== undefined ? studentData.middleName : (studentData.middle_name !== undefined ? studentData.middle_name : previousValue.middleName),
+      rawFullName: fullName || previousValue.rawFullName || null,
       dateOfBirth: studentData.dateOfBirth !== undefined ? studentData.dateOfBirth : (studentData.date_of_birth !== undefined ? studentData.date_of_birth : previousValue.dateOfBirth),
       maritalStatus: studentData.maritalStatus !== undefined ? studentData.maritalStatus : (studentData.marital_status !== undefined ? studentData.marital_status : previousValue.maritalStatus),
-      stateOfOrigin: studentData.stateOfOrigin !== undefined ? studentData.stateOfOrigin : (studentData.state_of_origin !== undefined ? studentData.state_of_origin : previousValue.stateOfOrigin),
+      stateOfOrigin: studentData.stateOfOrigin !== undefined ? studentData.stateOfOrigin : (studentData.state !== undefined ? studentData.state : previousValue.stateOfOrigin),
+      state: studentData.state !== undefined ? studentData.state : (studentData.stateOfOrigin !== undefined ? studentData.stateOfOrigin : previousValue.state),
+      location: studentData.location !== undefined ? studentData.location : previousValue.location,
+      alternativePhone: studentData.alternativePhone !== undefined ? studentData.alternativePhone : previousValue.alternativePhone,
+      secondaryPhone: studentData.phone2 !== undefined ? studentData.phone2 : (studentData.secondaryPhone !== undefined ? studentData.secondaryPhone : previousValue.secondaryPhone),
+      phone2: studentData.phone2 !== undefined ? studentData.phone2 : (studentData.secondaryPhone !== undefined ? studentData.secondaryPhone : previousValue.phone2),
       nationality: studentData.nationality !== undefined ? studentData.nationality : (previousValue.nationality || 'Nigerian'),
       religion: studentData.religion !== undefined ? studentData.religion : previousValue.religion,
       employmentStatus: studentData.employmentStatus !== undefined ? studentData.employmentStatus : (studentData.employment_status !== undefined ? studentData.employment_status : previousValue.employmentStatus),
       expertiseLevel: studentData.expertiseLevel !== undefined ? studentData.expertiseLevel : (studentData.expertise_level !== undefined ? studentData.expertise_level : previousValue.expertiseLevel),
       referralSource: studentData.referralSource !== undefined ? studentData.referralSource : (studentData.referral_source !== undefined ? studentData.referral_source : previousValue.referralSource),
+      registrationDate: studentData.registrationDate !== undefined ? studentData.registrationDate : (studentData.registeredAt !== undefined ? studentData.registeredAt : previousValue.registrationDate),
+      registeredAt: studentData.registeredAt !== undefined ? studentData.registeredAt : (studentData.registrationDate !== undefined ? studentData.registrationDate : previousValue.registeredAt),
       preferredSchedule: studentData.preferredSchedule !== undefined ? studentData.preferredSchedule : (studentData.preferred_schedule !== undefined ? studentData.preferred_schedule : previousValue.preferredSchedule),
+      hasSponsor: studentData.hasSponsor !== undefined ? studentData.hasSponsor : previousValue.hasSponsor,
       sponsorType: studentData.sponsorType !== undefined ? studentData.sponsorType : (studentData.sponsor_type !== undefined ? studentData.sponsor_type : previousValue.sponsorType),
       sponsorName: studentData.sponsorName !== undefined ? studentData.sponsorName : (studentData.sponsor_name !== undefined ? studentData.sponsor_name : previousValue.sponsorName),
       sponsorPhone: studentData.sponsorPhone !== undefined ? studentData.sponsorPhone : (studentData.sponsor_phone !== undefined ? studentData.sponsor_phone : previousValue.sponsorPhone),
       sponsorEmail: studentData.sponsorEmail !== undefined ? studentData.sponsorEmail : (studentData.sponsor_email !== undefined ? studentData.sponsor_email : previousValue.sponsorEmail),
+      sponsor: studentData.sponsor !== undefined ? studentData.sponsor : previousValue.sponsor,
       emergencyContactRelationship: studentData.emergencyContactRelationship !== undefined ? studentData.emergencyContactRelationship : (studentData.emergency_contact_relationship !== undefined ? studentData.emergency_contact_relationship : previousValue.emergencyContactRelationship)
     };
     studentRecord = {
@@ -13348,31 +13358,50 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
       studentNumber = await getAuthoritativeNextStudentNumber(null, tenantId);
     }
 
+    const regDate = studentData.registrationDate || studentData.registeredAt || new Date().toISOString().slice(0, 10);
     const initialMetadata = {
-      source: 'manual_entry',
-      registeredAt: new Date().toISOString(),
+      source: 'student_details_and_registration',
+      registeredAt: regDate,
+      registrationDate: regDate,
+      rawFullName: fullName,
       ...(studentData.metadata || {}),
       middleName: studentData.middleName || studentData.middle_name || null,
       dateOfBirth: studentData.dateOfBirth || studentData.date_of_birth || null,
       maritalStatus: studentData.maritalStatus || studentData.marital_status || null,
-      stateOfOrigin: studentData.stateOfOrigin || studentData.state_of_origin || null,
+      stateOfOrigin: studentData.stateOfOrigin || studentData.state || null,
+      state: studentData.state || studentData.stateOfOrigin || null,
+      location: studentData.location || null,
+      alternativePhone: studentData.alternativePhone || studentData.alternative_phone || null,
+      secondaryPhone: studentData.phone2 || studentData.secondaryPhone || null,
+      phone2: studentData.phone2 || studentData.secondaryPhone || null,
       nationality: studentData.nationality || 'Nigerian',
       religion: studentData.religion || null,
       employmentStatus: studentData.employmentStatus || studentData.employment_status || null,
       expertiseLevel: studentData.expertiseLevel || studentData.expertise_level || null,
       referralSource: studentData.referralSource || studentData.referral_source || null,
       preferredSchedule: studentData.preferredSchedule || studentData.preferred_schedule || null,
-      sponsorType: studentData.sponsorType || studentData.sponsor_type || 'Self',
+      hasSponsor: studentData.hasSponsor !== undefined ? studentData.hasSponsor : (studentData.sponsorType && studentData.sponsorType !== 'Self' ? 'Yes' : 'No'),
+      sponsorType: studentData.sponsorType || studentData.sponsor_type || (studentData.hasSponsor === 'Yes' || studentData.hasSponsor === true ? 'Sponsor' : 'Self'),
       sponsorName: studentData.sponsorName || studentData.sponsor_name || null,
       sponsorPhone: studentData.sponsorPhone || studentData.sponsor_phone || null,
       sponsorEmail: studentData.sponsorEmail || studentData.sponsor_email || null,
+      sponsor: studentData.sponsor || {
+        hasSponsor: studentData.hasSponsor === 'Yes' || studentData.hasSponsor === true,
+        name: studentData.sponsorName || studentData.sponsor_name || null,
+        phone: studentData.sponsorPhone || studentData.sponsor_phone || null,
+        email: studentData.sponsorEmail || studentData.sponsor_email || null,
+      },
       emergencyContactRelationship: studentData.emergencyContactRelationship || studentData.emergency_contact_relationship || null
     };
 
+    const generatedId = studentData.id || ('stu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+    const resolvedCustId = studentData.customerId || studentData.customer_id || ('cust_' + generatedId);
+
     studentRecord = {
-      id: studentData.id || ('stu_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+      id: generatedId,
       tenant_id: tenantId,
-      customerId: studentData.customerId || null,
+      customerId: resolvedCustId,
+      customer_id: resolvedCustId,
       userId: studentData.userId || null,
       studentNumber: studentNumber,
       student_number: studentNumber,
@@ -13409,6 +13438,28 @@ async function saveAuthoritativeStudent(studentData, actorReason = '') {
     if (!Array.isArray(state.students)) state.students = [];
     state.students.push(studentRecord);
     targetIndex = state.students.length - 1;
+
+    // Establish canonical customer ledger entry
+    if (!Array.isArray(state.customers)) state.customers = [];
+    if (!state.customers.some(c => c.id === resolvedCustId)) {
+      const newCust = {
+        id: resolvedCustId,
+        tenant_id: tenantId,
+        name: studentRecord.name,
+        email: studentRecord.email || null,
+        phone: studentRecord.phone || null,
+        address: studentRecord.address || null,
+        total_invoiced: 0,
+        total_paid: 0,
+        outstanding_balance: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      state.customers.push(newCust);
+      if (typeof dbRepo !== 'undefined' && dbRepo.saveRecord && supabaseClient && supabaseClient.isConfigured()) {
+        dbRepo.saveRecord('customers', newCust).catch(() => {});
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -23111,16 +23162,16 @@ function renderDashboardTab(container) {
           </div>
         </div>
 
-        <!-- 03 Candidate Application -->
-        <div class="cp-journey-stage-card" data-route="applications" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
+        <!-- 03 Student Details & Registration -->
+        <div class="cp-journey-stage-card" data-route="studentAccounts" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 10px; cursor:pointer; position:relative;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:#E0E7FF; color:#4338CA;">03</span>
-            <span class="cp-pill active" style="font-size:9.5px; padding:1px 6px;">${(state.intakeApplications || []).length} Apps</span>
+            <span class="cp-pill active" style="font-size:9.5px; padding:1px 6px;">Registration</span>
           </div>
-          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Candidate Application</div>
-          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Admissions Intake</div>
+          <div style="font-size:12.5px; font-weight:700; color:var(--primary); line-height:1.2;">Student Registration</div>
+          <div style="font-size:10.5px; color:var(--text-muted); margin-top:3px;">Details &amp; Capture</div>
           <div style="font-size:10px; color:var(--primary); font-weight:700; margin-top:6px; display:flex; align-items:center; gap:4px;">
-            <span>#applications</span> &rarr;
+            <span>#students</span> &rarr;
           </div>
         </div>
 
@@ -37594,93 +37645,266 @@ function renderStudentProfileModal(container, accountOrData) {
 function renderNewStudentModal(container) {
   const nextNum = (state.counters && state.counters.student) ? Number(state.counters.student) : 101;
   const previewStudentNumber = formatDocNo('student', nextNum);
+  const defaultRegDate = new Date().toISOString().slice(0, 10);
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
-      <div class="cp-modal" style="max-width:680px;">
-        <div class="cp-modal-header">
+      <div class="cp-modal" style="max-width:760px; max-height:92vh; display:flex; flex-direction:column;">
+        <div class="cp-modal-header" style="background:#F8FAFC; border-bottom:1px solid #E2E8F0; padding:16px 22px;">
           <div>
-            <div class="cp-modal-title">👨‍🎓 Add Authoritative Student</div>
-            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Register a verified student identity with official student ID.</div>
+            <div class="cp-modal-title" style="font-size:18px; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+              <span>👨‍🎓</span> Student Details &amp; Registration
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Authoritative vocational student identity capture and official registration.</div>
           </div>
           <button class="cp-modal-close" id="btnCloseNewStudentMod">&times;</button>
         </div>
 
-        <div class="cp-modal-body">
-          <div style="background:#F0F7FF; border:1px solid #BAE6FD; border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:12px; color:#0369A1;">Assigned Official Student ID:</span>
-            <span style="font-family:var(--font-mono); font-weight:800; color:var(--primary); font-size:13.5px;">${escapeHtml(previewStudentNumber)}</span>
-          </div>
-
-          <div class="cp-row2">
-            <div class="cp-field">
-              <label>First Name *</label>
-              <input type="text" id="newStuFirstName" placeholder="e.g. Samuel" required />
+        <div class="cp-modal-body" style="padding:18px 22px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:18px;">
+          
+          <!-- 1. STUDENT IDENTIFICATION -->
+          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 14px;">
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:var(--primary); margin-bottom:8px;">
+              1. Student Identification
             </div>
-            <div class="cp-field">
-              <label>Last Name *</label>
-              <input type="text" id="newStuLastName" placeholder="e.g. Adeleke" required />
-            </div>
-          </div>
-
-          <div class="cp-row2">
-            <div class="cp-field">
-              <label>Email Address</label>
-              <input type="email" id="newStuEmail" placeholder="student@example.com" />
-            </div>
-            <div class="cp-field">
-              <label>Phone Number</label>
-              <input type="text" id="newStuPhone" placeholder="e.g. 08012345678" />
+            <div class="cp-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div class="cp-field">
+                <label style="font-size:11.5px; font-weight:700; color:#475569;">Official Student ID <span style="font-size:10.5px; color:var(--primary); font-weight:600;">(System-Generated)</span></label>
+                <input type="text" value="${escapeHtml(previewStudentNumber)}" readonly style="font-family:var(--font-mono); font-weight:800; color:var(--primary); background:#F1F5F9; cursor:not-allowed;" />
+              </div>
+              <div class="cp-field">
+                <label style="font-size:11.5px; font-weight:700; color:#475569;">Student Name <span style="font-size:10.5px; color:#64748B; font-weight:500;">(Derived from Names)</span></label>
+                <input type="text" id="newStuDerivedName" readonly placeholder="— (Auto-derived) —" style="background:#F8FAFC; font-weight:700; color:#0F172A; cursor:default;" />
+              </div>
             </div>
           </div>
 
-          <div class="cp-row2">
-            <div class="cp-field">
-              <label>Gender</label>
-              <select id="newStuGender">
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
+          <!-- 2. PERSONAL DETAILS -->
+          <div>
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#1E293B; margin-bottom:10px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;">
+              2. Personal Details
             </div>
-            <div class="cp-field">
-              <label>Training Status</label>
-              <select id="newStuStatus">
-                <option value="ACTIVE" selected>ACTIVE (In Training)</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="SUSPENDED">SUSPENDED</option>
-                <option value="WITHDRAWN">WITHDRAWN</option>
-              </select>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
+              <div class="cp-field">
+                <label>First Name <span style="color:#DC2626;">*</span></label>
+                <input type="text" id="newStuFirstName" placeholder="e.g. Samuel" required />
+              </div>
+              <div class="cp-field">
+                <label>Middle Name</label>
+                <input type="text" id="newStuMiddleName" placeholder="e.g. Chukwuma" />
+              </div>
+              <div class="cp-field">
+                <label>Last Name <span style="color:#DC2626;">*</span></label>
+                <input type="text" id="newStuLastName" placeholder="e.g. Adeleke" required />
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+              <div class="cp-field">
+                <label>Gender</label>
+                <select id="newStuGender">
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="cp-field">
+                <label>Date of Birth</label>
+                <input type="date" id="newStuDOB" />
+              </div>
+              <div class="cp-field">
+                <label>Nationality</label>
+                <input type="text" id="newStuNationality" value="Nigerian" placeholder="e.g. Nigerian" />
+              </div>
+              <div class="cp-field">
+                <label>Religion</label>
+                <select id="newStuReligion">
+                  <option value="">Select Religion</option>
+                  <option value="Christianity">Christianity</option>
+                  <option value="Islam">Islam</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+              <div class="cp-field">
+                <label>Marital Status</label>
+                <select id="newStuMaritalStatus">
+                  <option value="">Select Status</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Divorced">Divorced</option>
+                  <option value="Widowed">Widowed</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div class="cp-field">
-            <label>Residential / Contact Address</label>
-            <input type="text" id="newStuAddress" placeholder="Street Address, City, State" />
+          <!-- 3. CONTACT DETAILS -->
+          <div>
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#1E293B; margin-bottom:10px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;">
+              3. Contact Details
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
+              <div class="cp-field">
+                <label>Email Address</label>
+                <input type="email" id="newStuEmail" placeholder="student@example.com" />
+              </div>
+              <div class="cp-field">
+                <label>Phone Number</label>
+                <input type="tel" id="newStuPhone" placeholder="e.g. 08012345678" />
+              </div>
+              <div class="cp-field">
+                <label>Alternative Phone Number</label>
+                <input type="tel" id="newStuAltPhone" placeholder="e.g. 08087654321" />
+              </div>
+              <div class="cp-field">
+                <label>Phone Number 2</label>
+                <input type="tel" id="newStuPhone2" placeholder="e.g. 07098765432" />
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px;">
+              <div class="cp-field">
+                <label>Address</label>
+                <input type="text" id="newStuAddress" placeholder="Residential Street Address, Area" />
+              </div>
+              <div class="cp-field">
+                <label>Location</label>
+                <input type="text" id="newStuLocation" placeholder="e.g. Port Harcourt" />
+              </div>
+              <div class="cp-field">
+                <label>State</label>
+                <input type="text" id="newStuState" placeholder="e.g. Rivers State" />
+              </div>
+            </div>
           </div>
 
-          <div class="cp-row2">
-            <div class="cp-field">
-              <label>Emergency Contact / Parent / Next of Kin</label>
-              <input type="text" id="newStuEmergencyName" placeholder="Full Name of Contact" />
+          <!-- 4. REGISTRATION -->
+          <div>
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#1E293B; margin-bottom:10px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;">
+              4. Registration
             </div>
-            <div class="cp-field">
-              <label>Emergency Contact Phone</label>
-              <input type="text" id="newStuEmergencyPhone" placeholder="e.g. 08087654321" />
+            <div class="cp-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div class="cp-field">
+                <label>Registration Date</label>
+                <input type="date" id="newStuRegDate" value="${escapeHtml(defaultRegDate)}" />
+              </div>
+              <div class="cp-field">
+                <label>Referral Source</label>
+                <select id="newStuReferralSource">
+                  <option value="Walk-in / Direct Enquiry">Walk-in / Direct Enquiry</option>
+                  <option value="Website">Clasptek Official Website</option>
+                  <option value="Social Media">LinkedIn / Social Media</option>
+                  <option value="Alumni">Alumni / Peer Recommendation</option>
+                  <option value="Employer">Employer Recommendation</option>
+                  <option value="Google Form">Google Form Intake</option>
+                  <option value="Other">Other Referral Channel</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div id="newStuErr" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;"></div>
+          <!-- 5. STUDENT PROFILE -->
+          <div>
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#1E293B; margin-bottom:10px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;">
+              5. Student Profile
+            </div>
+            <div class="cp-row2" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div class="cp-field">
+                <label>Student Expertise Level</label>
+                <select id="newStuExpertiseLevel">
+                  <option value="Beginner">Beginner (Foundational)</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                  <option value="Professional / Executive">Professional / Executive</option>
+                </select>
+              </div>
+              <div class="cp-field">
+                <label>Employment Status</label>
+                <select id="newStuEmploymentStatus">
+                  <option value="Employed">Employed (Corporate / Private)</option>
+                  <option value="Self-Employed">Self-Employed / Business Owner</option>
+                  <option value="Unemployed">Unemployed / Job Seeker</option>
+                  <option value="Student">Student (Undergraduate / NYSC)</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. SPONSOR INFORMATION (Strictly ends at Sponsor's Email Address) -->
+          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; color:#1E293B;">
+                6. Sponsor Information
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="font-size:11.5px; font-weight:700; color:#475569;">Has Sponsor?</label>
+                <select id="newStuHasSponsor" style="padding:3px 8px; border-radius:4px; border:1px solid #CBD5E1; font-size:11.5px; font-weight:700;">
+                  <option value="No">No (Self-Sponsored)</option>
+                  <option value="Yes">Yes (Sponsored)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="newStuSponsorFields" style="display:none; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+              <div class="cp-field">
+                <label>Sponsor Name <span style="color:#DC2626;">*</span></label>
+                <input type="text" id="newStuSponsorName" placeholder="e.g. Chevron Nigeria / John Doe" />
+              </div>
+              <div class="cp-field">
+                <label>Sponsor Phone Number</label>
+                <input type="tel" id="newStuSponsorPhone" placeholder="e.g. 08012345678" />
+              </div>
+              <div class="cp-field">
+                <label>Sponsor's Email Address</label>
+                <input type="email" id="newStuSponsorEmail" placeholder="sponsor@example.com" />
+              </div>
+            </div>
+            <div id="newStuSponsorEmptyNote" style="font-size:11.5px; color:#64748B; font-style:italic;">
+              Student is self-sponsored. No external corporate or individual sponsor registered.
+            </div>
+          </div>
+
+          <div id="newStuErr" style="color:var(--danger); font-size:12px; margin-top:4px; display:none; padding:8px 12px; background:#FEF2F2; border-radius:4px; border:1px solid #FECACA;"></div>
         </div>
 
-        <div class="cp-modal-footer">
+        <div class="cp-modal-footer" style="padding:14px 22px; border-top:1px solid #E2E8F0; background:#F8FAFC; display:flex; justify-content:flex-end; gap:10px;">
           <button class="cp-btn secondary" id="btnCancelNewStudent">Cancel</button>
-          <button class="cp-btn accent" id="btnSaveNewStudent">✔ Save Student</button>
+          <button class="cp-btn primary" id="btnSaveNewStudent" style="background:var(--primary); color:#FFFFFF; font-weight:700;">✔ Save Student</button>
         </div>
       </div>
     </div>
   `;
+
+  // Live Name Derivation
+  function updateLiveName() {
+    const f = (document.getElementById('newStuFirstName').value || '').trim();
+    const m = (document.getElementById('newStuMiddleName').value || '').trim();
+    const l = (document.getElementById('newStuLastName').value || '').trim();
+    const derived = [f, m, l].filter(Boolean).join(' ');
+    document.getElementById('newStuDerivedName').value = derived || '— (Auto-derived) —';
+  }
+
+  document.getElementById('newStuFirstName').addEventListener('input', updateLiveName);
+  document.getElementById('newStuMiddleName').addEventListener('input', updateLiveName);
+  document.getElementById('newStuLastName').addEventListener('input', updateLiveName);
+
+  // Sponsor Toggle
+  const sponsorToggle = document.getElementById('newStuHasSponsor');
+  const sponsorFields = document.getElementById('newStuSponsorFields');
+  const sponsorNote = document.getElementById('newStuSponsorEmptyNote');
+
+  sponsorToggle.addEventListener('change', () => {
+    if (sponsorToggle.value === 'Yes') {
+      sponsorFields.style.display = 'grid';
+      sponsorNote.style.display = 'none';
+    } else {
+      sponsorFields.style.display = 'none';
+      sponsorNote.style.display = 'block';
+    }
+  });
 
   document.getElementById('btnCloseNewStudentMod').addEventListener('click', closeModal);
   document.getElementById('btnCancelNewStudent').addEventListener('click', closeModal);
@@ -37692,18 +37916,38 @@ function renderNewStudentModal(container) {
     isSubmittingNewStu = true;
     saveNewBtn.disabled = true;
     const origText = saveNewBtn.innerHTML;
-    saveNewBtn.innerHTML = '⏳ Saving...';
+    saveNewBtn.innerHTML = '⏳ Registering Student...';
 
     const firstName = document.getElementById('newStuFirstName').value.trim();
+    const middleName = document.getElementById('newStuMiddleName').value.trim();
     const lastName = document.getElementById('newStuLastName').value.trim();
+    const gender = document.getElementById('newStuGender').value;
+    const dateOfBirth = document.getElementById('newStuDOB').value;
+    const nationality = document.getElementById('newStuNationality').value.trim() || 'Nigerian';
+    const religion = document.getElementById('newStuReligion').value;
+    const maritalStatus = document.getElementById('newStuMaritalStatus').value;
+
     const email = document.getElementById('newStuEmail').value.trim();
     const phone = document.getElementById('newStuPhone').value.trim();
-    const gender = document.getElementById('newStuGender').value;
-    const status = document.getElementById('newStuStatus').value;
+    const alternativePhone = document.getElementById('newStuAltPhone').value.trim();
+    const phone2 = document.getElementById('newStuPhone2').value.trim();
     const address = document.getElementById('newStuAddress').value.trim();
-    const emergencyContactName = document.getElementById('newStuEmergencyName').value.trim();
-    const emergencyContactPhone = document.getElementById('newStuEmergencyPhone').value.trim();
+    const location = document.getElementById('newStuLocation').value.trim();
+    const state = document.getElementById('newStuState').value.trim();
+
+    const registrationDate = document.getElementById('newStuRegDate').value || defaultRegDate;
+    const referralSource = document.getElementById('newStuReferralSource').value;
+
+    const expertiseLevel = document.getElementById('newStuExpertiseLevel').value;
+    const employmentStatus = document.getElementById('newStuEmploymentStatus').value;
+
+    const hasSponsorVal = sponsorToggle.value;
+    const sponsorName = hasSponsorVal === 'Yes' ? document.getElementById('newStuSponsorName').value.trim() : '';
+    const sponsorPhone = hasSponsorVal === 'Yes' ? document.getElementById('newStuSponsorPhone').value.trim() : '';
+    const sponsorEmail = hasSponsorVal === 'Yes' ? document.getElementById('newStuSponsorEmail').value.trim() : '';
+
     const errEl = document.getElementById('newStuErr');
+    errEl.style.display = 'none';
 
     try {
       if (!firstName) {
@@ -37711,19 +37955,66 @@ function renderNewStudentModal(container) {
         errEl.style.display = 'block';
         return;
       }
+      if (!lastName) {
+        errEl.textContent = 'Please provide the student’s last name.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (hasSponsorVal === 'Yes') {
+        if (!sponsorName) {
+          errEl.textContent = 'Please provide the sponsor name.';
+          errEl.style.display = 'block';
+          return;
+        }
+        if (!sponsorPhone && !sponsorEmail) {
+          errEl.textContent = 'Please provide at least a sponsor phone number or email address.';
+          errEl.style.display = 'block';
+          return;
+        }
+      }
+
+      const derivedName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim();
 
       const res = await saveAuthoritativeStudent({
         firstName,
+        middleName: middleName || null,
         lastName,
-        name: `${firstName} ${lastName}`.trim(),
-        email,
-        phone,
-        gender,
-        status,
-        address,
-        emergencyContactName,
-        emergencyContactPhone
-      }, 'Manual student addition from directory');
+        name: derivedName,
+        rawFullName: derivedName,
+        email: email || null,
+        phone: phone || null,
+        gender: gender || null,
+        dateOfBirth: dateOfBirth || null,
+        nationality,
+        religion: religion || null,
+        maritalStatus: maritalStatus || null,
+        address: address || null,
+        location: location || null,
+        stateOfOrigin: state || null,
+        state: state || null,
+        alternativePhone: alternativePhone || null,
+        secondaryPhone: phone2 || null,
+        phone2: phone2 || null,
+        registrationDate,
+        registeredAt: registrationDate,
+        referralSource,
+        expertiseLevel,
+        employmentStatus,
+        hasSponsor: hasSponsorVal,
+        sponsorType: hasSponsorVal === 'Yes' ? 'Sponsor' : 'Self',
+        sponsorName: sponsorName || null,
+        sponsorPhone: sponsorPhone || null,
+        sponsorEmail: sponsorEmail || null,
+        sponsor: {
+          hasSponsor: hasSponsorVal === 'Yes',
+          name: sponsorName || null,
+          phone: sponsorPhone || null,
+          email: sponsorEmail || null,
+        },
+        emergencyContactName: sponsorName || null,
+        emergencyContactPhone: sponsorPhone || null,
+        status: 'ACTIVE'
+      }, 'Student Details & Registration (Vocational Training Intake)');
 
       if (!res.success) {
         errEl.textContent = res.message || 'Failed to save student.';
