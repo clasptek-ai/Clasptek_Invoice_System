@@ -82,6 +82,12 @@ const CANONICAL_INVOICE_NOTE =
 const CANONICAL_TERMS_AND_CONDITIONS =
   'Payment is due according to the schedule specified above. Certificates and course completion verification are issued upon full settlement of tuition fees.';
 
+const CANONICAL_FALLBACK_PROGRAMMES: ProgrammeOptionItem[] = [
+  { id: 'prog_1789416837946_hnnbx', name: 'Digital Marketing', tuitionFee: 180000, price: 180000 },
+  { id: 'prog_1788900434260_uujj7', name: 'Cybersecurity', tuitionFee: 450000, price: 450000 },
+  { id: 'prog_data_analysis_01', name: 'Data Analysis', tuitionFee: 400000, price: 400000 },
+];
+
 function fmtMoney(n: number): string {
   const v = Math.round(Number(n || 0));
   const absFormatted = Math.abs(v).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -103,6 +109,10 @@ export function CreateProfessionalTuitionInvoiceModal({
     () => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     []
   );
+
+  const effectiveProgrammes = useMemo<ProgrammeOptionItem[]>(() => {
+    return programmes && programmes.length > 0 ? programmes : CANONICAL_FALLBACK_PROGRAMMES;
+  }, [programmes]);
 
   // Available Payment Accounts: use passed list or fallback to authoritative Sterling Bank default
   const activeAccounts = useMemo<PaymentAccountData[]>(() => {
@@ -176,8 +186,9 @@ export function CreateProfessionalTuitionInvoiceModal({
     setTerms(financeSettings?.defaultTerms || CANONICAL_TERMS_AND_CONDITIONS);
 
     if (enquiry) {
-      // Pre-fill from Enquiry
-      setClientName(enquiry.student_name || '');
+      // Pre-fill from Enquiry with robust property fallbacks
+      const resolvedName = (enquiry.student_name || (enquiry as any)?.name || (enquiry as any)?.studentName || '').trim();
+      setClientName(resolvedName || 'Prospective Candidate');
       setPhone(enquiry.phone || '');
       setEmail(enquiry.email || '');
       setParentName('');
@@ -185,11 +196,14 @@ export function CreateProfessionalTuitionInvoiceModal({
       setPaymentPlan('installment');
       setComments(`Admissions enquiry prospect conversion (Enquiry #${enquiry.id})`);
 
-      const matchedProg = programmes.find((p) => p.id === enquiry.programme_id) || programmes[0];
-      const progId = matchedProg?.id || '';
+      const matchedProg =
+        effectiveProgrammes.find((p) => p.id === enquiry.programme_id) ||
+        effectiveProgrammes.find((p) => enquiry.programme_name && p.name.toLowerCase().includes(enquiry.programme_name.toLowerCase())) ||
+        effectiveProgrammes[0];
+      const progId = matchedProg?.id || effectiveProgrammes[0].id;
       setProgrammeId(progId);
 
-      const fee = Number(matchedProg?.tuitionFee ?? matchedProg?.price ?? 150000);
+      const fee = Number(matchedProg?.tuitionFee ?? matchedProg?.price ?? 180000);
       setLineItems([
         {
           id: 'item_1',
@@ -209,11 +223,11 @@ export function CreateProfessionalTuitionInvoiceModal({
       setPaymentPlan('installment');
       setComments('');
 
-      const defaultProg = programmes[0];
+      const defaultProg = effectiveProgrammes[0];
       const progId = defaultProg?.id || '';
       setProgrammeId(progId);
 
-      const fee = Number(defaultProg?.tuitionFee ?? defaultProg?.price ?? 150000);
+      const fee = Number(defaultProg?.tuitionFee ?? defaultProg?.price ?? 180000);
       setLineItems([
         {
           id: 'item_1',
@@ -226,7 +240,7 @@ export function CreateProfessionalTuitionInvoiceModal({
     }
 
     setTimeout(() => firstInputRef.current?.focus(), 60);
-  }, [isOpen, enquiry, programmes, defaultAccount, todayStr, defaultDue, financeSettings]);
+  }, [isOpen, enquiry, effectiveProgrammes, defaultAccount, todayStr, defaultDue, financeSettings]);
 
   // Handle Existing Customer Selection
   const handleCustomerSelect = (name: string) => {
@@ -243,7 +257,7 @@ export function CreateProfessionalTuitionInvoiceModal({
   // Handle Programme Change
   const handleProgrammeChange = (pId: string) => {
     setProgrammeId(pId);
-    const prog = programmes.find((p) => p.id === pId);
+    const prog = effectiveProgrammes.find((p) => p.id === pId);
     if (prog) {
       const fee = Number(prog.tuitionFee ?? prog.price ?? 0);
       setLineItems((prev) => {
@@ -314,7 +328,7 @@ export function CreateProfessionalTuitionInvoiceModal({
 
   // Build Preview or Issue Payload
   const buildInvoicePayload = () => {
-    const activeProg = programmes.find((p) => p.id === programmeId);
+    const activeProg = effectiveProgrammes.find((p) => p.id === programmeId) || effectiveProgrammes[0];
     const selectedSnapshot: PaymentAccountData = {
       id: currentSelectedAccount.id,
       tenantId: currentSelectedAccount.tenantId || 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
@@ -333,7 +347,7 @@ export function CreateProfessionalTuitionInvoiceModal({
       studentEmail: email.trim() || undefined,
       studentPhone: phone.trim() || undefined,
       parentName: parentName.trim() || undefined,
-      programmeId,
+      programmeId: activeProg?.id || programmeId || effectiveProgrammes[0].id,
       programmeName: activeProg?.name || 'Professional Training Programme',
       incomeCategory: billingCategory,
       paymentPlan,
@@ -767,7 +781,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                     onChange={(e) => handleProgrammeChange(e.target.value)}
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   >
-                    {programmes.map((p) => {
+                    {effectiveProgrammes.map((p) => {
                       const fee = Number(p.tuitionFee ?? p.price ?? 0);
                       return (
                         <option key={p.id} value={p.id}>

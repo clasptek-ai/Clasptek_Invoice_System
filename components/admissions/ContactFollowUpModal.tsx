@@ -187,13 +187,11 @@ export function ContactFollowUpModal({
                 gap: '8px',
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--primary, #0284C7)' }}>
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-              </svg>
+              <span>📞</span>
               <span>Contact Prospect &amp; Log Follow-up</span>
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', margin: '4px 0 0 0' }}>
-              Directly reach candidate, document interaction outcome, and manage lifecycle.
+              Directly reach candidate, document interaction outcome, and record follow-up history.
             </p>
           </div>
           <button
@@ -238,14 +236,12 @@ export function ContactFollowUpModal({
                 gap: '8px',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted, #64748B)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Prospect Information
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary, #0F172A)', marginTop: '2px' }}>
-                    {enquiry.student_name}
-                  </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '13px' }}>
+                  <span style={{ color: 'var(--text-muted, #64748B)', fontWeight: 600 }}>Prospect:</span>{' '}
+                  <strong style={{ color: 'var(--text-primary, #0F172A)', fontSize: '14px', fontWeight: 800 }}>
+                    {enquiry.student_name || `Prospect_${enquiry.id.replace(/\D/g, '').slice(-12) || enquiry.id}`}
+                  </strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>
@@ -486,9 +482,6 @@ export function ContactFollowUpModal({
                   <option value="Email">Email</option>
                   <option value="In-Person Consultation">In-Person Consultation</option>
                   <option value="Online Video Meeting">Online Video Meeting</option>
-                  <option value="SMS">SMS</option>
-                  <option value="Campus Walk-in">Campus Walk-in</option>
-                  <option value="Other Outreach">Other Outreach</option>
                 </select>
               </div>
 
@@ -503,17 +496,10 @@ export function ContactFollowUpModal({
                   required
                 >
                   <option value="Contacted — Interested">Contacted — Interested</option>
-                  <option value="Contacted — Needs More Information">Contacted — Needs More Information</option>
-                  <option value="NO_RESPONSE">NO_RESPONSE</option>
-                  <option value="LOST / NOT_INTERESTED">LOST / NOT_INTERESTED</option>
+                  <option value="Needs More Information">Needs More Information</option>
+                  <option value="No Response">No Response</option>
+                  <option value="Lost / Not Interested">Lost / Not Interested</option>
                   <option value="Follow Up Later">Follow Up Later</option>
-                  <option value="Not Interested">Not Interested</option>
-                  <option value="Wrong Number">Wrong Number</option>
-                  <option value="Interested / Evaluating">Interested / Evaluating</option>
-                  <option value="Consultation Scheduled">Consultation Scheduled</option>
-                  <option value="Invoice Requested">Invoice Requested</option>
-                  <option value="Payment Promised">Payment Promised</option>
-                  <option value="Information Provided">Information Provided</option>
                 </select>
               </div>
             </div>
@@ -533,13 +519,13 @@ export function ContactFollowUpModal({
             {/* Detailed Notes */}
             <div className="cp-field" style={{ margin: 0 }}>
               <label htmlFor="fupNotes">
-                Detailed Follow-up Notes <span style={{ color: 'var(--danger, #DC2626)' }}>*</span>
+                Follow-up Notes <span style={{ color: 'var(--danger, #DC2626)' }}>*</span>
               </label>
               <textarea
                 id="fupNotes"
                 rows={3}
                 required
-                placeholder="Document conversation details, candidate questions, agreed next actions..."
+                placeholder="Record prospect feedback, discussion points, questions raised..."
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box' }}
@@ -653,12 +639,12 @@ export function ContactFollowUpModal({
               {isSubmitting ? (
                 <>
                   <span className="cp-spinner cp-spinner-sm" aria-hidden="true" />
-                  <span>Recording Follow-up…</span>
+                  <span>Logging Follow-up…</span>
                 </>
               ) : (
                 <>
                   <span aria-hidden="true">✔</span>
-                  <span>Record Follow-up &amp; Interaction</span>
+                  <span>Log Follow-up</span>
                 </>
               )}
             </button>

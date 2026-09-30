@@ -11,9 +11,8 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Enquiry, EnquiryStatus, AdmissionsTimelineEvent } from '@/types/admissions';
-import { ENQUIRY_TRANSITIONS, ENQUIRY_STATUS_LABELS } from '@/types/admissions';
 import { StatusBadge } from './StatusBadge';
 import { RegisterStudentModal } from './RegisterStudentModal';
 
@@ -62,17 +61,9 @@ function getBillingBadgeStyle(status: string) {
 export function EnquiryDrawer({
   enquiry,
   onClose,
-  onStatusChange,
-  onNoteAppend,
   onGenerateInvoice,
   onOpenContactFollowUp,
 }: EnquiryDrawerProps) {
-  const [note, setNote] = useState('');
-  const [selectedNextStatus, setSelectedNextStatus] = useState<EnquiryStatus | ''>('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
   const [localEnquiry, setLocalEnquiry] = useState<Enquiry | null>(enquiry);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
@@ -85,15 +76,9 @@ export function EnquiryDrawer({
 
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const followUpFormRef = useRef<HTMLDivElement>(null);
 
   // Load history whenever active enquiry changes
   useEffect(() => {
-    setNote('');
-    setSelectedNextStatus('');
-    setSaveError(null);
-    setSaveSuccess(false);
-
     if (enquiry?.id) {
       setIsLoadingHistory(true);
       fetch(`/api/admissions/enquiries/${enquiry.id}/history`)
@@ -132,44 +117,9 @@ export function EnquiryDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleSave = useCallback(async () => {
-    if (!enquiry) return;
-    if (!note.trim() && !selectedNextStatus) return;
-
-    setIsSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-
-    try {
-      const newStatus = selectedNextStatus || null;
-      if (onNoteAppend) {
-        await onNoteAppend(enquiry.id, note.trim(), newStatus as EnquiryStatus | null);
-      } else if (newStatus && onStatusChange) {
-        await onStatusChange(enquiry.id, newStatus as EnquiryStatus);
-      }
-      setNote('');
-      setSelectedNextStatus('');
-      setSaveSuccess(true);
-
-      // Re-fetch timeline history
-      const histRes = await fetch(`/api/admissions/enquiries/${enquiry.id}/history`);
-      if (histRes.ok) {
-        const histData = await histRes.json();
-        if (histData.history) setHistoryEvents(histData.history);
-      }
-
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [enquiry, note, selectedNextStatus, onNoteAppend, onStatusChange]);
-
   if (!enquiry) return null;
 
   const wa = formatWhatsApp(enquiry.phone);
-  const allowedTransitions = ENQUIRY_TRANSITIONS[enquiry.status] ?? [];
   const fin = enquiry.financials;
   const billingBadge = getBillingBadgeStyle(fin?.billingStatus || 'NOT_INVOICED');
 
@@ -179,8 +129,7 @@ export function EnquiryDrawer({
   let recommendationDesc = 'Contact the prospect regarding their interest and answer questions.';
   let recommendationButtonLabel = 'Log Follow-Up';
   let recommendationAction = () => {
-    if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-    else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+    onOpenContactFollowUp?.(enquiry);
   };
 
   if (!enquiry.programme_id) {
@@ -188,8 +137,7 @@ export function EnquiryDrawer({
     recommendationDesc = 'No programme has been selected yet. Contact prospect to confirm interested programme/course.';
     recommendationButtonLabel = 'Log Follow-Up';
     recommendationAction = () => {
-      if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-      else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+      onOpenContactFollowUp?.(enquiry);
     };
   } else if (billingStatus === 'PAID') {
     recommendationTitle = 'Proceed with Admissions Intake';
@@ -203,25 +151,21 @@ export function EnquiryDrawer({
     recommendationDesc = `Tuition payment of ${formatNaira(fin?.balanceDue || 0)} is overdue. Send reminder to avoid admission cancellation.`;
     recommendationButtonLabel = 'Contact & Follow Up';
     recommendationAction = () => {
-      if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-      else if (wa) window.open(wa, '_blank');
-      else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+      onOpenContactFollowUp?.(enquiry);
     };
   } else if (billingStatus === 'PARTIALLY_PAID') {
     recommendationTitle = 'Follow Up on Outstanding Balance';
     recommendationDesc = `Candidate has paid ${formatNaira(fin?.amountPaid || 0)}. Remind them of balance due: ${formatNaira(fin?.balanceDue || 0)}.`;
     recommendationButtonLabel = 'Follow Up on Balance';
     recommendationAction = () => {
-      if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-      else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+      onOpenContactFollowUp?.(enquiry);
     };
   } else if (billingStatus === 'INVOICED') {
     recommendationTitle = 'Follow Up on Payment';
     recommendationDesc = `Tuition invoice has been issued (${formatNaira(fin?.balanceDue || 0)}). Follow up on payment before the due date.`;
     recommendationButtonLabel = 'Follow Up on Payment';
     recommendationAction = () => {
-      if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-      else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+      onOpenContactFollowUp?.(enquiry);
     };
   } else if (billingStatus === 'INVOICE_REQUESTED') {
     recommendationTitle = 'Generate Invoice';
@@ -238,9 +182,7 @@ export function EnquiryDrawer({
     recommendationDesc = 'New lead received. Contact prospect directly to assess interest and determine programme.';
     recommendationButtonLabel = 'Contact Prospect';
     recommendationAction = () => {
-      if (onOpenContactFollowUp) onOpenContactFollowUp(enquiry);
-      else if (wa) window.open(wa, '_blank');
-      else followUpFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+      onOpenContactFollowUp?.(enquiry);
     };
   }
 
@@ -764,74 +706,39 @@ export function EnquiryDrawer({
             )}
           </section>
 
-          {/* Follow-up Note Logger & Status Progression */}
-          {allowedTransitions.length > 0 && (
-            <section ref={followUpFormRef} aria-labelledby="section-log-interaction">
-              <h3
-                id="section-log-interaction"
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  color: 'var(--text-muted, #64748B)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  marginBottom: '8px',
-                }}
-              >
-                Log Interaction &amp; Progress Status
-              </h3>
-              <div className="cp-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: '#F8FAFC' }}>
-                <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="drawerFollowUpNote">Interaction Notes</label>
-                  <textarea
-                    id="drawerFollowUpNote"
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Document call, WhatsApp discussion, interview, or next admissions step…"
-                  />
+          {/* Canonical Follow-up Action Callout */}
+          <section aria-labelledby="section-log-interaction">
+            <div
+              className="cp-card"
+              style={{
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#FAFBFD',
+                border: '1px solid var(--border, #E2E8F0)',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary, #0F172A)' }}>
+                  📞 Contact Prospect &amp; Log Follow-up
                 </div>
-
-                <div className="cp-field" style={{ margin: 0 }}>
-                  <label htmlFor="drawerNextStatus">Progress Status (Optional)</label>
-                  <select
-                    id="drawerNextStatus"
-                    value={selectedNextStatus}
-                    onChange={(e) => setSelectedNextStatus(e.target.value as EnquiryStatus | '')}
-                  >
-                    <option value="">Keep current: {ENQUIRY_STATUS_LABELS[enquiry.status]}</option>
-                    {allowedTransitions.map((s) => (
-                      <option key={s} value={s}>
-                        → {ENQUIRY_STATUS_LABELS[s]}
-                      </option>
-                    ))}
-                  </select>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-muted, #64748B)', marginTop: '2px' }}>
+                  Reach candidate via WhatsApp, phone, or email and record official outreach outcome.
                 </div>
-
-                {saveError && (
-                  <div role="alert" className="cp-alert error" style={{ margin: 0 }}>
-                    {saveError}
-                  </div>
-                )}
-                {saveSuccess && (
-                  <div role="status" className="cp-alert success" style={{ margin: 0 }}>
-                    ✓ Interaction recorded successfully.
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isSaving || (!note.trim() && !selectedNextStatus)}
-                  className="cp-btn primary"
-                  style={{ width: '100%', fontWeight: 700 }}
-                  aria-busy={isSaving}
-                >
-                  {isSaving ? 'Saving…' : 'Record Interaction'}
-                </button>
               </div>
-            </section>
-          )}
+              <button
+                type="button"
+                className="cp-btn primary"
+                onClick={() => onOpenContactFollowUp?.(enquiry)}
+                style={{ fontWeight: 700, fontSize: '12px', whiteSpace: 'nowrap' }}
+              >
+                Log Follow-up
+              </button>
+            </div>
+          </section>
 
         </div>
       </div>

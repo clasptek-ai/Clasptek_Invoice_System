@@ -43,8 +43,17 @@ export function GenerateInvoiceModal({
   financeSettings,
   onInvoiceCreated,
 }: GenerateInvoiceModalProps) {
-  // Adapt ProgrammeOption to the modal's expected format
-  const mappedProgrammes = programmes.map((p) => ({
+  // Adapt ProgrammeOption to the modal's expected format, ensuring fallback programmes are available
+  const availableProgrammes =
+    programmes && programmes.length > 0
+      ? programmes
+      : [
+          { id: 'prog_1789416837946_hnnbx', name: 'Digital Marketing', code: 'CLP-DIM', tuition_fee: 180000, status: 'active' },
+          { id: 'prog_1788900434260_uujj7', name: 'Cybersecurity', code: 'CLP-CYB', tuition_fee: 450000, status: 'active' },
+          { id: 'prog_data_analysis_01', name: 'Data Analysis', code: 'CLP-DAN', tuition_fee: 400000, status: 'active' },
+        ];
+
+  const mappedProgrammes = availableProgrammes.map((p) => ({
     id: p.id,
     name: p.name,
     code: p.code,

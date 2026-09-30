@@ -217,30 +217,43 @@ export function EnquiriesPageClient({
         }
 
         const nowIso = new Date().toISOString();
-        if (payload.status) {
-          const nextStatus = payload.status;
-          setEnquiries((prev) =>
-            prev.map((e) =>
-              e.id === enquiryId ? { ...e, status: nextStatus, updated_at: nowIso } : e
-            )
-          );
-          if (selectedEnquiry?.id === enquiryId) {
-            setSelectedEnquiry((prev) =>
-              prev ? { ...prev, status: nextStatus, updated_at: nowIso } : prev
-            );
-          }
-        } else {
-          setEnquiries((prev) =>
-            prev.map((e) =>
-              e.id === enquiryId ? { ...e, updated_at: nowIso } : e
-            )
-          );
-          if (selectedEnquiry?.id === enquiryId) {
-            setSelectedEnquiry((prev) =>
-              prev ? { ...prev, updated_at: nowIso } : prev
-            );
-          }
+        const headerParts: string[] = [];
+        if (payload.contactMethod) headerParts.push(`Channel: ${payload.contactMethod}`);
+        if (payload.outcome) headerParts.push(`Outcome: ${payload.outcome}`);
+        if (payload.activitySummary) headerParts.push(`Summary: ${payload.activitySummary}`);
+        const metaHeader = headerParts.length > 0 ? `【${headerParts.join(' | ')}】` : '';
+        const followUpTrailer = payload.nextFollowUpDate ? `\nNext Follow-up Scheduled: ${payload.nextFollowUpDate}` : '';
+        const appendedNote = [metaHeader, payload.note, followUpTrailer].filter(Boolean).join('\n');
+
+        setEnquiries((prev) =>
+          prev.map((e) => {
+            if (e.id !== enquiryId) return e;
+            const existingNotes = e.notes || '';
+            const mergedNotes = existingNotes ? `${existingNotes}\n\n${appendedNote}` : appendedNote;
+            return {
+              ...e,
+              status: payload.status || e.status,
+              notes: mergedNotes,
+              updated_at: nowIso,
+            };
+          })
+        );
+
+        if (selectedEnquiry?.id === enquiryId) {
+          setSelectedEnquiry((prev) => {
+            if (!prev) return prev;
+            const existingNotes = prev.notes || '';
+            const mergedNotes = existingNotes ? `${existingNotes}\n\n${appendedNote}` : appendedNote;
+            return {
+              ...prev,
+              status: payload.status || prev.status,
+              notes: mergedNotes,
+              updated_at: nowIso,
+            };
+          });
         }
+
+        setContactFollowUpEnquiry(null);
 
         setSuccessBanner(
           `Follow-up logged via ${payload.contactMethod} (${payload.outcome})${

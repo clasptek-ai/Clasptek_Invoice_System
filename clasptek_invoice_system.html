@@ -22710,7 +22710,7 @@ function render(container) {
     const qaNewEnquiry = document.getElementById('qaNewEnquiry');
     if (qaNewEnquiry) qaNewEnquiry.addEventListener('click', () => openModal('newEnquiry'));
     const qaNewInvoice = document.getElementById('qaNewInvoice');
-    if (qaNewInvoice) qaNewInvoice.addEventListener('click', () => { state.tab = 'invoices'; state.invoiceSubTab = 'new'; render(); });
+    if (qaNewInvoice) qaNewInvoice.addEventListener('click', () => { state.invoiceSubTab = 'new'; navigateTab('invoices'); });
     const qaRecordPayment = document.getElementById('qaRecordPayment');
     if (qaRecordPayment) qaRecordPayment.addEventListener('click', () => {
       const unpaidInv = state.invoices.find(i => invoiceBalance(i).balance > 0);
@@ -24624,10 +24624,9 @@ function renderEnquiriesTab(container) {
       if (act === 'contact') {
         openModal('enquiryDetail', { enquiry: enq, showContactForm: true });
       } else if (act === 'create_invoice') {
-        state.tab = 'invoices';
         state.invoiceSubTab = 'new';
         state.pendingEnquiryForInvoice = enq;
-        render();
+        navigateTab('invoices');
       } else if (act === 'record_payment') {
         const inv = (Array.isArray(state.invoices) ? state.invoices : []).find(i => (i && i.enquiryId && i.enquiryId === enq.id) || (enqName && i && asSafeString(i.clientName).trim().toLowerCase() === enqName));
         if (inv) openModal('recordPayment', { invoice: inv });
@@ -36497,10 +36496,10 @@ function renderEnquiryDetailModal(container, enquiry, options = {}) {
                   <label style="font-size:11.5px; font-weight:600;">Interaction Outcome *</label>
                   <select id="fupOutcome" style="width:100%; font-size:12px; padding:6px 8px;">
                     <option value="Contacted — Interested">Contacted — Interested</option>
+                    <option value="Needs More Information">Needs More Information</option>
                     <option value="Contacted — Needs More Information">Contacted — Needs More Information</option>
-                    <option value="NO_RESPONSE">NO_RESPONSE (No Response)</option>
-                    <option value="LOST">LOST / NOT_INTERESTED (Lost Lead)</option>
                     <option value="No Response">No Response</option>
+                    <option value="Lost / Not Interested">Lost / Not Interested</option>
                     <option value="Follow Up Later">Follow Up Later</option>
                     <option value="Not Interested">Not Interested</option>
                     <option value="Wrong Number">Wrong Number</option>
@@ -36547,7 +36546,7 @@ function renderEnquiryDetailModal(container, enquiry, options = {}) {
 
               <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
                 <button type="button" class="cp-btn secondary sm" id="btnCancelFollowUp" style="padding:6px 12px;">Cancel</button>
-                <button type="button" class="cp-btn accent sm" id="btnSaveFollowUp" style="padding:6px 16px; font-weight:600;">&#x2714; Save Follow-up</button>
+                <button type="button" class="cp-btn primary sm" id="btnSaveFollowUp" style="padding:6px 16px; font-weight:700;">&#x2714; Log Follow-up</button>
               </div>
             </div>
           </div>
@@ -36683,10 +36682,9 @@ function renderEnquiryDetailModal(container, enquiry, options = {}) {
       }
       closeModal();
       if (nextAct.action === 'create_invoice') {
-        state.tab = 'invoices';
         state.invoiceSubTab = 'new';
         state.pendingEnquiryForInvoice = enquiry;
-        render();
+        navigateTab('invoices');
       } else if (nextAct.action === 'enrol' || nextAct.action === 'enrol_or_pay') {
         openModal('enrolStudent', { enquiry });
       } else if (nextAct.action === 'record_payment') {
