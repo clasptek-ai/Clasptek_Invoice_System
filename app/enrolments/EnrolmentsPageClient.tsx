@@ -104,7 +104,7 @@ export function EnrolmentsPageClient({
           </div>
         </div>
         <a
-          href="/applications"
+          href="/students"
           className="cp-btn sm primary"
           id="btnNewEnrolmentBtn"
           style={{ fontWeight: 700, textDecoration: 'none' }}

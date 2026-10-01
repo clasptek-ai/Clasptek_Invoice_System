@@ -22419,11 +22419,6 @@ function render(container) {
                   <span class="cp-nav-label">Enquiries &amp; Leads</span>
                   ${activeEnquiriesCount > 0 ? `<span class="cp-nav-badge">${activeEnquiriesCount}</span>` : ''}
                 </div>
-                <div class="cp-nav-item ${state.tab === 'applications' ? 'active' : ''}" data-tab="applications" title="Candidate Applications">
-                  <span class="cp-nav-icon">${renderNavIcon('applications')}</span>
-                  <span class="cp-nav-label">Candidate Applications</span>
-                  ${((state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length > 0) ? `<span class="cp-nav-badge" style="background:#FEF3C7; color:#B45309;">${(state.intakeApplications || []).filter(a => isRecordForCurrentTenant(a) && (a.status === 'NEW' || a.status === 'REVIEW_REQUIRED')).length}</span>` : ''}
-                </div>
               </div>
 
               <div class="cp-nav-section">
@@ -22852,7 +22847,10 @@ function render(container) {
     else if (state.tab === 'expenses') renderExpensesTab(contentView);
     else if (state.tab === 'programmes') renderProgrammesTab(contentView);
     // Training Operations (Phase 5 & 5.1)
-    else if (state.tab === 'applications') renderApplicationsTab(contentView);
+    else if (state.tab === 'applications' || state.tab === 'applicantPortal') {
+      state.tab = 'studentAccounts';
+      renderStudentAccountsTab(contentView);
+    }
     else if (state.tab === 'apply') renderApplicantIntakePortal(contentView);
     else if (state.tab === 'applicantPortal') renderApplicantTrackingPortal(contentView);
     else if (state.tab === 'cohorts') renderCohortsTab(contentView);
@@ -22987,7 +22985,7 @@ function renderModal(type, data) {
   const container = document.getElementById('modalRoot');
   if (!container) return;
 
-  if (type === 'newStudent') renderNewStudentModal(container);
+  if (type === 'newStudent') renderNewStudentModal(container, data);
   else if (type === 'editStudent') renderEditStudentModal(container, data.student);
   else if (type === 'newEnquiry') renderNewEnquiryModal(container);
   else if (type === 'enquiryDetail') renderEnquiryDetailModal(container, data.enquiry, data);
@@ -24538,11 +24536,11 @@ function renderEnquiriesTab(container) {
                 const fin = getEnquiryFinancialStatus(e);
                 const nextAct = getEnquiryNextAction(e);
 
-                const allApps = Array.isArray(state.intakeApplications) ? state.intakeApplications : [];
-                const linkedApp = allApps.find(a =>
-                  (a.enquiryId && a.enquiryId === e.id) ||
-                  (a.enquiry_id && a.enquiry_id === e.id) ||
-                  (displayEmail && a.email && a.email.toLowerCase() === displayEmail.toLowerCase())
+                const accs = typeof getStudentAccountSummaries === 'function' ? getStudentAccountSummaries() : [];
+                const linkedStudent = accs.find(a =>
+                  (displayEmail && a.email && a.email.toLowerCase() === displayEmail.toLowerCase()) ||
+                  (displayPhone && a.phone && a.phone === displayPhone) ||
+                  (enqName && a.clientName && a.clientName.trim().toLowerCase() === enqName)
                 );
 
                 const enqTimeline = Array.isArray(e.timeline) ? e.timeline : [];
@@ -24556,10 +24554,10 @@ function renderEnquiriesTab(container) {
                     <td style="font-weight:700; color:var(--primary); cursor:pointer;" class="btnOpenEnquiryDetail" data-id="${escapeHtml(asSafeString(e.id))}">
                       ${escapeHtml(displayName)}
                       <div style="font-size:11px; font-weight:400; color:var(--text-muted);">${escapeHtml(displayPhone)} &middot; ${escapeHtml(displayEmail)}</div>
-                      ${linkedApp ? `
+                      ${linkedStudent ? `
                         <div style="margin-top:3px;">
-                          <span class="cp-pill active btnViewLinkedApp" data-id="${escapeHtml(asSafeString(e.id))}" data-app-id="${escapeHtml(asSafeString(linkedApp.id))}" style="font-size:9.5px; cursor:pointer;" title="View linked candidate application">
-                            &#x1F4CB; App: ${escapeHtml(linkedApp.applicationNumber || 'Linked')}
+                          <span class="cp-pill active btnViewLinkedStudent" data-id="${escapeHtml(asSafeString(e.id))}" style="font-size:9.5px; cursor:pointer;" title="View linked student profile">
+                            👨‍🎓 Student: ${escapeHtml(linkedStudent.studentNumber || 'Registered')}
                           </span>
                         </div>
                       ` : ''}
@@ -24576,14 +24574,14 @@ function renderEnquiriesTab(container) {
                     <td><span class="cp-pill ${escapeHtml(displayStatus.toLowerCase())}">${escapeHtml(displayStatus)}</span></td>
                     <td><span class="cp-pill ${fin.pillClass}">${fin.label}</span></td>
                     <td style="text-align:center;">
-                      ${linkedApp ? `
-                        <button class="cp-btn sm secondary btnViewLinkedApp" data-id="${escapeHtml(asSafeString(e.id))}" data-app-id="${escapeHtml(asSafeString(linkedApp.id))}" style="font-weight:600; white-space:nowrap;" title="View candidate application record">
-                          &#x1F4CB; View Application
+                      ${linkedStudent ? `
+                        <button class="cp-btn sm secondary btnViewLinkedStudent" data-id="${escapeHtml(asSafeString(e.id))}" style="font-weight:600; white-space:nowrap;" title="View student profile">
+                          👨‍🎓 View Student
                         </button>
                       ` : (displayStatus === 'CONTACTED' || displayStatus === 'INTERESTED') ? `
                         <div style="display:inline-flex; gap:5px; align-items:center; justify-content:center;">
-                          <button class="cp-btn sm accent btnStartCandidateApp" data-id="${escapeHtml(asSafeString(e.id))}" style="font-weight:700; white-space:nowrap;" title="Initiate admissions candidate application">
-                            &#x270D;&#xFE0F; Start Application
+                          <button class="cp-btn sm accent btnRegisterStudentFromEnquiry" data-id="${escapeHtml(asSafeString(e.id))}" style="font-weight:700; white-space:nowrap;" title="Register as Student & Client">
+                            + Register Student
                           </button>
                           <button class="cp-btn sm secondary btnNextAction" data-id="${escapeHtml(asSafeString(e.id))}" data-action="${nextAct.action}">
                             ${nextAct.label}
@@ -24641,26 +24639,30 @@ function renderEnquiriesTab(container) {
     });
   });
 
-  container.querySelectorAll('.btnStartCandidateApp').forEach(btn => {
+  container.querySelectorAll('.btnRegisterStudentFromEnquiry').forEach(btn => {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const enq = enquiriesList.find(e => asSafeString(e.id) === btn.dataset.id);
       if (!enq) return;
-      state.pendingApplicationFromEnquiry = enq;
-      state.tab = 'apply';
-      render();
+      openModal('newStudent', { enquiry: enq });
     });
   });
 
-  container.querySelectorAll('.btnViewLinkedApp').forEach(btn => {
+  container.querySelectorAll('.btnViewLinkedStudent').forEach(btn => {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      const appId = btn.dataset.appId;
-      state.tab = 'applications';
-      render();
-      if (appId) {
-        const appRecord = (state.intakeApplications || []).find(a => a.id === appId);
-        if (appRecord) openModal('applicationDetail', { application: appRecord });
+      const enq = enquiriesList.find(e => asSafeString(e.id) === btn.dataset.id);
+      const enqName = enq ? asSafeString(enq.name || enq.studentName).trim().toLowerCase() : '';
+      const accs = typeof getStudentAccountSummaries === 'function' ? getStudentAccountSummaries() : [];
+      const linkedStudent = accs.find(a =>
+        (enq && enq.email && a.email && a.email.toLowerCase() === enq.email.toLowerCase()) ||
+        (enq && enq.phone && a.phone && a.phone === enq.phone) ||
+        (enqName && a.clientName && a.clientName.trim().toLowerCase() === enqName)
+      );
+      if (linkedStudent) {
+        openModal('studentProfile', { account: linkedStudent });
+      } else if (enq) {
+        openModal('newStudent', { enquiry: enq });
       }
     });
   });
@@ -26573,7 +26575,7 @@ function renderEnrolmentsTab(container) {
         <div class="cp-empty-state">
           <div class="cp-empty-icon">&#x1F4DD;</div>
           <div class="cp-empty-title">No enrolments match criteria</div>
-          <div class="cp-empty-desc">Enroll students from Candidate Applications or adjust filter parameters.</div>
+          <div class="cp-empty-desc">Enroll students from Student &amp; Client Directory or adjust filter parameters.</div>
         </div>
       ` : `
         <div class="cp-table-wrap">
@@ -28099,6 +28101,10 @@ function renderCertificatesTab(container) {
 // TAB: INTAKE APPLICATIONS (PHASE 5.1 ADMIN QUEUE & DOSSIER)
 // -----------------------------------------------------------------------------
 function renderApplicationsTab(container) {
+  // Legacy route redirection to canonical Student & Client Directory
+  state.tab = 'studentAccounts';
+  renderStudentAccountsTab(container);
+  return;
   if (!state.filters) state.filters = {};
   if (!state.filters.appStatus) state.filters.appStatus = 'ALL';
   if (!state.filters.appProg) state.filters.appProg = 'ALL';
@@ -29631,8 +29637,8 @@ function renderApplicantIntakePortal(container, options = {}) {
       <div class="cp-admissions-workspace">
         <!-- Top Navigation -->
         <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <button type="button" class="cp-admissions-back-btn" id="btnWkBackToApplications" aria-label="Back to Candidate Applications">
-            <span style="font-size:16px; line-height:1;">&larr;</span> Back to Candidate Applications
+          <button type="button" class="cp-admissions-back-btn" id="btnWkBackToApplications" aria-label="Back to Student Directory">
+            <span style="font-size:16px; line-height:1;">&larr;</span> Back to Student Directory
           </button>
           <div style="font-size:12px; color:var(--text-muted); font-weight:600;">
             Route: <code style="background:#F1F5F9; padding:2px 6px; border-radius:4px; font-size:11px;">#apply</code>
@@ -29644,13 +29650,13 @@ function renderApplicantIntakePortal(container, options = {}) {
           <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
             <div>
               <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#38BDF8; margin-bottom:4px;">
-                Candidate Applications &bull; Admissions &amp; Candidate Intake
+                Vocational Training &bull; Student Details &amp; Registration
               </div>
               <h1 class="cp-page-title" style="font-size:24px; font-weight:800; color:#F8FAFC; margin:0 0 6px 0; letter-spacing:-0.5px;">
-                Admissions &amp; Candidate Intake
+                Student Details &amp; Registration
               </h1>
               <p class="cp-page-subtitle" style="font-size:13.5px; color:#94A3B8; margin:0; max-width:680px; line-height:1.4;">
-                Complete a new candidate application for admission into a Clasptek training programme.
+                Capture student details and register for Clasptek vocational and technical training programmes.
               </p>
             </div>
 
@@ -30177,7 +30183,7 @@ function renderApplicantIntakePortal(container, options = {}) {
           <div id="appWkGformsResult" style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:6px; font-size:12.5px; font-weight:600;"></div>
 
           <button type="button" class="cp-btn primary" id="btnWkImportGforms" style="width:100%; font-weight:800; padding:12px; font-size:14px;">
-            ✔ Ingest Submissions into Candidate Applications Pipeline
+            ✔ Ingest Submissions into Registration Pipeline
           </button>
         </div>
 
@@ -30234,7 +30240,7 @@ function renderApplicantIntakePortal(container, options = {}) {
 
         <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
           <button type="button" class="cp-btn primary" id="btnWkBackToQueue" style="font-weight:700;">
-            📋 View in Candidate Applications
+            👨‍🎓 View in Student Directory
           </button>
           <button type="button" class="cp-btn secondary" id="btnWkSubmitAnother" style="font-weight:600;">
             + Submit Another Application
@@ -30247,7 +30253,7 @@ function renderApplicantIntakePortal(container, options = {}) {
   function attachEvents() {
     // Back to Candidate Applications
     container.querySelector('#btnWkBackToApplications')?.addEventListener('click', () => {
-      navigateTab('applications');
+      navigateTab('studentAccounts');
     });
 
     // Mode Switchers
@@ -30266,7 +30272,7 @@ function renderApplicantIntakePortal(container, options = {}) {
     // Confirmation Screen Events
     if (submittedApplication) {
       container.querySelector('#btnWkBackToQueue')?.addEventListener('click', () => {
-        navigateTab('applications');
+        navigateTab('studentAccounts');
       });
 
       container.querySelector('#btnWkSubmitAnother')?.addEventListener('click', () => {
@@ -30407,7 +30413,7 @@ function renderApplicantIntakePortal(container, options = {}) {
         }
 
         importBtn.disabled = false;
-        importBtn.textContent = '✔ Ingest Submissions into Candidate Applications Pipeline';
+        importBtn.textContent = '✔ Ingest Submissions into Registration Pipeline';
 
         if (resultBox) {
           resultBox.style.display = 'block';
@@ -37642,10 +37648,21 @@ function renderStudentProfileModal(container, accountOrData) {
 // PHASE 1: AUTHORITATIVE STUDENT MANAGEMENT MODALS
 // ====================================================================
 
-function renderNewStudentModal(container) {
+function renderNewStudentModal(container, data) {
   const nextNum = (state.counters && state.counters.student) ? Number(state.counters.student) : 101;
   const previewStudentNumber = formatDocNo('student', nextNum);
   const defaultRegDate = new Date().toISOString().slice(0, 10);
+  const enq = (data && data.enquiry) ? data.enquiry : null;
+  let prefillFirst = '';
+  let prefillLast = '';
+  if (enq) {
+    const rawName = (enq.name || enq.studentName || '').trim();
+    const parts = rawName.split(/\s+/);
+    prefillFirst = parts[0] || '';
+    prefillLast = parts.slice(1).join(' ') || '';
+  }
+  const prefillEmail = enq ? (enq.email || '') : '';
+  const prefillPhone = enq ? (enq.phone || '') : '';
 
   container.innerHTML = `
     <div class="cp-modal-overlay">
@@ -37687,7 +37704,7 @@ function renderNewStudentModal(container) {
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
               <div class="cp-field">
                 <label>First Name <span style="color:#DC2626;">*</span></label>
-                <input type="text" id="newStuFirstName" placeholder="e.g. Samuel" required />
+                <input type="text" id="newStuFirstName" value="${escapeHtml(prefillFirst)}" placeholder="e.g. Samuel" required />
               </div>
               <div class="cp-field">
                 <label>Middle Name</label>
@@ -37695,7 +37712,7 @@ function renderNewStudentModal(container) {
               </div>
               <div class="cp-field">
                 <label>Last Name <span style="color:#DC2626;">*</span></label>
-                <input type="text" id="newStuLastName" placeholder="e.g. Adeleke" required />
+                <input type="text" id="newStuLastName" value="${escapeHtml(prefillLast)}" placeholder="e.g. Adeleke" required />
               </div>
             </div>
 
@@ -37748,11 +37765,11 @@ function renderNewStudentModal(container) {
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
               <div class="cp-field">
                 <label>Email Address</label>
-                <input type="email" id="newStuEmail" placeholder="student@example.com" />
+                <input type="email" id="newStuEmail" value="${escapeHtml(prefillEmail)}" placeholder="student@example.com" />
               </div>
               <div class="cp-field">
                 <label>Phone Number</label>
-                <input type="tel" id="newStuPhone" placeholder="e.g. 08012345678" />
+                <input type="tel" id="newStuPhone" value="${escapeHtml(prefillPhone)}" placeholder="e.g. 08012345678" />
               </div>
               <div class="cp-field">
                 <label>Alternative Phone Number</label>

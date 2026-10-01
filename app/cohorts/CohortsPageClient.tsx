@@ -78,12 +78,12 @@ export function CohortsPageClient({
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <a
-            href="/applications"
+            href="/enquiries"
             className="cp-btn sm secondary"
             id="btnScheduleTrainingSessionMain"
             style={{ fontWeight: 600, textDecoration: 'none' }}
           >
-            Admissions Pipeline
+            Enquiries &amp; Leads
           </a>
           <a
             href="/apply"
