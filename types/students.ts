@@ -116,6 +116,8 @@ export interface StudentFilters {
   search?: string;
   status?: string;
   programmeId?: string;
+  enrolmentStatus?: 'ALL' | 'ENROLLED' | 'NOT_ENROLLED' | string;
+  financialStatus?: 'ALL' | 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | string;
   page?: number;
   pageSize?: number;
 }

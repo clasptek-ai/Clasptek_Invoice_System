@@ -66,7 +66,7 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
                     )}
                   </td>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{en.programme_name || 'General'}</div>
+                    <div style={{ fontWeight: 600 }}>{en.programme_name || 'Not specified'}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{en.cohort_name}</div>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--primary)' }}>
@@ -153,7 +153,7 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
                     {en.student_name}
                   </h4>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {en.programme_name || 'General'} &bull; {en.cohort_name}
+                    {en.programme_name || 'Not specified'} &bull; {en.cohort_name}
                   </div>
                 </div>
                 <span

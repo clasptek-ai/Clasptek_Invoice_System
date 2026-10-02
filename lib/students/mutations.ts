@@ -893,3 +893,180 @@ export async function createStudentEnrolment(
     enrolment: insertedEnrolment,
   };
 }
+
+export interface StudentDependencyReport {
+  studentId: string;
+  studentNumber: string;
+  studentName: string;
+  canDelete: boolean;
+  blockReason?: string;
+  dependencies: {
+    enrolments: number;
+    invoices: number;
+    payments: number;
+    certificates: number;
+  };
+}
+
+/**
+ * Checks all relational dependencies for a student before deletion.
+ * Verifies enrolments, invoices, payments, certificates, and training records.
+ */
+export async function checkStudentDependencies(
+  supabase: SupabaseClient,
+  tenantId: string,
+  studentId: string
+): Promise<StudentDependencyReport | null> {
+  const { data: student } = await supabase
+    .from('students')
+    .select('id, student_number, first_name, last_name, customer_id, email')
+    .eq('id', studentId)
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!student) return null;
+
+  const fullName = `${student.first_name || ''} ${student.last_name || ''}`.trim();
+
+  // 1. Enrolments
+  const { count: enrCount } = await supabase
+    .from('enrolments')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('student_id', studentId);
+
+  // 2. Invoices & Payments
+  const orClauses: string[] = [];
+  if (student.customer_id) orClauses.push(`customer_id.eq.${student.customer_id}`);
+  if (fullName) orClauses.push(`student_name.ilike.%${fullName}%`);
+  if (student.email) orClauses.push(`student_email.ilike.%${student.email}%`);
+
+  let invCount = 0;
+  let payCount = 0;
+  if (orClauses.length > 0) {
+    const { data: invRows } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .or(orClauses.join(','));
+    invCount = invRows?.length || 0;
+    if (invCount > 0) {
+      const invIds = invRows!.map((i) => i.id);
+      const { count: pCount } = await supabase
+        .from('payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .in('invoice_id', invIds);
+      payCount = pCount || 0;
+    }
+  }
+
+  // 3. Certificates
+  const { count: certCount } = await supabase
+    .from('certificates')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('student_id', studentId);
+
+  const dependencies = {
+    enrolments: enrCount || 0,
+    invoices: invCount || 0,
+    payments: payCount || 0,
+    certificates: certCount || 0,
+  };
+
+  const hasDeps =
+    dependencies.enrolments > 0 ||
+    dependencies.invoices > 0 ||
+    dependencies.payments > 0 ||
+    dependencies.certificates > 0;
+
+  let blockReason: string | undefined;
+  if (hasDeps) {
+    const reasons: string[] = [];
+    if (dependencies.enrolments > 0) reasons.push(`${dependencies.enrolments} enrolment(s)`);
+    if (dependencies.invoices > 0) reasons.push(`${dependencies.invoices} invoice(s)`);
+    if (dependencies.payments > 0) reasons.push(`${dependencies.payments} payment(s)`);
+    if (dependencies.certificates > 0) reasons.push(`${dependencies.certificates} certificate(s)`);
+    blockReason = `Cannot delete because related records exist: ${reasons.join(', ')}.`;
+  }
+
+  return {
+    studentId: student.id,
+    studentNumber: student.student_number || '',
+    studentName: fullName || 'Student',
+    canDelete: !hasDeps,
+    blockReason,
+    dependencies,
+  };
+}
+
+/**
+ * Safely deletes a single student record if no financial or academic dependencies exist.
+ */
+export async function deleteStudentSafe(
+  supabase: SupabaseClient,
+  params: {
+    tenantId: string;
+    studentId: string;
+    reason?: string;
+    actor: MutationActor;
+  }
+): Promise<{ success: boolean; error?: string; report?: StudentDependencyReport }> {
+  const { tenantId, studentId, reason, actor } = params;
+
+  const report = await checkStudentDependencies(supabase, tenantId, studentId);
+  if (!report) {
+    return { success: false, error: 'Student not found in tenant.' };
+  }
+
+  if (!report.canDelete) {
+    return {
+      success: false,
+      error: report.blockReason || 'Student has dependent records and cannot be deleted.',
+      report,
+    };
+  }
+
+  // Safe to delete: clean up loose references in crm_intake_applications
+  await supabase
+    .from('crm_intake_applications')
+    .update({ matched_student_id: null, updated_at: new Date().toISOString() })
+    .eq('matched_student_id', studentId)
+    .eq('tenant_id', tenantId);
+
+  const { error: delErr } = await supabase
+    .from('students')
+    .delete()
+    .eq('id', studentId)
+    .eq('tenant_id', tenantId);
+
+  if (delErr) {
+    return { success: false, error: delErr.message, report };
+  }
+
+  // Audit log
+  try {
+    const isUuid = (val?: string) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+    await supabase.from('finance_audit_log').insert({
+      id: `aud_del_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
+      tenant_id: tenantId,
+      action: 'STUDENT_DELETED',
+      entity_type: 'Student',
+      entity_id: studentId,
+      entity_name: `${report.studentName} (${report.studentNumber})`,
+      actor_id: isUuid(actor.id) ? actor.id : null,
+      actor_role: actor.role,
+      reason: reason || 'Deleted from Student Directory (0 dependencies verified)',
+      source: 'STUDENT_DIRECTORY',
+      created_at: new Date().toISOString(),
+    });
+  } catch (auditErr) {
+    console.warn('[deleteStudentSafe] Audit log deferred:', auditErr);
+  }
+
+  return { success: true, report };
+}

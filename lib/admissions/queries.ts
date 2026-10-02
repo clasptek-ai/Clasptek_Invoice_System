@@ -263,29 +263,39 @@ export async function getEnquiries(
   let tenantStudents: Array<Record<string, unknown>> = [];
   let matchedApps: Array<Record<string, unknown>> = [];
 
+  const programmeMap = new Map<string, string>();
+
   if (rawRows.length > 0) {
     const tenantId = (rawRows[0] as { tenant_id?: string }).tenant_id;
     if (tenantId) {
       const enqIds = rawRows.map((r) => String(r.id));
-      const [invRes, payRes, stuRes, appRes] = await Promise.all([
+      const [invRes, payRes, stuRes, appRes, progRes] = await Promise.all([
         supabase.from('invoices').select('*').eq('tenant_id', tenantId),
         supabase.from('payments').select('*').eq('tenant_id', tenantId),
         supabase.from('students').select('id, student_number, metadata').eq('tenant_id', tenantId),
         supabase.from('crm_intake_applications').select('enquiry_id, matched_student_id').in('enquiry_id', enqIds),
+        supabase.from('programmes').select('id, name'),
       ]);
       invoices = invRes.data || [];
       payments = payRes.data || [];
       tenantStudents = stuRes.data || [];
       matchedApps = appRes.data || [];
+
+      (progRes.data || []).forEach((p: { id: string; name: string }) => {
+        if (p.id && p.name) programmeMap.set(p.id, p.name);
+      });
     }
   }
 
   // Flatten joined programme name and attach reconciled financial summary
   const rows = rawRows.map((row: Record<string, unknown>) => {
-    const prog = row.programmes as { name?: string } | null;
+    const rawProg = row.programmes;
+    const prog = Array.isArray(rawProg) ? rawProg[0] : (rawProg as { name?: string } | null);
+    const resolvedProgName =
+      prog?.name || (row.programme_id ? programmeMap.get(String(row.programme_id)) : null) || null;
     const enqObj = {
       ...row,
-      programme_name: prog?.name ?? null,
+      programme_name: resolvedProgName,
       programmes: undefined,
     } as unknown as Enquiry;
 
@@ -347,20 +357,32 @@ export async function getEnquiryById(
     return { data: null, error: error?.message || 'Enquiry not found' };
   }
 
-  const prog = (data as Record<string, unknown>).programmes as { name?: string } | null;
+  const rawData = data as Record<string, unknown>;
+  const rawProg = rawData.programmes;
+  const prog = Array.isArray(rawProg) ? rawProg[0] : (rawProg as { name?: string } | null);
+
+  // Reconcile financials, programmes, and student link
+  const [invRes, payRes, stuRes, appRes, progRes] = await Promise.all([
+    supabase.from('invoices').select('*').eq('tenant_id', String(rawData.tenant_id)),
+    supabase.from('payments').select('*').eq('tenant_id', String(rawData.tenant_id)),
+    supabase.from('students').select('id, student_number, metadata').eq('tenant_id', String(rawData.tenant_id)),
+    supabase.from('crm_intake_applications').select('enquiry_id, matched_student_id').eq('enquiry_id', id).limit(1),
+    supabase.from('programmes').select('id, name'),
+  ]);
+
+  const progMap = new Map<string, string>();
+  (progRes.data || []).forEach((p: { id: string; name: string }) => {
+    if (p.id && p.name) progMap.set(p.id, p.name);
+  });
+
+  const resolvedProgName =
+    prog?.name || (rawData.programme_id ? progMap.get(String(rawData.programme_id)) : null) || null;
+
   const enqObj = {
-    ...(data as Record<string, unknown>),
-    programme_name: prog?.name ?? null,
+    ...rawData,
+    programme_name: resolvedProgName,
     programmes: undefined,
   } as unknown as Enquiry;
-
-  // Reconcile financials and student link
-  const [invRes, payRes, stuRes, appRes] = await Promise.all([
-    supabase.from('invoices').select('*').eq('tenant_id', enqObj.tenant_id),
-    supabase.from('payments').select('*').eq('tenant_id', enqObj.tenant_id),
-    supabase.from('students').select('id, student_number, metadata').eq('tenant_id', enqObj.tenant_id),
-    supabase.from('crm_intake_applications').select('enquiry_id, matched_student_id').eq('enquiry_id', id).limit(1),
-  ]);
 
   const financials = computeEnquiryFinancials(
     {

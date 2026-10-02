@@ -21,7 +21,7 @@ export async function getStudents(
     const supabase = await createServerClient();
     const { page = 1, pageSize = PAGE_SIZE, search = '' } = filters;
 
-    // 1. Fetch Students
+    // 1. Fetch Students with optional database-level filtering
     let query = supabase
       .from('students')
       .select('*', { count: 'exact' })
@@ -36,6 +36,40 @@ export async function getStudents(
 
     if (filters.status && filters.status !== 'ALL') {
       query = query.eq('status', filters.status);
+    }
+
+    // Filter by Programme ID if requested
+    if (filters.programmeId && filters.programmeId !== 'ALL') {
+      const { data: progEnrs } = await supabase
+        .from('enrolments')
+        .select('student_id')
+        .eq('programme_id', filters.programmeId);
+      const matchedStudentIds = Array.from(
+        new Set((progEnrs || []).map((e) => e.student_id).filter(Boolean))
+      );
+      if (matchedStudentIds.length === 0) {
+        return { data: [], count: 0, error: null };
+      }
+      query = query.in('id', matchedStudentIds);
+    }
+
+    // Filter by Enrolment Status (ENROLLED vs NOT_ENROLLED)
+    if (filters.enrolmentStatus && filters.enrolmentStatus !== 'ALL') {
+      const { data: allEnrs } = await supabase.from('enrolments').select('student_id');
+      const enrolledStudentIds = Array.from(
+        new Set((allEnrs || []).map((e) => e.student_id).filter(Boolean))
+      );
+
+      if (filters.enrolmentStatus === 'ENROLLED') {
+        if (enrolledStudentIds.length === 0) {
+          return { data: [], count: 0, error: null };
+        }
+        query = query.in('id', enrolledStudentIds);
+      } else if (filters.enrolmentStatus === 'NOT_ENROLLED') {
+        if (enrolledStudentIds.length > 0) {
+          query = query.not('id', 'in', `(${enrolledStudentIds.join(',')})`);
+        }
+      }
     }
 
     const from = (page - 1) * pageSize;
@@ -56,11 +90,14 @@ export async function getStudents(
     const studentIds = students.map((s) => s.id);
 
     // 2. Fetch associated enrolments, programmes, invoices, and payments
-    const [enrolmentsRes, invoicesRes, paymentsRes] = await Promise.all([
+    const [enrolmentsRes, programmesRes, invoicesRes, paymentsRes] = await Promise.all([
       supabase
         .from('enrolments')
         .select('id, student_id, programme_id, status, programmes!fk_enrolments_programme_tenant(name)')
         .in('student_id', studentIds),
+      supabase
+        .from('programmes')
+        .select('id, name'),
       supabase
         .from('invoices')
         .select('id, invoice_no, total_amount, status, student_name, student_email'),
@@ -73,6 +110,11 @@ export async function getStudents(
     const allInvoices = invoicesRes.data ?? [];
     const allPayments = paymentsRes.data ?? [];
 
+    const programmeMap = new Map<string, string>();
+    (programmesRes.data ?? []).forEach((p: { id: string; name: string }) => {
+      if (p.id && p.name) programmeMap.set(p.id, p.name);
+    });
+
     const paymentsByInvoice: Record<string, number> = {};
     allPayments.forEach((p) => {
       if (p.invoice_id) {
@@ -81,7 +123,7 @@ export async function getStudents(
     });
 
     // 3. Map into StudentSummary matching legacy getStudentAccountSummaries
-    const summaries: StudentSummary[] = students.map((stu: Student) => {
+    let summaries: StudentSummary[] = students.map((stu: Student) => {
       const stuEnrolments = enrolments.filter((e) => e.student_id === stu.id);
 
       const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim();
@@ -102,10 +144,20 @@ export async function getStudents(
 
       const programmeNames = new Set<string>();
       stuEnrolments.forEach((e) => {
-        // @ts-expect-error Supabase nested relation shape
-        const pName = e.programmes?.name;
+        const rawProg = e.programmes;
+        const joinedName = Array.isArray(rawProg)
+          ? rawProg[0]?.name
+          : (rawProg as { name?: string } | undefined)?.name;
+        const pName = joinedName || (e.programme_id ? programmeMap.get(e.programme_id) : null);
         if (pName) programmeNames.add(pName);
       });
+
+      let programmesDisplay = 'Not specified';
+      if (programmeNames.size > 1) {
+        programmesDisplay = `Multiple Programmes (${Array.from(programmeNames).join(', ')})`;
+      } else if (programmeNames.size === 1) {
+        programmesDisplay = Array.from(programmeNames)[0];
+      }
 
       let financialStatus: StudentSummary['financial_status'] = 'NO_INVOICE';
       let statusDisplay = 'Prospect';
@@ -132,7 +184,7 @@ export async function getStudents(
         gender: stu.gender,
         address: stu.address,
         parent_name: stu.emergency_contact_name,
-        programmes_list: Array.from(programmeNames).join(', ') || '—',
+        programmes_list: programmesDisplay,
         total_invoiced: totalInvoiced,
         total_paid: totalPaid,
         balance,
@@ -142,6 +194,10 @@ export async function getStudents(
         status_display: statusDisplay,
       };
     });
+
+    if (filters.financialStatus && filters.financialStatus !== 'ALL') {
+      summaries = summaries.filter((s) => s.financial_status === filters.financialStatus);
+    }
 
     return { data: summaries, count: count ?? 0, error: null };
   } catch (err: unknown) {
@@ -226,8 +282,8 @@ export async function getStudentDossier(
     const enrolments = (enrolmentsRaw ?? []).map((e: Record<string, unknown>) => ({
       id: String(e.id || ''),
       enrolment_number: String(e.enrolment_number || 'ENR-—'),
-      programme_name: String((e.programmes as { name?: string } | undefined)?.name || 'General Programme'),
-      cohort_name: String((e.cohorts as { name?: string } | undefined)?.name || 'General Cohort'),
+      programme_name: String((e.programmes as { name?: string } | undefined)?.name || 'Not specified'),
+      cohort_name: String((e.cohorts as { name?: string } | undefined)?.name || 'Unassigned'),
       status: String(e.status || ''),
       agreed_tuition_fee: Number(e.agreed_tuition_fee || 0),
       enrolment_date: String(e.enrolment_date || ''),

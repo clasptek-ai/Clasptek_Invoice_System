@@ -80,7 +80,7 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
                   <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                     {c.cohort_code || c.id}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{c.programme_name || 'General'}</td>
+                  <td style={{ fontWeight: 600 }}>{c.programme_name || 'Not specified'}</td>
                   <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
                     {fmtDate(c.start_date)} &rarr; {fmtDate(c.end_date)}
                   </td>
@@ -149,7 +149,7 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
               <div className="cp-mobile-record-header">
                 <div>
                   <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {c.programme_name || 'General Training'}
+                    {c.programme_name || 'Not specified'}
                   </h4>
                   <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
                     {c.lead_facilitator_name ? `Facilitator: ${c.lead_facilitator_name}` : 'Unassigned'}

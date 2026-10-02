@@ -206,6 +206,8 @@ const contextCode = `
   let lastSavedDbRecord = null;
   let lastAuditLog = null;
   let simulateAuditFailure = false;
+  let mockStudentSummaries = [];
+  function getStudentAccountSummaries() { return mockStudentSummaries; }
   const dbRepo = {
     async saveRecord(storeKey, record) {
       const entry = { storeKey, record: JSON.parse(JSON.stringify(record)) };
@@ -258,6 +260,7 @@ const contextCode = `
     clearSavedDbRecords: () => { allSavedDbRecords = []; lastSavedDbRecord = null; },
     getLastAuditLog: () => lastAuditLog,
     setSimulateAuditFailure: (val) => { simulateAuditFailure = Boolean(val); },
+    setMockStudentSummaries: (val) => { mockStudentSummaries = Array.isArray(val) ? val : []; },
     mockElements,
     getMockElement: (id) => getOrCreateMockElement(id)
   });
@@ -1239,6 +1242,58 @@ await runTest('47. Non-blocking audit failure: when enquiry DB save succeeds and
   assert(!container.innerHTML.includes('Failed to persist follow-up'), 'Error banner must not be present');
 
   app.setSimulateAuditFailure(false);
+});
+
+// ----------------------------------------------------
+// 48. Enquiries table links students via getStudentAccountSummaries without ReferenceError (enqName regression safety)
+// ----------------------------------------------------
+await runTest('48. Enquiries table links students via getStudentAccountSummaries without ReferenceError (enqName regression safety)', () => {
+  app.setMockStudentSummaries([
+    {
+      id: 'stu_101',
+      clientName: 'Ada Lovelace',
+      email: 'ada@computing.org',
+      phone: '08012345678',
+      studentNumber: 'STU-2026-0001'
+    },
+    {
+      id: 'stu_102',
+      clientName: 'Charles Babbage',
+      email: 'charles@difference.org',
+      phone: '08098765432',
+      studentNumber: 'STU-2026-0002'
+    }
+  ]);
+
+  app.state.enquiries = [
+    {
+      id: 'enq_101',
+      name: 'Ada Lovelace',
+      email: 'ada@computing.org',
+      phone: '08012345678',
+      programmeName: 'Executive Cloud Engineering',
+      source: 'Website',
+      status: 'INTERESTED',
+      enquiryDate: '2026-09-01'
+    },
+    {
+      id: 'enq_102',
+      name: 'Charles Babbage',
+      email: 'charles@difference.org',
+      phone: '08098765432',
+      programmeName: 'Executive Cloud Engineering',
+      source: 'Referral',
+      status: 'NEW',
+      enquiryDate: '2026-09-02'
+    }
+  ];
+
+  const container = { innerHTML: '', querySelectorAll: () => [] };
+  // This must execute cleanly without throwing ReferenceError: enqName is not defined
+  app.renderEnquiriesTab(container);
+  assert(container.innerHTML.includes('Student: STU-2026-0001'), 'Should link student STU-2026-0001');
+  assert(container.innerHTML.includes('btnViewLinkedStudent'), 'Should render linked student button');
+  app.setMockStudentSummaries([]);
 });
 
 console.log('\n================================================================================');

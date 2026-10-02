@@ -1,7 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "outputDirectory": "public",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/api/admin/provision-user", "destination": "/api/admin?action=provision-user" },
@@ -13,9 +12,7 @@
     { "source": "/api/auth/google/verify-repository", "destination": "/api/auth/google/auth?action=verify-repository" },
     { "source": "/api/meetings/leave", "destination": "/api/meetings/action?action=leave" },
     { "source": "/api/meetings/status", "destination": "/api/meetings/action?action=status" },
-    { "source": "/api/meetings/chat", "destination": "/api/meetings/action?action=chat" },
-    { "source": "/clasptek_invoice_system.html", "destination": "/index.html" },
-    { "source": "/((?!api/|runtime-config\\.js).*)", "destination": "/index.html" }
+    { "source": "/api/meetings/chat", "destination": "/api/meetings/action?action=chat" }
   ],
   "headers": [
     {
@@ -40,15 +37,6 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=()"
-        }
-      ]
-    },
-    {
-      "source": "/(.*\\.html|/|^$)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },

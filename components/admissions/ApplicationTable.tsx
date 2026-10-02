@@ -114,7 +114,7 @@ export function ApplicationTable({
                   {/* Programme */}
                   <td>
                     <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-primary)' }}>
-                      {app.programme_name || 'General Application'}
+                      {app.programme_name || 'Not specified'}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                       {MODE_LABELS[app.delivery_mode] || app.delivery_mode}
@@ -213,7 +213,7 @@ export function ApplicationTable({
               <div className="cp-mobile-record-grid">
                 <div className="cp-mobile-record-field">
                   <span className="cp-mobile-record-label">Programme</span>
-                  <span className="cp-mobile-record-value">{app.programme_name || 'General Application'}</span>
+                  <span className="cp-mobile-record-value">{app.programme_name || 'Not specified'}</span>
                 </div>
                 <div className="cp-mobile-record-field">
                   <span className="cp-mobile-record-label">Status</span>
