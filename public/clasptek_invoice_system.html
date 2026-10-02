@@ -24536,6 +24536,7 @@ function renderEnquiriesTab(container) {
                 const fin = getEnquiryFinancialStatus(e);
                 const nextAct = getEnquiryNextAction(e);
 
+                const enqName = asSafeString(e.name || e.studentName).trim().toLowerCase();
                 const accs = typeof getStudentAccountSummaries === 'function' ? getStudentAccountSummaries() : [];
                 const linkedStudent = accs.find(a =>
                   (displayEmail && a.email && a.email.toLowerCase() === displayEmail.toLowerCase()) ||
