@@ -632,7 +632,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 <span>📥</span>
                 <span>
                   <strong>Creating Invoice for Lead:</strong> {enquiry.student_name} (
-                  {enquiry.programme_name || 'General'}) &mdash; Details pre-filled automatically.
+                  {enquiry.programme_name || 'Not specified'}) &mdash; Details pre-filled automatically.
                 </span>
               </div>
             )}

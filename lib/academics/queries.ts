@@ -46,7 +46,7 @@ export async function getCohorts(
 
     let query = supabase
       .from('cohorts')
-      .select('*, programmes(name), personnel(full_name)')
+      .select('*, programmes!fk_cohorts_programme_tenant(name), personnel(full_name)')
       .order('start_date', { ascending: false });
 
     if (filters.programmeId && filters.programmeId !== 'ALL') {
@@ -108,7 +108,7 @@ export async function getCohorts(
 
         return {
           ...c,
-          programme_name: c.programmes?.name || 'General',
+          programme_name: c.programmes?.name || 'Not specified',
           lead_facilitator_name: c.personnel?.full_name || undefined,
           enrolled_count: enrolled,
           is_full: isFull,
@@ -172,7 +172,7 @@ export async function getEnrolments(
 
     const enriched: Enrolment[] = (enrolments as RawEnrolment[]).map((e) => ({
       ...e,
-      programme_name: e.programmes?.name || 'General Programme',
+      programme_name: e.programmes?.name || 'Not specified',
       cohort_name: e.cohorts ? `${e.cohorts.cohort_code || ''} - ${e.cohorts.name || ''}`.trim() : (e.cohort || '—'),
     }));
 
