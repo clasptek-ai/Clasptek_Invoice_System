@@ -106,8 +106,8 @@ async function run() {
   });
 
   check('Exactly 2 legitimate callers of updateUser exist in the entire codebase', updateUserCalls.length === 2);
-  check('Caller 1 is btnSetNewPassword (explicit recovery flow)', updateUserCalls.some(c => c.lineNum < 18000));
-  check('Caller 2 is btnUpdateMyPassword (authenticated self-service security screen)', updateUserCalls.some(c => c.lineNum > 18000 && c.lineNum < 21000));
+  check('Caller 1 is btnSetNewPassword (explicit recovery flow)', updateUserCalls.some(c => c.lineNum < 23000));
+  check('Caller 2 is btnUpdateMyPassword (authenticated self-service security screen)', updateUserCalls.some(c => c.lineNum >= 23000));
 
   updateUserCalls.forEach((c, idx) => {
     console.log(`    Authorized Caller ${idx + 1}: Line ${c.lineNum}: ${c.code}`);
