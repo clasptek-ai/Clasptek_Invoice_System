@@ -107,7 +107,7 @@ export interface StudentSummary {
   total_paid: number;
   balance: number;
   is_enrolled: boolean;
-  financial_status: 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE';
+  financial_status: 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | 'OVERDUE';
   training_status: StudentStatus;
   status_display: string;
 }
@@ -117,7 +117,7 @@ export interface StudentFilters {
   status?: string;
   programmeId?: string;
   enrolmentStatus?: 'ALL' | 'ENROLLED' | 'NOT_ENROLLED' | string;
-  financialStatus?: 'ALL' | 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | string;
+  financialStatus?: 'ALL' | 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | 'OVERDUE' | string;
   page?: number;
   pageSize?: number;
 }

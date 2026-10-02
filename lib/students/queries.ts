@@ -5,6 +5,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   Student,
   StudentSummary,
@@ -13,6 +14,95 @@ import type {
 } from '@/types/students';
 
 const PAGE_SIZE = 25;
+
+export interface StudentFinancialSummary {
+  totalInvoiced: number;
+  totalPaid: number;
+  balance: number;
+  financialStatus: 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | 'OVERDUE';
+  statusDisplay: string;
+}
+
+/**
+ * Authoritative financial aggregation for students and clients.
+ * Safely resolves between live transactional records (invoices/payments) and
+ * imported historical customer ledger baseline (customers.total_invoiced, total_paid, outstanding_balance)
+ * without double-counting.
+ */
+export function getStudentFinancialSummary(
+  student: { id: string; customer_id?: string | null; first_name?: string; last_name?: string; email?: string | null },
+  customer?: { id: string; total_invoiced?: number | null; total_paid?: number | null; outstanding_balance?: number | null } | null,
+  stuInvoices: Array<{ id: string; total_amount?: number | null; status?: string | null; due_date?: string | null }> = [],
+  paymentsByInvoice: Record<string, number> = {}
+): StudentFinancialSummary {
+  // If student has transactional records in the invoices table, use them as authoritative
+  if (stuInvoices && stuInvoices.length > 0) {
+    const totalInvoiced = stuInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+    const totalPaid = stuInvoices.reduce((sum, inv) => sum + (paymentsByInvoice[inv.id] || 0), 0);
+    const balance = Math.max(0, totalInvoiced - totalPaid);
+
+    const hasOverdueInvoice = stuInvoices.some((inv) => {
+      const isUnpaidOrPartial = inv.status !== 'paid';
+      const isPastDue = inv.due_date && new Date(inv.due_date) < new Date();
+      return isUnpaidOrPartial && isPastDue;
+    });
+
+    let financialStatus: StudentFinancialSummary['financialStatus'] = 'NO_INVOICE';
+    let statusDisplay = 'Prospect';
+
+    if (totalInvoiced > 0 && balance <= 0) {
+      financialStatus = 'FULLY_PAID';
+      statusDisplay = 'Fully Paid';
+    } else if (hasOverdueInvoice) {
+      financialStatus = 'OVERDUE';
+      statusDisplay = 'Overdue';
+    } else if (totalInvoiced > 0 && totalPaid > 0 && balance > 0) {
+      financialStatus = 'PARTIALLY_PAID';
+      statusDisplay = 'Partial Balance';
+    } else if (totalInvoiced > 0) {
+      financialStatus = 'UNPAID';
+      statusDisplay = 'Outstanding';
+    }
+
+    return { totalInvoiced, totalPaid, balance, financialStatus, statusDisplay };
+  }
+
+  // Baseline: Use imported customer ledger values
+  if (customer) {
+    const totalInvoiced = Math.max(0, Number(customer.total_invoiced || 0));
+    const totalPaid = Math.max(0, Number(customer.total_paid || 0));
+    const balance = Math.max(
+      0,
+      customer.outstanding_balance !== undefined && customer.outstanding_balance !== null
+        ? Number(customer.outstanding_balance)
+        : totalInvoiced - totalPaid
+    );
+
+    let financialStatus: StudentFinancialSummary['financialStatus'] = 'NO_INVOICE';
+    let statusDisplay = 'Prospect';
+
+    if (totalInvoiced > 0 && balance <= 0) {
+      financialStatus = 'FULLY_PAID';
+      statusDisplay = 'Fully Paid';
+    } else if (totalInvoiced > 0 && totalPaid > 0 && balance > 0) {
+      financialStatus = 'PARTIALLY_PAID';
+      statusDisplay = 'Partial Balance';
+    } else if (totalInvoiced > 0) {
+      financialStatus = 'UNPAID';
+      statusDisplay = 'Outstanding';
+    }
+
+    return { totalInvoiced, totalPaid, balance, financialStatus, statusDisplay };
+  }
+
+  return {
+    totalInvoiced: 0,
+    totalPaid: 0,
+    balance: 0,
+    financialStatus: 'NO_INVOICE',
+    statusDisplay: 'Prospect',
+  };
+}
 
 export async function getStudents(
   filters: StudentFilters = {}
@@ -72,6 +162,51 @@ export async function getStudents(
       }
     }
 
+    // Filter by Financial Status if requested
+    if (filters.financialStatus && filters.financialStatus !== 'ALL') {
+      const targetStatus = filters.financialStatus;
+      const [allStudentsRes, allCustRes, allInvsRes, allPaysRes] = await Promise.all([
+        supabase.from('students').select('id, customer_id, email, first_name, last_name'),
+        supabase.from('customers').select('id, total_invoiced, total_paid, outstanding_balance'),
+        supabase.from('invoices').select('id, customer_id, student_name, student_email, total_amount, status, due_date'),
+        supabase.from('payments').select('id, invoice_id, amount'),
+      ]);
+
+      const custMap = new Map((allCustRes.data || []).map((c) => [c.id, c]));
+      const paysByInv: Record<string, number> = {};
+      (allPaysRes.data || []).forEach((p) => {
+        if (p.invoice_id) {
+          paysByInv[p.invoice_id] = (paysByInv[p.invoice_id] || 0) + Number(p.amount || 0);
+        }
+      });
+
+      const matchedStudentIds: string[] = [];
+      (allStudentsRes.data || []).forEach((stu) => {
+        const cust = stu.customer_id ? custMap.get(stu.customer_id) : null;
+        const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim().toLowerCase();
+        const lowerEmail = (stu.email || '').toLowerCase();
+
+        const stuInvs = (allInvsRes.data || []).filter((inv) => {
+          if (inv.customer_id && stu.customer_id && inv.customer_id === stu.customer_id) return true;
+          const invName = (inv.student_name || '').toLowerCase();
+          const invEmail = (inv.student_email || '').toLowerCase();
+          if (fullName && invName && (invName === fullName || invName.includes(fullName))) return true;
+          if (lowerEmail && invEmail && invEmail === lowerEmail) return true;
+          return false;
+        });
+
+        const summary = getStudentFinancialSummary(stu, cust, stuInvs, paysByInv);
+        if (summary.financialStatus === targetStatus) {
+          matchedStudentIds.push(stu.id);
+        }
+      });
+
+      if (matchedStudentIds.length === 0) {
+        return { data: [], count: 0, error: null };
+      }
+      query = query.in('id', matchedStudentIds);
+    }
+
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     query = query.range(from, to);
@@ -88,9 +223,10 @@ export async function getStudents(
     }
 
     const studentIds = students.map((s) => s.id);
+    const customerIds = Array.from(new Set(students.map((s) => s.customer_id).filter(Boolean))) as string[];
 
-    // 2. Fetch associated enrolments, programmes, invoices, and payments
-    const [enrolmentsRes, programmesRes, invoicesRes, paymentsRes] = await Promise.all([
+    // 2. Fetch associated enrolments, programmes, invoices, payments, and customers
+    const [enrolmentsRes, programmesRes, invoicesRes, paymentsRes, customersRes] = await Promise.all([
       supabase
         .from('enrolments')
         .select('id, student_id, programme_id, status, programmes!fk_enrolments_programme_tenant(name)')
@@ -100,19 +236,31 @@ export async function getStudents(
         .select('id, name'),
       supabase
         .from('invoices')
-        .select('id, invoice_no, total_amount, status, student_name, student_email'),
+        .select('id, invoice_no, total_amount, status, student_name, student_email, customer_id, due_date'),
       supabase
         .from('payments')
         .select('id, invoice_id, amount'),
+      customerIds.length > 0
+        ? supabase
+            .from('customers')
+            .select('id, total_invoiced, total_paid, outstanding_balance')
+            .in('id', customerIds)
+        : Promise.resolve({ data: [] }),
     ]);
 
     const enrolments = enrolmentsRes.data ?? [];
     const allInvoices = invoicesRes.data ?? [];
     const allPayments = paymentsRes.data ?? [];
+    const allCustomers = customersRes.data ?? [];
 
     const programmeMap = new Map<string, string>();
     (programmesRes.data ?? []).forEach((p: { id: string; name: string }) => {
       if (p.id && p.name) programmeMap.set(p.id, p.name);
+    });
+
+    const customerMap = new Map<string, { id: string; total_invoiced?: number; total_paid?: number; outstanding_balance?: number }>();
+    allCustomers.forEach((c) => {
+      if (c.id) customerMap.set(c.id, c);
     });
 
     const paymentsByInvoice: Record<string, number> = {};
@@ -122,15 +270,17 @@ export async function getStudents(
       }
     });
 
-    // 3. Map into StudentSummary matching legacy getStudentAccountSummaries
-    let summaries: StudentSummary[] = students.map((stu: Student) => {
+    // 3. Map into StudentSummary matching authoritative programme resolution and financial calculations
+    const summaries: StudentSummary[] = students.map((stu: Student) => {
       const stuEnrolments = enrolments.filter((e) => e.student_id === stu.id);
+      const cust = stu.customer_id ? customerMap.get(stu.customer_id) : null;
 
       const fullName = `${stu.first_name || ''} ${stu.last_name || ''}`.trim();
       const lowerName = fullName.toLowerCase();
       const lowerEmail = (stu.email || '').toLowerCase();
 
       const stuInvoices = allInvoices.filter((inv) => {
+        if (inv.customer_id && stu.customer_id && inv.customer_id === stu.customer_id) return true;
         const invName = (inv.student_name || '').toLowerCase();
         const invEmail = (inv.student_email || '').toLowerCase();
         if (lowerName && invName && (invName === lowerName || invName.includes(lowerName))) return true;
@@ -138,9 +288,8 @@ export async function getStudents(
         return false;
       });
 
-      const totalInvoiced = stuInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-      const totalPaid = stuInvoices.reduce((sum, inv) => sum + (paymentsByInvoice[inv.id] || 0), 0);
-      const balance = Math.max(0, totalInvoiced - totalPaid);
+      // Authoritative financial summary (same calculation drives columns, filter, and dossier)
+      const fin = getStudentFinancialSummary(stu, cust, stuInvoices, paymentsByInvoice);
 
       const programmeNames = new Set<string>();
       stuEnrolments.forEach((e) => {
@@ -154,23 +303,9 @@ export async function getStudents(
 
       let programmesDisplay = 'Not specified';
       if (programmeNames.size > 1) {
-        programmesDisplay = `Multiple Programmes (${Array.from(programmeNames).join(', ')})`;
+        programmesDisplay = 'Multiple Programmes';
       } else if (programmeNames.size === 1) {
         programmesDisplay = Array.from(programmeNames)[0];
-      }
-
-      let financialStatus: StudentSummary['financial_status'] = 'NO_INVOICE';
-      let statusDisplay = 'Prospect';
-
-      if (totalInvoiced > 0 && balance <= 0) {
-        financialStatus = 'FULLY_PAID';
-        statusDisplay = 'Fully Paid';
-      } else if (totalInvoiced > 0 && totalPaid > 0 && balance > 0) {
-        financialStatus = 'PARTIALLY_PAID';
-        statusDisplay = 'Partial Balance';
-      } else if (totalInvoiced > 0) {
-        financialStatus = 'UNPAID';
-        statusDisplay = 'Outstanding';
       }
 
       return {
@@ -185,19 +320,15 @@ export async function getStudents(
         address: stu.address,
         parent_name: stu.emergency_contact_name,
         programmes_list: programmesDisplay,
-        total_invoiced: totalInvoiced,
-        total_paid: totalPaid,
-        balance,
+        total_invoiced: fin.totalInvoiced,
+        total_paid: fin.totalPaid,
+        balance: fin.balance,
         is_enrolled: stuEnrolments.length > 0,
-        financial_status: financialStatus,
+        financial_status: fin.financialStatus,
         training_status: stu.status,
-        status_display: statusDisplay,
+        status_display: fin.statusDisplay,
       };
     });
-
-    if (filters.financialStatus && filters.financialStatus !== 'ALL') {
-      summaries = summaries.filter((s) => s.financial_status === filters.financialStatus);
-    }
 
     return { data: summaries, count: count ?? 0, error: null };
   } catch (err: unknown) {
@@ -221,7 +352,7 @@ export async function getStudentById(id: string): Promise<{ data: Student | null
 
 export async function getStudentDossier(
   studentId: string,
-  client?: any
+  client?: SupabaseClient
 ): Promise<{ data: StudentDossier | null; error: string | null }> {
   try {
     const supabase = client || (await createServerClient());
@@ -246,10 +377,6 @@ export async function getStudentDossier(
       .eq('student_id', studentId);
 
     // 3. Fetch invoices by customer_id, student_name, or student_email
-    let invoicesQuery = supabase
-      .from('invoices')
-      .select('id, invoice_no, total_amount, status, invoice_date, student_name, student_email, customer_id');
-
     const orClauses: string[] = [];
     if (student.customer_id) {
       orClauses.push(`customer_id.eq.${student.customer_id}`);
@@ -261,12 +388,16 @@ export async function getStudentDossier(
       orClauses.push(`student_email.ilike.%${student.email}%`);
     }
 
+    let invoicesRaw: Array<Record<string, unknown>> = [];
     if (orClauses.length > 0) {
-      invoicesQuery = invoicesQuery.or(orClauses.join(','));
+      const { data: invData } = await supabase
+        .from('invoices')
+        .select('id, invoice_no, total_amount, status, invoice_date, due_date, student_name, student_email, customer_id')
+        .or(orClauses.join(','));
+      invoicesRaw = invData || [];
     }
 
-    const { data: invoicesRaw } = await invoicesQuery;
-    const invList: Array<Record<string, unknown>> = invoicesRaw || [];
+    const invList = invoicesRaw;
     const invIds = invList.map((i: Record<string, unknown>) => String(i.id || ''));
 
     // 4. Fetch payments for those invoices
@@ -316,19 +447,17 @@ export async function getStudentDossier(
       method: String(p.payment_method || 'TRANSFER'),
     }));
 
-    const totalInvoiced = invoices.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0);
-    const totalPaid = payments.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
-    const balanceDue = Math.max(0, totalInvoiced - totalPaid);
-
     // 5. Fetch linked Corporate Customer / Sponsor if present
     let corporateSponsor: { id: string; name: string; email?: string | null; phone?: string | null } | null = null;
+    let customerRow: { id: string; total_invoiced?: number; total_paid?: number; outstanding_balance?: number } | null = null;
     if (student.customer_id) {
       const { data: custData } = await supabase
         .from('customers')
-        .select('id, name, email, phone')
+        .select('id, name, email, phone, total_invoiced, total_paid, outstanding_balance')
         .eq('id', student.customer_id)
         .single();
       if (custData) {
+        customerRow = custData;
         corporateSponsor = {
           id: String(custData.id),
           name: String(custData.name),
@@ -338,6 +467,23 @@ export async function getStudentDossier(
       }
     }
 
+    const paymentsByInvoice: Record<string, number> = {};
+    paymentsRaw.forEach((p) => {
+      const invId = String(p.invoice_id || '');
+      if (invId) {
+        paymentsByInvoice[invId] = (paymentsByInvoice[invId] || 0) + Number(p.amount || 0);
+      }
+    });
+
+    // Authoritative financial calculation identical to directory table
+    const typedInvoices = invList.map((i) => ({
+      id: String(i.id || ''),
+      total_amount: Number(i.total_amount || 0),
+      status: String(i.status || ''),
+      due_date: (i.due_date as string | null) || null,
+    }));
+    const finSummary = getStudentFinancialSummary(student, customerRow, typedInvoices, paymentsByInvoice);
+
     return {
       data: {
         student: student as Student,
@@ -345,9 +491,9 @@ export async function getStudentDossier(
         enrolments,
         invoices,
         payments,
-        totalInvoiced,
-        totalPaid,
-        balanceDue,
+        totalInvoiced: finSummary.totalInvoiced,
+        totalPaid: finSummary.totalPaid,
+        balanceDue: finSummary.balance,
       },
       error: null,
     };

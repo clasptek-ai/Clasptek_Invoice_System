@@ -123,6 +123,7 @@ export function StudentFilters({
             <option value="FULLY_PAID">Fully Paid</option>
             <option value="PARTIALLY_PAID">Partial Balance</option>
             <option value="UNPAID">Outstanding</option>
+            <option value="OVERDUE">Overdue</option>
             <option value="NO_INVOICE">No Invoice</option>
           </select>
         </div>
