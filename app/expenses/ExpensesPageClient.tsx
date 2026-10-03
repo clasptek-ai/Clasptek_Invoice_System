@@ -13,6 +13,12 @@ import { downloadSafeCsv } from '@/lib/utils/csv';
 import { AUTHORITATIVE_EXPENSE_TAXONOMY } from '@/lib/finance/taxonomy';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface ExpensesClientProps {
   initialExpenses: Expense[];
@@ -21,15 +27,6 @@ interface ExpensesClientProps {
   isPeriodLocked: boolean;
   currentPeriod: string;
 }
-
-const DEPARTMENTS = [
-  'Operations',
-  'Academics',
-  'Marketing',
-  'Administration',
-  'Executive',
-  'Finance',
-];
 
 const PAYMENT_METHODS: PaymentMethod[] = [
   'Bank Transfer',
@@ -51,13 +48,30 @@ export function ExpensesPageClient({
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [search, setSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [selectedDept, setSelectedDept] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Multi-row selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    expenseIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'CANCEL',
+    expenseIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
 
   // Modal states
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [cancelModalData, setCancelModalData] = useState<{ id: string; desc: string } | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states for Log Expense
@@ -100,9 +114,10 @@ export function ExpensesPageClient({
         if (!descMatch && !benMatch && !catMatch && !grpMatch && !refMatch) return false;
       }
       if (selectedGroup && e.categoryGroup !== selectedGroup) return false;
+      if (selectedStatus && e.status !== selectedStatus) return false;
       return true;
     });
-  }, [expenses, search, selectedGroup]);
+  }, [expenses, search, selectedGroup, selectedStatus]);
 
   const {
     currentPage,
@@ -112,11 +127,44 @@ export function ExpensesPageClient({
     setPageSize,
   } = usePagination(filteredExpenses, {
     initialPageSize: 25,
-    resetDeps: [search, selectedGroup],
+    resetDeps: [search, selectedGroup, selectedStatus],
   });
 
+  const visibleIds = paginatedExpenses.map((e) => e.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const headerCheckboxRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const someSelected = visibleIds.some((id) => selectedIds.has(id));
+      headerCheckboxRef.current.indeterminate = someSelected && !isAllSelected;
+    }
+  }, [selectedIds, visibleIds, isAllSelected]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
   // CSV Export with RFC-4180 formula injection defense
-  const handleExportCsv = () => {
+  const handleExportCsv = (recordsToExport?: Expense[]) => {
+    const list = recordsToExport || filteredExpenses;
     const headers = [
       'Date',
       'Expense Group',
@@ -128,7 +176,7 @@ export function ExpensesPageClient({
       'Reference',
       'Status',
     ];
-    const rows = filteredExpenses.map((e) => [
+    const rows = list.map((e) => [
       e.expenseDate,
       e.categoryGroup,
       e.subCategory,
@@ -141,6 +189,13 @@ export function ExpensesPageClient({
     ]);
     downloadSafeCsv('Expenses_Ledger', headers, rows);
     notify('success', 'Expenses ledger exported safely to CSV.');
+  };
+
+  const handleExportSelectedCsv = () => {
+    const selectedRecords = expenses.filter((e) => selectedIds.has(e.id));
+    if (selectedRecords.length > 0) {
+      handleExportCsv(selectedRecords);
+    }
   };
 
   // Submit new expense
@@ -221,29 +276,91 @@ export function ExpensesPageClient({
     }
   };
 
-  // Cancel expense
-  const handleCancelSubmit = async () => {
-    if (!cancelModalData) return;
-    try {
-      const res = await fetch(`/api/finance/expenses/${cancelModalData.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancel', reason: cancelReason }),
+  // Bulk Approve
+  const handleBulkApprove = async () => {
+    const pendingToApprove = expenses.filter(
+      (e) => selectedIds.has(e.id) && e.status === 'pending_approval'
+    );
+    if (pendingToApprove.length === 0) return;
+
+    let successCount = 0;
+    for (const exp of pendingToApprove) {
+      try {
+        const res = await fetch(`/api/finance/expenses/${exp.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'approve' }),
+        });
+        if (res.ok) successCount++;
+      } catch {
+        // continue
+      }
+    }
+
+    setExpenses((prev) =>
+      prev.map((e) =>
+        selectedIds.has(e.id) && e.status === 'pending_approval'
+          ? { ...e, status: 'approved' as ExpenseStatus }
+          : e
+      )
+    );
+    notify('success', `Approved ${successCount} expense(s).`);
+  };
+
+  // Open Cancel Modal
+  const handleOpenCancelModal = (ids: string[], targetIdentifier?: string) => {
+    if (isPeriodLocked) {
+      setLifecycleModal({
+        isOpen: true,
+        actionType: 'CANCEL',
+        expenseIds: ids,
+        recordIdentifier: targetIdentifier || `${ids.length} selected expense(s)`,
+        dependencies: [],
+        blockedMessage: `Financial period ${currentPeriod} is locked. Transactions and cancellations are strictly prohibited.`,
+        isLoading: false,
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Cancellation failed');
+      return;
+    }
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'CANCEL',
+      expenseIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected expense(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: false,
+    });
+  };
+
+  // Confirm cancellation via RecordLifecycleModal
+  const handleConfirmCancel = async (reason: string) => {
+    const { expenseIds } = lifecycleModal;
+    if (expenseIds.length === 0) return;
+
+    setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+    let successCount = 0;
+    try {
+      for (const id of expenseIds) {
+        const res = await fetch(`/api/finance/expenses/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'cancel', reason: reason || 'Cancelled via ledger manager' }),
+        });
+        if (res.ok) successCount++;
+      }
 
       setExpenses((prev) =>
         prev.map((e) =>
-          e.id === cancelModalData.id ? { ...e, status: 'cancelled' as ExpenseStatus } : e
+          expenseIds.includes(e.id) ? { ...e, status: 'cancelled' as ExpenseStatus } : e
         )
       );
-      setCancelModalData(null);
-      setCancelReason('');
-      notify('success', 'Expense marked as cancelled.');
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+      handleClearSelection();
+      notify('success', `Cancelled ${successCount} expense record(s).`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error cancelling expense';
       notify('error', msg);
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -304,7 +421,7 @@ export function ExpensesPageClient({
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="cp-btn sm secondary" onClick={handleExportCsv} id="btnExportExpenses">
+            <button className="cp-btn sm secondary" onClick={() => handleExportCsv()} id="btnExportExpenses">
               📥 Export CSV
             </button>
             {canRecord && (
@@ -331,7 +448,7 @@ export function ExpensesPageClient({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="cp-field" style={{ maxWidth: 240, marginBottom: 0 }}>
+          <div className="cp-field" style={{ maxWidth: 220, marginBottom: 0 }}>
             <select
               id="expenseGroupFilter"
               value={selectedGroup}
@@ -345,21 +462,77 @@ export function ExpensesPageClient({
               ))}
             </select>
           </div>
-          <div className="cp-field" style={{ maxWidth: 200, marginBottom: 0 }}>
+          <div className="cp-field" style={{ maxWidth: 180, marginBottom: 0 }}>
             <select
-              id="expenseDeptFilter"
-              value={selectedDept}
-              onChange={(e) => setSelectedDept(e.target.value)}
+              id="expenseStatusFilter"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
             >
-              <option value="">All Departments</option>
-              {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
+              <option value="">All Statuses</option>
+              <option value="recorded">Recorded</option>
+              <option value="pending_approval">Pending Approval</option>
+              <option value="approved">Approved</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
+          {(search || selectedGroup || selectedStatus) && (
+            <button
+              type="button"
+              className="cp-btn sm secondary"
+              onClick={() => {
+                setSearch('');
+                setSelectedGroup('');
+                setSelectedStatus('');
+              }}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              Reset Filters
+            </button>
+          )}
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+            Showing {filteredExpenses.length} of {expenses.length}
+          </span>
         </div>
+
+        {/* Selection Bar */}
+        <TableSelectionBar
+          selectedCount={selectedIds.size}
+          totalVisibleCount={visibleIds.length}
+          entityLabel="expense"
+          onSelectAllVisible={handleToggleSelectAll}
+          isAllSelected={isAllSelected}
+          onClearSelection={handleClearSelection}
+        >
+          <button
+            type="button"
+            className="cp-btn sm secondary"
+            onClick={handleExportSelectedCsv}
+            title="Export only selected expenses to CSV"
+          >
+            📥 Export CSV ({selectedIds.size})
+          </button>
+          {canApprove && (
+            <button
+              type="button"
+              className="cp-btn sm accent"
+              onClick={handleBulkApprove}
+              title="Approve selected pending expenses"
+            >
+              ✅ Approve Selected
+            </button>
+          )}
+          {canCancel && (
+            <button
+              type="button"
+              className="cp-btn sm danger"
+              onClick={() => handleOpenCancelModal(Array.from(selectedIds))}
+              disabled={isPeriodLocked}
+              title="Cancel selected expense records"
+            >
+              🛑 Cancel Selected ({selectedIds.size})
+            </button>
+          )}
+        </TableSelectionBar>
 
         {/* Table / Empty State */}
         {filteredExpenses.length === 0 ? (
@@ -377,6 +550,16 @@ export function ExpensesPageClient({
               <table className="cp-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        ref={headerCheckboxRef}
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        aria-label="Select all visible expenses"
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
                     <th>Date</th>
                     <th className="cp-col-secondary">Expense Group</th>
                     <th>Category</th>
@@ -389,131 +572,180 @@ export function ExpensesPageClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedExpenses.map((e) => (
-                    <tr key={e.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</td>
-                      <td className="cp-col-secondary" style={{ fontWeight: 600 }}>{e.categoryGroup}</td>
-                      <td>{e.subCategory}</td>
-                      <td>
-                        {e.description}
-                        {e.reference && (
-                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 6 }}>
-                            ({e.reference})
+                  {paginatedExpenses.map((e) => {
+                    const isSelected = selectedIds.has(e.id);
+                    return (
+                      <tr
+                        key={e.id}
+                        style={{
+                          backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                        }}
+                      >
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(e.id)}
+                            aria-label={`Select expense ${e.description}`}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</td>
+                        <td className="cp-col-secondary" style={{ fontWeight: 600 }}>{e.categoryGroup}</td>
+                        <td>{e.subCategory}</td>
+                        <td>
+                          {e.description}
+                          {e.reference && (
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 6 }}>
+                              ({e.reference})
+                            </span>
+                          )}
+                        </td>
+                        <td className="cp-col-tertiary">{e.beneficiary}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', whiteSpace: 'nowrap' }}>
+                          ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="cp-col-secondary">
+                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                            {e.paymentMethod}
                           </span>
-                        )}
-                      </td>
-                      <td className="cp-col-tertiary">{e.beneficiary}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--danger)', whiteSpace: 'nowrap' }}>
-                        ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="cp-col-secondary">
-                        <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                          {e.paymentMethod}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`cp-pill ${e.status}`}>
-                          {e.status.toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        {e.status === 'pending_approval' && canApprove && (
-                          <button
-                            className="cp-btn sm accent"
-                            onClick={() => handleApprove(e.id)}
-                            style={{ marginRight: 6 }}
-                          >
-                            Approve
-                          </button>
-                        )}
-                        {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
-                          <button
-                            className="cp-btn sm danger"
-                            onClick={() => setCancelModalData({ id: e.id, desc: e.description })}
-                            disabled={isPeriodLocked}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                        {e.status !== 'recorded' && e.status !== 'pending_approval' && '—'}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          <span className={`cp-pill ${e.status}`}>
+                            {e.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {e.status === 'pending_approval' && canApprove && (
+                            <button
+                              className="cp-btn sm accent"
+                              onClick={() => handleApprove(e.id)}
+                              style={{ marginRight: 6 }}
+                            >
+                              Approve
+                            </button>
+                          )}
+                          {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
+                            <button
+                              className="cp-btn sm danger"
+                              onClick={() => handleOpenCancelModal([e.id], e.description)}
+                              disabled={isPeriodLocked}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          {e.status !== 'recorded' && e.status !== 'pending_approval' && '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Vertical Cards */}
             <div className="cp-cards-mobile">
-              {paginatedExpenses.map((e) => (
-                <div key={e.id} className="cp-mobile-record-card">
-                  <div className="cp-mobile-record-header">
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                        {e.subCategory}
+              {paginatedExpenses.map((e) => {
+                const isSelected = selectedIds.has(e.id);
+                return (
+                  <div
+                    key={e.id}
+                    className="cp-mobile-record-card"
+                    style={{
+                      borderLeft: isSelected ? '4px solid var(--primary, #0284c7)' : undefined,
+                    }}
+                    onClick={() => handleToggleSelect(e.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(evt) => evt.key === 'Enter' && handleToggleSelect(e.id)}
+                    aria-label={`Select expense ${e.description}`}
+                  >
+                    <div className="cp-mobile-record-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(evt) => {
+                            evt.stopPropagation();
+                            handleToggleSelect(e.id);
+                          }}
+                          aria-label={`Select expense ${e.description}`}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                            {e.subCategory}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {e.expenseDate} &middot; {e.categoryGroup}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {e.expenseDate} &middot; {e.categoryGroup}
+                      <span className={`cp-pill ${e.status}`}>
+                        {e.status.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                      {e.description}
+                      {e.reference && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 6 }}>
+                          ({e.reference})
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="cp-mobile-record-grid">
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Beneficiary</span>
+                        <span className="cp-mobile-record-value">{e.beneficiary || 'Internal'}</span>
+                      </div>
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Amount</span>
+                        <span className="cp-mobile-record-value" style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '13px' }}>
+                          ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                        <span className="cp-mobile-record-label">Payment Method</span>
+                        <span className="cp-mobile-record-value">{e.paymentMethod}</span>
                       </div>
                     </div>
-                    <span className={`cp-pill ${e.status}`}>
-                      {e.status.toUpperCase()}
-                    </span>
-                  </div>
 
-                  <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
-                    {e.description}
-                    {e.reference && (
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 6 }}>
-                        ({e.reference})
-                      </span>
+                    {((e.status === 'pending_approval' && canApprove) || ((e.status === 'recorded' || e.status === 'pending_approval') && canCancel)) && (
+                      <div className="cp-mobile-record-actions">
+                        {e.status === 'pending_approval' && canApprove && (
+                          <button
+                            type="button"
+                            className="cp-btn sm accent"
+                            onClick={(evt) => {
+                              evt.stopPropagation();
+                              handleApprove(e.id);
+                            }}
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
+                          <button
+                            type="button"
+                            className="cp-btn sm danger"
+                            onClick={(evt) => {
+                              evt.stopPropagation();
+                              handleOpenCancelModal([e.id], e.description);
+                            }}
+                            disabled={isPeriodLocked}
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-
-                  <div className="cp-mobile-record-grid">
-                    <div className="cp-mobile-record-field">
-                      <span className="cp-mobile-record-label">Beneficiary</span>
-                      <span className="cp-mobile-record-value">{e.beneficiary || 'Internal'}</span>
-                    </div>
-                    <div className="cp-mobile-record-field">
-                      <span className="cp-mobile-record-label">Amount</span>
-                      <span className="cp-mobile-record-value" style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '13px' }}>
-                        ₦{e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
-                      <span className="cp-mobile-record-label">Payment Method</span>
-                      <span className="cp-mobile-record-value">{e.paymentMethod}</span>
-                    </div>
-                  </div>
-
-                  {((e.status === 'pending_approval' && canApprove) || ((e.status === 'recorded' || e.status === 'pending_approval') && canCancel)) && (
-                    <div className="cp-mobile-record-actions">
-                      {e.status === 'pending_approval' && canApprove && (
-                        <button
-                          type="button"
-                          className="cp-btn sm accent"
-                          onClick={() => handleApprove(e.id)}
-                          style={{ flex: 1, justifyContent: 'center' }}
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {(e.status === 'recorded' || e.status === 'pending_approval') && canCancel && (
-                        <button
-                          type="button"
-                          className="cp-btn sm danger"
-                          onClick={() => setCancelModalData({ id: e.id, desc: e.description })}
-                          disabled={isPeriodLocked}
-                          style={{ flex: 1, justifyContent: 'center' }}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Standard Pagination */}
@@ -681,51 +913,20 @@ export function ExpensesPageClient({
         </div>
       )}
 
-      {/* Cancel Modal */}
-      {cancelModalData && (
-        <div className="cp-modal-overlay">
-          <div className="cp-modal" style={{ maxWidth: 440 }}>
-            <div className="cp-modal-header">
-              <div className="cp-modal-title">Cancel Expense</div>
-              <button
-                className="cp-modal-close"
-                onClick={() => setCancelModalData(null)}
-              >
-                &times;
-              </button>
-            </div>
-            <div className="cp-modal-body">
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                Are you sure you want to cancel expense: <strong>{cancelModalData.desc}</strong>?
-              </p>
-              <div className="cp-field">
-                <label>Cancellation Reason *</label>
-                <textarea
-                  rows={2}
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="e.g. Duplicate entry, vendor refund"
-                  required
-                />
-              </div>
-            </div>
-            <div className="cp-modal-footer">
-              <button
-                className="cp-btn secondary"
-                onClick={() => setCancelModalData(null)}
-              >
-                Keep Expense
-              </button>
-              <button
-                className="cp-btn danger"
-                onClick={handleCancelSubmit}
-              >
-                Confirm Cancellation
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Record Lifecycle Modal (Cancel) */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Operational Expense"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        requireReason={true}
+        reasonPlaceholder="Mandatory reason for expense cancellation..."
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmCancel}
+      />
     </div>
   );
 }

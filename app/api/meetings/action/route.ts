@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
-import { updateMeetingStatus, getMeetingById } from '@/lib/meetings/queries';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { updateMeetingStatus, getMeetingById, checkMeetingDependencies, deleteMeetingSafe } from '@/lib/meetings/queries';
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,13 +36,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
-
-    if (authErr || !user) {
+    const session = await getAuthoritativeSession();
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -52,6 +47,24 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const action = (actionQuery || body.action || '').toUpperCase();
     const meetingId = body.meetingId || body.publicId;
+
+    if (action === 'CHECK_DEPENDENCIES') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const depCheck = await checkMeetingDependencies(meetingId);
+      return NextResponse.json({ success: true, ...depCheck });
+    }
+
+    if (action === 'DELETE_MEETING') {
+      if (!['Super Admin', 'Staff'].includes(session.role)) {
+        return NextResponse.json({ error: 'Forbidden: Insufficient permissions to delete meetings.' }, { status: 403 });
+      }
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const delRes = await deleteMeetingSafe(meetingId, session.tenantId);
+      if (!delRes.success) {
+        return NextResponse.json({ error: delRes.error }, { status: 400 });
+      }
+      return NextResponse.json({ success: true, action: 'DELETE_MEETING' });
+    }
 
     if (action === 'END_MEETING') {
       if (meetingId) {
@@ -84,8 +97,8 @@ export async function POST(req: NextRequest) {
       const message = {
         id: `msg_${Date.now()}`,
         meetingId,
-        senderId: user.id,
-        senderName: body.senderName || user.email || 'Participant',
+        senderId: session.user.id,
+        senderName: body.senderName || session.user.email || 'Participant',
         content: body.content || '',
         timestamp: new Date().toISOString(),
       };

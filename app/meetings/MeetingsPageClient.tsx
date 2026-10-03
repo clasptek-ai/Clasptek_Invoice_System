@@ -11,6 +11,12 @@ import { useRouter } from 'next/navigation';
 import type { Meeting, GoogleDriveStatus } from '@/types/meetings';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface MeetingsPageClientProps {
   initialMeetings: Meeting[];
@@ -115,6 +121,138 @@ export function MeetingsPageClient({
     initialPageSize: 25,
     resetDeps: [subTab, search],
   });
+
+  // Multi-row selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    meetingIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'DELETE',
+    meetingIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const visibleIds = paginatedMeetings.map((m) => m.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const headerCheckboxRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const someSelected = visibleIds.some((id) => selectedIds.has(id));
+      headerCheckboxRef.current.indeterminate = someSelected && !isAllSelected;
+    }
+  }, [selectedIds, visibleIds, isAllSelected]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // Open Cancel / Delete Meeting Modal with referential integrity dependency inspection
+  const handleOpenDeleteModal = async (ids: string[], targetIdentifier?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'DELETE',
+      meetingIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected meeting(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: true,
+    });
+
+    try {
+      const deps: RecordDependencyItem[] = [];
+      let blockedMsg: string | null = null;
+
+      for (const id of ids) {
+        const m = meetings.find((x) => x.id === id);
+        if (m) {
+          const hasRecording =
+            m.recordingStatus === 'STORED' ||
+            Boolean(m.recordingMetadata?.driveUrl) ||
+            Boolean(m.recordingUrl);
+          if (hasRecording) {
+            deps.push({
+              label: `Archived Video Recording (${m.title})`,
+              count: 1,
+            });
+            blockedMsg = 'Hard deletion is blocked: Completed or recorded meetings must be preserved for academic accreditation and student review.';
+          }
+          if (m.status === 'ENDED' || m.status === 'COMPLETED') {
+            deps.push({
+              label: `Attendance Ledger (${m.title})`,
+              count: 1,
+            });
+            blockedMsg = 'Completed academic meetings preserve learner attendance logs and cannot be deleted.';
+          }
+        }
+      }
+
+      setLifecycleModal((prev) => ({
+        ...prev,
+        dependencies: deps,
+        blockedMessage: blockedMsg,
+        isLoading: false,
+      }));
+    } catch {
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    const { meetingIds } = lifecycleModal;
+    if (meetingIds.length === 0) return;
+
+    setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+    let deletedCount = 0;
+    try {
+      for (const id of meetingIds) {
+        const res = await fetch('/api/meetings/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'DELETE_MEETING', meetingId: id }),
+        });
+        if (res.ok) {
+          deletedCount++;
+        }
+      }
+
+      setMeetings((prev) => prev.filter((m) => !meetingIds.includes(m.id)));
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+      handleClearSelection();
+      setFeedbackMsg({ type: 'success', text: `Removed ${deletedCount} meeting session(s).` });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error deleting meeting';
+      setFeedbackMsg({ type: 'error', text: msg });
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
 
   // Subtab switch
   const handleTabChange = (tab: string) => {
@@ -682,9 +820,28 @@ export function MeetingsPageClient({
         </div>
       </div>
 
-      {/* Meetings Table / List */}
-      <div className="cp-card">
-        {displayed.length === 0 ? (
+        {/* Selection Bar */}
+        <TableSelectionBar
+          selectedCount={selectedIds.size}
+          totalVisibleCount={visibleIds.length}
+          entityLabel="meeting"
+          onSelectAllVisible={handleToggleSelectAll}
+          isAllSelected={isAllSelected}
+          onClearSelection={handleClearSelection}
+        >
+          <button
+            type="button"
+            className="cp-btn sm danger"
+            onClick={() => handleOpenDeleteModal(Array.from(selectedIds))}
+            title="Cancel or delete selected meetings"
+          >
+            🗑️ Cancel / Delete Selected ({selectedIds.size})
+          </button>
+        </TableSelectionBar>
+
+        {/* Meetings Table / List */}
+        <div className="cp-card">
+          {displayed.length === 0 ? (
           <div className="cp-empty-state">
             <div className="cp-empty-icon">📹</div>
             <div className="cp-empty-title">
@@ -696,10 +853,21 @@ export function MeetingsPageClient({
           </div>
         ) : (
           <>
-            <div className="cp-table-wrap">
+            {/* Desktop & Tablet Table */}
+            <div className="cp-table-wrap cp-table-desktop">
             <table className="cp-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      ref={headerCheckboxRef}
+                      checked={isAllSelected}
+                      onChange={handleToggleSelectAll}
+                      aria-label="Select all visible meetings"
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
                   <th>Meeting Title &amp; Programme</th>
                   <th>Cohort / Class</th>
                   <th>Facilitator</th>
@@ -710,6 +878,7 @@ export function MeetingsPageClient({
               </thead>
               <tbody>
                 {paginatedMeetings.map((m) => {
+                  const isSelected = selectedIds.has(m.id);
                   const isLive = m.status === 'LIVE';
                   const isScheduled = m.status === 'SCHEDULED';
                   const isEnded = m.status === 'ENDED' || m.status === 'COMPLETED';
@@ -722,7 +891,21 @@ export function MeetingsPageClient({
                   else if (isEnded) pillColor = 'paid';
 
                   return (
-                    <tr key={m.id}>
+                    <tr
+                      key={m.id}
+                      style={{
+                        backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                      }}
+                    >
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(m.id)}
+                          aria-label={`Select meeting ${m.title}`}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
                       <td>
                         <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 13.5 }}>
                           {m.title}
@@ -753,7 +936,7 @@ export function MeetingsPageClient({
                         </span>
                       </td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                           {isLive && (
                             <button
                               className="cp-btn sm danger"
@@ -787,6 +970,15 @@ export function MeetingsPageClient({
                               Summary
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className="cp-btn sm danger"
+                            onClick={() => handleOpenDeleteModal([m.id], m.title)}
+                            title="Cancel / Delete Meeting"
+                            style={{ padding: '4px 8px' }}
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -795,6 +987,135 @@ export function MeetingsPageClient({
               </tbody>
             </table>
           </div>
+
+            {/* Mobile Vertical Cards Stack */}
+            <div className="cp-cards-mobile">
+              {paginatedMeetings.map((m) => {
+                const isSelected = selectedIds.has(m.id);
+                const isLive = m.status === 'LIVE';
+                const isScheduled = m.status === 'SCHEDULED';
+                const isEnded = m.status === 'ENDED' || m.status === 'COMPLETED';
+                const hasRecording =
+                  m.recordingStatus === 'STORED' || Boolean(m.recordingMetadata?.driveUrl);
+
+                let pillColor = 'draft';
+                if (isLive) pillColor = 'danger';
+                else if (isScheduled) pillColor = 'active';
+                else if (isEnded) pillColor = 'paid';
+
+                return (
+                  <div
+                    key={m.id}
+                    className="cp-mobile-record-card"
+                    style={{
+                      borderLeft: isSelected ? '4px solid var(--primary, #0284c7)' : undefined,
+                    }}
+                    onClick={() => handleToggleSelect(m.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(evt) => evt.key === 'Enter' && handleToggleSelect(m.id)}
+                    aria-label={`Select meeting ${m.title}`}
+                  >
+                    <div className="cp-mobile-record-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(evt) => {
+                            evt.stopPropagation();
+                            handleToggleSelect(m.id);
+                          }}
+                          aria-label={`Select meeting ${m.title}`}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--primary)' }}>
+                            {m.title}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            {m.programmeName || 'Academic Course'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`cp-pill ${pillColor}`} style={{ fontSize: '10.5px', fontWeight: 700 }}>
+                        {isLive && '● '}
+                        {m.status}
+                      </span>
+                    </div>
+
+                    <div className="cp-mobile-record-grid">
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Cohort</span>
+                        <span className="cp-mobile-record-value">{m.cohortCode || 'General'}</span>
+                      </div>
+                      <div className="cp-mobile-record-field">
+                        <span className="cp-mobile-record-label">Facilitator</span>
+                        <span className="cp-mobile-record-value">{m.facilitatorName || 'Facilitator'}</span>
+                      </div>
+                      <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
+                        <span className="cp-mobile-record-label">Date &amp; Schedule</span>
+                        <span className="cp-mobile-record-value">
+                          {m.scheduledStart?.split('T')[0]} ({m.scheduledStart?.split('T')[1]?.slice(0, 5)} – {m.scheduledEnd?.split('T')[1]?.slice(0, 5)})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="cp-mobile-record-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {isLive && (
+                        <button
+                          type="button"
+                          className="cp-btn sm danger"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            handleJoinMeeting(m);
+                          }}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          🔴 Join Live Room
+                        </button>
+                      )}
+                      {isScheduled && (
+                        <button
+                          type="button"
+                          className="cp-btn sm primary"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            handleJoinMeeting(m);
+                          }}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          Join Room
+                        </button>
+                      )}
+                      {hasRecording && (
+                        <button
+                          type="button"
+                          className="cp-btn sm paid"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            setWatchModalMeeting(m);
+                          }}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          ▶ Watch Recording
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="cp-btn sm danger"
+                        onClick={(evt) => {
+                          evt.stopPropagation();
+                          handleOpenDeleteModal([m.id], m.title);
+                        }}
+                        style={{ padding: '4px 10px' }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Standard Pagination */}
             <Pagination
@@ -1284,6 +1605,19 @@ export function MeetingsPageClient({
           </div>
         </div>
       )}
+
+      {/* Record Lifecycle Modal (Delete / Cancel Protection) */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Classroom Meeting Session"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

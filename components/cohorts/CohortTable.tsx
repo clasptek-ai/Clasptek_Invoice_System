@@ -1,45 +1,70 @@
 /**
  * components/cohorts/CohortTable.tsx — Phase 4
- * Exact legacy Clasptek 8-column Cohorts & Schedules Table.
- * Reference: index.html lines 26130–26160 / 26300–26360
+ * Scheduled Cohorts Table with data-management controls:
+ * - Multi-row selection & select-all
+ * - Capacity indicators & delivery badges
+ * - Action buttons: Details and Close / Archive Cohort
+ * - Responsive desktop/tablet table and mobile cards
  */
 
 'use client';
 
-import React from 'react';
-import type { Cohort } from '../../types/academics';
+import React, { useRef, useEffect } from 'react';
+import type { Cohort } from '@/types/academics';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
 
 interface CohortTableProps {
   cohorts: Cohort[];
   onSelectCohort?: (cohort: Cohort) => void;
+  onCloseCohort?: (cohort: Cohort) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
+  canEdit?: boolean;
 }
 
-function fmtDate(iso: string | null): string {
+function fmtDate(iso?: string | null): string {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
-    return '—';
+    return iso;
   }
 }
 
-export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
+export function CohortTable({
+  cohorts,
+  onSelectCohort,
+  onCloseCohort,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleSelectAll,
+  isAllSelected = false,
+  canEdit = true,
+}: CohortTableProps) {
   const {
+    paginatedItems: paginatedCohorts,
     currentPage,
     pageSize,
-    paginatedItems: paginatedCohorts,
-    setPage,
-    setPageSize,
-  } = usePagination(cohorts, {
+    totalRecords,
+    onPageChange,
+    onPageSizeChange,
+  } = usePagination<Cohort>(cohorts, {
     initialPageSize: 25,
     resetDeps: [cohorts],
   });
+
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const selectedCount = paginatedCohorts.filter((c) => selectedIds.has(c.id)).length;
+      const isIndeterminate = selectedCount > 0 && selectedCount < paginatedCohorts.length;
+      headerCheckboxRef.current.indeterminate = isIndeterminate;
+    }
+  }, [selectedIds, paginatedCohorts]);
 
   if (cohorts.length === 0) {
     return (
@@ -54,10 +79,22 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
   return (
     <>
       {/* Desktop & Tablet Table */}
-      <div className="cp-table-wrap cp-table-desktop">
+      <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table className="cp-table">
           <thead>
             <tr>
+              {onToggleSelect && (
+                <th style={{ width: '42px', textAlign: 'center', padding: '8px' }}>
+                  <input
+                    type="checkbox"
+                    ref={headerCheckboxRef}
+                    checked={isAllSelected}
+                    onChange={onToggleSelectAll}
+                    aria-label="Select all visible cohorts"
+                    style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                  />
+                </th>
+              )}
               <th>Cohort Code</th>
               <th>Programme</th>
               <th>Dates</th>
@@ -65,7 +102,7 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
               <th className="cp-col-secondary">Lead Facilitator</th>
               <th style={{ textAlign: 'center' }}>Capacity &amp; Seats</th>
               <th>Status</th>
-              <th style={{ textAlign: 'center' }}>Action</th>
+              <th style={{ textAlign: 'center', minWidth: '110px' }}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -74,9 +111,31 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
               const cap = Number(c.capacity || 25);
               const isFull = c.is_full ?? (enrolled >= cap);
               const pct = c.percentage_full ?? (cap > 0 ? Math.round((enrolled / cap) * 100) : 0);
+              const isChecked = selectedIds.has(c.id);
 
               return (
-                <tr key={c.id}>
+                <tr
+                  key={c.id}
+                  style={{
+                    backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.05)' : undefined,
+                  }}
+                >
+                  {/* Checkbox */}
+                  {onToggleSelect && (
+                    <td
+                      style={{ textAlign: 'center', width: '42px', padding: '8px' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => onToggleSelect(c.id)}
+                        aria-label={`Select ${c.cohort_code}`}
+                        style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                      />
+                    </td>
+                  )}
+
                   <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                     {c.cohort_code || c.id}
                   </td>
@@ -106,20 +165,36 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
                           ? 'active'
                           : c.status === 'COMPLETED'
                           ? 'paid'
-                          : 'draft'
+                          : c.status === 'CANCELLED'
+                          ? 'draft'
+                          : 'category-pill'
                       }`}
                     >
                       {c.status || 'UPCOMING'}
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      className="cp-btn sm secondary"
-                      onClick={() => onSelectCohort && onSelectCohort(c)}
-                    >
-                      Details
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={() => onSelectCohort && onSelectCohort(c)}
+                        style={{ padding: '3px 8px', fontSize: '11px' }}
+                      >
+                        Details
+                      </button>
+                      {canEdit && onCloseCohort && c.status !== 'COMPLETED' && c.status !== 'CANCELLED' && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={() => onCloseCohort(c)}
+                          style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                          title="Close / Complete Cohort"
+                        >
+                          🛑
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -129,113 +204,93 @@ export function CohortTable({ cohorts, onSelectCohort }: CohortTableProps) {
       </div>
 
       {/* Mobile Card Stack */}
-      <div className="cp-cards-mobile">
+      <div className="cp-cards-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {paginatedCohorts.map((c) => {
           const enrolled = c.enrolled_count || 0;
           const cap = Number(c.capacity || 25);
           const isFull = c.is_full ?? (enrolled >= cap);
-          const pct = c.percentage_full ?? (cap > 0 ? Math.round((enrolled / cap) * 100) : 0);
+          const isChecked = selectedIds.has(c.id);
 
           return (
             <div
               key={c.id}
-              className="cp-mobile-record-card"
-              onClick={() => onSelectCohort && onSelectCohort(c)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && onSelectCohort && onSelectCohort(c)}
-              aria-label={`View cohort ${c.cohort_code || c.name}`}
+              className="cp-card"
+              style={{
+                padding: '14px',
+                border: isChecked ? '1px solid #3B82F6' : undefined,
+                backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.03)' : undefined,
+              }}
             >
-              <div className="cp-mobile-record-header">
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {c.programme_name || 'Not specified'}
-                  </h4>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {c.lead_facilitator_name ? `Facilitator: ${c.lead_facilitator_name}` : 'Unassigned'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {onToggleSelect && (
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => onToggleSelect(c.id)}
+                      aria-label={`Select ${c.cohort_code}`}
+                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                    />
+                  )}
+                  <div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px', color: 'var(--primary)' }}>
+                      {c.cohort_code || c.id}
+                    </span>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                      {c.name}
+                    </div>
                   </div>
                 </div>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono, monospace)',
-                    fontWeight: 700,
-                    fontSize: '11px',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {c.cohort_code || 'COH-—'}
+                <span className={`cp-pill ${c.status === 'IN_PROGRESS' ? 'active' : 'draft'}`}>
+                  {c.status || 'UPCOMING'}
                 </span>
               </div>
 
-              <div className="cp-mobile-record-grid">
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Status</span>
-                  <div>
-                    <span
-                      className={`cp-pill ${
-                        c.status === 'IN_PROGRESS'
-                          ? 'active'
-                          : c.status === 'COMPLETED'
-                          ? 'paid'
-                          : 'draft'
-                      }`}
-                    >
-                      {c.status || 'UPCOMING'}
-                    </span>
-                  </div>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Enrolment Capacity</span>
-                  <div>
-                    <span className={`cp-pill ${isFull ? 'danger' : 'paid'}`} style={{ fontWeight: 700, fontSize: '10.5px' }}>
-                      {enrolled} / {cap} ({pct}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Schedule Dates</span>
-                  <span className="cp-mobile-record-value" style={{ fontSize: '11.5px', fontWeight: 400 }}>
-                    {fmtDate(c.start_date)} &rarr; {fmtDate(c.end_date)}
-                  </span>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Mode</span>
-                  <span className="cp-mobile-record-value" style={{ fontSize: '11.5px', fontWeight: 400 }}>
-                    {c.delivery_mode || 'IN_PERSON'}
-                  </span>
-                </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <strong>{c.programme_name || 'Not specified'}</strong> &middot; {c.delivery_mode || 'IN_PERSON'}
               </div>
 
-              <div className="cp-mobile-record-actions">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', marginBottom: '8px' }}>
+                <span>Dates: {fmtDate(c.start_date)} &rarr; {fmtDate(c.end_date)}</span>
+                <span className={`cp-pill ${isFull ? 'danger' : 'paid'}`}>
+                  {enrolled} / {cap} seats
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
                 <button
                   type="button"
                   className="cp-btn sm secondary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onSelectCohort) onSelectCohort(c);
-                  }}
-                  style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                  onClick={() => onSelectCohort && onSelectCohort(c)}
+                  style={{ padding: '3px 8px', fontSize: '11px' }}
                 >
-                  View Cohort Details
+                  Details
                 </button>
+                {canEdit && onCloseCohort && c.status !== 'COMPLETED' && (
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => onCloseCohort(c)}
+                    style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                  >
+                    🛑 Close
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Standard Pagination */}
       <Pagination
         currentPage={currentPage}
         pageSize={pageSize}
-        totalRecords={cohorts.length}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
+        totalRecords={totalRecords}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
         entityLabel="cohorts"
       />
+
     </>
   );
 }

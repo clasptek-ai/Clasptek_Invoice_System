@@ -6,11 +6,13 @@
  * Faithful reproduction of legacy Clasptek UI, design tokens (.cp-*), and workflows.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Payslip, Personnel, FinancialMetrics, AllowanceDeductionItem } from '@/types/finance';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { RecordLifecycleModal } from '@/components/tables/RecordLifecycleModal';
 
 interface PayrollPageClientProps {
   initialPayslips: Payslip[];
@@ -30,6 +32,12 @@ export function PayrollPageClient({
   metrics,
 }: PayrollPageClientProps) {
   const [payslips, setPayslips] = useState<Payslip[]>(initialPayslips);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    payslip?: Payslip;
+  }>({ isOpen: false });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'staff' | 'facilitator'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -167,10 +175,59 @@ export function PayrollPageClient({
     }
   };
 
-  // CSV Export
-  const handleExportCSV = () => {
-    const headers = ['Payslip #', 'Pay Period', 'Employee Name', 'Type', 'Department', 'Role', 'Basic Pay', 'Gross Pay', 'Total Deductions', 'Net Pay', 'Status'];
-    const rows = filteredPayslips.map(p => [
+  // Cancel Statement with Lifecycle Modal
+  const handleOpenCancelPayslip = (ps: Payslip) => {
+    setLifecycleModal({
+      isOpen: true,
+      payslip: ps,
+    });
+  };
+
+  const handleConfirmCancelPayslip = async (reason?: string) => {
+    if (!lifecycleModal.payslip) return;
+    const ps = lifecycleModal.payslip;
+    try {
+      const res = await fetch(`/api/finance/payroll/${ps.id}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', remarks: reason }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to cancel statement');
+      }
+
+      setPayslips((prev) => prev.map((item) => (item.id === ps.id ? { ...item, status: 'cancelled' } : item)));
+      if (selectedPayslip?.id === ps.id) {
+        setSelectedPayslip({ ...selectedPayslip, status: 'cancelled' });
+      }
+      setFeedbackMsg({ type: 'success', text: `Payslip ${ps.payslipDisplayNo} has been cancelled.` });
+      setLifecycleModal({ isOpen: false });
+    } catch (err: unknown) {
+      setFeedbackMsg({ type: 'error', text: err instanceof Error ? err.message : 'Cancellation failed' });
+    }
+  };
+
+  // Safe RFC-4180 CSV Export
+  const handleExportCSV = (selectedOnly: boolean = false) => {
+    const headers = [
+      'Payslip #',
+      'Pay Period',
+      'Employee Name',
+      'Type',
+      'Department',
+      'Role',
+      'Basic Pay',
+      'Gross Pay',
+      'Total Deductions',
+      'Net Pay',
+      'Status',
+    ];
+    const sourceList = selectedOnly
+      ? filteredPayslips.filter((p) => selectedIds.has(p.id))
+      : filteredPayslips;
+
+    const rows = sourceList.map((p) => [
       p.payslipDisplayNo,
       p.payPeriod,
       p.employeeName,
@@ -188,12 +245,13 @@ export function PayrollPageClient({
   };
 
   // Unique periods for dropdown
-  const uniquePeriods = Array.from(new Set(payslips.map(p => p.payPeriod))).filter(Boolean);
+  const uniquePeriods = Array.from(new Set(payslips.map((p) => p.payPeriod))).filter(Boolean);
 
   // Filter payslips
-  const filteredPayslips = payslips.filter(ps => {
+  const filteredPayslips = payslips.filter((ps) => {
     const q = searchQuery.toLowerCase().trim();
-    const matchesQ = !q ||
+    const matchesQ =
+      !q ||
       ps.payslipDisplayNo.toLowerCase().includes(q) ||
       ps.employeeName.toLowerCase().includes(q) ||
       ps.role.toLowerCase().includes(q) ||
@@ -216,6 +274,82 @@ export function PayrollPageClient({
     initialPageSize: 25,
     resetDeps: [searchQuery, typeFilter, statusFilter, periodFilter],
   });
+
+  // Row Selection logic
+  const visibleIds = useMemo(() => paginatedPayslips.map((p) => p.id), [paginatedPayslips]);
+  const isAllSelected = useMemo(
+    () => visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id)),
+    [visibleIds, selectedIds]
+  );
+  const isIndeterminate = useMemo(() => {
+    const count = visibleIds.filter((id) => selectedIds.has(id)).length;
+    return count > 0 && count < visibleIds.length;
+  }, [visibleIds, selectedIds]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkStatusAction = async (action: 'acknowledge' | 'approve') => {
+    const targetStatus = action === 'acknowledge' ? 'issued' : 'acknowledged';
+    const eligible = payslips.filter((p) => selectedIds.has(p.id) && p.status === targetStatus);
+    if (eligible.length === 0) {
+      setFeedbackMsg({
+        type: 'error',
+        text: `No selected statements are in '${targetStatus.toUpperCase()}' status to ${action}.`,
+      });
+      return;
+    }
+
+    let successCount = 0;
+    for (const ps of eligible) {
+      try {
+        const res = await fetch(`/api/finance/payroll/${ps.id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        if (res.ok) successCount++;
+      } catch {
+        // continue
+      }
+    }
+
+    const nextStatus = action === 'acknowledge' ? 'acknowledged' : 'approved';
+    setPayslips((prev) =>
+      prev.map((p) => (eligible.some((e) => e.id === p.id) ? { ...p, status: nextStatus } : p))
+    );
+    setFeedbackMsg({
+      type: 'success',
+      text: `Successfully updated ${successCount} payslip statement(s) to ${nextStatus.toUpperCase()}!`,
+    });
+    handleClearSelection();
+  };
 
   return (
     <div>
@@ -322,7 +456,7 @@ export function PayrollPageClient({
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="cp-btn sm secondary" onClick={handleExportCSV}>
+            <button className="cp-btn sm secondary" onClick={() => handleExportCSV(false)}>
               📥 Export CSV
             </button>
             <button className="cp-btn sm accent" onClick={() => setIsPrepareModalOpen(true)}>
@@ -401,11 +535,62 @@ export function PayrollPageClient({
           </div>
         ) : (
           <>
+            {/* Table Selection Bar */}
+            {selectedIds.size > 0 && (
+              <div style={{ padding: '0 20px 14px' }}>
+                <TableSelectionBar
+                  selectedCount={selectedIds.size}
+                  totalVisibleCount={visibleIds.length}
+                  entityLabel="payslips"
+                  onClearSelection={handleClearSelection}
+                  onSelectAllVisible={handleToggleSelectAll}
+                  isAllSelected={isAllSelected}
+                >
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleBulkStatusAction('acknowledge')}
+                    style={{ fontSize: '12px', padding: '4px 10px', color: '#7e22ce' }}
+                  >
+                    ✔ Bulk Acknowledge
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleBulkStatusAction('approve')}
+                    style={{ fontSize: '12px', padding: '4px 10px', color: '#d97706' }}
+                  >
+                    ✔ Bulk Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleExportCSV(true)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  >
+                    📥 Export Selected CSV
+                  </button>
+                </TableSelectionBar>
+              </div>
+            )}
+
             {/* Desktop & Tablet Table */}
             <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
+                    <th style={{ width: '40px', padding: '10px 14px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible payslips"
+                        checked={isAllSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isIndeterminate;
+                        }}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                    </th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Payslip #</th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Period</th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: '#475569' }}>Employee Name</th>
@@ -436,9 +621,25 @@ export function PayrollPageClient({
                       statusBg = '#f0f9ff';
                       statusColor = '#0284c7';
                     }
+                    const isRowSelected = selectedIds.has(ps.id);
 
                     return (
-                      <tr key={ps.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
+                      <tr
+                        key={ps.id}
+                        style={{
+                          borderBottom: '1px solid var(--border, #f1f5f9)',
+                          backgroundColor: isRowSelected ? '#F0F9FF' : undefined,
+                        }}
+                      >
+                        <td style={{ width: '40px', padding: '10px 14px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select payslip ${ps.payslipDisplayNo}`}
+                            checked={isRowSelected}
+                            onChange={() => handleToggleSelect(ps.id)}
+                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          />
+                        </td>
                         <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
                           {ps.payslipDisplayNo}
                         </td>
@@ -515,6 +716,17 @@ export function PayrollPageClient({
                                 Pay
                               </button>
                             )}
+
+                            {ps.status !== 'paid' && ps.status !== 'cancelled' && (
+                              <button
+                                className="cp-btn sm secondary"
+                                onClick={() => handleOpenCancelPayslip(ps)}
+                                style={{ padding: '3px 8px', fontSize: '11px', color: '#dc2626' }}
+                                title="Cancel statement"
+                              >
+                                Cancel
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -554,12 +766,22 @@ export function PayrollPageClient({
                     aria-label={`View payslip ${ps.payslipDisplayNo}`}
                   >
                     <div className="cp-mobile-record-header">
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                          {ps.employeeName}
-                        </h4>
-                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          {ps.role} &bull; {ps.department}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select payslip ${ps.payslipDisplayNo}`}
+                          checked={selectedIds.has(ps.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => handleToggleSelect(ps.id)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {ps.employeeName}
+                          </h4>
+                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {ps.role} &bull; {ps.department}
+                          </div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
@@ -615,6 +837,19 @@ export function PayrollPageClient({
                       >
                         View Statement
                       </button>
+                      {ps.status !== 'paid' && ps.status !== 'cancelled' && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenCancelPayslip(ps);
+                          }}
+                          style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600, color: '#dc2626' }}
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -924,6 +1159,25 @@ export function PayrollPageClient({
           </div>
         </div>
       )}
+
+      {/* Controlled Lifecycle Cancellation Modal */}
+      {lifecycleModal.isOpen && lifecycleModal.payslip && (
+        <RecordLifecycleModal
+          isOpen={lifecycleModal.isOpen}
+          onClose={() => setLifecycleModal({ isOpen: false })}
+          onConfirm={handleConfirmCancelPayslip}
+          entityName="Compensation Statement"
+          recordIdentifier={lifecycleModal.payslip.payslipDisplayNo}
+          actionType="CANCEL"
+          dependencies={[
+            { label: 'Pay Period', count: 1 },
+            { label: 'Gross Pay (₦)', count: Math.round(lifecycleModal.payslip.grossPay) },
+          ]}
+          requireReason={true}
+          reasonPlaceholder="Enter reason for cancelling this payslip statement (mandatory for financial compliance audit)..."
+        />
+      )}
     </div>
   );
 }
+

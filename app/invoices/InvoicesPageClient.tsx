@@ -15,6 +15,12 @@ import { printCanonicalElement } from '@/components/finance/printCanonical';
 import { CreateProfessionalTuitionInvoiceModal } from '@/components/finance/CreateProfessionalTuitionInvoiceModal';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 
 interface ProgrammeOption {
@@ -156,6 +162,133 @@ export function InvoicesPageClient({
     initialPageSize: 25,
     resetDeps: [searchQuery, statusFilter],
   });
+
+  // Multi-row selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    invoiceIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'VOID',
+    invoiceIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const visibleIds = paginatedInvoices.map((inv) => inv.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleOpenVoidModal = (ids: string[], targetIdentifier?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'VOID',
+      invoiceIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected invoice(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: false,
+    });
+  };
+
+  const handleConfirmVoid = async (reason: string) => {
+    const { invoiceIds } = lifecycleModal;
+    if (invoiceIds.length === 0) return;
+
+    setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+    try {
+      for (const id of invoiceIds) {
+        const res = await fetch(`/api/finance/invoices/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'cancelled',
+            reason: reason || 'Cancelled via portal invoice manager',
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Failed to void invoice ${id}`);
+        }
+      }
+
+      setInvoices((prev) =>
+        prev.map((i) => (invoiceIds.includes(i.id) ? { ...i, status: 'cancelled' } : i))
+      );
+      setSelectedIds(new Set());
+      setFeedbackMsg({
+        type: 'success',
+        text: `Successfully voided ${invoiceIds.length} invoice(s). Record numbers preserved in financial audit trail.`,
+      });
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+    } catch (err) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to void invoice',
+      });
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleExportSelectedCSV = () => {
+    const selectedInvoices = invoices.filter((i) => selectedIds.has(i.id));
+    const headers = [
+      'Invoice #',
+      'Issue Date',
+      'Due Date',
+      'Student / Client',
+      'Phone',
+      'Email',
+      'Programme',
+      'Total Amount',
+      'Paid Amount',
+      'Balance',
+      'Status',
+    ];
+    const rows = selectedInvoices.map((inv) => [
+      inv.invoiceDisplayNo,
+      inv.invoiceDate,
+      inv.dueDate,
+      inv.studentName,
+      inv.studentPhone || '',
+      inv.studentEmail || '',
+      inv.programmeName || '',
+      inv.totalAmount,
+      inv.paidAmount || 0,
+      inv.balanceAmount || 0,
+      inv.status.toUpperCase(),
+    ]);
+    downloadSafeCsv('clasptek_selected_invoices', headers, rows);
+  };
+
 
   return (
     <div>
@@ -318,11 +451,59 @@ export function InvoicesPageClient({
           </div>
         ) : (
           <>
+            {/* Universal Selection Toolbar */}
+            <TableSelectionBar
+              selectedCount={selectedIds.size}
+              totalVisibleCount={visibleIds.length}
+              entityLabel="invoice"
+              onClearSelection={handleClearSelection}
+              onSelectAllVisible={handleToggleSelectAll}
+              isAllSelected={isAllSelected}
+            >
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleExportSelectedCSV}
+                  className="cp-btn sm secondary"
+                  style={{ fontSize: '12px', padding: '4px 8px' }}
+                >
+                  Export Selected CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenVoidModal(Array.from(selectedIds))}
+                  className="cp-btn sm"
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    backgroundColor: '#D97706',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Void Selected
+                </button>
+              </div>
+            </TableSelectionBar>
+
             {/* Desktop & Tablet Table */}
             <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
+                    <th style={{ width: '42px', textAlign: 'center', padding: '8px' }}>
+                      <input
+                        type="checkbox"
+                        ref={headerCheckboxRef}
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        aria-label="Select all visible invoices"
+                        style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                      />
+                    </th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Invoice #</th>
                     <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Issue Date</th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Due Date</th>
@@ -358,11 +539,25 @@ export function InvoicesPageClient({
                       statusBg = '#f0f9ff';
                     }
 
+                    const isChecked = selectedIds.has(inv.id);
+
                     return (
                       <tr
                         key={inv.id}
-                        style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}
+                        style={{
+                          borderBottom: '1px solid var(--border, #f1f5f9)',
+                          backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.05)' : undefined,
+                        }}
                       >
+                        <td style={{ textAlign: 'center', width: '42px', padding: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleSelect(inv.id)}
+                            aria-label={`Select ${inv.invoiceDisplayNo}`}
+                            style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                          />
+                        </td>
                         <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
                           {inv.invoiceDisplayNo}
                         </td>
@@ -419,10 +614,10 @@ export function InvoicesPageClient({
                             {!isCancelled && !isPaid && (
                               <button
                                 className="cp-btn sm danger"
-                                onClick={() => handleCancelInvoice(inv.id)}
+                                onClick={() => handleOpenVoidModal([inv.id], `${inv.invoiceDisplayNo} (${inv.studentName})`)}
                                 style={{ padding: '4px 8px', fontSize: '11.5px', color: '#dc2626' }}
                               >
-                                Cancel
+                                Void
                               </button>
                             )}
                           </div>
@@ -636,7 +831,24 @@ export function InvoicesPageClient({
           </div>
         </div>
       )}
+
+      {/* Safe Void / Cancellation Modal with Mandatory Audit Reason */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Invoice"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        recordCount={lifecycleModal.invoiceIds.length}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        requireReason={true}
+        reasonPlaceholder="Mandatory reason for voiding invoice (e.g. billing error, student withdrawn, credit note issued)..."
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmVoid}
+      />
     </div>
   );
 }
+
 

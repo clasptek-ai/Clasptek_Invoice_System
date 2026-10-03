@@ -12,6 +12,8 @@ import { UserRole, USER_ROLES } from '@/types/auth';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { RecordLifecycleModal } from '@/components/tables/RecordLifecycleModal';
 
 interface PeopleAccessProps {
   initialPersonnel: AdminPersonnel[];
@@ -33,10 +35,32 @@ export function PeopleAccessPageClient({
   // Self check
   const isCurrentUser = (uid: string) => Boolean(currentUserId && uid === currentUserId);
 
+  // Selection states
+  const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<Set<string>>(new Set());
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+
   // Filters for Personnel
   const [searchPersonnel, setSearchPersonnel] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'staff' | 'facilitator'>('ALL');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'active' | 'suspended' | 'deactivated'>('ALL');
+
+  // Filters for Users
+  const [searchUsers, setSearchUsers] = useState('');
+  const [filterUserRole, setFilterUserRole] = useState('ALL');
+
+  // Lifecycle modal state
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    target?: AdminPersonnel;
+    actionType: 'DELETE' | 'DEACTIVATE';
+    dependencies: Array<{ label: string; count: number }>;
+    isBlocked?: boolean;
+    blockedMessage?: string;
+  }>({
+    isOpen: false,
+    actionType: 'DELETE',
+    dependencies: [],
+  });
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -101,16 +125,137 @@ export function PeopleAccessPageClient({
     resetDeps: [filterType, filterStatus, searchPersonnel],
   });
 
+  // Filtered Users
+  const filteredUsers = useMemo(() => {
+    return userList.filter((u) => {
+      if (filterUserRole !== 'ALL' && u.role !== filterUserRole) return false;
+      if (searchUsers.trim()) {
+        const q = searchUsers.toLowerCase();
+        const matchName = (u.name || '').toLowerCase().includes(q);
+        const matchEmail = (u.email || '').toLowerCase().includes(q);
+        const matchPersonnel = (u.personnelName || '').toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchPersonnel) return false;
+      }
+      return true;
+    });
+  }, [userList, searchUsers, filterUserRole]);
+
   const {
     currentPage: usersPage,
     pageSize: usersPageSize,
     paginatedItems: paginatedUsers,
     setPage: setUsersPage,
     setPageSize: setUsersPageSize,
-  } = usePagination(userList, {
+  } = usePagination(filteredUsers, {
     initialPageSize: 25,
-    resetDeps: [userList],
+    resetDeps: [userList, searchUsers, filterUserRole],
   });
+
+  // Personnel Selection
+  const visiblePersonnelIds = useMemo(() => paginatedPersonnel.map((p) => p.id), [paginatedPersonnel]);
+  const isAllPersonnelSelected = useMemo(
+    () => visiblePersonnelIds.length > 0 && visiblePersonnelIds.every((id) => selectedPersonnelIds.has(id)),
+    [visiblePersonnelIds, selectedPersonnelIds]
+  );
+  const isPersonnelIndeterminate = useMemo(() => {
+    const count = visiblePersonnelIds.filter((id) => selectedPersonnelIds.has(id)).length;
+    return count > 0 && count < visiblePersonnelIds.length;
+  }, [visiblePersonnelIds, selectedPersonnelIds]);
+
+  const handleToggleSelectPersonnel = (id: string) => {
+    setSelectedPersonnelIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllPersonnel = () => {
+    if (isAllPersonnelSelected) {
+      setSelectedPersonnelIds((prev) => {
+        const next = new Set(prev);
+        visiblePersonnelIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedPersonnelIds((prev) => {
+        const next = new Set(prev);
+        visiblePersonnelIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearPersonnelSelection = () => {
+    setSelectedPersonnelIds(new Set());
+  };
+
+  const handleBulkDeactivatePersonnel = async (newStatus: 'active' | 'deactivated') => {
+    if (selectedPersonnelIds.size === 0) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/personnel', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: Array.from(selectedPersonnelIds),
+          employmentStatus: newStatus,
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      setPersonnelList((prev) =>
+        prev.map((item) => (selectedPersonnelIds.has(item.id) ? { ...item, employmentStatus: newStatus } : item))
+      );
+      notify('success', `Updated ${selectedPersonnelIds.size} personnel record(s) to ${newStatus}`);
+      handleClearPersonnelSelection();
+    } catch (err: unknown) {
+      notify('error', err instanceof Error ? err.message : 'Bulk status update failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Users Selection
+  const visibleUserIds = useMemo(() => paginatedUsers.map((u) => u.id), [paginatedUsers]);
+  const isAllUsersSelected = useMemo(
+    () => visibleUserIds.length > 0 && visibleUserIds.every((id) => selectedUserIds.has(id)),
+    [visibleUserIds, selectedUserIds]
+  );
+  const isUsersIndeterminate = useMemo(() => {
+    const count = visibleUserIds.filter((id) => selectedUserIds.has(id)).length;
+    return count > 0 && count < visibleUserIds.length;
+  }, [visibleUserIds, selectedUserIds]);
+
+  const handleToggleSelectUser = (id: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllUsers = () => {
+    if (isAllUsersSelected) {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        visibleUserIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        visibleUserIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearUserSelection = () => {
+    setSelectedUserIds(new Set());
+  };
 
   // Notifications
   const notify = (type: 'success' | 'error', text: string) => {
@@ -119,9 +264,13 @@ export function PeopleAccessPageClient({
   };
 
   // CSV Exports using certified formula injection defense
-  const handleExportUsers = () => {
+  const handleExportUsers = (selectedOnly: boolean = false) => {
     const headers = ['User Name', 'Work Email', 'Assigned Role', 'Account Status', 'Last Login', 'Created At'];
-    const rows = userList.map((u) => [
+    const sourceList = selectedOnly
+      ? filteredUsers.filter((u) => selectedUserIds.has(u.id))
+      : filteredUsers;
+
+    const rows = sourceList.map((u) => [
       u.name,
       u.email,
       u.role,
@@ -132,7 +281,7 @@ export function PeopleAccessPageClient({
     downloadSafeCsv('User_Accounts', headers, rows);
   };
 
-  const handleExportPersonnel = () => {
+  const handleExportPersonnel = (selectedOnly: boolean = false) => {
     const headers = [
       'Employee ID',
       'Full Name',
@@ -146,7 +295,11 @@ export function PeopleAccessPageClient({
       'Account Number',
       'Base Compensation',
     ];
-    const rows = filteredPersonnel.map((p) => [
+    const sourceList = selectedOnly
+      ? filteredPersonnel.filter((p) => selectedPersonnelIds.has(p.id))
+      : filteredPersonnel;
+
+    const rows = sourceList.map((p) => [
       p.employeeId,
       p.fullName,
       p.email,
@@ -279,19 +432,49 @@ export function PeopleAccessPageClient({
     }
   };
 
-  const handleDeletePersonnel = async (p: AdminPersonnel) => {
-    if (!confirm(`Permanently delete ${p.fullName} (${p.employeeId})?\nThis action verifies zero dependencies and cannot be undone.`)) {
-      return;
-    }
+  const handleOpenDeletePersonnel = async (p: AdminPersonnel) => {
     try {
-      const res = await fetch(`/api/admin/personnel?id=${encodeURIComponent(p.id)}`, {
+      const res = await fetch(`/api/admin/personnel?action=check-dependencies&id=${encodeURIComponent(p.id)}`);
+      const data = await res.json();
+      const payslips = data.payslipCount || 0;
+      const reports = data.reportCount || 0;
+      const hasDeps = payslips > 0 || reports > 0;
+
+      setLifecycleModal({
+        isOpen: true,
+        target: p,
+        actionType: 'DELETE',
+        dependencies: [
+          { label: 'Historical Payslips', count: payslips },
+          { label: 'Facilitator Delivery Reports', count: reports },
+        ],
+        isBlocked: hasDeps,
+        blockedMessage: hasDeps
+          ? `Cannot permanently delete personnel: ${payslips > 0 ? `${payslips} payslip(s) ` : ''}${reports > 0 ? `${reports} facilitator report(s) ` : ''}exist in tenant records. Under financial and academic governance regulations, records with transaction history cannot be deleted. Deactivate this profile instead.`
+          : undefined,
+      });
+    } catch {
+      setLifecycleModal({
+        isOpen: true,
+        target: p,
+        actionType: 'DELETE',
+        dependencies: [],
+      });
+    }
+  };
+
+  const handleConfirmDeletePersonnel = async () => {
+    if (!lifecycleModal.target) return;
+    try {
+      const res = await fetch(`/api/admin/personnel?id=${encodeURIComponent(lifecycleModal.target.id)}`, {
         method: 'DELETE',
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error);
 
-      setPersonnelList((prev) => prev.filter((item) => item.id !== p.id));
-      notify('success', `Personnel ${p.employeeId} permanently removed.`);
+      setPersonnelList((prev) => prev.filter((item) => item.id !== lifecycleModal.target?.id));
+      notify('success', `Personnel ${lifecycleModal.target.employeeId} permanently removed.`);
+      setLifecycleModal({ isOpen: false, actionType: 'DELETE', dependencies: [] });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Delete failed';
       notify('error', msg);
@@ -575,23 +758,77 @@ export function PeopleAccessPageClient({
         {/* SUBTAB 1: USERS */}
         {subTab === 'users' && (
           <div>
+            {/* User Controls and Filters */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                Active credentials and role-based permissions governing portal workspaces. Plaintext passwords are never accessible to administrators.
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', flex: 1, minWidth: '280px' }}>
+                <input
+                  type="text"
+                  placeholder="Search user by name, email, personnel..."
+                  value={searchUsers}
+                  onChange={(e) => setSearchUsers(e.target.value)}
+                  style={{ minWidth: '220px', flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '12.5px' }}
+                />
+                <select
+                  value={filterUserRole}
+                  onChange={(e) => setFilterUserRole(e.target.value)}
+                  style={{ minWidth: '140px', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '12.5px' }}
+                >
+                  <option value="ALL">All Roles ({userList.length})</option>
+                  {USER_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button
                 className="cp-btn sm secondary"
-                onClick={handleExportUsers}
+                onClick={() => handleExportUsers(false)}
                 style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
               >
                 📥 Export Users CSV
               </button>
             </div>
 
+            {/* Users Selection Bar */}
+            {selectedUserIds.size > 0 && (
+              <div style={{ marginBottom: '14px' }}>
+                <TableSelectionBar
+                  selectedCount={selectedUserIds.size}
+                  totalVisibleCount={visibleUserIds.length}
+                  entityLabel="users"
+                  onClearSelection={handleClearUserSelection}
+                  onSelectAllVisible={handleToggleSelectAllUsers}
+                  isAllSelected={isAllUsersSelected}
+                >
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleExportUsers(true)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  >
+                    📥 Export Selected Users
+                  </button>
+                </TableSelectionBar>
+              </div>
+            )}
+
             <div className="cp-table-wrap" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                    <th style={{ width: '40px', padding: '10px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible users"
+                        checked={isAllUsersSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isUsersIndeterminate;
+                        }}
+                        onChange={handleToggleSelectAllUsers}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                    </th>
                     <th style={{ padding: '10px' }}>User Name</th>
                     <th style={{ padding: '10px' }}>Official Work Email</th>
                     <th style={{ padding: '10px' }}>Assigned Role</th>
@@ -602,12 +839,36 @@ export function PeopleAccessPageClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedUsers.map((u) => {
-                    const isDeact = u.status === 'deactivated';
-                    const isSusp = u.status === 'suspended';
-                    return (
-                      <tr key={u.id} style={{ borderBottom: '1px solid var(--border)', opacity: isDeact ? 0.6 : 1 }}>
-                        <td style={{ padding: '10px', fontWeight: 700, color: 'var(--primary)' }}>{u.name}</td>
+                  {paginatedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={isSuperAdmin ? 8 : 7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                        No user accounts match current search criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedUsers.map((u) => {
+                      const isDeact = u.status === 'deactivated';
+                      const isSusp = u.status === 'suspended';
+                      const isSelected = selectedUserIds.has(u.id);
+                      return (
+                        <tr
+                          key={u.id}
+                          style={{
+                            borderBottom: '1px solid var(--border)',
+                            opacity: isDeact ? 0.6 : 1,
+                            backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                          }}
+                        >
+                          <td style={{ width: '40px', padding: '10px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select user ${u.name}`}
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectUser(u.id)}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
+                          <td style={{ padding: '10px', fontWeight: 700, color: 'var(--primary)' }}>{u.name}</td>
                         <td style={{ padding: '10px', fontFamily: 'monospace' }}>{u.email}</td>
                         <td style={{ padding: '10px' }}>
                           <span
@@ -683,7 +944,7 @@ export function PeopleAccessPageClient({
                         )}
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
             </div>
@@ -709,7 +970,7 @@ export function PeopleAccessPageClient({
               </div>
               <button
                 className="cp-btn sm secondary"
-                onClick={handleExportPersonnel}
+                onClick={() => handleExportPersonnel(false)}
                 style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
               >
                 📥 Export Personnel CSV
@@ -752,11 +1013,62 @@ export function PeopleAccessPageClient({
               </div>
             </div>
 
+            {/* Personnel Selection Bar */}
+            {selectedPersonnelIds.size > 0 && (
+              <div style={{ marginBottom: '14px' }}>
+                <TableSelectionBar
+                  selectedCount={selectedPersonnelIds.size}
+                  totalVisibleCount={visiblePersonnelIds.length}
+                  entityLabel="personnel"
+                  onClearSelection={handleClearPersonnelSelection}
+                  onSelectAllVisible={handleToggleSelectAllPersonnel}
+                  isAllSelected={isAllPersonnelSelected}
+                >
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleBulkDeactivatePersonnel('deactivated')}
+                    style={{ fontSize: '12px', padding: '4px 10px', color: '#DC2626' }}
+                  >
+                    🛑 Deactivate Selected
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleBulkDeactivatePersonnel('active')}
+                    style={{ fontSize: '12px', padding: '4px 10px', color: '#059669' }}
+                  >
+                    ✔ Activate Selected
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => handleExportPersonnel(true)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  >
+                    📥 Export Selected
+                  </button>
+                </TableSelectionBar>
+              </div>
+            )}
+
             {/* Personnel Table (Desktop & Tablet) */}
             <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                    <th style={{ width: '40px', padding: '10px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible personnel"
+                        checked={isAllPersonnelSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isPersonnelIndeterminate;
+                        }}
+                        onChange={handleToggleSelectAllPersonnel}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                    </th>
                     <th style={{ padding: '10px' }}>Personnel ID</th>
                     <th style={{ padding: '10px' }}>Full Name &amp; Contact</th>
                     <th style={{ padding: '10px' }}>Type</th>
@@ -771,15 +1083,32 @@ export function PeopleAccessPageClient({
                 <tbody>
                   {filteredPersonnel.length === 0 ? (
                     <tr>
-                      <td colSpan={canManage ? 9 : 8} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                      <td colSpan={canManage ? 10 : 9} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                         No personnel records matching the current filter.
                       </td>
                     </tr>
                   ) : (
                     paginatedPersonnel.map((p) => {
                       const isDeact = p.employmentStatus === 'deactivated';
+                      const isSelected = selectedPersonnelIds.has(p.id);
                       return (
-                        <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', opacity: isDeact ? 0.6 : 1 }}>
+                        <tr
+                          key={p.id}
+                          style={{
+                            borderBottom: '1px solid var(--border)',
+                            opacity: isDeact ? 0.6 : 1,
+                            backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                          }}
+                        >
+                          <td style={{ width: '40px', padding: '10px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select personnel ${p.fullName}`}
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectPersonnel(p.id)}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
                           <td style={{ padding: '10px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>
                             {p.employeeId}
                           </td>
@@ -868,7 +1197,7 @@ export function PeopleAccessPageClient({
                                 )}
                                 <button
                                   className="cp-btn sm danger"
-                                  onClick={() => handleDeletePersonnel(p)}
+                                  onClick={() => handleOpenDeletePersonnel(p)}
                                   style={{ padding: '3px 8px', fontSize: '11px', borderRadius: '3px', cursor: 'pointer', border: '1px solid #DC2626', background: 'none', color: '#DC2626' }}
                                 >
                                   Delete
@@ -891,12 +1220,21 @@ export function PeopleAccessPageClient({
                 return (
                   <div key={p.id} className="cp-mobile-record-card">
                     <div className="cp-mobile-record-header">
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                          {p.fullName}
-                        </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--primary)', fontWeight: 700 }}>
-                          {p.employeeId} &middot; {p.jobTitle}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select personnel ${p.fullName}`}
+                          checked={selectedPersonnelIds.has(p.id)}
+                          onChange={() => handleToggleSelectPersonnel(p.id)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                            {p.fullName}
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--primary)', fontWeight: 700 }}>
+                            {p.employeeId} &middot; {p.jobTitle}
+                          </div>
                         </div>
                       </div>
                       <span
@@ -962,6 +1300,14 @@ export function PeopleAccessPageClient({
                           style={{ flex: 1, justifyContent: 'center' }}
                         >
                           {isDeact ? 'Reactivate' : 'Deactivate'}
+                        </button>
+                        <button
+                          type="button"
+                          className="cp-btn sm danger"
+                          onClick={() => handleOpenDeletePersonnel(p)}
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          Delete
                         </button>
                       </div>
                     )}
@@ -1186,6 +1532,21 @@ export function PeopleAccessPageClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Controlled Lifecycle Deletion & Dependency Verification Modal */}
+      {lifecycleModal.isOpen && lifecycleModal.target && (
+        <RecordLifecycleModal
+          isOpen={lifecycleModal.isOpen}
+          onClose={() => setLifecycleModal({ isOpen: false, actionType: 'DELETE', dependencies: [] })}
+          onConfirm={handleConfirmDeletePersonnel}
+          entityName="Personnel Record"
+          recordIdentifier={lifecycleModal.target.fullName}
+          actionType="DELETE"
+          dependencies={lifecycleModal.dependencies}
+          blockedMessage={lifecycleModal.blockedMessage}
+          isLoading={isSubmitting}
+        />
       )}
     </div>
   );

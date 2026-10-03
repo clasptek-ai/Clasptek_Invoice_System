@@ -1,18 +1,24 @@
 /**
  * app/enrolments/EnrolmentsPageClient.tsx — Phase 4
  * Client Component for Course Enrolments.
- * Matches legacy index.html lines 26456–26550.
+ * Extended with multi-row selection, bulk status changes, and referential-checked withdrawal dialog.
  */
 
 'use client';
 
-import React, { useCallback, useTransition } from 'react';
+import React, { useState, useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Enrolment, Cohort } from '@/types/academics';
 import { EnrolmentKpiStrip } from '@/components/enrolments/EnrolmentKpiStrip';
 import { EnrolmentFilters } from '@/components/enrolments/EnrolmentFilters';
 import { EnrolmentTable } from '@/components/enrolments/EnrolmentTable';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface EnrolmentsPageClientProps {
   initialEnrolments: Enrolment[];
@@ -38,6 +44,32 @@ export function EnrolmentsPageClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  const [enrolments, setEnrolments] = useState<Enrolment[]>(initialEnrolments);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    enrolmentIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'CANCEL',
+    enrolmentIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const notify = (type: 'success' | 'error', text: string) => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const handlePageChange = useCallback(
     (newPage: number) => {
@@ -72,8 +104,153 @@ export function EnrolmentsPageClient({
     [router, searchParams]
   );
 
+  // Multi-row selection
+  const visibleIds = enrolments.map((e) => e.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  }, [isAllSelected, visibleIds]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkStatusChange = useCallback(
+    async (newStatus: string) => {
+      if (selectedIds.size === 0) return;
+      const ids = Array.from(selectedIds);
+      try {
+        const res = await fetch('/api/enrolments/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'UPDATE_STATUS', enrolmentIds: ids, status: newStatus }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update enrolment status');
+
+        setEnrolments((prev) =>
+          prev.map((e) => (selectedIds.has(e.id) ? { ...e, status: newStatus as any } : e))
+        );
+        setSelectedIds(new Set());
+        notify('success', data.message || `Updated ${ids.length} enrolments.`);
+      } catch (err) {
+        notify('error', err instanceof Error ? err.message : 'Status update failed.');
+      }
+    },
+    [selectedIds]
+  );
+
+  const handleOpenWithdraw = useCallback(async (ids: string[], targetName?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'CANCEL',
+      enrolmentIds: ids,
+      recordIdentifier: targetName || `${ids.length} selected enrolment(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: true,
+    });
+
+    try {
+      const res = await fetch('/api/enrolments/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CHECK_DEPENDENCIES', enrolmentIds: ids }),
+      });
+      const data = await res.json();
+      if (data.ok && data.reports) {
+        const reports = data.reports;
+        let totalCerts = 0;
+        let totalAtt = 0;
+        reports.forEach((r: { dependencies?: { count?: number; label?: string }[] }) => {
+          r.dependencies?.forEach((d) => {
+            if (d.label === 'Issued Certificate') totalCerts += d.count || 0;
+            if (d.label === 'Attendance Records') totalAtt += d.count || 0;
+          });
+        });
+
+        const depItems: RecordDependencyItem[] = [];
+        if (totalCerts > 0) depItems.push({ label: 'Issued Certificates', count: totalCerts });
+        if (totalAtt > 0) depItems.push({ label: 'Attendance Records', count: totalAtt });
+
+        setLifecycleModal((prev) => ({
+          ...prev,
+          isLoading: false,
+          dependencies: depItems,
+        }));
+      }
+    } catch {
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
+
+  const handleConfirmLifecycleAction = useCallback(
+    async (reason: string) => {
+      const { enrolmentIds } = lifecycleModal;
+      if (enrolmentIds.length === 0) return;
+
+      setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+      try {
+        const res = await fetch('/api/enrolments/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'WITHDRAW', enrolmentIds, reason }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Withdrawal failed');
+
+        setEnrolments((prev) =>
+          prev.map((e) => (enrolmentIds.includes(e.id) ? { ...e, status: 'WITHDRAWN' as any } : e))
+        );
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          enrolmentIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        notify('success', data.message || 'Enrolment(s) successfully withdrawn.');
+        setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+      } catch (err) {
+        notify('error', err instanceof Error ? err.message : 'Action failed.');
+        setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+      }
+    },
+    [lifecycleModal]
+  );
+
   return (
     <div className="flex flex-col h-full">
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          style={{
+            padding: '10px 16px',
+            marginBottom: '14px',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 600,
+            background: feedback.type === 'success' ? '#DEF7EC' : '#FDE8E8',
+            color: feedback.type === 'success' ? '#03543F' : '#9B1C1C',
+            border: `1px solid ${feedback.type === 'success' ? '#84E1BC' : '#F8B4B4'}`,
+          }}
+        >
+          {feedback.text}
+        </div>
+      )}
+
       {/* Header with Action — Exact Legacy Styling */}
       <div
         style={{
@@ -114,7 +291,54 @@ export function EnrolmentsPageClient({
       </div>
 
       {/* Top KPI Grid */}
-      <EnrolmentKpiStrip enrolments={initialEnrolments} totalCount={totalCount} />
+      <EnrolmentKpiStrip enrolments={enrolments} totalCount={totalCount} />
+
+      {/* Universal Selection Toolbar */}
+      <TableSelectionBar
+        selectedCount={selectedIds.size}
+        totalVisibleCount={visibleIds.length}
+        entityLabel="enrolment"
+        onClearSelection={handleClearSelection}
+        onSelectAllVisible={handleToggleSelectAll}
+        isAllSelected={isAllSelected}
+      >
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                handleBulkStatusChange(e.target.value);
+                e.target.value = '';
+              }
+            }}
+            defaultValue=""
+            className="cp-btn sm secondary"
+            style={{ padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: '#FFFFFF' }}
+          >
+            <option value="" disabled>Set Status...</option>
+            <option value="ACTIVE">Mark as ACTIVE</option>
+            <option value="COMPLETED">Mark as COMPLETED</option>
+            <option value="WITHDRAWN">Mark as WITHDRAWN</option>
+            <option value="CANCELLED">Mark as CANCELLED</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => handleOpenWithdraw(Array.from(selectedIds))}
+            className="cp-btn sm cp-btn-danger"
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              backgroundColor: '#DC2626',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            🛑 Withdraw Selected
+          </button>
+        </div>
+      </TableSelectionBar>
 
       {/* Main Table Card */}
       <div className="cp-card">
@@ -141,7 +365,18 @@ export function EnrolmentsPageClient({
         </div>
 
         {/* Register Table */}
-        <EnrolmentTable enrolments={initialEnrolments} />
+        <EnrolmentTable
+          enrolments={enrolments}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onToggleSelectAll={handleToggleSelectAll}
+          isAllSelected={isAllSelected}
+          onEditStatus={(en) => {
+            const nextStatus = en.status === 'ACTIVE' ? 'COMPLETED' : 'ACTIVE';
+            handleBulkStatusChange(nextStatus);
+          }}
+          onWithdrawEnrolment={(en) => handleOpenWithdraw([en.id], `${en.enrolment_number} (${en.student_name})`)}
+        />
 
         {/* Standard Pagination Footer */}
         <Pagination
@@ -153,6 +388,20 @@ export function EnrolmentsPageClient({
           entityLabel="enrolments"
         />
       </div>
+
+      {/* Safe Lifecycle Dialog */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Course Enrolment"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        recordCount={lifecycleModal.enrolmentIds.length}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmLifecycleAction}
+      />
     </div>
   );
 }

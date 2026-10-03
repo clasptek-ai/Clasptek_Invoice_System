@@ -835,3 +835,173 @@ export async function getEnquiryStatusCounts(): Promise<Record<string, number>> 
   }
   return counts;
 }
+
+// ─── Phase 2 Table Data-Management Controls: Safe Dependency & Bulk Methods ───
+
+export interface EnquiryDependencyReport {
+  id: string;
+  studentName: string;
+  canDelete: boolean;
+  blockedReason?: string;
+  dependencies: {
+    invoices: number;
+    registeredStudents: number;
+  };
+}
+
+/**
+ * Checks referential dependencies for enquiries before deletion.
+ * Blocks deletion if the enquiry has associated invoices or has been converted to a registered student.
+ */
+export async function checkEnquiriesDependencies(
+  enquiryIds: string[],
+  tenantId?: string
+): Promise<EnquiryDependencyReport[]> {
+  const supabase = await createServerClient();
+  const reports: EnquiryDependencyReport[] = [];
+
+  for (const id of enquiryIds) {
+    let query = supabase
+      .from('enquiries')
+      .select('id, student_name, email, phone, status, tenant_id')
+      .eq('id', id);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: enq } = await query.maybeSingle();
+
+    if (!enq) continue;
+
+    const rowTenantId = tenantId || (enq as { tenant_id?: string }).tenant_id;
+
+    // 1. Check for converted student
+    let stuCount = 0;
+    if (enq.email || enq.phone) {
+      const orConditions: string[] = [];
+      if (enq.email) orConditions.push(`email.eq.${enq.email}`);
+      if (enq.phone) orConditions.push(`phone.eq.${enq.phone}`);
+      let stuQuery = supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true })
+        .or(orConditions.join(','));
+      if (rowTenantId) {
+        stuQuery = stuQuery.eq('tenant_id', rowTenantId);
+      }
+      const { count } = await stuQuery;
+      stuCount = count || 0;
+    }
+
+    // 2. Check for invoices referencing enquiry
+    let invCount = 0;
+    const invFilters: string[] = [`metadata->>enquiry_id.eq.${id}`];
+    if (enq.email) invFilters.push(`student_email.eq.${enq.email}`);
+    if (enq.student_name) invFilters.push(`student_name.ilike.%${enq.student_name}%`);
+
+    let invQuery = supabase
+      .from('invoices')
+      .select('id')
+      .or(invFilters.join(','));
+    if (rowTenantId) {
+      invQuery = invQuery.eq('tenant_id', rowTenantId);
+    }
+    const { data: invRows } = await invQuery;
+    invCount = invRows?.length || 0;
+
+    const canDelete = stuCount === 0 && invCount === 0 && enq.status !== 'INVOICED';
+    let blockedReason: string | undefined;
+    if (!canDelete) {
+      const reasons: string[] = [];
+      if (invCount > 0) reasons.push(`${invCount} invoice(s) exist`);
+      if (stuCount > 0) reasons.push('registered as student');
+      if (enq.status === 'INVOICED') reasons.push('enquiry has been invoiced');
+      blockedReason = `Cannot delete: ${reasons.join(', ')}.`;
+    }
+
+    reports.push({
+      id: enq.id,
+      studentName: enq.student_name,
+      canDelete,
+      blockedReason,
+      dependencies: {
+        invoices: invCount,
+        registeredStudents: stuCount,
+      },
+    });
+  }
+
+  return reports;
+}
+
+/**
+ * Bulk updates the status of multiple enquiries.
+ */
+export async function bulkUpdateEnquiriesStatus(
+  enquiryIds: string[],
+  status: EnquiryStatus,
+  tenantId?: string
+): Promise<{ success: boolean; updatedCount: number; error: string | null }> {
+  if (enquiryIds.length === 0) return { success: true, updatedCount: 0, error: null };
+  const supabase = await createServerClient();
+  let query = supabase
+    .from('enquiries')
+    .update({ status, updated_at: new Date().toISOString() })
+    .in('id', enquiryIds);
+
+  if (tenantId) {
+    query = query.eq('tenant_id', tenantId);
+  }
+
+  const { error, count } = await query;
+
+  if (error) {
+    console.error('[bulkUpdateEnquiriesStatus]', error.message);
+    return { success: false, updatedCount: 0, error: error.message };
+  }
+  return { success: true, updatedCount: count || enquiryIds.length, error: null };
+}
+
+/**
+ * Safely deletes enquiries after verifying zero dependencies.
+ */
+export async function deleteEnquiriesSafe(
+  enquiryIds: string[],
+  _reason?: string,
+  tenantId?: string
+): Promise<{
+  success: boolean;
+  deleted: string[];
+  blocked: Array<{ id: string; reason: string }>;
+  error: string | null;
+}> {
+  const reports = await checkEnquiriesDependencies(enquiryIds, tenantId);
+  const eligibleIds = reports.filter((r) => r.canDelete).map((r) => r.id);
+  const blocked = reports
+    .filter((r) => !r.canDelete)
+    .map((r) => ({ id: r.id, reason: r.blockedReason || 'Dependencies exist' }));
+
+  if (eligibleIds.length === 0) {
+    return {
+      success: false,
+      deleted: [],
+      blocked,
+      error: 'No selected enquiries are eligible for deletion due to existing dependencies or cross-tenant boundaries.',
+    };
+  }
+
+  const supabase = await createServerClient();
+  let delQuery = supabase.from('enquiries').delete().in('id', eligibleIds);
+  if (tenantId) {
+    delQuery = delQuery.eq('tenant_id', tenantId);
+  }
+  const { error } = await delQuery;
+
+  if (error) {
+    console.error('[deleteEnquiriesSafe]', error.message);
+    return { success: false, deleted: [], blocked, error: error.message };
+  }
+
+  return { success: true, deleted: eligibleIds, blocked, error: null };
+}
+

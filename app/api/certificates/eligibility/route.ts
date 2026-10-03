@@ -69,6 +69,24 @@ export async function POST(request: NextRequest) {
     };
 
     if (action === 'verify') {
+      if (body.enrolmentIds && Array.isArray(body.enrolmentIds)) {
+        let verifiedCount = 0;
+        const errors: string[] = [];
+        for (const enId of body.enrolmentIds) {
+          const res = await verifyEnrolmentCompletion(auth.session.tenantId, actor, enId, body.notes);
+          if (res.success) {
+            verifiedCount++;
+          } else if (res.error) {
+            errors.push(res.error);
+          }
+        }
+        return NextResponse.json({
+          success: true,
+          message: `Successfully verified completion for ${verifiedCount} candidate(s).`,
+          errors: errors.length > 0 ? errors : undefined,
+        });
+      }
+
       if (!body.enrolmentId) {
         return NextResponse.json({ success: false, error: 'Enrolment ID is required' }, { status: 400 });
       }

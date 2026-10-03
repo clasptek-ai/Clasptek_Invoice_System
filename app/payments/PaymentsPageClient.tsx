@@ -14,6 +14,12 @@ import { CanonicalReceiptDocument } from '@/components/finance/CanonicalReceiptD
 import { printCanonicalElement } from '@/components/finance/printCanonical';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 
 interface TargetInvoiceOption {
@@ -142,10 +148,94 @@ export function PaymentsPageClient({
     }
   };
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Filter state
+  const [methodFilter, setMethodFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Multi-row selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    paymentIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'VOID',
+    paymentIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  // Filter payments
+  const filteredPayments = payments.filter(p => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchesQ =
+      !q ||
+      p.receiptDisplayNo.toLowerCase().includes(q) ||
+      (p.studentName && p.studentName.toLowerCase().includes(q)) ||
+      (p.invoiceDisplayNo && p.invoiceDisplayNo.toLowerCase().includes(q)) ||
+      (p.reference && p.reference.toLowerCase().includes(q)) ||
+      p.paymentMethod.toLowerCase().includes(q);
+
+    const matchesMethod = methodFilter === 'all' || p.paymentMethod === methodFilter;
+    const matchesStatus = statusFilter === 'all' || p.reconciliationStatus === statusFilter;
+
+    return matchesQ && matchesMethod && matchesStatus;
+  });
+
+  const {
+    currentPage,
+    pageSize,
+    paginatedItems: paginatedPayments,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredPayments, {
+    initialPageSize: 25,
+    resetDeps: [searchQuery, methodFilter, statusFilter],
+  });
+
+  const visibleIds = paginatedPayments.map((p) => p.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const someSelected = visibleIds.some((id) => selectedIds.has(id));
+      headerCheckboxRef.current.indeterminate = someSelected && !isAllSelected;
+    }
+  }, [selectedIds, visibleIds, isAllSelected]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // CSV Export for selected or all
+  const handleExportCSV = (recordsToExport?: Payment[]) => {
+    const list = recordsToExport || filteredPayments;
     const headers = ['Receipt #', 'Payment Date', 'Student / Client', 'Target Invoice', 'Payment Method', 'Transaction Ref', 'Amount Paid', 'Status'];
-    const rows = filteredPayments.map(p => [
+    const rows = list.map(p => [
       p.receiptDisplayNo,
       p.paymentDate,
       p.studentName || 'Student',
@@ -159,29 +249,31 @@ export function PaymentsPageClient({
     downloadSafeCsv('clasptek_payments', headers, rows);
   };
 
-  // Filter payments
-  const filteredPayments = payments.filter(p => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      p.receiptDisplayNo.toLowerCase().includes(q) ||
-      (p.studentName && p.studentName.toLowerCase().includes(q)) ||
-      (p.invoiceDisplayNo && p.invoiceDisplayNo.toLowerCase().includes(q)) ||
-      (p.reference && p.reference.toLowerCase().includes(q)) ||
-      p.paymentMethod.toLowerCase().includes(q)
-    );
-  });
+  const handleExportSelectedCSV = () => {
+    const selectedRecords = payments.filter((p) => selectedIds.has(p.id));
+    if (selectedRecords.length > 0) {
+      handleExportCSV(selectedRecords);
+    }
+  };
 
-  const {
-    currentPage,
-    pageSize,
-    paginatedItems: paginatedPayments,
-    setPage,
-    setPageSize,
-  } = usePagination(filteredPayments, {
-    initialPageSize: 25,
-    resetDeps: [searchQuery],
-  });
+  // Safe Deletion / Voiding Audit Handler (Receipts are permanent audit ledger entries)
+  const handleOpenVoidModal = (ids: string[], targetIdentifier?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'VOID',
+      paymentIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected receipt(s)`,
+      dependencies: [
+        {
+          label: 'General Ledger Accounts & Invoices (Balancing Debtor Records)',
+          count: ids.length,
+        },
+      ],
+      blockedMessage:
+        'Official fee receipts are immutable financial audit records. To reverse a misallocated deposit, create an adjustment credit note or contact the Super Administrator.',
+      isLoading: false,
+    });
+  };
 
   const selectedInvDetail = targetInvoices.find(i => i.id === selectedInvoiceId);
 
@@ -266,7 +358,7 @@ export function PaymentsPageClient({
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="cp-btn sm secondary" onClick={handleExportCSV}>
+            <button className="cp-btn sm secondary" onClick={() => handleExportCSV()}>
               📥 Export CSV
             </button>
             <button className="cp-btn sm accent" onClick={() => setIsRecordModalOpen(true)}>
@@ -275,24 +367,94 @@ export function PaymentsPageClient({
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
-          <input
-            type="text"
-            placeholder="Filter by receipt #, student, reference, or invoice..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              maxWidth: '380px',
-              width: '100%',
-              padding: '7px 12px',
-              fontSize: '13px',
-              border: '1px solid var(--border, #cbd5e1)',
-              borderRadius: '5px',
-              background: '#fff',
-            }}
-          />
+        {/* Search & Filter Bar */}
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border, #e2e8f0)', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 240px', minWidth: '200px' }}>
+            <input
+              type="text"
+              placeholder="Search receipt #, student, reference, or invoice..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '7px 12px',
+                fontSize: '13px',
+                border: '1px solid var(--border, #cbd5e1)',
+                borderRadius: '5px',
+                background: '#fff',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              style={{ padding: '7px 10px', fontSize: '12.5px', border: '1px solid var(--border, #cbd5e1)', borderRadius: '5px', background: '#fff' }}
+            >
+              <option value="all">All Payment Methods</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="POS">POS Terminal</option>
+              <option value="Card">Debit / Credit Card</option>
+              <option value="Online Payment">Online Payment</option>
+              <option value="Cash">Cash Deposit</option>
+              <option value="Other">Other</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ padding: '7px 10px', fontSize: '12.5px', border: '1px solid var(--border, #cbd5e1)', borderRadius: '5px', background: '#fff' }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="matched">Matched</option>
+              <option value="pending">Pending</option>
+              <option value="unmatched">Unmatched</option>
+            </select>
+            {(searchQuery || methodFilter !== 'all' || statusFilter !== 'all') && (
+              <button
+                type="button"
+                className="cp-btn sm secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  setMethodFilter('all');
+                  setStatusFilter('all');
+                }}
+                style={{ padding: '5px 10px', fontSize: '12px' }}
+              >
+                Reset
+              </button>
+            )}
+            <span style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', marginLeft: 'auto' }}>
+              Showing {filteredPayments.length} of {payments.length}
+            </span>
+          </div>
         </div>
+
+        {/* Selection Bar */}
+        <TableSelectionBar
+          selectedCount={selectedIds.size}
+          totalVisibleCount={visibleIds.length}
+          entityLabel="receipt"
+          onSelectAllVisible={handleToggleSelectAll}
+          isAllSelected={isAllSelected}
+          onClearSelection={handleClearSelection}
+        >
+          <button
+            type="button"
+            className="cp-btn sm secondary"
+            onClick={handleExportSelectedCSV}
+            title="Export only selected receipts to CSV"
+          >
+            📥 Export CSV ({selectedIds.size})
+          </button>
+          <button
+            type="button"
+            className="cp-btn sm danger"
+            onClick={() => handleOpenVoidModal(Array.from(selectedIds))}
+            title="Review void or audit policy for selected records"
+          >
+            🛑 Audit / Invalidate ({selectedIds.size})
+          </button>
+        </TableSelectionBar>
 
         {/* Ledger Table */}
         {filteredPayments.length === 0 ? (
@@ -315,6 +477,16 @@ export function PaymentsPageClient({
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border, #e2e8f0)', textAlign: 'left' }}>
+                    <th style={{ width: '40px', padding: '10px 14px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        ref={headerCheckboxRef}
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        aria-label="Select all visible payments"
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Receipt #</th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Payment Date</th>
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Student / Client</th>
@@ -327,81 +499,126 @@ export function PaymentsPageClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedPayments.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border, #f1f5f9)' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
-                        {p.receiptDisplayNo}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: 'var(--text-secondary, #475569)' }}>
-                        {fmtDate(p.paymentDate)}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
-                        {p.studentName || 'Student'}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: 'var(--primary, #0284c7)', fontFamily: 'monospace', fontWeight: 600 }}>
-                        {p.invoiceDisplayNo || 'INV-REF'}
-                      </td>
-                      <td className="cp-col-tertiary" style={{ padding: '10px 14px' }}>
-                        <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>
-                          {p.paymentMethod}
-                        </span>
-                      </td>
-                      <td className="cp-col-secondary" style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '11.5px', color: '#64748b' }}>
-                        {p.reference || '—'}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
-                        {fmtMoney(p.amount)}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
-                          {p.reconciliationStatus}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <button
-                          className="cp-btn sm secondary"
-                          onClick={() => setSelectedReceipt(p)}
-                          style={{ padding: '4px 8px', fontSize: '11.5px' }}
-                        >
-                          Receipt
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedPayments.map((p) => {
+                    const isSelected = selectedIds.has(p.id);
+                    return (
+                      <tr
+                        key={p.id}
+                        style={{
+                          borderBottom: '1px solid var(--border, #f1f5f9)',
+                          backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                        }}
+                      >
+                        <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(p.id)}
+                            aria-label={`Select receipt ${p.receiptDisplayNo}`}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td style={{ padding: '10px 14px', fontWeight: 700, fontFamily: 'monospace' }}>
+                          {p.receiptDisplayNo}
+                        </td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary, #475569)' }}>
+                          {fmtDate(p.paymentDate)}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+                          {p.studentName || 'Student'}
+                        </td>
+                        <td style={{ padding: '10px 14px', color: 'var(--primary, #0284c7)', fontFamily: 'monospace', fontWeight: 600 }}>
+                          {p.invoiceDisplayNo || 'INV-REF'}
+                        </td>
+                        <td className="cp-col-tertiary" style={{ padding: '10px 14px' }}>
+                          <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>
+                            {p.paymentMethod}
+                          </span>
+                        </td>
+                        <td className="cp-col-secondary" style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '11.5px', color: '#64748b' }}>
+                          {p.reference || '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
+                          {fmtMoney(p.amount)}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
+                            {p.reconciliationStatus}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              className="cp-btn sm secondary"
+                              onClick={() => setSelectedReceipt(p)}
+                              style={{ padding: '4px 8px', fontSize: '11.5px' }}
+                            >
+                              Receipt
+                            </button>
+                            <button
+                              className="cp-btn sm danger"
+                              onClick={() => handleOpenVoidModal([p.id], p.receiptDisplayNo)}
+                              style={{ padding: '4px 8px', fontSize: '11.5px' }}
+                              title="Audit / Invalidate Receipt"
+                            >
+                              🛑
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Card Stack */}
             <div className="cp-cards-mobile">
-              {paginatedPayments.map((p) => (
-                <div
-                  key={p.id}
-                  className="cp-mobile-record-card"
-                  onClick={() => setSelectedReceipt(p)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && setSelectedReceipt(p)}
-                  aria-label={`View receipt ${p.receiptDisplayNo}`}
-                >
-                  <div className="cp-mobile-record-header">
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        {p.studentName || 'Student'}
-                      </h4>
-                      <div style={{ fontSize: '11.5px', color: 'var(--primary)', fontFamily: 'monospace', marginTop: '2px', fontWeight: 600 }}>
-                        {p.invoiceDisplayNo || 'INV-REF'}
+              {paginatedPayments.map((p) => {
+                const isSelected = selectedIds.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="cp-mobile-record-card"
+                    style={{
+                      borderLeft: isSelected ? '4px solid var(--primary, #0284c7)' : undefined,
+                    }}
+                    onClick={() => handleToggleSelect(p.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && handleToggleSelect(p.id)}
+                    aria-label={`Select receipt ${p.receiptDisplayNo}`}
+                  >
+                    <div className="cp-mobile-record-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelect(p.id);
+                          }}
+                          aria-label={`Select receipt ${p.receiptDisplayNo}`}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {p.studentName || 'Student'}
+                          </h4>
+                          <div style={{ fontSize: '11.5px', color: 'var(--primary)', fontFamily: 'monospace', marginTop: '2px', fontWeight: 600 }}>
+                            {p.invoiceDisplayNo || 'INV-REF'}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11.5px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {p.receiptDisplayNo}
+                        </span>
+                        <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
+                          {p.reconciliationStatus}
+                        </span>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11.5px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                        {p.receiptDisplayNo}
-                      </span>
-                      <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, color: '#059669', background: '#ecfdf5', textTransform: 'uppercase' }}>
-                        {p.reconciliationStatus}
-                      </span>
-                    </div>
-                  </div>
 
                   <div className="cp-mobile-record-grid">
                     <div className="cp-mobile-record-field">
@@ -430,7 +647,7 @@ export function PaymentsPageClient({
                     </div>
                   </div>
 
-                  <div className="cp-mobile-record-actions">
+                  <div className="cp-mobile-record-actions" style={{ display: 'flex', gap: '8px' }}>
                     <button
                       type="button"
                       className="cp-btn sm secondary"
@@ -440,11 +657,23 @@ export function PaymentsPageClient({
                       }}
                       style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
                     >
-                      View Canonical Receipt
+                      Receipt
+                    </button>
+                    <button
+                      type="button"
+                      className="cp-btn sm danger"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenVoidModal([p.id], p.receiptDisplayNo);
+                      }}
+                      style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                    >
+                      🛑 Audit / Void
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
 
             {/* Standard Pagination */}
@@ -654,6 +883,21 @@ export function PaymentsPageClient({
           </div>
         </div>
       )}
+
+      {/* RECORD LIFECYCLE MODAL (Audit/Void Protection) */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Payment Receipt"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={async () => {
+          setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+        }}
+      />
     </div>
   );
 }

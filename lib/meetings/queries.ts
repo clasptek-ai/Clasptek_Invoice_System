@@ -374,3 +374,85 @@ export async function updateMeetingRecordingMetadata(
     return { success: false, error: msg };
   }
 }
+
+export async function checkMeetingDependencies(meetingId: string): Promise<{
+  canDelete: boolean;
+  blockedReason?: string;
+  dependencies: Array<{ label: string; count: number }>;
+}> {
+  const meetingRes = await getMeetingById(meetingId);
+  if (!meetingRes.data) {
+    return { canDelete: true, dependencies: [] };
+  }
+
+  const meeting = meetingRes.data;
+  const deps: Array<{ label: string; count: number }> = [];
+
+  const hasRecording =
+    meeting.recordingStatus === 'STORED' ||
+    Boolean(meeting.recordingMetadata?.driveUrl) ||
+    Boolean(meeting.recordingUrl);
+
+  if (hasRecording) {
+    deps.push({
+      label: 'Archived Classroom Recording & Google Drive Media',
+      count: 1,
+    });
+  }
+
+  if (meeting.status === 'COMPLETED' || meeting.status === 'ENDED') {
+    deps.push({
+      label: 'Delivered Academic Session & Attendance Logs',
+      count: 1,
+    });
+  }
+
+  if (deps.length > 0) {
+    return {
+      canDelete: false,
+      blockedReason:
+        'This meeting has an archived classroom recording or completed academic attendance records. Hard deletion is prohibited to preserve curriculum audit logs.',
+      dependencies: deps,
+    };
+  }
+
+  return { canDelete: true, dependencies: [] };
+}
+
+export async function deleteMeetingSafe(
+  meetingId: string,
+  tenantId?: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const depCheck = await checkMeetingDependencies(meetingId);
+    if (!depCheck.canDelete) {
+      return { success: false, error: depCheck.blockedReason || 'Cannot delete meeting with dependencies' };
+    }
+
+    // Remove from in-memory store
+    memoryMeetings.delete(meetingId);
+    for (const [id, m] of memoryMeetings.entries()) {
+      if (m.publicId === meetingId || m.id === meetingId) {
+        memoryMeetings.delete(id);
+      }
+    }
+
+    // Attempt database deletion if table is available
+    try {
+      const supabase = await createServerClient();
+      let delQuery = supabase
+        .from('meetings')
+        .delete()
+        .or(`id.eq.${meetingId},public_id.eq.${meetingId}`);
+      if (tenantId) {
+        delQuery = delQuery.eq('tenant_id', tenantId);
+      }
+      await delQuery;
+    } catch (_) {}
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to delete meeting';
+    return { success: false, error: msg };
+  }
+}

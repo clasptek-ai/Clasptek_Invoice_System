@@ -29,6 +29,12 @@ import { CanonicalInvoiceDocument } from '@/components/finance/CanonicalInvoiceD
 import { printCanonicalElement } from '@/components/finance/printCanonical';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface EnquiriesPageClientProps {
   initialEnquiries: Enquiry[];
@@ -80,6 +86,160 @@ export function EnquiriesPageClient({
   const [isGenerateInvoiceOpen, setIsGenerateInvoiceOpen] = useState(false);
   const [createdInvoiceForPreview, setCreatedInvoiceForPreview] = useState<Invoice | null>(null);
   const invoiceDocRef = useRef<HTMLDivElement>(null);
+
+  // Multi-row selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    enquiryIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'DELETE',
+    enquiryIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const visibleIds = enquiries.map((e) => e.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  }, [isAllSelected, visibleIds]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleOpenDelete = useCallback(async (ids: string[], targetName?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'DELETE',
+      enquiryIds: ids,
+      recordIdentifier: targetName || `${ids.length} selected record(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: true,
+    });
+
+    try {
+      const res = await fetch('/api/admissions/enquiries/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CHECK_DEPENDENCIES', enquiryIds: ids }),
+      });
+      const data = await res.json();
+      if (data.ok && data.reports) {
+        const reports = data.reports;
+        const blocked = reports.filter((r: { canDelete: boolean }) => !r.canDelete);
+        let totalInvoices = 0;
+        let totalStudents = 0;
+        reports.forEach((r: { dependencies?: { invoices?: number; registeredStudents?: number } }) => {
+          totalInvoices += r.dependencies?.invoices || 0;
+          totalStudents += r.dependencies?.registeredStudents || 0;
+        });
+
+        const depItems: RecordDependencyItem[] = [];
+        if (totalInvoices > 0) depItems.push({ label: 'Invoices', count: totalInvoices });
+        if (totalStudents > 0) depItems.push({ label: 'Registered Student Profiles', count: totalStudents });
+
+        setLifecycleModal((prev) => ({
+          ...prev,
+          isLoading: false,
+          dependencies: depItems,
+          blockedMessage:
+            blocked.length > 0
+              ? `${blocked.length} enquiry record(s) have active dependencies (invoices or registered students) and cannot be deleted.`
+              : null,
+        }));
+      }
+    } catch {
+      setLifecycleModal((prev) => ({
+        ...prev,
+        isLoading: false,
+        blockedMessage: 'Failed to verify record dependencies.',
+      }));
+    }
+  }, []);
+
+  const handleBulkStatusChange = useCallback(
+    async (status: EnquiryStatus) => {
+      if (selectedIds.size === 0) return;
+      const ids = Array.from(selectedIds);
+      try {
+        const res = await fetch('/api/admissions/enquiries/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'UPDATE_STATUS', enquiryIds: ids, status }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update status');
+
+        setEnquiries((prev) =>
+          prev.map((e) => (selectedIds.has(e.id) ? { ...e, status, updated_at: new Date().toISOString() } : e))
+        );
+        setSelectedIds(new Set());
+        setSuccessBanner(data.message || `Updated ${ids.length} records.`);
+        setTimeout(() => setSuccessBanner(null), 4000);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Bulk status update failed.');
+      }
+    },
+    [selectedIds]
+  );
+
+  const handleConfirmLifecycleAction = useCallback(
+    async (reason: string) => {
+      const { actionType, enquiryIds } = lifecycleModal;
+      if (enquiryIds.length === 0) return;
+
+      setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+      try {
+        if (actionType === 'DELETE') {
+          const res = await fetch('/api/admissions/enquiries/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE', enquiryIds, reason }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Deletion failed');
+
+          setEnquiries((prev) => prev.filter((e) => !enquiryIds.includes(e.id)));
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            enquiryIds.forEach((id) => next.delete(id));
+            return next;
+          });
+          setSuccessBanner(data.message || 'Records successfully deleted.');
+          setTimeout(() => setSuccessBanner(null), 4000);
+          setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+        }
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Action failed.');
+        setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+      }
+    },
+    [lifecycleModal]
+  );
 
   const handleEnquiryCreated = useCallback((newEnq: Enquiry) => {
     setEnquiries((prev) => [newEnq, ...prev]);
@@ -533,6 +693,54 @@ export function EnquiriesPageClient({
       {/* Filters */}
       <EnquiryFilters currentSearch={currentSearch} currentStatus={currentStatus} />
 
+      {/* Universal Selection Toolbar */}
+      <TableSelectionBar
+        selectedCount={selectedIds.size}
+        totalVisibleCount={visibleIds.length}
+        entityLabel="enquiry"
+        onClearSelection={handleClearSelection}
+        onSelectAllVisible={handleToggleSelectAll}
+        isAllSelected={isAllSelected}
+      >
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                handleBulkStatusChange(e.target.value as EnquiryStatus);
+                e.target.value = '';
+              }
+            }}
+            defaultValue=""
+            className="cp-btn sm secondary"
+            style={{ padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: '#FFFFFF' }}
+          >
+            <option value="" disabled>Set Status...</option>
+            <option value="NEW">Mark as NEW</option>
+            <option value="CONTACTED">Mark as CONTACTED</option>
+            <option value="QUALIFIED">Mark as QUALIFIED</option>
+            <option value="INVOICED">Mark as INVOICED</option>
+            <option value="LOST">Mark as LOST</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => handleOpenDelete(Array.from(selectedIds))}
+            className="cp-btn sm cp-btn-danger"
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              backgroundColor: '#DC2626',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Delete Selected
+          </button>
+        </div>
+      </TableSelectionBar>
+
       {/* Table Container */}
       <div className="cp-card" style={{ padding: '0', overflow: 'hidden' }}>
         <div
@@ -557,6 +765,12 @@ export function EnquiriesPageClient({
             onSelect={setSelectedEnquiry}
             onFollowUp={(enq) => setContactFollowUpEnquiry(enq)}
             onGenerateInvoice={handleOpenGenerateInvoice}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
+            isAllSelected={isAllSelected}
+            onDeleteEnquiry={(enq) => handleOpenDelete([enq.id], enq.student_name)}
+            onEditEnquiry={(enq) => setSelectedEnquiry(enq)}
           />
         </div>
 
@@ -688,6 +902,21 @@ export function EnquiriesPageClient({
           </div>
         </div>
       )}
+
+      {/* Safe Deletion & Dependency Verification Dialog */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Enquiry"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        recordCount={lifecycleModal.enquiryIds.length}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmLifecycleAction}
+      />
     </div>
   );
 }
+

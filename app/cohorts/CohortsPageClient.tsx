@@ -1,17 +1,23 @@
 /**
  * app/cohorts/CohortsPageClient.tsx — Phase 4
  * Client Component for Cohorts & Schedules.
- * Matches legacy index.html lines 26236–26360.
+ * Extended with multi-row selection, bulk status transitions, and safe lifecycle dialogs.
  */
 
 'use client';
 
-import React, { useCallback, useTransition } from 'react';
+import React, { useState, useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Cohort, Programme } from '@/types/academics';
 import { CohortKpiStrip } from '@/components/cohorts/CohortKpiStrip';
 import { CohortFilters } from '@/components/cohorts/CohortFilters';
 import { CohortTable } from '@/components/cohorts/CohortTable';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface CohortsPageClientProps {
   initialCohorts: Cohort[];
@@ -32,6 +38,32 @@ export function CohortsPageClient({
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
+  const [cohorts, setCohorts] = useState<Cohort[]>(initialCohorts);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    cohortIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'CANCEL',
+    cohortIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const notify = (type: 'success' | 'error', text: string) => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
   const handleFilterUpdate = useCallback(
     (key: string, value: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -45,8 +77,147 @@ export function CohortsPageClient({
     [router, searchParams]
   );
 
+  // Multi-row selection
+  const visibleIds = cohorts.map((c) => c.id);
+  const isAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  }, [isAllSelected, visibleIds]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkStatusChange = useCallback(
+    async (status: string) => {
+      if (selectedIds.size === 0) return;
+      const ids = Array.from(selectedIds);
+      try {
+        const res = await fetch('/api/admissions/cohorts/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'UPDATE_STATUS', cohortIds: ids, status }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update cohort status');
+
+        setCohorts((prev) =>
+          prev.map((c) => (selectedIds.has(c.id) ? { ...c, status: status as any } : c))
+        );
+        setSelectedIds(new Set());
+        notify('success', data.message || `Updated ${ids.length} cohort(s).`);
+      } catch (err) {
+        notify('error', err instanceof Error ? err.message : 'Status update failed.');
+      }
+    },
+    [selectedIds]
+  );
+
+  const handleOpenCloseCohort = useCallback(async (ids: string[], targetName?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'CANCEL',
+      cohortIds: ids,
+      recordIdentifier: targetName || `${ids.length} selected cohort(s)`,
+      dependencies: [],
+      blockedMessage: null,
+      isLoading: true,
+    });
+
+    try {
+      const res = await fetch('/api/admissions/cohorts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CHECK_DEPENDENCIES', cohortIds: ids }),
+      });
+      const data = await res.json();
+      if (data.ok && data.reports) {
+        const reports = data.reports;
+        let totalEnrolments = 0;
+        reports.forEach((r: { dependencies?: { count?: number; label?: string }[] }) => {
+          r.dependencies?.forEach((d) => {
+            if (d.label === 'Enrolled Students') totalEnrolments += d.count || 0;
+          });
+        });
+
+        const depItems: RecordDependencyItem[] = [];
+        if (totalEnrolments > 0) depItems.push({ label: 'Enrolled Students', count: totalEnrolments });
+
+        setLifecycleModal((prev) => ({
+          ...prev,
+          isLoading: false,
+          dependencies: depItems,
+        }));
+      }
+    } catch {
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
+
+  const handleConfirmLifecycleAction = useCallback(async () => {
+    const { cohortIds } = lifecycleModal;
+    if (cohortIds.length === 0) return;
+
+    setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const res = await fetch('/api/admissions/cohorts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CLOSE', cohortIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Closure failed');
+
+      setCohorts((prev) =>
+        prev.map((c) => (cohortIds.includes(c.id) ? { ...c, status: 'COMPLETED' as any } : c))
+      );
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        cohortIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      notify('success', data.message || 'Cohort(s) successfully marked as COMPLETED.');
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+    } catch (err) {
+      notify('error', err instanceof Error ? err.message : 'Action failed.');
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, [lifecycleModal]);
+
   return (
     <div className="flex flex-col h-full">
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          style={{
+            padding: '10px 16px',
+            marginBottom: '14px',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 600,
+            background: feedback.type === 'success' ? '#DEF7EC' : '#FDE8E8',
+            color: feedback.type === 'success' ? '#03543F' : '#9B1C1C',
+            border: `1px solid ${feedback.type === 'success' ? '#84E1BC' : '#F8B4B4'}`,
+          }}
+        >
+          {feedback.text}
+        </div>
+      )}
+
       {/* Header with Action — Exact Legacy Styling */}
       <div
         style={{
@@ -97,17 +268,17 @@ export function CohortsPageClient({
       </div>
 
       {/* Top KPI Grid */}
-      <CohortKpiStrip cohorts={initialCohorts} />
+      <CohortKpiStrip cohorts={cohorts} />
 
       {/* Main Table Card */}
       <div className="cp-card">
         <div className="cp-card-header" style={{ flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <div className="cp-section-title" style={{ fontSize: '16px', fontWeight: 800 }}>
-              🏛️ Scheduled Training Cohorts
+              📋 Training Cohort Schedule
             </div>
             <div className="cp-section-desc" style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
-              Real-time seat occupancy, delivery schedules, and cohort management.
+              Manage intake timelines, track capacity thresholds, and launch attendance registers.
             </div>
           </div>
 
@@ -123,9 +294,72 @@ export function CohortsPageClient({
           />
         </div>
 
-        {/* Scheduling Table */}
-        <CohortTable cohorts={initialCohorts} />
+        {/* Universal Selection Toolbar */}
+        <div style={{ padding: '0 16px' }}>
+          <TableSelectionBar
+            selectedCount={selectedIds.size}
+            totalVisibleCount={visibleIds.length}
+            entityLabel="cohort"
+            onClearSelection={handleClearSelection}
+            onSelectAllVisible={handleToggleSelectAll}
+            isAllSelected={isAllSelected}
+          >
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkStatusChange(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="cp-btn sm secondary"
+                style={{ padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: '#FFFFFF' }}
+              >
+                <option value="" disabled>Set Status...</option>
+                <option value="PLANNING">Mark as PLANNING</option>
+                <option value="UPCOMING">Mark as UPCOMING</option>
+                <option value="IN_PROGRESS">Mark as IN_PROGRESS</option>
+                <option value="COMPLETED">Mark as COMPLETED</option>
+                <option value="CANCELLED">Mark as CANCELLED</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => handleOpenCloseCohort(Array.from(selectedIds))}
+                className="cp-btn sm secondary"
+                style={{ fontSize: '12px', padding: '4px 8px', color: '#DC2626' }}
+              >
+                🛑 Close Selected
+              </button>
+            </div>
+          </TableSelectionBar>
+        </div>
+
+        {/* Cohort Table */}
+        <CohortTable
+          cohorts={cohorts}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onToggleSelectAll={handleToggleSelectAll}
+          isAllSelected={isAllSelected}
+          onCloseCohort={(c) => handleOpenCloseCohort([c.id], `${c.cohort_code} (${c.name})`)}
+        />
       </div>
+
+      {/* Safe Closure Dialog */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Training Cohort"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        recordCount={lifecycleModal.cohortIds.length}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmLifecycleAction}
+      />
     </div>
   );
 }

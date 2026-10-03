@@ -22,6 +22,28 @@ export async function GET(request: NextRequest) {
   });
   if (auth.errorResponse) return auth.errorResponse;
 
+  const action = request.nextUrl.searchParams.get('action');
+  if (action === 'check-dependencies') {
+    const id = request.nextUrl.searchParams.get('id');
+    if (!id) return NextResponse.json({ success: false, error: 'ID required' }, { status: 400 });
+    const supabase = await createServerClient();
+    const { count: payslipCount } = await supabase
+      .from('payslips')
+      .select('id', { count: 'exact', head: true })
+      .eq('personnel_id', id)
+      .eq('tenant_id', auth.session.tenantId);
+    const { count: reportCount } = await supabase
+      .from('facilitator_reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('facilitator_id', id)
+      .eq('tenant_id', auth.session.tenantId);
+    return NextResponse.json({
+      success: true,
+      payslipCount: payslipCount || 0,
+      reportCount: reportCount || 0,
+    });
+  }
+
   const personnel = await getAdminPersonnelList(auth.session.tenantId);
   return NextResponse.json({ success: true, data: personnel });
 }
@@ -62,6 +84,18 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
+
+    if (body.ids && Array.isArray(body.ids) && body.employmentStatus) {
+      const supabase = await createServerClient();
+      const { error: updErr } = await supabase
+        .from('personnel')
+        .update({ employment_status: body.employmentStatus, updated_at: new Date().toISOString() })
+        .in('id', body.ids)
+        .eq('tenant_id', auth.session.tenantId);
+      if (updErr) return NextResponse.json({ success: false, error: updErr.message }, { status: 500 });
+      return NextResponse.json({ success: true, count: body.ids.length });
+    }
+
     const { id, ...updates } = body;
     if (!id) {
       return NextResponse.json(

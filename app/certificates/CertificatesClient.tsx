@@ -13,6 +13,12 @@ import { CertificateDocument } from '@/components/certificates/CertificateDocume
 import { DEFAULT_CERTIFICATE_TEMPLATES } from '@/lib/certificates/constants';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import {
+  RecordLifecycleModal,
+  type LifecycleActionType,
+  type RecordDependencyItem,
+} from '@/components/tables/RecordLifecycleModal';
 
 interface Props {
   initialCertificates: Certificate[];
@@ -133,7 +139,184 @@ export const CertificatesClient: React.FC<Props> = ({
     resetDeps: [eligibleCandidates],
   });
 
-  // Handlers
+  // Multi-row selection for Registry and Eligible Candidates
+  const [selectedCertIds, setSelectedCertIds] = useState<Set<string>>(new Set());
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    actionType: LifecycleActionType;
+    certIds: string[];
+    recordIdentifier?: string;
+    dependencies: RecordDependencyItem[];
+    blockedMessage: string | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    actionType: 'CANCEL',
+    certIds: [],
+    dependencies: [],
+    blockedMessage: null,
+    isLoading: false,
+  });
+
+  const visibleCertIds = paginatedCertificates.map((c) => c.id);
+  const isAllCertsSelected = visibleCertIds.length > 0 && visibleCertIds.every((id) => selectedCertIds.has(id));
+  const certHeaderCheckboxRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (certHeaderCheckboxRef.current) {
+      const someSelected = visibleCertIds.some((id) => selectedCertIds.has(id));
+      certHeaderCheckboxRef.current.indeterminate = someSelected && !isAllCertsSelected;
+    }
+  }, [selectedCertIds, visibleCertIds, isAllCertsSelected]);
+
+  const visibleCandidateIds = paginatedEligibleCandidates.map((c) => c.enrolmentId);
+  const isAllCandidatesSelected =
+    visibleCandidateIds.length > 0 && visibleCandidateIds.every((id) => selectedCandidateIds.has(id));
+  const candidateHeaderCheckboxRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (candidateHeaderCheckboxRef.current) {
+      const someSelected = visibleCandidateIds.some((id) => selectedCandidateIds.has(id));
+      candidateHeaderCheckboxRef.current.indeterminate = someSelected && !isAllCandidatesSelected;
+    }
+  }, [selectedCandidateIds, visibleCandidateIds, isAllCandidatesSelected]);
+
+  const handleToggleSelectCert = (id: string) => {
+    setSelectedCertIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllCerts = () => {
+    if (isAllCertsSelected) setSelectedCertIds(new Set());
+    else setSelectedCertIds(new Set(visibleCertIds));
+  };
+
+  const handleClearCertSelection = () => setSelectedCertIds(new Set());
+
+  const handleToggleSelectCandidate = (id: string) => {
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllCandidates = () => {
+    if (isAllCandidatesSelected) setSelectedCandidateIds(new Set());
+    else setSelectedCandidateIds(new Set(visibleCandidateIds));
+  };
+
+  const handleClearCandidateSelection = () => setSelectedCandidateIds(new Set());
+
+  // Open Safe Revocation Modal
+  const handleOpenRevokeModal = (ids: string[], targetIdentifier?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'CANCEL',
+      certIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected certificate(s)`,
+      dependencies: [
+        {
+          label: 'Digital Verification Token & Historical Ledger',
+          count: ids.length,
+        },
+      ],
+      blockedMessage: null,
+      isLoading: false,
+    });
+  };
+
+  // Blocked Hard Deletion Dialog (Academic accreditation preservation)
+  const handleOpenDeleteBlockedModal = (ids: string[], targetIdentifier?: string) => {
+    setLifecycleModal({
+      isOpen: true,
+      actionType: 'DELETE',
+      certIds: ids,
+      recordIdentifier: targetIdentifier || `${ids.length} selected certificate(s)`,
+      dependencies: [
+        {
+          label: 'Cryptographic Verification Records & Public Ledger',
+          count: ids.length,
+        },
+      ],
+      blockedMessage:
+        'Official issued academic credentials cannot be deleted from the database. To invalidate a credential, revoke it with documented audit reasons or reissue with corrected student details.',
+      isLoading: false,
+    });
+  };
+
+  // Confirm Revocation via RecordLifecycleModal
+  const handleConfirmLifecycleAction = async (reason: string) => {
+    const { certIds, actionType } = lifecycleModal;
+    if (certIds.length === 0) return;
+    if (actionType === 'DELETE') {
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    setLifecycleModal((prev) => ({ ...prev, isLoading: true }));
+    let revokedCount = 0;
+    try {
+      for (const id of certIds) {
+        const res = await fetch(`/api/certificates/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason || 'Revoked via credentials administrator' }),
+        });
+        if (res.ok) revokedCount++;
+      }
+
+      setLifecycleModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+      handleClearCertSelection();
+      setSuccessToast(`Revoked ${revokedCount} certificate credential(s).`);
+      await refreshCertificates();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error revoking certificate';
+      setErrorMessage(msg);
+      setLifecycleModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Bulk Issue Certificates for selected candidates
+  const handleBulkIssueSelected = async () => {
+    const candidatesToIssue = eligibleCandidates.filter((c) => selectedCandidateIds.has(c.enrolmentId));
+    if (candidatesToIssue.length === 0) return;
+
+    setIsLoading(true);
+    let issuedCount = 0;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      for (const c of candidatesToIssue) {
+        const res = await fetch('/api/certificates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enrolmentId: c.enrolmentId,
+            issueDate: today,
+            certificateTitle: 'Certificate of Completion',
+            certificateDescription: `${c.programmeName} Core Vocational Competencies`,
+            certificateRole: `${c.programmeName} Professional`,
+          }),
+        });
+        if (res.ok) issuedCount++;
+      }
+
+      handleClearCandidateSelection();
+      setSuccessToast(`Successfully issued ${issuedCount} certificate(s)!`);
+      await refreshCertificates();
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error in bulk certificate issuance');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const handleOpenIssueModal = (candidate: CertificateEligibilityCandidate) => {
     const isCyber = candidate.programmeName.toLowerCase().includes('cyber');
     const isData = candidate.programmeName.toLowerCase().includes('data');
@@ -597,6 +780,37 @@ export const CertificatesClient: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Selection Bar for Certificates */}
+          <TableSelectionBar
+            selectedCount={selectedCertIds.size}
+            totalVisibleCount={visibleCertIds.length}
+            entityLabel="certificate"
+            onSelectAllVisible={handleToggleSelectAllCerts}
+            isAllSelected={isAllCertsSelected}
+            onClearSelection={handleClearCertSelection}
+          >
+            {isAdminOrStaff && (
+              <>
+                <button
+                  type="button"
+                  className="cp-btn sm danger"
+                  onClick={() => handleOpenRevokeModal(Array.from(selectedCertIds))}
+                  title="Revoke selected certificates"
+                >
+                  🛑 Revoke Selected ({selectedCertIds.size})
+                </button>
+                <button
+                  type="button"
+                  className="cp-btn sm secondary"
+                  onClick={() => handleOpenDeleteBlockedModal(Array.from(selectedCertIds))}
+                  title="Check deletion policy for certificates"
+                >
+                  ℹ️ Deletion Policy
+                </button>
+              </>
+            )}
+          </TableSelectionBar>
+
           {filteredCertificates.length === 0 ? (
             <div className="cp-empty-state" style={{ padding: '48px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '40px', marginBottom: '12px' }}>&#x1F4DC;</div>
@@ -612,6 +826,16 @@ export const CertificatesClient: React.FC<Props> = ({
                 <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                      <th style={{ width: '40px', padding: '12px 14px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          ref={certHeaderCheckboxRef}
+                          checked={isAllCertsSelected}
+                          onChange={handleToggleSelectAllCerts}
+                          aria-label="Select all visible certificates"
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
                       <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
                         Certificate #
                       </th>
@@ -645,14 +869,29 @@ export const CertificatesClient: React.FC<Props> = ({
                   </thead>
                   <tbody>
                     {paginatedCertificates.map((cert) => {
+                      const isSelected = selectedCertIds.has(cert.id);
                       const isIssued = cert.status === 'ISSUED';
                       const roleName = cert.certificateRoleSnapshot || 'Certified Professional';
 
                       return (
                         <tr
                           key={cert.id}
-                          style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+                          style={{
+                            borderBottom: '1px solid #F1F5F9',
+                            verticalAlign: 'middle',
+                            fontSize: '12.5px',
+                            backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                          }}
                         >
+                          <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectCert(cert.id)}
+                              aria-label={`Select certificate ${cert.certificateNumber}`}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
                           <td
                             style={{
                               padding: '12px 14px',
@@ -732,6 +971,15 @@ export const CertificatesClient: React.FC<Props> = ({
                                     Reissue
                                   </button>
                                 ))}
+                              <button
+                                type="button"
+                                className="cp-btn sm danger"
+                                onClick={() => handleOpenDeleteBlockedModal([cert.id], cert.certificateNumber)}
+                                title="Check deletion policy / block casual delete"
+                                style={{ padding: '4px 8px' }}
+                              >
+                                🗑️
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -744,6 +992,7 @@ export const CertificatesClient: React.FC<Props> = ({
               {/* Mobile Card Stack */}
               <div className="cp-cards-mobile" style={{ padding: '12px' }}>
                 {paginatedCertificates.map((cert) => {
+                  const isSelected = selectedCertIds.has(cert.id);
                   const isIssued = cert.status === 'ISSUED';
                   const roleName = cert.certificateRoleSnapshot || 'Certified Professional';
 
@@ -751,19 +1000,34 @@ export const CertificatesClient: React.FC<Props> = ({
                     <div
                       key={cert.id}
                       className="cp-mobile-record-card"
-                      onClick={() => setSelectedCert(cert)}
+                      style={{
+                        borderLeft: isSelected ? '4px solid var(--primary, #0284c7)' : undefined,
+                      }}
+                      onClick={() => handleToggleSelectCert(cert.id)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && setSelectedCert(cert)}
-                      aria-label={`View certificate ${cert.certificateNumber}`}
+                      onKeyDown={(e) => e.key === 'Enter' && handleToggleSelectCert(cert.id)}
+                      aria-label={`Select certificate ${cert.certificateNumber}`}
                     >
                       <div className="cp-mobile-record-header">
-                        <div>
-                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                            {cert.studentNameSnapshot}
-                          </h4>
-                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            {roleName} &bull; {cert.programmeNameSnapshot}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleToggleSelectCert(cert.id);
+                            }}
+                            aria-label={`Select certificate ${cert.certificateNumber}`}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {cert.studentNameSnapshot}
+                            </h4>
+                            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {roleName} &bull; {cert.programmeNameSnapshot}
+                            </div>
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
@@ -845,6 +1109,27 @@ export const CertificatesClient: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Selection Bar for Eligible Candidates */}
+          <TableSelectionBar
+            selectedCount={selectedCandidateIds.size}
+            totalVisibleCount={visibleCandidateIds.length}
+            entityLabel="candidate"
+            onSelectAllVisible={handleToggleSelectAllCandidates}
+            isAllSelected={isAllCandidatesSelected}
+            onClearSelection={handleClearCandidateSelection}
+          >
+            {isAdminOrStaff && (
+              <button
+                type="button"
+                className="cp-btn sm accent"
+                onClick={handleBulkIssueSelected}
+                title="Bulk issue certificates for selected trainees"
+              >
+                🎓 Issue Selected ({selectedCandidateIds.size})
+              </button>
+            )}
+          </TableSelectionBar>
+
           {eligibleCandidates.length === 0 ? (
             <div className="cp-empty-state" style={{ padding: '48px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '40px', marginBottom: '12px' }}>&#x1F3C5;</div>
@@ -862,6 +1147,16 @@ export const CertificatesClient: React.FC<Props> = ({
                 <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                      <th style={{ width: '40px', padding: '12px 14px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          ref={candidateHeaderCheckboxRef}
+                          checked={isAllCandidatesSelected}
+                          onChange={handleToggleSelectAllCandidates}
+                          aria-label="Select all visible candidates"
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
                       <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
                         Enrolment #
                       </th>
@@ -899,14 +1194,30 @@ export const CertificatesClient: React.FC<Props> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedEligibleCandidates.map((c) => (
-                      <tr
-                        key={c.enrolmentId}
-                        style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
-                      >
-                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
-                          {c.enrolmentNumber}
-                        </td>
+                    {paginatedEligibleCandidates.map((c) => {
+                      const isSelected = selectedCandidateIds.has(c.enrolmentId);
+                      return (
+                        <tr
+                          key={c.enrolmentId}
+                          style={{
+                            borderBottom: '1px solid #F1F5F9',
+                            verticalAlign: 'middle',
+                            fontSize: '12.5px',
+                            backgroundColor: isSelected ? 'var(--surface-selected, #eff6ff)' : undefined,
+                          }}
+                        >
+                          <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectCandidate(c.enrolmentId)}
+                              aria-label={`Select candidate ${c.studentName}`}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
+                            {c.enrolmentNumber}
+                          </td>
                         <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>{c.studentName}</td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ fontWeight: 600 }}>{c.programmeName}</div>
@@ -932,7 +1243,8 @@ export const CertificatesClient: React.FC<Props> = ({
                           )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
@@ -1520,6 +1832,20 @@ export const CertificatesClient: React.FC<Props> = ({
           </div>
         </div>
       )}
+      {/* Record Lifecycle Modal (Revoke / Block Deletion) */}
+      <RecordLifecycleModal
+        isOpen={lifecycleModal.isOpen}
+        actionType={lifecycleModal.actionType}
+        entityName="Certificate Credential"
+        recordIdentifier={lifecycleModal.recordIdentifier}
+        dependencies={lifecycleModal.dependencies}
+        blockedMessage={lifecycleModal.blockedMessage}
+        requireReason={lifecycleModal.actionType === 'CANCEL'}
+        reasonPlaceholder="Document reason for certificate revocation..."
+        isLoading={lifecycleModal.isLoading}
+        onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmLifecycleAction}
+      />
     </div>
   );
 };

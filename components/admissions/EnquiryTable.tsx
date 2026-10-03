@@ -1,22 +1,15 @@
 /**
  * components/admissions/EnquiryTable.tsx — Phase 3 & 9G
- * Responsive table of enquiries and leads.
- *
- * Implements the recommended directory columns:
- * - Prospect (Name + note snippet)
- * - Interested Programme
- * - Contact (Phone/WhatsApp + Email)
- * - Source
- * - Status (Admissions progression)
- * - Billing Status (Authoritative invoice/payment status)
- * - Balance Due (Authoritative outstanding balance)
- * - Last Follow-up (Date)
- * - Actions: [ View ] [ Follow Up ] [ Generate Invoice ]
+ * Responsive table of enquiries and leads with full data management controls:
+ * - Row selection & indeterminate select-all
+ * - Search & Filter integration
+ * - Quick Action Buttons: View, Follow Up, Generate Invoice, Edit, Safe Delete
+ * - Fully responsive desktop/tablet table and mobile card stack
  */
 
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { Enquiry } from '@/types/admissions';
 import { StatusBadge } from './StatusBadge';
 
@@ -25,6 +18,14 @@ interface EnquiryTableProps {
   onSelect: (enquiry: Enquiry) => void;
   onFollowUp?: (enquiry: Enquiry) => void;
   onGenerateInvoice?: (enquiry: Enquiry) => void;
+  onEditEnquiry?: (enquiry: Enquiry) => void;
+  onDeleteEnquiry?: (enquiry: Enquiry) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
   isLoading?: boolean;
 }
 
@@ -60,18 +61,18 @@ function formatNaira(amount: number): string {
   });
 }
 
-function getBillingBadgeStyle(status?: string) {
+function getBillingBadgeStyle(status?: string): { bg: string; text: string; border: string; label: string } {
   switch (status) {
     case 'PAID':
-      return { bg: '#DEF7EC', text: '#03543F', border: '#BCF0DA', label: 'Paid' };
+      return { bg: '#DEF7EC', text: '#03543F', border: '#84E1BC', label: 'Paid in Full' };
     case 'PARTIALLY_PAID':
-      return { bg: '#FEF08A', text: '#854D0E', border: '#FDE047', label: 'Partially Paid' };
+      return { bg: '#FEF08A', text: '#854D0E', border: '#FACC15', label: 'Partially Paid' };
     case 'OVERDUE':
       return { bg: '#FDE8E8', text: '#9B1C1C', border: '#F8B4B4', label: 'Overdue' };
     case 'INVOICED':
-      return { bg: '#E1EFFE', text: '#1E429F', border: '#B4C6FC', label: 'Invoiced' };
+      return { bg: '#E1EFFE', text: '#1E429F', border: '#A4CAFE', label: 'Invoiced' };
     case 'INVOICE_REQUESTED':
-      return { bg: '#F3E8FF', text: '#6B21A8', border: '#E9D5FF', label: 'Inv Requested' };
+      return { bg: '#F3E8FF', text: '#6B21A8', border: '#D8B4FE', label: 'Invoice Requested' };
     case 'NOT_INVOICED':
     default:
       return { bg: '#F1F5F9', text: '#475569', border: '#CBD5E1', label: 'Not Invoiced' };
@@ -83,15 +84,31 @@ export function EnquiryTable({
   onSelect,
   onFollowUp,
   onGenerateInvoice,
-  isLoading,
+  onEditEnquiry,
+  onDeleteEnquiry,
+  canEdit = true,
+  canDelete = true,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleSelectAll,
+  isAllSelected = false,
+  isLoading = false,
 }: EnquiryTableProps) {
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const selectedCount = enquiries.filter((e) => selectedIds.has(e.id)).length;
+      const isIndeterminate = selectedCount > 0 && selectedCount < enquiries.length;
+      headerCheckboxRef.current.indeterminate = isIndeterminate;
+    }
+  }, [selectedIds, enquiries]);
+
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: 'var(--text-muted)' }} aria-live="polite">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="cp-spinner cp-spinner-md" aria-hidden="true" />
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>Loading enquiries...</span>
-        </div>
+      <div className="cp-loading-state" style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'inline-block', width: '24px', height: '24px', border: '3px solid #E2E8F0', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <p style={{ marginTop: '8px', fontSize: '13px' }}>Loading enquiries...</p>
       </div>
     );
   }
@@ -116,10 +133,22 @@ export function EnquiryTable({
   return (
     <>
       {/* Desktop & Tablet Table */}
-      <div className="cp-table-wrap cp-table-desktop">
+      <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table className="cp-table">
           <thead>
             <tr>
+              {onToggleSelect && (
+                <th style={{ width: '42px', textAlign: 'center', padding: '8px' }}>
+                  <input
+                    type="checkbox"
+                    ref={headerCheckboxRef}
+                    checked={isAllSelected}
+                    onChange={onToggleSelectAll}
+                    aria-label="Select all visible enquiries"
+                    style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                  />
+                </th>
+              )}
               <th scope="col">Prospect</th>
               <th scope="col">Interested Programme</th>
               <th scope="col">Phone</th>
@@ -128,11 +157,12 @@ export function EnquiryTable({
               <th scope="col">Billing Status</th>
               <th scope="col" style={{ textAlign: 'right' }}>Balance Due</th>
               <th scope="col" className="cp-col-tertiary">Last Follow-up</th>
-              <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
+              <th scope="col" style={{ textAlign: 'center', minWidth: '180px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {enquiries.map((enquiry) => {
+              const isSelected = selectedIds.has(enquiry.id);
               const wa = formatWhatsApp(enquiry.phone);
               const fin = enquiry.financials;
               const billing = getBillingBadgeStyle(fin?.billingStatus);
@@ -140,9 +170,28 @@ export function EnquiryTable({
               return (
                 <tr
                   key={enquiry.id}
-                  style={{ cursor: 'pointer' }}
+                  style={{
+                    backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.05)' : undefined,
+                    cursor: 'pointer',
+                  }}
                   onClick={() => onSelect(enquiry)}
                 >
+                  {/* Row Checkbox */}
+                  {onToggleSelect && (
+                    <td
+                      style={{ textAlign: 'center', width: '42px', padding: '8px' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onToggleSelect(enquiry.id)}
+                        aria-label={`Select ${enquiry.student_name}`}
+                        style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                      />
+                    </td>
+                  )}
+
                   {/* Prospect */}
                   <td>
                     <div style={{ fontWeight: 700, color: 'var(--text-primary, #0F172A)' }}>
@@ -178,7 +227,17 @@ export function EnquiryTable({
                           aria-label={`WhatsApp ${enquiry.student_name}`}
                           title="Chat on WhatsApp"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
                             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                           </svg>
                         </a>
@@ -187,8 +246,8 @@ export function EnquiryTable({
                   </td>
 
                   {/* Source */}
-                  <td className="cp-col-secondary" style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)' }}>
-                    {enquiry.source ?? '—'}
+                  <td className="cp-col-secondary" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {enquiry.source || '—'}
                   </td>
 
                   {/* Status */}
@@ -200,14 +259,14 @@ export function EnquiryTable({
                   <td>
                     <span
                       style={{
+                        display: 'inline-block',
                         fontSize: '11px',
                         fontWeight: 700,
                         padding: '2px 8px',
-                        borderRadius: '10px',
+                        borderRadius: '12px',
                         backgroundColor: billing.bg,
                         color: billing.text,
                         border: `1px solid ${billing.border}`,
-                        display: 'inline-block',
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -216,18 +275,26 @@ export function EnquiryTable({
                   </td>
 
                   {/* Balance Due */}
-                  <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: (fin?.balanceDue || 0) > 0 ? 'var(--accent, #C1272D)' : 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      color: (fin?.balanceDue || 0) > 0 ? 'var(--accent, #C1272D)' : '#059669',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {formatNaira(fin?.balanceDue || 0)}
                   </td>
 
                   {/* Last Follow-up */}
-                  <td className="cp-col-tertiary" style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', whiteSpace: 'nowrap' }}>
+                  <td className="cp-col-tertiary" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
                     {formatDate(enquiry.updated_at)}
                   </td>
 
                   {/* Actions */}
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap' }}>
                       <button
                         type="button"
                         className="cp-btn sm secondary"
@@ -235,7 +302,7 @@ export function EnquiryTable({
                           e.stopPropagation();
                           onSelect(enquiry);
                         }}
-                        style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600 }}
+                        style={{ padding: '3px 7px', fontSize: '11px', fontWeight: 600 }}
                         title="View prospect snapshot"
                       >
                         View
@@ -248,7 +315,7 @@ export function EnquiryTable({
                           if (onFollowUp) onFollowUp(enquiry);
                           else onSelect(enquiry);
                         }}
-                        style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600 }}
+                        style={{ padding: '3px 7px', fontSize: '11px', fontWeight: 600, color: 'var(--primary, #0284C7)' }}
                         title="Log admissions follow-up"
                       >
                         Follow Up
@@ -260,11 +327,39 @@ export function EnquiryTable({
                           e.stopPropagation();
                           if (onGenerateInvoice) onGenerateInvoice(enquiry);
                         }}
-                        style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}
+                        style={{ padding: '3px 7px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}
                         title="Generate tuition invoice"
                       >
-                        Generate Invoice
+                        Invoice
                       </button>
+                      {canEdit && onEditEnquiry && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditEnquiry(enquiry);
+                          }}
+                          style={{ padding: '3px 6px', fontSize: '11px' }}
+                          title="Edit Enquiry"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canDelete && onDeleteEnquiry && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteEnquiry(enquiry);
+                          }}
+                          style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                          title="Delete Enquiry"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -275,8 +370,9 @@ export function EnquiryTable({
       </div>
 
       {/* Mobile Card Stack */}
-      <div className="cp-cards-mobile">
+      <div className="cp-cards-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {enquiries.map((enquiry) => {
+          const isSelected = selectedIds.has(enquiry.id);
           const wa = formatWhatsApp(enquiry.phone);
           const fin = enquiry.financials;
           const billing = getBillingBadgeStyle(fin?.billingStatus);
@@ -285,7 +381,12 @@ export function EnquiryTable({
             <div
               key={enquiry.id}
               className="cp-card"
-              style={{ padding: '14px', cursor: 'pointer', marginBottom: '12px' }}
+              style={{
+                padding: '14px',
+                cursor: 'pointer',
+                border: isSelected ? '1px solid #3B82F6' : undefined,
+                backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.03)' : undefined,
+              }}
               onClick={() => onSelect(enquiry)}
               role="button"
               tabIndex={0}
@@ -293,13 +394,27 @@ export function EnquiryTable({
               aria-label={`View enquiry for ${enquiry.student_name}`}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-                <div>
-                  <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary, #0F172A)', margin: 0 }}>
-                    {enquiry.student_name}
-                  </p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', margin: '2px 0 0 0' }}>
-                    {enquiry.programme_name ?? 'No programme selected'}
-                  </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {onToggleSelect && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onToggleSelect(enquiry.id);
+                      }}
+                      aria-label={`Select ${enquiry.student_name}`}
+                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                    />
+                  )}
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary, #0F172A)', margin: 0 }}>
+                      {enquiry.student_name}
+                    </p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted, #64748B)', margin: '2px 0 0 0' }}>
+                      {enquiry.programme_name ?? 'No programme selected'}
+                    </p>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                   <StatusBadge status={enquiry.status} />
@@ -335,7 +450,7 @@ export function EnquiryTable({
                   )}
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatDate(enquiry.updated_at)}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
                   <button
                     type="button"
                     className="cp-btn sm secondary"
@@ -371,6 +486,19 @@ export function EnquiryTable({
                   >
                     Invoice
                   </button>
+                  {canDelete && onDeleteEnquiry && (
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteEnquiry(enquiry);
+                      }}
+                      style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

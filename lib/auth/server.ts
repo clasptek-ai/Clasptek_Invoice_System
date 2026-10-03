@@ -64,38 +64,31 @@ export async function getAuthoritativeSession(): Promise<AuthoritativeSession | 
     return null;
   }
 
-  let resolvedRole: UserRole | null = null;
-  let resolvedTenantId: string | null = null;
-
   try {
-    const { data: membership } = await supabase
+    const { data: membership, error: membershipError } = await supabase
       .from('tenant_memberships')
       .select('role, tenant_id, status')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (membership) {
-      resolvedRole = normalizeRole(membership.role);
-      resolvedTenantId = membership.tenant_id;
+    // FAIL CLOSED: Database query error or missing/inactive membership
+    if (membershipError || !membership || !membership.role || !membership.tenant_id) {
+      return null;
     }
+
+    const resolvedRole = normalizeRole(membership.role);
+    const resolvedTenantId = membership.tenant_id;
+
+    return {
+      user,
+      role: resolvedRole,
+      tenantId: resolvedTenantId,
+    };
   } catch (_dbErr) {
-    // If tenant_memberships query fails, fall back to validated JWT metadata
+    // FAIL CLOSED on any unexpected database or network exception
+    return null;
   }
-
-  // Fallback to user_metadata if membership not found
-  if (!resolvedRole && user.user_metadata?.role) {
-    resolvedRole = normalizeRole(user.user_metadata.role);
-  }
-  if (!resolvedTenantId && user.user_metadata?.tenant_id) {
-    resolvedTenantId = user.user_metadata.tenant_id;
-  }
-
-  return {
-    user,
-    role: resolvedRole || 'Staff',
-    tenantId: resolvedTenantId || DEFAULT_TENANT_ID,
-  };
 }
 
 export interface AuthGateOptions {

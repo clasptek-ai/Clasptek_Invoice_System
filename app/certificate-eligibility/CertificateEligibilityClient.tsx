@@ -12,6 +12,8 @@ import type { UserRole } from '@/types/auth';
 import { CertificateDocument } from '@/components/certificates/CertificateDocument';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { RecordLifecycleModal } from '@/components/tables/RecordLifecycleModal';
 
 interface CohortItem {
   id: string;
@@ -40,6 +42,13 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
 }) => {
   const [candidates, setCandidates] = useState<CertificateEligibilityCandidate[]>(initialCandidates);
   const [kpis, setKpis] = useState(initialKpis);
+
+  // Selection & Lifecycle state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lifecycleModal, setLifecycleModal] = useState<{
+    isOpen: boolean;
+    candidate?: CertificateEligibilityCandidate;
+  }>({ isOpen: false });
 
   // Filters
   const [search, setSearch] = useState('');
@@ -120,6 +129,81 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
     initialPageSize: 25,
     resetDeps: [candidates, cohortFilter, eligibilityFilter, search],
   });
+
+  // Selection handlers & computed properties
+  const visibleIds = useMemo(() => paginatedCandidates.map((c) => c.enrolmentId), [paginatedCandidates]);
+  const isAllSelected = useMemo(
+    () => visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id)),
+    [visibleIds, selectedIds]
+  );
+  const isIndeterminate = useMemo(() => {
+    const count = visibleIds.filter((id) => selectedIds.has(id)).length;
+    return count > 0 && count < visibleIds.length;
+  }, [visibleIds, selectedIds]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkVerifySelected = async () => {
+    const eligibleSelected = candidates.filter(
+      (c) => selectedIds.has(c.enrolmentId) && c.isAttendanceEligible && !c.isVerified
+    );
+    if (eligibleSelected.length === 0) {
+      setErrorMessage('None of the selected candidates meet the ≥80% attendance benchmark for verification.');
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch('/api/certificates/eligibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify',
+          enrolmentIds: eligibleSelected.map((c) => c.enrolmentId),
+          notes: 'Batch completion signoff based on delivered session attendance',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setErrorMessage(data.error || 'Failed to verify selected candidates');
+      } else {
+        setSuccessToast(`Verified completion for ${eligibleSelected.length} candidate(s)`);
+        handleClearSelection();
+        await refreshData();
+      }
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error executing bulk verification');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Action handlers
   const handleConfirmVerify = async () => {
@@ -255,7 +339,7 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
   };
 
   // Safe RFC-4180 CSV export with formula injection prevention
-  const exportCsv = () => {
+  const exportCsv = (selectedOnly: boolean = false) => {
     const sanitize = (val: string | number | null | undefined): string => {
       let str = String(val ?? '').trim();
       if (/^[=+\-@\t\r]/.test(str)) {
@@ -278,7 +362,11 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
       'Certificate #',
     ];
 
-    const rows = filteredList.map((c) => [
+    const sourceList = selectedOnly
+      ? filteredList.filter((c) => selectedIds.has(c.enrolmentId))
+      : filteredList;
+
+    const rows = sourceList.map((c) => [
       sanitize(c.enrolmentNumber),
       sanitize(c.studentName),
       sanitize(c.studentEmail),
@@ -376,7 +464,7 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="cp-btn secondary sm" onClick={exportCsv} title="Export current list to CSV">
+          <button className="cp-btn secondary sm" onClick={() => exportCsv(false)} title="Export current list to CSV">
             &#x1F4E5; Export CSV
           </button>
         </div>
@@ -533,11 +621,54 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
           </div>
         ) : (
           <>
+            {/* Table Selection Bar */}
+            {selectedIds.size > 0 && (
+              <div style={{ padding: '0 20px 14px' }}>
+                <TableSelectionBar
+                  selectedCount={selectedIds.size}
+                  totalVisibleCount={visibleIds.length}
+                  entityLabel="candidates"
+                  onClearSelection={handleClearSelection}
+                  onSelectAllVisible={handleToggleSelectAll}
+                  isAllSelected={isAllSelected}
+                >
+                  <button
+                    type="button"
+                    className="cp-btn sm paid"
+                    onClick={handleBulkVerifySelected}
+                    style={{ fontSize: '12px', padding: '4px 12px', fontWeight: 700 }}
+                  >
+                    ✔ Verify Selected
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => exportCsv(true)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  >
+                    📥 Export Selected
+                  </button>
+                </TableSelectionBar>
+              </div>
+            )}
+
             {/* Desktop & Tablet Table */}
             <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto' }}>
               <table className="cp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                    <th style={{ width: '40px', padding: '12px 14px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible candidates"
+                        checked={isAllSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isIndeterminate;
+                        }}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                    </th>
                     <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
                       Enrolment #
                     </th>
@@ -596,12 +727,27 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
                   {paginatedCandidates.map((en) => {
                     const isEligible = en.isAttendanceEligible;
                     const isVerified = en.isVerified;
+                    const isRowSelected = selectedIds.has(en.enrolmentId);
 
                     return (
                       <tr
                         key={en.enrolmentId}
-                        style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontSize: '12.5px' }}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          verticalAlign: 'middle',
+                          fontSize: '12.5px',
+                          backgroundColor: isRowSelected ? '#F0F9FF' : undefined,
+                        }}
                       >
+                        <td style={{ width: '40px', padding: '12px 14px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select candidate ${en.studentName}`}
+                            checked={isRowSelected}
+                            onChange={() => handleToggleSelect(en.enrolmentId)}
+                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          />
+                        </td>
                         <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#14213D' }}>
                           {en.enrolmentNumber}
                         </td>
@@ -733,12 +879,21 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
                 return (
                   <div key={en.enrolmentId} className="cp-mobile-record-card">
                     <div className="cp-mobile-record-header">
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                          {en.studentName}
-                        </h4>
-                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          {en.programmeName} &bull; {en.cohortName}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select candidate ${en.studentName}`}
+                          checked={selectedIds.has(en.enrolmentId)}
+                          onChange={() => handleToggleSelect(en.enrolmentId)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {en.studentName}
+                          </h4>
+                          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {en.programmeName} &bull; {en.cohortName}
+                          </div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
@@ -1155,6 +1310,25 @@ export const CertificateEligibilityClient: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* ===================== MODAL: LIFECYCLE / PROVENANCE PROTECTION ===================== */}
+      {/* Controlled Protected Record Modal */}
+      {lifecycleModal.isOpen && lifecycleModal.candidate && (
+        <RecordLifecycleModal
+          isOpen={lifecycleModal.isOpen}
+          onClose={() => setLifecycleModal({ isOpen: false })}
+          onConfirm={async () => {
+            setLifecycleModal({ isOpen: false });
+          }}
+          entityName="Candidate Completion Record"
+          recordIdentifier={lifecycleModal.candidate.studentName}
+          actionType="DELETE"
+          dependencies={[
+            { label: 'Delivered Sessions Attended', count: lifecycleModal.candidate.totalAttendedSessions },
+            { label: 'Active Certificates', count: lifecycleModal.candidate.hasActiveCertificate ? 1 : 0 },
+          ]}
+          blockedMessage="Trainee completion records are protected historical academic records with recorded session attendance. To withdraw this student from the cohort, manage their enrolment under Enrolments Management instead of casual deletion."
+        />
       )}
     </div>
   );

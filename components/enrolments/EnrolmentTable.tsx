@@ -1,24 +1,54 @@
 /**
  * components/enrolments/EnrolmentTable.tsx — Phase 4
- * Exact legacy Clasptek 9-column Course Enrolment Register Table.
- * Reference: index.html lines 26531–26550
+ * Course Enrolment Register Table with data management controls:
+ * - Multi-row selection & select-all
+ * - Attendance & Completion status badges
+ * - Action buttons: Details, Edit Status, Withdraw / Deactivate
+ * - Responsive desktop/tablet table and mobile cards
  */
 
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { Enrolment } from '@/types/academics';
 
 interface EnrolmentTableProps {
   enrolments: Enrolment[];
   onSelectEnrolment?: (enrolment: Enrolment) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
+  onEditStatus?: (enrolment: Enrolment) => void;
+  onWithdrawEnrolment?: (enrolment: Enrolment) => void;
+  canEdit?: boolean;
 }
 
 function fmtMoney(amount: number): string {
   return '₦' + Number(amount || 0).toLocaleString();
 }
 
-export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTableProps) {
+export function EnrolmentTable({
+  enrolments,
+  onSelectEnrolment,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleSelectAll,
+  isAllSelected = false,
+  onEditStatus,
+  onWithdrawEnrolment,
+  canEdit = true,
+}: EnrolmentTableProps) {
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      const selectedCount = enrolments.filter((e) => selectedIds.has(e.id)).length;
+      const isIndeterminate = selectedCount > 0 && selectedCount < enrolments.length;
+      headerCheckboxRef.current.indeterminate = isIndeterminate;
+    }
+  }, [selectedIds, enrolments]);
+
   if (enrolments.length === 0) {
     return (
       <div className="cp-empty-state">
@@ -34,10 +64,22 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
   return (
     <>
       {/* Desktop & Tablet Table */}
-      <div className="cp-table-wrap cp-table-desktop">
+      <div className="cp-table-wrap cp-table-desktop" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table className="cp-table">
           <thead>
             <tr>
+              {onToggleSelect && (
+                <th style={{ width: '42px', textAlign: 'center', padding: '8px' }}>
+                  <input
+                    type="checkbox"
+                    ref={headerCheckboxRef}
+                    checked={isAllSelected}
+                    onChange={onToggleSelectAll}
+                    aria-label="Select all visible enrolments"
+                    style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                  />
+                </th>
+              )}
               <th>Enrolment #</th>
               <th>Student</th>
               <th>Programme &amp; Cohort</th>
@@ -46,14 +88,37 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
               <th className="cp-col-secondary">Completion</th>
               <th className="cp-col-tertiary">Credential</th>
               <th>Status</th>
-              <th style={{ textAlign: 'center' }}>Action</th>
+              <th style={{ textAlign: 'center', minWidth: '130px' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {enrolments.map((en) => {
               const att = Number(en.completion_attendance_pct || 0);
+              const isChecked = selectedIds.has(en.id);
+
               return (
-                <tr key={en.id}>
+                <tr
+                  key={en.id}
+                  style={{
+                    backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.05)' : undefined,
+                  }}
+                >
+                  {/* Checkbox */}
+                  {onToggleSelect && (
+                    <td
+                      style={{ textAlign: 'center', width: '42px', padding: '8px' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => onToggleSelect(en.id)}
+                        aria-label={`Select ${en.enrolment_number}`}
+                        style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                      />
+                    </td>
+                  )}
+
                   <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--primary)' }}>
                     {en.enrolment_number || 'ENR-—'}
                   </td>
@@ -109,22 +174,47 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
                           ? 'active'
                           : en.status === 'COMPLETED'
                           ? 'paid'
-                          : en.status === 'CONFIRMED'
-                          ? 'category-pill'
-                          : 'draft'
+                          : en.status === 'WITHDRAWN' || en.status === 'CANCELLED'
+                          ? 'draft'
+                          : 'category-pill'
                       }`}
                     >
                       {en.status}
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      className="cp-btn sm secondary"
-                      onClick={() => onSelectEnrolment && onSelectEnrolment(en)}
-                    >
-                      Details
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={() => onSelectEnrolment && onSelectEnrolment(en)}
+                        style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600 }}
+                      >
+                        Details
+                      </button>
+                      {canEdit && onEditStatus && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={() => onEditStatus(en)}
+                          style={{ padding: '3px 6px', fontSize: '11px' }}
+                          title="Change Enrolment Status"
+                        >
+                          ✏️
+                        </button>
+                      )}
+                      {canEdit && onWithdrawEnrolment && en.status !== 'WITHDRAWN' && (
+                        <button
+                          type="button"
+                          className="cp-btn sm secondary"
+                          onClick={() => onWithdrawEnrolment(en)}
+                          style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                          title="Withdraw Enrolment"
+                        >
+                          🛑
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -134,100 +224,84 @@ export function EnrolmentTable({ enrolments, onSelectEnrolment }: EnrolmentTable
       </div>
 
       {/* Mobile Card Stack */}
-      <div className="cp-cards-mobile">
+      <div className="cp-cards-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {enrolments.map((en) => {
           const att = Number(en.completion_attendance_pct || 0);
+          const isChecked = selectedIds.has(en.id);
+
           return (
             <div
               key={en.id}
-              className="cp-mobile-record-card"
-              onClick={() => onSelectEnrolment && onSelectEnrolment(en)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && onSelectEnrolment && onSelectEnrolment(en)}
-              aria-label={`View enrolment for ${en.student_name}`}
+              className="cp-card"
+              style={{
+                padding: '14px',
+                border: isChecked ? '1px solid #3B82F6' : undefined,
+                backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.03)' : undefined,
+              }}
             >
-              <div className="cp-mobile-record-header">
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {en.student_name}
-                  </h4>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {en.programme_name || 'Not specified'} &bull; {en.cohort_name}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {onToggleSelect && (
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => onToggleSelect(en.id)}
+                      aria-label={`Select ${en.enrolment_number}`}
+                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                    />
+                  )}
+                  <div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '12px', color: 'var(--primary)' }}>
+                      {en.enrolment_number || 'ENR-—'}
+                    </span>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginTop: '2px' }}>
+                      {en.student_name}
+                    </div>
                   </div>
                 </div>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono, monospace)',
-                    fontWeight: 700,
-                    fontSize: '11px',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--primary)',
-                  }}
-                >
-                  {en.enrolment_number || 'ENR-—'}
+                <span className={`cp-pill ${en.status === 'ACTIVE' ? 'active' : 'draft'}`}>
+                  {en.status}
                 </span>
               </div>
 
-              <div className="cp-mobile-record-grid">
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Status</span>
-                  <div>
-                    <span
-                      className={`cp-pill ${
-                        en.status === 'ACTIVE'
-                          ? 'active'
-                          : en.status === 'COMPLETED'
-                          ? 'paid'
-                          : en.status === 'CONFIRMED'
-                          ? 'category-pill'
-                          : 'draft'
-                      }`}
-                    >
-                      {en.status}
-                    </span>
-                  </div>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Tuition Fee</span>
-                  <span className="cp-mobile-record-value" style={{ color: 'var(--primary)' }}>
-                    {fmtMoney(en.agreed_tuition_fee)}
-                  </span>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Attendance</span>
-                  <div>
-                    <span
-                      className={`cp-pill ${att >= 80 ? 'paid' : att > 0 ? 'active' : 'draft'}`}
-                      style={{ fontWeight: 700, fontSize: '10.5px' }}
-                    >
-                      {att}%
-                    </span>
-                  </div>
-                </div>
-                <div className="cp-mobile-record-field">
-                  <span className="cp-mobile-record-label">Credential</span>
-                  <span className="cp-mobile-record-value" style={{ fontSize: '11.5px', fontWeight: 500 }}>
-                    {en.certificate_issued ? '🎓 Certified' : '—'}
-                  </span>
-                </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                <strong>{en.programme_name || 'Not specified'}</strong> &middot; {en.cohort_name}
               </div>
 
-              <div className="cp-mobile-record-actions">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', marginBottom: '8px' }}>
+                <span>Agreed: <strong>{fmtMoney(en.agreed_tuition_fee)}</strong></span>
+                <span>Attendance: <strong>{att}%</strong></span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
                 <button
                   type="button"
                   className="cp-btn sm secondary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onSelectEnrolment) onSelectEnrolment(en);
-                  }}
-                  style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                  onClick={() => onSelectEnrolment && onSelectEnrolment(en)}
+                  style={{ padding: '3px 8px', fontSize: '11px' }}
                 >
-                  View Enrolment
+                  Details
                 </button>
+                {canEdit && onEditStatus && (
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => onEditStatus(en)}
+                    style={{ padding: '3px 6px', fontSize: '11px' }}
+                  >
+                    ✏️
+                  </button>
+                )}
+                {canEdit && onWithdrawEnrolment && en.status !== 'WITHDRAWN' && (
+                  <button
+                    type="button"
+                    className="cp-btn sm secondary"
+                    onClick={() => onWithdrawEnrolment(en)}
+                    style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                  >
+                    🛑
+                  </button>
+                )}
               </div>
             </div>
           );
