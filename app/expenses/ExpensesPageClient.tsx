@@ -240,7 +240,15 @@ export function ExpensesPageClient({
         throw new Error(data.error || 'Failed to record expense');
       }
 
-      setExpenses((prev) => [data.expense, ...prev]);
+      setExpenses((prev) => {
+        const next = [data.expense, ...prev];
+        return next.sort((a, b) => {
+          const dateA = a.expenseDate || '';
+          const dateB = b.expenseDate || '';
+          if (dateA !== dateB) return dateB.localeCompare(dateA);
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+      });
       setIsLogModalOpen(false);
       setFormAmount('');
       setFormDesc('');

@@ -132,7 +132,15 @@ export function PaymentsPageClient({
         throw new Error(data.error || 'Failed to record payment');
       }
 
-      setPayments([data.payment, ...payments]);
+      setPayments((prev) => {
+        const next = [data.payment, ...prev];
+        return next.sort((a, b) => {
+          const dateA = a.paymentDate || '';
+          const dateB = b.paymentDate || '';
+          if (dateA !== dateB) return dateB.localeCompare(dateA);
+          return (Number(b.receiptNo) || 0) - (Number(a.receiptNo) || 0);
+        });
+      });
       setIsRecordModalOpen(false);
       setReference('');
       setNotes('');

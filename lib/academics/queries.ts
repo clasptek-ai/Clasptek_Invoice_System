@@ -24,7 +24,9 @@ export async function getProgrammes(): Promise<{ data: Programme[]; error: strin
     const { data, error } = await supabase
       .from('programmes')
       .select('*')
-      .order('name', { ascending: true });
+      .order('name', { ascending: true })
+      .order('code', { ascending: true })
+      .order('id', { ascending: true });
 
     if (error) {
       console.error('[getProgrammes]', error.message);
@@ -47,7 +49,9 @@ export async function getCohorts(
     let query = supabase
       .from('cohorts')
       .select('*, programmes!fk_cohorts_programme_tenant(name), personnel(full_name)')
-      .order('start_date', { ascending: false });
+      .order('start_date', { ascending: false })
+      .order('cohort_code', { ascending: false })
+      .order('id', { ascending: false });
 
     if (filters.programmeId && filters.programmeId !== 'ALL') {
       query = query.eq('programme_id', filters.programmeId);
@@ -137,7 +141,9 @@ export async function getEnrolments(
     let query = supabase
       .from('enrolments')
       .select('*, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(cohort_code, name)', { count: 'exact' })
-      .order('enrolment_date', { ascending: false });
+      .order('enrolment_date', { ascending: false })
+      .order('enrolment_number', { ascending: false })
+      .order('id', { ascending: false });
 
     if (filters.cohortId && filters.cohortId !== 'ALL') {
       query = query.eq('cohort_id', filters.cohortId);

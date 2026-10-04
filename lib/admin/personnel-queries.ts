@@ -58,7 +58,8 @@ export async function getAdminPersonnelList(tenantId: string): Promise<AdminPers
     .from('personnel')
     .select('*')
     .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false });
+    .order('full_name', { ascending: true })
+    .order('employee_id', { ascending: true });
 
   if (error) {
     console.error('Error fetching admin personnel:', error.message);

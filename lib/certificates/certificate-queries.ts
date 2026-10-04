@@ -39,7 +39,8 @@ export async function getCertificates(
       .from('certificates')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false });
+      .order('issue_date', { ascending: false })
+      .order('certificate_number', { ascending: false });
 
     if (filters.status && filters.status !== 'ALL') {
       query = query.eq('status', filters.status);

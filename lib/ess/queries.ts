@@ -117,7 +117,8 @@ export async function getEmployeePayslips(): Promise<EmployeePayslip[]> {
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('personnel_id', personnel.id)
-    .order('pay_period', { ascending: false });
+    .order('pay_period', { ascending: false })
+    .order('payslip_no', { ascending: false });
 
   if (error) {
     throw new Error(`Failed to fetch payslips: ${error.message}`);

@@ -45,7 +45,10 @@ export async function GET(request: NextRequest) {
       .from('students')
       .select('*')
       .eq('tenant_id', session.tenantId)
-      .order('created_at', { ascending: false });
+      .order('metadata->>registeredAt', { ascending: false, nullsFirst: false })
+      .order('metadata->>registrationDate', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .order('student_number', { ascending: false });
 
     if (search) {
       query = query.or(

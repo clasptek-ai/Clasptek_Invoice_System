@@ -115,7 +115,10 @@ export async function getStudents(
     let query = supabase
       .from('students')
       .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false });
+      .order('metadata->>registeredAt', { ascending: false, nullsFirst: false })
+      .order('metadata->>registrationDate', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .order('student_number', { ascending: false });
 
     if (search.trim()) {
       const q = search.trim();

@@ -80,18 +80,24 @@ export function MeetingsPageClient({
     muteOnEntry: false,
   });
 
-  const upcomingMeetings = meetings.filter((m) => m.status === 'SCHEDULED');
-  const liveMeetings = meetings.filter((m) => m.status === 'LIVE');
-  const completedMeetings = meetings.filter(
-    (m) => m.status === 'ENDED' || m.status === 'COMPLETED'
+  const upcomingMeetings = [...meetings.filter((m) => m.status === 'SCHEDULED')].sort(
+    (a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime() || a.id.localeCompare(b.id)
   );
-  const recordingMeetings = meetings.filter(
+  const liveMeetings = meetings.filter((m) => m.status === 'LIVE');
+  const completedMeetings = [...meetings.filter(
+    (m) => m.status === 'ENDED' || m.status === 'COMPLETED'
+  )].sort(
+    (a, b) => new Date(b.scheduledStart).getTime() - new Date(a.scheduledStart).getTime() || b.id.localeCompare(a.id)
+  );
+  const recordingMeetings = [...meetings.filter(
     (m) =>
       m.recordingStatus === 'STORED' ||
       Boolean(m.recordingMetadata?.driveUrl) ||
       Boolean(m.recordingUrl) ||
       m.status === 'ENDED' ||
       m.status === 'COMPLETED'
+  )].sort(
+    (a, b) => new Date(b.scheduledStart).getTime() - new Date(a.scheduledStart).getTime() || b.id.localeCompare(a.id)
   );
 
   let displayed = meetings;

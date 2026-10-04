@@ -98,7 +98,8 @@ export async function getInvoices(tenantId?: string): Promise<Invoice[]> {
       .from('invoices')
       .select('*')
       .eq('tenant_id', resolvedTenant)
-      .order('created_at', { ascending: false }),
+      .order('invoice_date', { ascending: false })
+      .order('invoice_no', { ascending: false }),
     supabase
       .from('payments')
       .select('*')
@@ -652,7 +653,9 @@ export async function getPayments(tenantId?: string): Promise<Payment[]> {
       .from('payments')
       .select('*')
       .eq('tenant_id', resolvedTenant)
-      .order('payment_date', { ascending: false }),
+      .order('payment_date', { ascending: false })
+      .order('receipt_no', { ascending: false })
+      .order('created_at', { ascending: false }),
     supabase
       .from('invoices')
       .select('id, invoice_display_no, student_name')
@@ -867,7 +870,8 @@ export async function getPayslips(tenantId?: string): Promise<Payslip[]> {
     .from('payslips')
     .select('*')
     .eq('tenant_id', resolvedTenant)
-    .order('created_at', { ascending: false });
+    .order('pay_period', { ascending: false })
+    .order('payslip_no', { ascending: false });
 
   if (error) {
     console.error('Error fetching payslips:', error);
@@ -1184,7 +1188,8 @@ export async function getPersonnelList(tenantId?: string): Promise<Personnel[]> 
     .from('personnel')
     .select('*')
     .eq('tenant_id', resolvedTenant)
-    .order('full_name', { ascending: true });
+    .order('full_name', { ascending: true })
+    .order('employee_id', { ascending: true });
 
   if (error) {
     console.error('Error fetching personnel:', error);

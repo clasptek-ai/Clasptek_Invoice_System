@@ -30,8 +30,10 @@ export async function getTrainingCohorts(): Promise<{
     const supabase = await createServerClient();
     const { data: cohorts, error: cErr } = await supabase
       .from('cohorts')
-      .select('id, name, status, programme_id, lead_facilitator_id, metadata, created_at')
-      .order('created_at', { ascending: false });
+      .select('id, name, status, programme_id, lead_facilitator_id, metadata, start_date, cohort_code, created_at')
+      .order('start_date', { ascending: false })
+      .order('cohort_code', { ascending: false })
+      .order('id', { ascending: false });
 
     if (cErr) {
       console.error('[getTrainingCohorts]', cErr.message);

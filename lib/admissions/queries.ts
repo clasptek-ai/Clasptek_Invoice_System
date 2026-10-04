@@ -234,7 +234,8 @@ export async function getEnquiries(
        programmes:programme_id ( name )`,
       { count: 'exact' }
     )
-    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .range(from, to);
 
   if (status && status !== 'all') {

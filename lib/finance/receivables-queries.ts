@@ -90,7 +90,8 @@ export async function getReceivablesAgeing(tenantId?: string): Promise<{
       .select('*')
       .eq('tenant_id', resolvedTenant)
       .not('status', 'in', '("voided","cancelled")')
-      .order('due_date', { ascending: true }),
+      .order('due_date', { ascending: true })
+      .order('invoice_no', { ascending: false }),
     supabase
       .from('payments')
       .select('*')

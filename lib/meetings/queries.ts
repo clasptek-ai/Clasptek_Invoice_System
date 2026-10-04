@@ -121,7 +121,8 @@ export async function getMeetings(filters?: {
     const { data: dbMeetings, error: dbErr } = await supabase
       .from('meetings')
       .select('*')
-      .order('scheduled_start', { ascending: false });
+      .order('scheduled_start', { ascending: false })
+      .order('id', { ascending: false });
 
     let all: Meeting[] = [];
 

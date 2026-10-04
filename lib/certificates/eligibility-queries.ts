@@ -40,7 +40,8 @@ export async function getCertificateEligibilityList(
       .select('*')
       .eq('tenant_id', tenantId)
       .not('status', 'in', '("CANCELLED","WITHDRAWN")')
-      .order('created_at', { ascending: false });
+      .order('enrolment_date', { ascending: false })
+      .order('enrolment_number', { ascending: false });
 
     if (filters.cohortId && filters.cohortId !== 'ALL') {
       enrQuery = enrQuery.eq('cohort_id', filters.cohortId);
