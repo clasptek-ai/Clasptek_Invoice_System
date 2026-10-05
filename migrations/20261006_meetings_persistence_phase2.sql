@@ -122,30 +122,7 @@ CREATE POLICY "meetings_facilitator_select" ON public.meetings
         )
     );
 
--- 8. Policy: Facilitator UPDATE (assigned meetings lifecycle only)
-CREATE POLICY "meetings_facilitator_update" ON public.meetings
-    FOR UPDATE
-    TO authenticated
-    USING (
-        tenant_id = public.get_auth_tenant_id()
-        AND deleted_at IS NULL
-        AND public.is_facilitator()
-        AND facilitator_id IN (
-            SELECT p.id FROM public.personnel p
-            WHERE p.user_id = auth.uid()
-              AND p.tenant_id = public.get_auth_tenant_id()
-        )
-    )
-    WITH CHECK (
-        tenant_id = public.get_auth_tenant_id()
-        AND facilitator_id IN (
-            SELECT p.id FROM public.personnel p
-            WHERE p.user_id = auth.uid()
-              AND p.tenant_id = public.get_auth_tenant_id()
-        )
-    );
-
--- 9. Policy: Student SELECT (enrolled cohort meetings only)
+-- 8. Policy: Student SELECT (enrolled cohort meetings only)
 CREATE POLICY "meetings_student_select" ON public.meetings
     FOR SELECT
     TO authenticated
