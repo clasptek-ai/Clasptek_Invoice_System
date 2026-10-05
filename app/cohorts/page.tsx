@@ -4,8 +4,9 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getCohorts, getProgrammes } from '@/lib/academics/queries';
+import { getPersonnelList } from '@/lib/finance/queries';
 import { CohortsPageClient } from './CohortsPageClient';
 
 export const dynamic = 'force-dynamic';
@@ -20,13 +21,15 @@ interface PageProps {
 }
 
 export default async function CohortsPage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthoritativeSession();
+  if (!session) {
     redirect('/login?next=/cohorts');
+  }
+
+  // Cohort creation/management is an Admin-authorized operation
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
   }
 
   const params = await searchParams;
@@ -34,19 +37,29 @@ export default async function CohortsPage({ searchParams }: PageProps) {
   const prog = params.prog ?? 'ALL';
   const status = params.status ?? 'ALL';
 
-  const [cohortsResult, progsResult] = await Promise.all([
+  const [cohortsResult, progsResult, personnelList] = await Promise.all([
     getCohorts({
       search,
       programmeId: prog,
       status,
     }),
     getProgrammes(),
+    getPersonnelList(),
   ]);
+
+  const facilitators = (personnelList || []).map((p) => ({
+    id: p.id,
+    fullName: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || p.email,
+    name: p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || p.email,
+    employeeId: p.employeeId,
+    jobTitle: p.department || (p.employeeType === 'facilitator' ? 'Lead Facilitator' : 'Staff'),
+  }));
 
   return (
     <CohortsPageClient
       initialCohorts={cohortsResult.data}
       programmes={progsResult.data}
+      facilitators={facilitators}
       currentSearch={search}
       currentProg={prog}
       currentStatus={status}

@@ -4,6 +4,7 @@
  */
 
 import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { getFacilitatorReports, getTrainingCohorts } from '@/lib/training/queries';
 import { FacilitatorReportsPageClient } from './FacilitatorReportsPageClient';
@@ -20,14 +21,18 @@ interface PageProps {
 }
 
 export default async function FacilitatorReportsPage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthoritativeSession();
 
-  if (!user) {
+  if (!session) {
     redirect('/login?next=/facilitator-reports');
   }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const supabase = await createServerClient();
 
   const params = await searchParams;
   const cohortFilter = params.cohortId || 'ALL';

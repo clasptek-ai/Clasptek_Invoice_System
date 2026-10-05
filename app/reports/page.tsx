@@ -1,7 +1,11 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getUnifiedReports } from '@/lib/intelligence/queries';
-import { getFinanceTenantId, getFinancialMetrics } from '@/lib/finance/queries';
+import { getFinancialMetrics } from '@/lib/finance/queries';
 import { ReportsPageClient } from './ReportsPageClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Reports & Analytics — Clasptek Portal',
@@ -9,7 +13,18 @@ export const metadata = {
 };
 
 export default async function ReportsPage() {
-  const tenantId = await getFinanceTenantId();
+  const session = await getAuthoritativeSession();
+
+  if (!session) {
+    redirect('/login?next=/reports');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
 
   const [initialReports, financeMetrics] = await Promise.all([
     getUnifiedReports('ALL', tenantId),

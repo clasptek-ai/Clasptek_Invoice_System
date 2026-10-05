@@ -548,15 +548,17 @@ export function MeetingsPageClient({
             Native browser video meeting rooms for Clasptek live classrooms, cohort lectures, and facilitator sessions.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="cp-btn primary"
-            id="btnOpenScheduleMeetingModal"
-            onClick={() => setIsScheduleModalOpen(true)}
-          >
-            + Schedule Meeting
-          </button>
-        </div>
+        {currentUser.role !== 'Facilitator' && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="cp-btn primary"
+              id="btnOpenScheduleMeetingModal"
+              onClick={() => setIsScheduleModalOpen(true)}
+            >
+              + Schedule Meeting
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Top KPI Grid */}
@@ -827,23 +829,25 @@ export function MeetingsPageClient({
       </div>
 
         {/* Selection Bar */}
-        <TableSelectionBar
-          selectedCount={selectedIds.size}
-          totalVisibleCount={visibleIds.length}
-          entityLabel="meeting"
-          onSelectAllVisible={handleToggleSelectAll}
-          isAllSelected={isAllSelected}
-          onClearSelection={handleClearSelection}
-        >
-          <button
-            type="button"
-            className="cp-btn sm danger"
-            onClick={() => handleOpenDeleteModal(Array.from(selectedIds))}
-            title="Cancel or delete selected meetings"
+        {currentUser.role !== 'Facilitator' && (
+          <TableSelectionBar
+            selectedCount={selectedIds.size}
+            totalVisibleCount={visibleIds.length}
+            entityLabel="meeting"
+            onSelectAllVisible={handleToggleSelectAll}
+            isAllSelected={isAllSelected}
+            onClearSelection={handleClearSelection}
           >
-            🗑️ Cancel / Delete Selected ({selectedIds.size})
-          </button>
-        </TableSelectionBar>
+            <button
+              type="button"
+              className="cp-btn sm danger"
+              onClick={() => handleOpenDeleteModal(Array.from(selectedIds))}
+              title="Cancel or delete selected meetings"
+            >
+              🗑️ Cancel / Delete Selected ({selectedIds.size})
+            </button>
+          </TableSelectionBar>
+        )}
 
         {/* Meetings Table / List */}
         <div className="cp-card">
@@ -976,15 +980,17 @@ export function MeetingsPageClient({
                               Summary
                             </button>
                           )}
-                          <button
-                            type="button"
-                            className="cp-btn sm danger"
-                            onClick={() => handleOpenDeleteModal([m.id], m.title)}
-                            title="Cancel / Delete Meeting"
-                            style={{ padding: '4px 8px' }}
-                          >
-                            🗑️
-                          </button>
+                          {currentUser.role !== 'Facilitator' && (
+                            <button
+                              type="button"
+                              className="cp-btn sm danger"
+                              onClick={() => handleOpenDeleteModal([m.id], m.title)}
+                              title="Cancel / Delete Meeting"
+                              style={{ padding: '4px 8px' }}
+                            >
+                              🗑️
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1106,17 +1112,19 @@ export function MeetingsPageClient({
                           ▶ Watch Recording
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="cp-btn sm danger"
-                        onClick={(evt) => {
-                          evt.stopPropagation();
-                          handleOpenDeleteModal([m.id], m.title);
-                        }}
-                        style={{ padding: '4px 10px' }}
-                      >
-                        🗑️ Delete
-                      </button>
+                      {currentUser.role !== 'Facilitator' && (
+                        <button
+                          type="button"
+                          className="cp-btn sm danger"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            handleOpenDeleteModal([m.id], m.title);
+                          }}
+                          style={{ padding: '4px 10px' }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

@@ -1,6 +1,11 @@
 import React from 'react';
-import { getPayslips, getPersonnelList, getFinancialMetrics, getFinanceTenantId } from '@/lib/finance/queries';
+import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getPayslips, getPersonnelList, getFinancialMetrics } from '@/lib/finance/queries';
+import { getFinanceSettings } from '@/lib/settings/queries';
 import { PayrollPageClient } from './PayrollPageClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Staff & Facilitator Payroll — Clasptek Portal',
@@ -8,12 +13,24 @@ export const metadata = {
 };
 
 export default async function PayrollPage() {
-  const tenantId = await getFinanceTenantId();
+  const session = await getAuthoritativeSession();
 
-  const [payslips, personnel, metrics] = await Promise.all([
+  if (!session) {
+    redirect('/login?next=/payroll');
+  }
+
+  const allowed = ['Super Admin', 'Finance Manager'].includes(session.role);
+  if (!allowed) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
+
+  const [payslips, personnel, metrics, financeSettings] = await Promise.all([
     getPayslips(tenantId),
     getPersonnelList(tenantId),
     getFinancialMetrics(tenantId),
+    getFinanceSettings(tenantId),
   ]);
 
   return (
@@ -22,6 +39,7 @@ export default async function PayrollPage() {
         initialPayslips={payslips}
         personnel={personnel}
         metrics={metrics}
+        financeSettings={financeSettings}
       />
     </div>
   );

@@ -1,7 +1,11 @@
 import React from 'react';
-import { getPayments, getInvoices, getFinancialMetrics, getFinanceTenantId } from '@/lib/finance/queries';
+import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getPayments, getInvoices, getFinancialMetrics } from '@/lib/finance/queries';
 import { getFinanceSettings } from '@/lib/settings/queries';
 import { PaymentsPageClient } from './PaymentsPageClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Payments & Receipts Ledger — Clasptek Portal',
@@ -9,7 +13,18 @@ export const metadata = {
 };
 
 export default async function PaymentsPage() {
-  const tenantId = await getFinanceTenantId();
+  const session = await getAuthoritativeSession();
+
+  if (!session) {
+    redirect('/login?next=/payments');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
 
   const [payments, allInvoices, metrics, financeSettings] = await Promise.all([
     getPayments(tenantId),

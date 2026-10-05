@@ -9,9 +9,9 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getEnquiries, getProgrammes } from '@/lib/admissions/queries';
-import { getFinanceTenantId, getCustomersList } from '@/lib/finance/queries';
+import { getCustomersList } from '@/lib/finance/queries';
 import { getFinanceSettings, getPaymentAccounts } from '@/lib/settings/queries';
 import { EnquiriesPageClient } from './EnquiriesPageClient';
 import type { EnquiryFilters } from '@/types/admissions';
@@ -28,15 +28,20 @@ interface PageProps {
 }
 
 export default async function EnquiriesPage({ searchParams }: PageProps) {
-  // 1. Verify authentication
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // 1. Verify authoritative session & role
+  const session = await getAuthoritativeSession();
+  if (!session) {
     redirect('/login?next=/enquiries');
   }
+
+  // Facilitators and Students must NOT access the CRM pipeline.
+  // Super Admin, Finance Manager, and Staff (Admissions) retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
 
   // 2. Parse search params
   const params = await searchParams;
@@ -45,10 +50,11 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
   const rawPageSize = parseInt(params.pageSize ?? '25', 10);
   const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
+  const sortBy = params.sortBy ?? 'created_at';
+  const sortOrder = (params.order === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
   const initialOpenNew = params.new === '1' || params.action === 'new';
 
   // 3. Fetch initial data, active programmes, and authoritative finance/payment settings in parallel
-  const tenantId = await getFinanceTenantId();
   const [
     { data: enquiries, count, error },
     programmes,
@@ -56,7 +62,7 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
     financeSettings,
     paymentAccounts,
   ] = await Promise.all([
-    getEnquiries({ search, status, page, pageSize }),
+    getEnquiries({ search, status, page, pageSize, sortBy, sortOrder }),
     getProgrammes(),
     getCustomersList(tenantId),
     getFinanceSettings(tenantId),
@@ -68,6 +74,12 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
     console.error('[/enquiries] data fetch error:', error);
   }
 
+  const staffName =
+    (session.user.user_metadata?.full_name as string) ||
+    (session.user.user_metadata?.name as string) ||
+    session.user.email?.split('@')[0] ||
+    'Admissions';
+
   return (
     <EnquiriesPageClient
       initialEnquiries={enquiries}
@@ -76,12 +88,14 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
       currentStatus={status}
       currentPage={page}
       pageSize={pageSize}
+      currentSortBy={sortBy}
+      currentSortOrder={sortOrder}
       programmes={programmes}
       customers={customers}
       financeSettings={financeSettings}
       paymentAccounts={paymentAccounts}
       initialOpenNew={initialOpenNew}
-      staffName={user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admissions'}
+      staffName={staffName}
       initialError={
         error
           ? 'Unable to load enquiries. Please try again. If the problem persists, contact an administrator.'

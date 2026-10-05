@@ -28,7 +28,7 @@ export default async function CertificateEligibilityPage() {
     redirect('/login?next=/certificate-eligibility');
   }
 
-  const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff', 'Facilitator'];
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
   if (!allowedRoles.includes(session.role)) {
     redirect('/dashboard');
   }

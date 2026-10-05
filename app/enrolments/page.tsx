@@ -4,7 +4,7 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getEnrolments, getCohorts } from '@/lib/academics/queries';
 import { EnrolmentsPageClient } from './EnrolmentsPageClient';
 
@@ -20,13 +20,16 @@ interface PageProps {
 }
 
 export default async function EnrolmentsPage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthoritativeSession();
+  if (!session) {
     redirect('/login?next=/enrolments');
+  }
+
+  // Facilitators and Students must NOT access the organisation-wide Enrolments administration screen.
+  // Super Admin, Finance Manager, and Staff (Admissions/Registrar) retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
   }
 
   const params = await searchParams;
@@ -36,6 +39,8 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
   const rawPageSize = parseInt(params.pageSize ?? '25', 10);
   const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
+  const sortBy = params.sortBy ?? 'enrolment_date';
+  const sortOrder = (params.order === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
 
   const [enrolmentsResult, cohortsResult] = await Promise.all([
     getEnrolments({
@@ -44,6 +49,8 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
       status,
       page,
       pageSize,
+      sortBy,
+      sortOrder,
     }),
     getCohorts(),
   ]);
@@ -58,6 +65,8 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
       currentStatus={status}
       currentPage={page}
       pageSize={pageSize}
+      currentSortBy={sortBy}
+      currentSortOrder={sortOrder}
     />
   );
 }

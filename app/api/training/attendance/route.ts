@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import {
   saveAttendance,
   correctAttendance,
@@ -17,14 +17,18 @@ import type { AttendanceStatus } from '@/types/training';
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
 
-    if (authErr || !user) {
+    if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions to record attendance.' },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -77,14 +81,18 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
 
-    if (authErr || !user) {
+    if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only administrators may correct historical attendance records.' },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -119,14 +127,18 @@ export async function PATCH(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
 
-    if (authErr || !user) {
+    if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions to finalize session attendance.' },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();

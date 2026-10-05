@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const allowedRoles = ['Super Admin', 'Staff'];
+    const allowedRoles = ['Super Admin', 'Finance Manager'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions for cohort management.' },

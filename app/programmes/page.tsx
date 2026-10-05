@@ -4,7 +4,7 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getProgrammes } from '@/lib/academics/queries';
 import { ProgrammesPageClient } from './ProgrammesPageClient';
 
@@ -16,13 +16,15 @@ export const metadata = {
 };
 
 export default async function ProgrammesPage() {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthoritativeSession();
 
-  if (!user) {
+  if (!session) {
     redirect('/login?next=/programmes');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
   }
 
   const { data: programmes } = await getProgrammes();

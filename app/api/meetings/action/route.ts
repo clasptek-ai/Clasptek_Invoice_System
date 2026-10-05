@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getAuthoritativePersonnel } from '@/lib/ess/queries';
 import { updateMeetingStatus, getMeetingById, checkMeetingDependencies, deleteMeetingSafe } from '@/lib/meetings/queries';
 
 export async function GET(req: NextRequest) {
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'DELETE_MEETING') {
-      if (!['Super Admin', 'Staff'].includes(session.role)) {
+      if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
         return NextResponse.json({ error: 'Forbidden: Insufficient permissions to delete meetings.' }, { status: 403 });
       }
       if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
@@ -67,9 +68,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'END_MEETING') {
-      if (meetingId) {
-        await updateMeetingStatus(meetingId, 'ENDED');
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        const mtgRes = await getMeetingById(meetingId);
+        if (!mtgRes.data || (mtgRes.data.facilitatorId !== persId)) {
+          return NextResponse.json({ error: 'Forbidden: You are not authorized to end this meeting.' }, { status: 403 });
+        }
+      } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+        return NextResponse.json({ error: 'Forbidden: Insufficient permissions to end this meeting.' }, { status: 403 });
       }
+      await updateMeetingStatus(meetingId, 'ENDED');
       return NextResponse.json({ success: true, action: 'END_MEETING', endedAt: new Date().toISOString() });
     }
 

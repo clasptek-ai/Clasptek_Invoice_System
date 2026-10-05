@@ -1,7 +1,10 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getManagementDashboardMetrics } from '@/lib/intelligence/queries';
-import { getFinanceTenantId } from '@/lib/finance/queries';
 import { IntelligencePageClient } from './IntelligencePageClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Management Intelligence — Clasptek Portal',
@@ -9,7 +12,18 @@ export const metadata = {
 };
 
 export default async function IntelligencePage() {
-  const tenantId = await getFinanceTenantId();
+  const session = await getAuthoritativeSession();
+
+  if (!session) {
+    redirect('/login?next=/intelligence');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
   const initialMetrics = await getManagementDashboardMetrics(tenantId, 'all_time');
 
   return (

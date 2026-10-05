@@ -5,6 +5,8 @@
  */
 
 import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getAuthoritativePersonnel } from '@/lib/ess/queries';
 import type { Meeting, MeetingStatus, RecordingStatus, RecordingMetadata } from '@/types/meetings';
 
 // Persistent in-memory meeting cache (retained across requests in same node process)
@@ -191,6 +193,40 @@ export async function getMeetings(filters?: {
       };
     });
 
+    const session = await getAuthoritativeSession().catch(() => null);
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: null };
+        }
+        const { data: myCohorts } = await supabase
+          .from('cohorts')
+          .select('id')
+          .eq('lead_facilitator_id', persId);
+        const { data: mySessions } = await supabase
+          .from('training_sessions')
+          .select('cohort_id')
+          .eq('facilitator_id', persId);
+
+        const assignedCohortIds = Array.from(
+          new Set([
+            ...(myCohorts || []).map((c) => c.id),
+            ...(mySessions || []).map((s) => s.cohort_id),
+          ])
+        );
+
+        all = all.filter(
+          (m) =>
+            m.facilitatorId === persId ||
+            (m.cohortId && assignedCohortIds.includes(m.cohortId))
+        );
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: null };
+      }
+    }
+
     if (filters?.subTab) {
       if (filters.subTab === 'upcoming') {
         all = all.filter((m) => m.status === 'SCHEDULED');
@@ -281,6 +317,30 @@ export async function getMeetingById(idOrPublicId: string): Promise<{
       updatedAt: row.updated_at,
     };
 
+    const session = await getAuthoritativeSession().catch(() => null);
+    if (session && session.role === 'Facilitator') {
+      const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+      const persId = personnelRes?.personnel?.id;
+      if (!persId) {
+        return { data: null, error: 'Meeting not found' };
+      }
+      if (meeting.facilitatorId !== persId) {
+        let isCohortAssigned = false;
+        if (meeting.cohortId) {
+          const { data: cohortRow } = await supabase
+            .from('cohorts')
+            .select('id')
+            .eq('id', meeting.cohortId)
+            .eq('lead_facilitator_id', persId)
+            .maybeSingle();
+          if (cohortRow) isCohortAssigned = true;
+        }
+        if (!isCohortAssigned) {
+          return { data: null, error: 'Meeting not found' };
+        }
+      }
+    }
+
     memoryMeetings.set(meeting.id, meeting);
     return { data: meeting, error: null };
   } catch (err: unknown) {
@@ -290,6 +350,11 @@ export async function getMeetingById(idOrPublicId: string): Promise<{
 }
 
 export async function saveMeetingRecord(meeting: Meeting): Promise<void> {
+  const session = await getAuthoritativeSession().catch(() => null);
+  if (session && !['Super Admin', 'Finance Manager'].includes(session.role)) {
+    throw new Error('FORBIDDEN: Only administrators may save or schedule meetings');
+  }
+
   memoryMeetings.set(meeting.id, meeting);
 
   // Attempt database save if table is available

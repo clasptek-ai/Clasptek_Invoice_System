@@ -23,6 +23,11 @@ export default async function MySessionsPage() {
     redirect('/login?next=/my-sessions');
   }
 
+  const allowedRoles = ['Super Admin', 'Facilitator'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
   const sessions = await getEmployeeSessions();
 
   return (

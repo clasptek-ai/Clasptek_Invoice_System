@@ -4,6 +4,7 @@
  */
 
 import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { getMeetings } from '@/lib/meetings/queries';
 import { getGoogleDriveStatus } from '@/lib/meetings/google-drive';
@@ -22,14 +23,18 @@ interface PageProps {
 }
 
 export default async function MeetingsPage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthoritativeSession();
 
-  if (!user) {
+  if (!session) {
     redirect('/login?next=/meetings');
   }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const supabase = await createServerClient();
 
   const params = await searchParams;
   const subTab = params.subTab || 'all';
@@ -54,6 +59,12 @@ export default async function MeetingsPage({ searchParams }: PageProps) {
   );
   const programmes = progRes.data || [];
 
+  const userName =
+    (session.user.user_metadata?.full_name as string) ||
+    (session.user.user_metadata?.name as string) ||
+    session.user.email ||
+    'User';
+
   return (
     <MeetingsPageClient
       initialMeetings={meetings}
@@ -64,10 +75,10 @@ export default async function MeetingsPage({ searchParams }: PageProps) {
       currentSubTab={subTab}
       currentSearch={searchQuery}
       currentUser={{
-        id: user.id,
-        email: user.email || '',
-        name: user.user_metadata?.name || user.email || 'Staff Member',
-        role: user.user_metadata?.role || 'Staff',
+        id: session.user.id,
+        email: session.user.email || '',
+        name: userName,
+        role: session.role,
       }}
     />
   );

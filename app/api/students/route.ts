@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Strict RBAC: Facilitators and Students must NOT access the organization-wide student directory
+    if (session.role === 'Facilitator' || session.role === 'Student' || !['Super Admin', 'Finance Manager', 'Staff'].includes(session.role)) {
+      return NextResponse.json(
+        {
+          error: `Forbidden: Role '${session.role}' is not authorized to access the student directory.`,
+        },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').trim();
     const status = (searchParams.get('status') || 'ALL').trim();
@@ -195,7 +205,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Generate unique authoritative Student ID
-    const studentNumber = await generateNextStudentNumber(supabase, session.tenantId);
+    const studentNumber = await generateNextStudentNumber(supabase, session.tenantId, registrationDate);
     const internalId = `stu_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
     const actor = {

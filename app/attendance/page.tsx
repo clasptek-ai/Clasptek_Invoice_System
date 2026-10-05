@@ -4,7 +4,7 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import {
   getTrainingCohorts,
   getTrainingSessions,
@@ -25,13 +25,15 @@ interface PageProps {
 }
 
 export default async function AttendancePage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getAuthoritativeSession();
 
-  if (!user) {
+  if (!session) {
     redirect('/login?next=/attendance');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
   }
 
   const params = await searchParams;

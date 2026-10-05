@@ -11,6 +11,9 @@ const ALL_STAFF: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff'
 const FINANCE: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
 const ADMIN: UserRole[] = ['Super Admin', 'Finance Manager'];
 const SUPER_ADMIN: UserRole[] = ['Super Admin'];
+const ADMISSIONS_AND_ADMIN: UserRole[] = ['Super Admin', 'Finance Manager', 'Staff'];
+const TRAINING_DELIVERY: UserRole[] = ['Super Admin', 'Finance Manager', 'Facilitator'];
+const FACILITATOR_SESSIONS: UserRole[] = ['Super Admin', 'Facilitator'];
 
 export const NAVIGATION_REGISTRY: NavigationSection[] = [
   // ─── 1. WORKSPACE ────────────────────────────────────────────────────────────
@@ -38,7 +41,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Enquiries & Leads',
         href: '/enquiries',
         icon: 'enquiries',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: ADMISSIONS_AND_ADMIN,
         migrationPhase: 'Phase 3 — ACTIVE',
       },
     ],
@@ -54,7 +57,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Student & Client Directory',
         href: '/students',
         icon: 'students',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: ADMISSIONS_AND_ADMIN,
         migrationPhase: 'Phase 4 — ACTIVE',
       },
     ],
@@ -118,7 +121,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Course Enrollments',
         href: '/enrolments',
         icon: 'enrolments',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: ADMISSIONS_AND_ADMIN,
         migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
@@ -134,7 +137,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Attendance Register',
         href: '/attendance',
         icon: 'attendance',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: TRAINING_DELIVERY,
         migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
@@ -142,7 +145,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Meetings',
         href: '/meetings',
         icon: 'meetings',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: TRAINING_DELIVERY,
         migrationPhase: 'Phase 5 — ACTIVE',
         subItems: [
           { id: 'allMeetings', label: 'All Meetings', href: '/meetings?subTab=all' },
@@ -157,7 +160,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Facilitator Reports',
         href: '/facilitator-reports',
         icon: 'facilitatorReports',
-        rolesAllowed: ['Super Admin', 'Finance Manager', 'Staff', 'Facilitator'],
+        rolesAllowed: TRAINING_DELIVERY,
         migrationPhase: 'Phase 5 — ACTIVE',
       },
       {
@@ -165,7 +168,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Certificate Eligibility',
         href: '/certificate-eligibility',
         icon: 'completions',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: ADMIN,
         migrationPhase: 'Phase 9D — ACTIVE',
       },
       {
@@ -173,7 +176,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Certificates',
         href: '/certificates',
         icon: 'certificates',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: ADMIN,
         migrationPhase: 'Phase 9D — ACTIVE',
       },
     ],
@@ -293,7 +296,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'My Training Sessions',
         href: '/my-sessions',
         icon: 'sessions',
-        rolesAllowed: ALL_STAFF,
+        rolesAllowed: FACILITATOR_SESSIONS,
         migrationPhase: 'Phase 9E — ACTIVE',
       },
       {

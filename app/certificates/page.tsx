@@ -28,7 +28,7 @@ export default async function CertificatesPage() {
     redirect('/login?next=/certificates');
   }
 
-  const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff', 'Facilitator'];
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
   if (!allowedRoles.includes(session.role)) {
     redirect('/dashboard');
   }

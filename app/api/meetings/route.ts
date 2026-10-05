@@ -4,19 +4,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getMeetings } from '@/lib/meetings/queries';
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
 
-    if (authErr || !user) {
+    if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (session.role === 'Staff' || session.role === 'Student') {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions to view meetings.' },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(req.url);

@@ -5,6 +5,8 @@
  */
 
 import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getAuthoritativePersonnel } from '@/lib/ess/queries';
 import type {
   TrainingSession,
   AttendanceRecord,
@@ -27,13 +29,29 @@ export async function getTrainingCohorts(): Promise<{
   error: string | null;
 }> {
   try {
+    const session = await getAuthoritativeSession().catch(() => null);
     const supabase = await createServerClient();
-    const { data: cohorts, error: cErr } = await supabase
+    let query = supabase
       .from('cohorts')
       .select('id, name, status, programme_id, lead_facilitator_id, metadata, start_date, cohort_code, created_at')
       .order('start_date', { ascending: false })
       .order('cohort_code', { ascending: false })
       .order('id', { ascending: false });
+
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: null };
+        }
+        query = query.eq('lead_facilitator_id', persId);
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: null };
+      }
+    }
+
+    const { data: cohorts, error: cErr } = await query;
 
     if (cErr) {
       console.error('[getTrainingCohorts]', cErr.message);
@@ -85,6 +103,7 @@ export async function getTrainingSessions(cohortId?: string): Promise<{
   error: string | null;
 }> {
   try {
+    const session = await getAuthoritativeSession().catch(() => null);
     const supabase = await createServerClient();
     let query = supabase
       .from('training_sessions')
@@ -92,7 +111,50 @@ export async function getTrainingSessions(cohortId?: string): Promise<{
       .order('session_date', { ascending: true })
       .order('session_number', { ascending: true });
 
-    if (cohortId) {
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: null };
+        }
+        if (cohortId) {
+          const { data: assignedCohort } = await supabase
+            .from('cohorts')
+            .select('id')
+            .eq('id', cohortId)
+            .eq('lead_facilitator_id', persId)
+            .maybeSingle();
+
+          const { data: sessionInCohort } = await supabase
+            .from('training_sessions')
+            .select('id')
+            .eq('cohort_id', cohortId)
+            .eq('facilitator_id', persId)
+            .limit(1);
+
+          if (!assignedCohort && (!sessionInCohort || sessionInCohort.length === 0)) {
+            return { data: [], error: null };
+          }
+          query = query.eq('cohort_id', cohortId);
+        } else {
+          const { data: myCohorts } = await supabase
+            .from('cohorts')
+            .select('id')
+            .eq('lead_facilitator_id', persId);
+          const cIds = (myCohorts || []).map((c) => c.id);
+          if (cIds.length > 0) {
+            query = query.or(`facilitator_id.eq.${persId},cohort_id.in.(${cIds.join(',')})`);
+          } else {
+            query = query.eq('facilitator_id', persId);
+          }
+        }
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: null };
+      } else if (cohortId) {
+        query = query.eq('cohort_id', cohortId);
+      }
+    } else if (cohortId) {
       query = query.eq('cohort_id', cohortId);
     }
 
@@ -152,7 +214,38 @@ export async function getCohortEnrolmentsWithStudents(cohortId: string): Promise
   error: string | null;
 }> {
   try {
+    const session = await getAuthoritativeSession().catch(() => null);
     const supabase = await createServerClient();
+
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: 'FORBIDDEN: Facilitator profile not found' };
+        }
+        const { data: assignedCohort } = await supabase
+          .from('cohorts')
+          .select('id')
+          .eq('id', cohortId)
+          .eq('lead_facilitator_id', persId)
+          .maybeSingle();
+
+        const { data: sessionInCohort } = await supabase
+          .from('training_sessions')
+          .select('id')
+          .eq('cohort_id', cohortId)
+          .eq('facilitator_id', persId)
+          .limit(1);
+
+        if (!assignedCohort && (!sessionInCohort || sessionInCohort.length === 0)) {
+          return { data: [], error: 'FORBIDDEN: You are not assigned to this cohort' };
+        }
+      } else if (session.role === 'Student') {
+        return { data: [], error: 'FORBIDDEN: Students cannot access cohort enrolment registers' };
+      }
+    }
+
     const { data: enrolments, error: eErr } = await supabase
       .from('enrolments')
       .select('id, enrolment_number, student_id, status, student_name, student_email')
@@ -218,7 +311,61 @@ export async function getAttendance(
   error: string | null;
 }> {
   try {
+    const session = await getAuthoritativeSession().catch(() => null);
     const supabase = await createServerClient();
+
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: 'FORBIDDEN: Facilitator profile not found' };
+        }
+        if (cohortId) {
+          const { data: assignedCohort } = await supabase
+            .from('cohorts')
+            .select('id')
+            .eq('id', cohortId)
+            .eq('lead_facilitator_id', persId)
+            .maybeSingle();
+
+          const { data: sessionInCohort } = await supabase
+            .from('training_sessions')
+            .select('id')
+            .eq('cohort_id', cohortId)
+            .eq('facilitator_id', persId)
+            .limit(1);
+
+          if (!assignedCohort && (!sessionInCohort || sessionInCohort.length === 0)) {
+            return { data: [], error: null };
+          }
+        } else if (sessionId) {
+          const { data: sessionRow } = await supabase
+            .from('training_sessions')
+            .select('cohort_id, facilitator_id')
+            .eq('id', sessionId)
+            .maybeSingle();
+
+          if (!sessionRow) {
+            return { data: [], error: null };
+          }
+          if (sessionRow.facilitator_id !== persId) {
+            const { data: assignedCohort } = await supabase
+              .from('cohorts')
+              .select('id')
+              .eq('id', sessionRow.cohort_id)
+              .eq('lead_facilitator_id', persId)
+              .maybeSingle();
+            if (!assignedCohort) {
+              return { data: [], error: null };
+            }
+          }
+        }
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: null };
+      }
+    }
+
     let query = supabase.from('attendance').select('*');
 
     if (sessionId) {
@@ -266,28 +413,52 @@ export async function saveAttendance(record: {
   checkOutAt?: string | null;
 }): Promise<{ data: AttendanceRecord | null; error: string | null }> {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) {
       return { data: null, error: 'Unauthorized: login required' };
     }
 
+    if (session.role === 'Staff' || session.role === 'Student') {
+      return { data: null, error: 'FORBIDDEN: Role not authorized to record attendance' };
+    }
+
+    const supabase = await createServerClient();
+    const user = session.user;
+
     // 1. Get session details and verify status
-    const { data: session, error: sErr } = await supabase
+    const { data: trainingSession, error: sErr } = await supabase
       .from('training_sessions')
-      .select('id, tenant_id, cohort_id, status, session_number, session_title')
+      .select('id, tenant_id, cohort_id, status, session_number, session_title, facilitator_id')
       .eq('id', record.sessionId)
       .single();
 
-    if (sErr || !session) {
+    if (sErr || !trainingSession) {
       return { data: null, error: `Referenced session '${record.sessionId}' does not exist` };
     }
 
-    if (session.status === 'CANCELLED') {
+    if (trainingSession.status === 'CANCELLED') {
       return { data: null, error: 'Cannot record attendance against a cancelled training session' };
+    }
+
+    // If facilitator, verify assignment to this session or cohort lead
+    if (session.role === 'Facilitator') {
+      const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+      const persId = personnelRes?.personnel?.id;
+      if (!persId) {
+        return { data: null, error: 'FORBIDDEN: Facilitator profile not found' };
+      }
+
+      if (trainingSession.facilitator_id !== persId) {
+        const { data: cohortRow } = await supabase
+          .from('cohorts')
+          .select('id, lead_facilitator_id')
+          .eq('id', trainingSession.cohort_id)
+          .maybeSingle();
+
+        if (cohortRow?.lead_facilitator_id !== persId) {
+          return { data: null, error: 'FORBIDDEN: Facilitator is not assigned to this session or cohort' };
+        }
+      }
     }
 
     // 2. Get enrolment details and verify cohort match
@@ -301,7 +472,7 @@ export async function saveAttendance(record: {
       return { data: null, error: `Referenced enrolment '${record.enrolmentId}' does not exist` };
     }
 
-    if (session.cohort_id !== enrolment.cohort_id) {
+    if (trainingSession.cohort_id !== enrolment.cohort_id) {
       return {
         data: null,
         error: "COHORT_MISMATCH: Student is not enrolled in this session's cohort",
@@ -363,8 +534,8 @@ export async function saveAttendance(record: {
       .from('attendance')
       .insert({
         id: attendanceId,
-        tenant_id: session.tenant_id,
-        cohort_id: session.cohort_id,
+        tenant_id: trainingSession.tenant_id,
+        cohort_id: trainingSession.cohort_id,
         session_id: record.sessionId,
         enrolment_id: record.enrolmentId,
         attendance_status: record.attendanceStatus,
@@ -422,12 +593,16 @@ export async function correctAttendance(
       };
     }
 
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) return { data: null, error: 'Unauthorized' };
 
-    if (!user) return { data: null, error: 'Unauthorized' };
+    const allowedCorrectionRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedCorrectionRoles.includes(session.role)) {
+      return { data: null, error: 'FORBIDDEN: Only administrators may correct historical attendance records' };
+    }
+
+    const supabase = await createServerClient();
+    const user = session.user;
 
     const { data: existing, error: fetchErr } = await supabase
       .from('attendance')
@@ -492,7 +667,38 @@ export async function submitSessionAttendance(
   sessionId: string
 ): Promise<{ success: boolean; error: string | null }> {
   try {
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) return { success: false, error: 'Unauthorized' };
+
     const supabase = await createServerClient();
+
+    if (session.role === 'Facilitator') {
+      const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+      const persId = personnelRes?.personnel?.id;
+      const { data: sessionRow } = await supabase
+        .from('training_sessions')
+        .select('facilitator_id, cohort_id')
+        .eq('id', sessionId)
+        .maybeSingle();
+
+      if (!sessionRow) {
+        return { success: false, error: 'Session not found' };
+      }
+
+      if (sessionRow.facilitator_id !== persId) {
+        const { data: cohortRow } = await supabase
+          .from('cohorts')
+          .select('lead_facilitator_id')
+          .eq('id', sessionRow.cohort_id)
+          .maybeSingle();
+        if (cohortRow?.lead_facilitator_id !== persId) {
+          return { success: false, error: 'FORBIDDEN: You are not assigned to this session' };
+        }
+      }
+    } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { success: false, error: 'FORBIDDEN: Insufficient permissions to finalize session' };
+    }
+
     const now = new Date().toISOString();
 
     const { error } = await supabase
@@ -528,12 +734,14 @@ export async function saveTrainingSession(data: {
   notes?: string | null;
 }): Promise<{ data: TrainingSession | null; error: string | null }> {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) return { data: null, error: 'Unauthorized' };
 
-    if (!user) return { data: null, error: 'Unauthorized' };
+    if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { data: null, error: 'FORBIDDEN: Only administrators may schedule or edit training sessions' };
+    }
+
+    const supabase = await createServerClient();
 
     // Get tenant from cohort
     const { data: cohort, error: cErr } = await supabase
@@ -655,12 +863,26 @@ export async function getFacilitatorReports(filters?: {
   search?: string;
 }): Promise<{ data: FacilitatorReport[]; error: string | null }> {
   try {
+    const session = await getAuthoritativeSession().catch(() => null);
     const supabase = await createServerClient();
     let query = supabase
       .from('facilitator_reports')
       .select('*')
       .order('report_date', { ascending: false })
       .order('created_at', { ascending: false });
+
+    if (session) {
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        if (!persId) {
+          return { data: [], error: null };
+        }
+        query = query.eq('facilitator_id', persId);
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: null };
+      }
+    }
 
     if (filters?.cohortId && filters.cohortId !== 'ALL') {
       query = query.eq('cohort_id', filters.cohortId);
@@ -763,12 +985,14 @@ export async function saveFacilitatorReport(data: {
   status?: string;
 }): Promise<{ data: FacilitatorReport | null; error: string | null }> {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) return { data: null, error: 'Unauthorized: login required' };
 
-    if (!user) return { data: null, error: 'Unauthorized: login required' };
+    if (session.role === 'Staff' || session.role === 'Student') {
+      return { data: null, error: 'FORBIDDEN: Role not authorized to submit reports' };
+    }
+
+    const supabase = await createServerClient();
 
     // ZERO-EXAMINATION AUDIT INVARIANT ON REPORT CONTENT
     const prohibitedPattern =
@@ -784,12 +1008,44 @@ export async function saveFacilitatorReport(data: {
     // Verify cohort exists
     const { data: cohort, error: cErr } = await supabase
       .from('cohorts')
-      .select('id, tenant_id')
+      .select('id, tenant_id, lead_facilitator_id')
       .eq('id', data.cohortId)
       .single();
 
     if (cErr || !cohort) {
       return { data: null, error: `Referenced cohort '${data.cohortId}' not found` };
+    }
+
+    let reportFacilitatorId = data.facilitatorId;
+
+    if (session.role === 'Facilitator') {
+      const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+      const persId = personnelRes?.personnel?.id;
+      if (!persId) {
+        return { data: null, error: 'FORBIDDEN: Facilitator profile not found' };
+      }
+
+      // Facilitator must submit report for themselves
+      reportFacilitatorId = persId;
+
+      // Verify cohort assignment
+      if (cohort.lead_facilitator_id !== persId) {
+        const { data: sessionInCohort } = await supabase
+          .from('training_sessions')
+          .select('id')
+          .eq('cohort_id', data.cohortId)
+          .eq('facilitator_id', persId)
+          .limit(1);
+
+        if (!sessionInCohort || sessionInCohort.length === 0) {
+          return { data: null, error: 'FORBIDDEN: Cannot submit reports for an unassigned cohort' };
+        }
+      }
+
+      // Facilitators cannot review or approve their own report
+      if (data.status === 'REVIEWED') {
+        return { data: null, error: 'FORBIDDEN: Facilitators cannot approve or review reports' };
+      }
     }
 
     const now = new Date().toISOString();
@@ -800,7 +1056,7 @@ export async function saveFacilitatorReport(data: {
         .from('facilitator_reports')
         .update({
           session_id: data.sessionId || null,
-          facilitator_id: data.facilitatorId,
+          facilitator_id: reportFacilitatorId,
           report_date: data.reportDate,
           session_summary: data.sessionSummary.trim(),
           topics_covered: data.topicsCovered.trim(),
@@ -850,7 +1106,7 @@ export async function saveFacilitatorReport(data: {
         tenant_id: cohort.tenant_id,
         cohort_id: data.cohortId,
         session_id: data.sessionId || null,
-        facilitator_id: data.facilitatorId,
+        facilitator_id: reportFacilitatorId,
         report_date: data.reportDate,
         session_summary: data.sessionSummary.trim(),
         topics_covered: data.topicsCovered.trim(),
@@ -902,12 +1158,16 @@ export async function reviewFacilitatorReport(
   reviewNotes?: string
 ): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) return { success: false, error: 'Unauthorized: login required' };
 
-    if (!user) return { success: false, error: 'Unauthorized: login required' };
+    const allowedReviewRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedReviewRoles.includes(session.role)) {
+      return { success: false, error: 'FORBIDDEN: Only administrators may review and sign off facilitator reports' };
+    }
+
+    const supabase = await createServerClient();
+    const user = session.user;
 
     const now = new Date().toISOString();
     const reviewerName = user.email || user.id;

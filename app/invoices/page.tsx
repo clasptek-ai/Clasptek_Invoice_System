@@ -1,8 +1,12 @@
 import React from 'react';
-import { getInvoices, getCustomersList, getFinancialMetrics, getFinanceTenantId } from '@/lib/finance/queries';
+import { redirect } from 'next/navigation';
+import { getAuthoritativeSession } from '@/lib/auth/server';
+import { getInvoices, getCustomersList, getFinancialMetrics } from '@/lib/finance/queries';
 import { getFinanceSettings, getPaymentAccounts } from '@/lib/settings/queries';
 import { createServerClient } from '@/lib/supabase/server';
 import { InvoicesPageClient } from './InvoicesPageClient';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Invoices & Tuition Billing — Clasptek Portal',
@@ -10,7 +14,18 @@ export const metadata = {
 };
 
 export default async function InvoicesPage() {
-  const tenantId = await getFinanceTenantId();
+  const session = await getAuthoritativeSession();
+
+  if (!session) {
+    redirect('/login?next=/invoices');
+  }
+
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
+  const tenantId = session.tenantId;
   const supabase = await createServerClient();
 
   const [invoices, customers, metrics, programmesRes, financeSettings, paymentAccounts] = await Promise.all([
@@ -46,4 +61,3 @@ export default async function InvoicesPage() {
     </div>
   );
 }
-

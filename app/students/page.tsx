@@ -5,7 +5,6 @@
  */
 
 import { redirect } from 'next/navigation';
-import { createServerClient } from '@/lib/supabase/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import { getStudents } from '@/lib/students/queries';
 import { getProgrammes } from '@/lib/admissions/queries';
@@ -23,16 +22,18 @@ interface PageProps {
 }
 
 export default async function StudentsPage({ searchParams }: PageProps) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getAuthoritativeSession();
+  if (!session) {
     redirect('/login?next=/students');
   }
 
-  const session = await getAuthoritativeSession();
+  // Facilitators and Students must NOT access the organisation-wide Student Directory.
+  // Super Admin, Finance Manager, and Staff (Admissions/Registrar) retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  if (!allowedRoles.includes(session.role)) {
+    redirect('/dashboard');
+  }
+
   const params = await searchParams;
 
   const search = (params.search ?? '').trim();
@@ -43,6 +44,8 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(params.page ?? '1', 10));
   const rawPageSize = parseInt(params.pageSize ?? '25', 10);
   const pageSize = [10, 25, 50, 100].includes(rawPageSize) ? rawPageSize : 25;
+  const sortBy = params.sortBy ?? 'registration_date';
+  const sortOrder = (params.order === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
 
   const [result, programmes] = await Promise.all([
     getStudents({
@@ -53,6 +56,8 @@ export default async function StudentsPage({ searchParams }: PageProps) {
       financialStatus,
       page,
       pageSize,
+      sortBy,
+      sortOrder,
     }),
     getProgrammes(),
   ]);
@@ -70,6 +75,8 @@ export default async function StudentsPage({ searchParams }: PageProps) {
       currentPage={page}
       pageSize={pageSize}
       currentUserRole={session?.role || 'Staff'}
+      currentSortBy={sortBy}
+      currentSortOrder={sortOrder}
     />
   );
 }
