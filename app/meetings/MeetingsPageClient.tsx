@@ -85,7 +85,7 @@ export function MeetingsPageClient({
   );
   const liveMeetings = meetings.filter((m) => m.status === 'LIVE');
   const completedMeetings = [...meetings.filter(
-    (m) => m.status === 'ENDED' || m.status === 'COMPLETED'
+    (m) => m.status === 'COMPLETED'
   )].sort(
     (a, b) => new Date(b.scheduledStart).getTime() - new Date(a.scheduledStart).getTime() || b.id.localeCompare(a.id)
   );
@@ -94,7 +94,6 @@ export function MeetingsPageClient({
       m.recordingStatus === 'STORED' ||
       Boolean(m.recordingMetadata?.driveUrl) ||
       Boolean(m.recordingUrl) ||
-      m.status === 'ENDED' ||
       m.status === 'COMPLETED'
   )].sort(
     (a, b) => new Date(b.scheduledStart).getTime() - new Date(a.scheduledStart).getTime() || b.id.localeCompare(a.id)
@@ -209,7 +208,7 @@ export function MeetingsPageClient({
             });
             blockedMsg = 'Hard deletion is blocked: Completed or recorded meetings must be preserved for academic accreditation and student review.';
           }
-          if (m.status === 'ENDED' || m.status === 'COMPLETED') {
+          if (m.status === 'COMPLETED') {
             deps.push({
               label: `Attendance Ledger (${m.title})`,
               count: 1,
@@ -288,7 +287,7 @@ export function MeetingsPageClient({
           description: meetingForm.description.trim(),
           programmeId: meetingForm.programmeId || null,
           cohortId: meetingForm.cohortId || null,
-          facilitatorId: meetingForm.facilitatorId || currentUser.id,
+          facilitatorId: meetingForm.facilitatorId ? meetingForm.facilitatorId.trim() : null,
           scheduledStart: new Date(meetingForm.scheduledStart).toISOString(),
           scheduledEnd: new Date(meetingForm.scheduledEnd).toISOString(),
           participantAccess: meetingForm.participantAccess,
@@ -891,7 +890,7 @@ export function MeetingsPageClient({
                   const isSelected = selectedIds.has(m.id);
                   const isLive = m.status === 'LIVE';
                   const isScheduled = m.status === 'SCHEDULED';
-                  const isEnded = m.status === 'ENDED' || m.status === 'COMPLETED';
+                  const isEnded = m.status === 'COMPLETED';
                   const hasRecording =
                     m.recordingStatus === 'STORED' || Boolean(m.recordingMetadata?.driveUrl);
 
@@ -1006,7 +1005,7 @@ export function MeetingsPageClient({
                 const isSelected = selectedIds.has(m.id);
                 const isLive = m.status === 'LIVE';
                 const isScheduled = m.status === 'SCHEDULED';
-                const isEnded = m.status === 'ENDED' || m.status === 'COMPLETED';
+                const isEnded = m.status === 'COMPLETED';
                 const hasRecording =
                   m.recordingStatus === 'STORED' || Boolean(m.recordingMetadata?.driveUrl);
 

@@ -1,7 +1,7 @@
 /**
- * app/api/meetings/join/route.ts — Phase 5
+ * app/api/meetings/join/route.ts — Phase 2 Meetings Persistence & Security
  * Route handler for Meeting Join & Token Issuance.
- * Issues short-lived LiveKit token with server-side HMAC-SHA256 signature.
+ * Issues short-lived LiveKit token only after strict database-backed authorization.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    const tenantId = session.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'FORBIDDEN', message: 'Authoritative tenant could not be resolved.' }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
     const { publicId, meetingId, displayName } = body;
 
     const identifier = publicId || meetingId;
@@ -37,9 +42,20 @@ export async function POST(req: NextRequest) {
 
     const meeting = meetingRes.data;
 
-    if (meeting.status === 'ENDED' || meeting.status === 'COMPLETED') {
+    // Cross-tenant prevention
+    if (meeting.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'MEETING_NOT_FOUND', message: 'Meeting not found' }, { status: 404 });
+    }
+
+    // Soft delete check
+    if (meeting.deletedAt) {
+      return NextResponse.json({ error: 'MEETING_NOT_FOUND', message: 'Meeting not found' }, { status: 404 });
+    }
+
+    // Canonical status check
+    if (meeting.status === 'COMPLETED') {
       return NextResponse.json(
-        { error: 'MEETING_ENDED', message: 'This meeting has ended. Thank you for attending.' },
+        { error: 'MEETING_ENDED', message: 'This meeting has completed. Thank you for attending.' },
         { status: 400 }
       );
     }
@@ -60,27 +76,28 @@ export async function POST(req: NextRequest) {
       isHost = true;
       participantRole = 'HOST';
     } else if (userRole === 'Facilitator') {
+      // Authoritative personnel lookup: auth.uid() -> personnel.user_id -> personnel.id
       const personnelRes = await getAuthoritativePersonnel().catch(() => null);
       const persId = personnelRes?.personnel?.id;
+      if (!persId) {
+        return NextResponse.json(
+          { error: 'UNAUTHORIZED_MEETING_ACCESS', message: 'No authoritative personnel profile found for this facilitator.' },
+          { status: 403 }
+        );
+      }
 
       let isAssigned = Boolean(persId && meeting.facilitatorId === persId);
 
-      if (!isAssigned && meeting.cohortId && persId) {
+      if (!isAssigned && meeting.cohortId) {
         const { data: assignedCohort } = await supabase
           .from('cohorts')
           .select('id')
           .eq('id', meeting.cohortId)
           .eq('lead_facilitator_id', persId)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
 
-        const { data: sessionInCohort } = await supabase
-          .from('training_sessions')
-          .select('id')
-          .eq('cohort_id', meeting.cohortId)
-          .eq('facilitator_id', persId)
-          .limit(1);
-
-        if (assignedCohort || (sessionInCohort && sessionInCohort.length > 0)) {
+        if (assignedCohort) {
           isAssigned = true;
         }
       }
@@ -98,29 +115,48 @@ export async function POST(req: NextRequest) {
       isHost = true;
       participantRole = 'HOST';
     } else if (userRole === 'Student') {
-      if (meeting.participantAccess === 'COHORT_ONLY' && meeting.cohortId) {
-        const { data: enrolment } = await supabase
-          .from('enrolments')
-          .select('id')
-          .eq('cohort_id', meeting.cohortId)
-          .or(`student_id.eq.${session.user.id},student_email.ilike.${session.user.email || ''}`)
-          .not('status', 'in', '("CANCELLED","WITHDRAWN")')
-          .maybeSingle();
+      // Authoritative student lookup: auth.uid() -> students.user_id -> students.id
+      const { data: studData } = await supabase
+        .from('students')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
 
-        if (!enrolment) {
-          return NextResponse.json(
-            {
-              error: 'UNAUTHORIZED_MEETING_ACCESS',
-              message: 'You are not enrolled in the cohort scheduled for this meeting.',
-            },
-            { status: 403 }
-          );
-        }
+      const studentId = studData?.id;
+      if (!studentId || !meeting.cohortId) {
+        return NextResponse.json(
+          {
+            error: 'UNAUTHORIZED_MEETING_ACCESS',
+            message: 'You are not enrolled in the cohort scheduled for this meeting.',
+          },
+          { status: 403 }
+        );
       }
+
+      // Check active enrolment in meeting's cohort
+      const { data: enrolment } = await supabase
+        .from('enrolments')
+        .select('id')
+        .eq('cohort_id', meeting.cohortId)
+        .eq('student_id', studentId)
+        .eq('tenant_id', tenantId)
+        .not('status', 'in', '("CANCELLED","WITHDRAWN")')
+        .maybeSingle();
+
+      if (!enrolment) {
+        return NextResponse.json(
+          {
+            error: 'UNAUTHORIZED_MEETING_ACCESS',
+            message: 'You are not enrolled in the cohort scheduled for this meeting.',
+          },
+          { status: 403 }
+        );
+      }
+
       isHost = false;
       participantRole = 'STUDENT';
     } else {
-      // General Staff
       return NextResponse.json(
         {
           error: 'UNAUTHORIZED_MEETING_ACCESS',

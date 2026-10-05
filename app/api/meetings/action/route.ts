@@ -1,8 +1,8 @@
 /**
- * app/api/meetings/action/route.ts — Phase 5
+ * app/api/meetings/action/route.ts — Phase 2 Meetings Persistence & Security
  * Route handler for Meeting Operations & Host Controls:
  * - GET: Status of room
- * - POST: Mute, Remove, End Meeting, Leave, Chat
+ * - POST: START, END_MEETING (COMPLETED), DELETE_MEETING (soft-delete), CHECK_DEPENDENCIES, etc.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -67,7 +67,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, action: 'DELETE_MEETING' });
     }
 
-    if (action === 'END_MEETING') {
+    if (action === 'START_MEETING' || action === 'START') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      if (session.role === 'Facilitator') {
+        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
+        const persId = personnelRes?.personnel?.id;
+        const mtgRes = await getMeetingById(meetingId);
+        if (!mtgRes.data || (mtgRes.data.facilitatorId !== persId)) {
+          return NextResponse.json({ error: 'Forbidden: You are not authorized to start this meeting.' }, { status: 403 });
+        }
+      } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+        return NextResponse.json({ error: 'Forbidden: Insufficient permissions to start this meeting.' }, { status: 403 });
+      }
+      await updateMeetingStatus(meetingId, 'LIVE');
+      return NextResponse.json({ success: true, action: 'START_MEETING', startedAt: new Date().toISOString() });
+    }
+
+    if (action === 'END_MEETING' || action === 'END') {
       if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
       if (session.role === 'Facilitator') {
         const personnelRes = await getAuthoritativePersonnel().catch(() => null);
@@ -79,7 +95,7 @@ export async function POST(req: NextRequest) {
       } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
         return NextResponse.json({ error: 'Forbidden: Insufficient permissions to end this meeting.' }, { status: 403 });
       }
-      await updateMeetingStatus(meetingId, 'ENDED');
+      await updateMeetingStatus(meetingId, 'COMPLETED');
       return NextResponse.json({ success: true, action: 'END_MEETING', endedAt: new Date().toISOString() });
     }
 

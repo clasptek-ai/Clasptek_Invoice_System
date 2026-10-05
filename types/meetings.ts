@@ -3,7 +3,7 @@
  * Authoritative types for Meetings, Live Rooms, Recordings, and Google Drive Integration.
  */
 
-export type MeetingStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'COMPLETED' | 'CANCELLED';
+export type MeetingStatus = 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 
 export type ParticipantAccess = 'COHORT_ONLY' | 'ALL_STUDENTS' | 'PUBLIC_TOKEN';
 
@@ -61,6 +61,7 @@ export interface Meeting {
   createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
   // Joined fields
   facilitatorName?: string;
   cohortCode?: string;

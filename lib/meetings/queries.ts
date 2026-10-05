@@ -1,176 +1,185 @@
 /**
- * lib/meetings/queries.ts — Phase 5
- * Server-side Data Access Layer for Meetings Operations.
- * Integrates with database and in-memory persistent cache for fail-safe operation.
+ * lib/meetings/queries.ts — Phase 2 Meetings Persistence & Security
+ * Authoritative Server-side Data Access Layer for Meetings Operations.
+ * Fully backed by Supabase PostgreSQL with multi-tenant RLS isolation.
+ * Zero dependency on process memory cache.
  */
 
 import { createServerClient } from '@/lib/supabase/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
-import { getAuthoritativePersonnel } from '@/lib/ess/queries';
 import type { Meeting, MeetingStatus, RecordingStatus, RecordingMetadata } from '@/types/meetings';
 
-// Persistent in-memory meeting cache (retained across requests in same node process)
-// Pre-seeded with initial historical/scheduled meetings for rich UI experience
-const memoryMeetings = new Map<string, Meeting>();
+function mapDbRowToMeeting(r: Record<string, unknown>): Meeting {
+  const rawProvider = String(r.provider || 'LIVEKIT').toLowerCase();
+  const sfuProvider = (['livekit', 'daily', 'mock'].includes(rawProvider) ? rawProvider : 'livekit') as Meeting['sfuProvider'];
+  
+  let rawStatus = String(r.status || 'SCHEDULED');
+  if (rawStatus === 'ENDED') rawStatus = 'COMPLETED';
+  const status = (['SCHEDULED', 'LIVE', 'COMPLETED', 'CANCELLED'].includes(rawStatus) ? rawStatus : 'SCHEDULED') as MeetingStatus;
 
-function seedInitialMeetings() {
-  if (memoryMeetings.size > 0) return;
+  const recMeta = (r.recording_metadata as RecordingMetadata) || {};
+  const recUrl = (r.recording_url as string | null) || recMeta.webViewLink || recMeta.driveUrl || undefined;
 
-  const defaultTenantId = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
-  const now = Date.now();
-
-  const samples: Meeting[] = [
-    {
-      id: 'mtg_init_1',
-      tenantId: defaultTenantId,
-      publicId: 'mtg-c70a-481',
-      title: 'Full Stack Web Architecture & React Fundamentals',
-      description: 'Comprehensive deep dive into Component Lifecycle, Server Actions, and Next.js App Router.',
-      programmeId: null,
-      cohortId: null,
-      trainingSessionId: null,
-      facilitatorId: null,
-      scheduledStart: new Date(now + 3600000 * 2).toISOString(),
-      scheduledEnd: new Date(now + 3600000 * 4).toISOString(),
-      actualStart: null,
-      actualEnd: null,
-      status: 'SCHEDULED',
-      participantAccess: 'COHORT_ONLY',
-      sfuProvider: 'livekit',
-      sfuRoomId: 'mtg-c70a-481',
-      settings: { allowChat: true, allowScreenShare: true, muteOnEntry: false },
-      recordingEnabled: true,
-      recordingStatus: 'NOT_STARTED',
-      recordingMetadata: {},
-      createdBy: null,
-      createdAt: new Date(now - 86400000).toISOString(),
-      updatedAt: new Date(now - 86400000).toISOString(),
-      facilitatorName: 'Lead Facilitator',
-      cohortCode: 'FSW-2026-A',
-      cohortName: 'Full Stack Cohort A',
-      programmeName: 'Full Stack Software Engineering',
-    },
-    {
-      id: 'mtg_init_2',
-      tenantId: defaultTenantId,
-      publicId: 'mtg-b81f-992',
-      title: 'Enterprise Data Engineering with PostgreSQL & Supabase',
-      description: 'Production database design, multi-tenant Row Level Security, RPCs, and query optimization.',
-      programmeId: null,
-      cohortId: null,
-      trainingSessionId: null,
-      facilitatorId: null,
-      scheduledStart: new Date(now - 3600000 * 24).toISOString(),
-      scheduledEnd: new Date(now - 3600000 * 22).toISOString(),
-      actualStart: new Date(now - 3600000 * 24).toISOString(),
-      actualEnd: new Date(now - 3600000 * 22).toISOString(),
-      status: 'COMPLETED',
-      participantAccess: 'COHORT_ONLY',
-      sfuProvider: 'livekit',
-      sfuRoomId: 'mtg-b81f-992',
-      settings: { allowChat: true, allowScreenShare: true, muteOnEntry: false },
-      recordingEnabled: true,
-      recordingStatus: 'STORED',
-      recordingMetadata: {
-        fileId: '1AbC_demo_recording_id',
-        driveFileId: '1AbC_demo_recording_id',
-        fileName: 'Enterprise_Data_Engineering_2026.mp4',
-        driveUrl: 'https://drive.google.com/file/d/1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0C/view',
-        webViewLink: 'https://drive.google.com/file/d/1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0C/view',
-        fileSizeBytes: 345000000,
-        durationSeconds: 7200,
-        uploadedAt: new Date(now - 3600000 * 22).toISOString(),
-        storedAt: new Date(now - 3600000 * 22).toISOString(),
-      },
-      recordings: [
-        {
-          fileId: '1AbC_demo_recording_id',
-          driveFileId: '1AbC_demo_recording_id',
-          fileName: 'Enterprise_Data_Engineering_2026.mp4',
-          driveUrl: 'https://drive.google.com/file/d/1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0C/view',
-          webViewLink: 'https://drive.google.com/file/d/1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0C/view',
-          fileSizeBytes: 345000000,
-          durationSeconds: 7200,
-          uploadedAt: new Date(now - 3600000 * 22).toISOString(),
-          storedAt: new Date(now - 3600000 * 22).toISOString(),
-        },
-      ],
-      recordingUrl: 'https://drive.google.com/file/d/1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0C/view',
-      createdBy: null,
-      createdAt: new Date(now - 86400000 * 2).toISOString(),
-      updatedAt: new Date(now - 3600000 * 22).toISOString(),
-      facilitatorName: 'Dr. John Doe',
-      cohortCode: 'DE-2026-B',
-      cohortName: 'Data Engineering Cohort B',
-      programmeName: 'Data Analytics & Engineering',
-    },
-  ];
-
-  samples.forEach((m) => memoryMeetings.set(m.id, m));
+  return {
+    id: String(r.id),
+    tenantId: String(r.tenant_id),
+    publicId: String(r.public_id),
+    title: String(r.title),
+    description: (r.description as string | null) || null,
+    programmeId: null,
+    cohortId: (r.cohort_id as string | null) || null,
+    trainingSessionId: (r.training_session_id as string | null) || null,
+    facilitatorId: (r.facilitator_id as string | null) || null,
+    scheduledStart: String(r.scheduled_start),
+    scheduledEnd: String(r.scheduled_end),
+    actualStart: (r.actual_start as string | null) || null,
+    actualEnd: (r.actual_end as string | null) || null,
+    status,
+    participantAccess: (r.participant_access as Meeting['participantAccess']) || 'COHORT_ONLY',
+    sfuProvider,
+    sfuRoomId: (r.provider_room_id as string | null) || String(r.public_id),
+    settings: (r.settings as Meeting['settings']) || { allowChat: true, allowScreenShare: true, muteOnEntry: false },
+    recordingEnabled: Boolean(r.recording_enabled),
+    recordingStatus: (r.recording_status as Meeting['recordingStatus']) || 'NOT_STARTED',
+    recordingMetadata: recMeta,
+    recordingUrl: recUrl,
+    recordings: recMeta.driveFileId ? [recMeta] : [],
+    createdBy: (r.created_by as string | null) || null,
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+    deletedAt: (r.deleted_at as string | null) || null,
+  };
 }
-
-seedInitialMeetings();
 
 export async function getMeetings(filters?: {
   subTab?: string;
   search?: string;
 }): Promise<{ data: Meeting[]; error: string | null }> {
   try {
-    seedInitialMeetings();
-    const supabase = await createServerClient();
-
-    // Check if meetings table exists in database
-    const { data: dbMeetings, error: dbErr } = await supabase
-      .from('meetings')
-      .select('*')
-      .order('scheduled_start', { ascending: false })
-      .order('id', { ascending: false });
-
-    let all: Meeting[] = [];
-
-    if (!dbErr && dbMeetings && dbMeetings.length > 0) {
-      all = dbMeetings.map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        tenantId: String(r.tenant_id),
-        publicId: String(r.public_id),
-        title: String(r.title),
-        description: r.description as string | null,
-        programmeId: r.programme_id as string | null,
-        cohortId: r.cohort_id as string | null,
-        trainingSessionId: r.training_session_id as string | null,
-        facilitatorId: r.facilitator_id as string | null,
-        scheduledStart: String(r.scheduled_start),
-        scheduledEnd: String(r.scheduled_end),
-        actualStart: r.actual_start as string | null,
-        actualEnd: r.actual_end as string | null,
-        status: r.status as Meeting['status'],
-        participantAccess: r.participant_access as Meeting['participantAccess'],
-        sfuProvider: r.sfu_provider as Meeting['sfuProvider'],
-        sfuRoomId: r.sfu_room_id as string | null,
-        settings: (r.settings as Meeting['settings']) || {},
-        recordingEnabled: Boolean(r.recording_enabled),
-        recordingStatus: r.recording_status as Meeting['recordingStatus'],
-        recordingMetadata: (r.recording_metadata as Meeting['recordingMetadata']) || {},
-        createdBy: r.created_by as string | null,
-        createdAt: String(r.created_at),
-        updatedAt: String(r.updated_at),
-      }));
-    } else {
-      all = Array.from(memoryMeetings.values());
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) {
+      return { data: [], error: 'Unauthorized: Authentication required.' };
     }
 
-    // Enhance with cohorts and programmes if needed
+    const supabase = await createServerClient();
+    const tenantId = session.tenantId;
+
+    // Base query: tenant-isolated, excluding soft-deleted records
+    let query = supabase
+      .from('meetings')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
+      .order('scheduled_start', { ascending: false });
+
+    // Role-based scoping
+    if (session.role === 'Facilitator') {
+      // Authoritative personnel lookup
+      const { data: persData } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const persId = persData?.id;
+      if (!persId) {
+        return { data: [], error: null };
+      }
+
+      // Check lead facilitator cohort assignments
+      const { data: myCohorts } = await supabase
+        .from('cohorts')
+        .select('id')
+        .eq('lead_facilitator_id', persId)
+        .eq('tenant_id', tenantId);
+
+      const assignedCohortIds = (myCohorts || []).map((c) => c.id);
+
+      if (assignedCohortIds.length > 0) {
+        query = query.or(`facilitator_id.eq.${persId},cohort_id.in.(${assignedCohortIds.join(',')})`);
+      } else {
+        query = query.eq('facilitator_id', persId);
+      }
+    } else if (session.role === 'Student') {
+      // Authoritative student lookup
+      const { data: studData } = await supabase
+        .from('students')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const studentId = studData?.id;
+      if (!studentId) {
+        return { data: [], error: null };
+      }
+
+      // Active cohort enrolments
+      const { data: myEnrolments } = await supabase
+        .from('enrolments')
+        .select('cohort_id')
+        .eq('student_id', studentId)
+        .eq('tenant_id', tenantId)
+        .not('status', 'in', '("CANCELLED","WITHDRAWN")');
+
+      const enrolledCohortIds = Array.from(new Set((myEnrolments || []).map((e) => e.cohort_id).filter(Boolean)));
+      if (enrolledCohortIds.length === 0) {
+        return { data: [], error: null };
+      }
+
+      query = query.in('cohort_id', enrolledCohortIds);
+    } else if (['Staff', 'Finance Staff', 'Finance Viewer'].includes(session.role)) {
+      return { data: [], error: null };
+    }
+
+    const { data: rows, error: fetchErr } = await query;
+    if (fetchErr) {
+      return { data: [], error: fetchErr.message };
+    }
+
+    let all: Meeting[] = (rows || []).map(mapDbRowToMeeting);
+
+    if (session.role === 'Facilitator') {
+      const { data: persData } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const persId = persData?.id;
+      if (!persId) {
+        return { data: [], error: null };
+      }
+
+      const { data: myCohorts } = await supabase
+        .from('cohorts')
+        .select('id')
+        .eq('lead_facilitator_id', persId)
+        .eq('tenant_id', tenantId);
+
+      const assignedCohortIds = (myCohorts || []).map((c) => c.id);
+
+      all = all.filter(
+        (m) =>
+          m.facilitatorId === persId ||
+          (m.cohortId && assignedCohortIds.includes(m.cohortId))
+      );
+    }
+
+    // Metadata joins: Cohorts, Personnel, Programmes
     const [cohortsRes, personnelRes, progRes] = await Promise.all([
-      supabase.from('cohorts').select('id, name, programme_id, metadata'),
-      supabase.from('personnel').select('id, name, first_name, last_name'),
-      supabase.from('programmes').select('id, name'),
+      supabase.from('cohorts').select('id, name, programme_id, metadata').eq('tenant_id', tenantId),
+      supabase.from('personnel').select('id, full_name, first_name, last_name').eq('tenant_id', tenantId),
+      supabase.from('programmes').select('id, name').eq('tenant_id', tenantId),
     ]);
 
     const progMap = new Map((progRes.data || []).map((p) => [p.id, p.name]));
     const persMap = new Map(
-      (personnelRes.data || []).map((p) => [
-        p.id,
-        p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Facilitator',
+      (personnelRes.data || []).map((p: Record<string, unknown>) => [
+        String(p.id),
+        (p.full_name as string) || `${(p.first_name as string) || ''} ${(p.last_name as string) || ''}`.trim() || 'Facilitator',
       ])
     );
     const cohortMap = new Map(
@@ -178,7 +187,7 @@ export async function getMeetings(filters?: {
         const meta = (c.metadata as Record<string, unknown>) || {};
         const code = (meta.cohort_code as string) || (meta.cohortCode as string) || c.id;
         const pName = c.programme_id ? progMap.get(c.programme_id) || '' : '';
-        return [c.id, { name: c.name, code, programmeName: pName }];
+        return [c.id, { name: c.name, code, programmeName: pName, programmeId: c.programme_id }];
       })
     );
 
@@ -186,66 +195,34 @@ export async function getMeetings(filters?: {
       const cInfo = m.cohortId ? cohortMap.get(m.cohortId) : null;
       return {
         ...m,
-        facilitatorName: m.facilitatorName || (m.facilitatorId ? persMap.get(m.facilitatorId) || 'Facilitator' : 'Unassigned'),
-        cohortCode: m.cohortCode || cInfo?.code || 'Cohort',
-        cohortName: m.cohortName || cInfo?.name || '',
-        programmeName: m.programmeName || cInfo?.programmeName || (m.programmeId ? progMap.get(m.programmeId) || '' : ''),
+        facilitatorName: m.facilitatorId ? persMap.get(m.facilitatorId) || 'Facilitator' : 'Unassigned',
+        cohortCode: cInfo?.code || 'Cohort',
+        cohortName: cInfo?.name || '',
+        programmeName: cInfo?.programmeName || (m.programmeId ? progMap.get(m.programmeId) || '' : ''),
+        programmeId: m.programmeId || cInfo?.programmeId || null,
       };
     });
 
-    const session = await getAuthoritativeSession().catch(() => null);
-    if (session) {
-      if (session.role === 'Facilitator') {
-        const personnelRes = await getAuthoritativePersonnel().catch(() => null);
-        const persId = personnelRes?.personnel?.id;
-        if (!persId) {
-          return { data: [], error: null };
-        }
-        const { data: myCohorts } = await supabase
-          .from('cohorts')
-          .select('id')
-          .eq('lead_facilitator_id', persId);
-        const { data: mySessions } = await supabase
-          .from('training_sessions')
-          .select('cohort_id')
-          .eq('facilitator_id', persId);
-
-        const assignedCohortIds = Array.from(
-          new Set([
-            ...(myCohorts || []).map((c) => c.id),
-            ...(mySessions || []).map((s) => s.cohort_id),
-          ])
-        );
-
-        all = all.filter(
-          (m) =>
-            m.facilitatorId === persId ||
-            (m.cohortId && assignedCohortIds.includes(m.cohortId))
-        );
-      } else if (session.role === 'Staff' || session.role === 'Student') {
-        return { data: [], error: null };
-      }
-    }
-
+    // Subtab filtering
     if (filters?.subTab) {
       if (filters.subTab === 'upcoming') {
         all = all.filter((m) => m.status === 'SCHEDULED');
       } else if (filters.subTab === 'live') {
         all = all.filter((m) => m.status === 'LIVE');
       } else if (filters.subTab === 'completed') {
-        all = all.filter((m) => m.status === 'ENDED' || m.status === 'COMPLETED');
+        all = all.filter((m) => m.status === 'COMPLETED');
       } else if (filters.subTab === 'recordings') {
         all = all.filter(
           (m) =>
             m.recordingStatus === 'STORED' ||
             Boolean(m.recordingMetadata?.driveUrl) ||
             Boolean(m.recordingUrl) ||
-            m.status === 'ENDED' ||
             m.status === 'COMPLETED'
         );
       }
     }
 
+    // Keyword search
     if (filters?.search && filters.search.trim()) {
       const q = filters.search.toLowerCase().trim();
       all = all.filter(
@@ -269,79 +246,87 @@ export async function getMeetingById(idOrPublicId: string): Promise<{
   error: string | null;
 }> {
   try {
-    seedInitialMeetings();
-
-    // Check memory store
-    for (const m of memoryMeetings.values()) {
-      if (m.id === idOrPublicId || m.publicId === idOrPublicId) {
-        return { data: m, error: null };
-      }
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) {
+      return { data: null, error: 'Unauthorized: Authentication required.' };
     }
 
-    // Check database
     const supabase = await createServerClient();
+    const tenantId = session.tenantId;
+
     const { data: row, error } = await supabase
       .from('meetings')
       .select('*')
+      .eq('tenant_id', tenantId)
       .or(`id.eq.${idOrPublicId},public_id.eq.${idOrPublicId}`)
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (error || !row) {
       return { data: null, error: 'Meeting not found' };
     }
 
-    const meeting: Meeting = {
-      id: row.id,
-      tenantId: row.tenant_id,
-      publicId: row.public_id,
-      title: row.title,
-      description: row.description,
-      programmeId: row.programme_id,
-      cohortId: row.cohort_id,
-      trainingSessionId: row.training_session_id,
-      facilitatorId: row.facilitator_id,
-      scheduledStart: row.scheduled_start,
-      scheduledEnd: row.scheduled_end,
-      actualStart: row.actual_start,
-      actualEnd: row.actual_end,
-      status: row.status,
-      participantAccess: row.participant_access,
-      sfuProvider: row.sfu_provider,
-      sfuRoomId: row.sfu_room_id,
-      settings: row.settings || {},
-      recordingEnabled: row.recording_enabled,
-      recordingStatus: row.recording_status,
-      recordingMetadata: row.recording_metadata || {},
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    const meeting = mapDbRowToMeeting(row);
 
-    const session = await getAuthoritativeSession().catch(() => null);
-    if (session && session.role === 'Facilitator') {
-      const personnelRes = await getAuthoritativePersonnel().catch(() => null);
-      const persId = personnelRes?.personnel?.id;
+    // Authorization checks based on authoritative role
+    if (session.role === 'Facilitator') {
+      const { data: persData } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const persId = persData?.id;
       if (!persId) {
         return { data: null, error: 'Meeting not found' };
       }
+
       if (meeting.facilitatorId !== persId) {
-        let isCohortAssigned = false;
+        let isCohortLead = false;
         if (meeting.cohortId) {
           const { data: cohortRow } = await supabase
             .from('cohorts')
             .select('id')
             .eq('id', meeting.cohortId)
             .eq('lead_facilitator_id', persId)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
-          if (cohortRow) isCohortAssigned = true;
+          if (cohortRow) isCohortLead = true;
         }
-        if (!isCohortAssigned) {
+        if (!isCohortLead) {
           return { data: null, error: 'Meeting not found' };
         }
       }
+    } else if (session.role === 'Student') {
+      const { data: studData } = await supabase
+        .from('students')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const studentId = studData?.id;
+      if (!studentId || !meeting.cohortId) {
+        return { data: null, error: 'Meeting not found' };
+      }
+
+      const { data: enrolment } = await supabase
+        .from('enrolments')
+        .select('id')
+        .eq('cohort_id', meeting.cohortId)
+        .eq('student_id', studentId)
+        .eq('tenant_id', tenantId)
+        .not('status', 'in', '("CANCELLED","WITHDRAWN")')
+        .maybeSingle();
+
+      if (!enrolment) {
+        return { data: null, error: 'Meeting not found' };
+      }
+    } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { data: null, error: 'Meeting not found' };
     }
 
-    memoryMeetings.set(meeting.id, meeting);
     return { data: meeting, error: null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to get meeting';
@@ -350,43 +335,85 @@ export async function getMeetingById(idOrPublicId: string): Promise<{
 }
 
 export async function saveMeetingRecord(meeting: Meeting): Promise<void> {
-  const session = await getAuthoritativeSession().catch(() => null);
-  if (session && !['Super Admin', 'Finance Manager'].includes(session.role)) {
-    throw new Error('FORBIDDEN: Only administrators may save or schedule meetings');
+  const session = await getAuthoritativeSession();
+  if (!session || !session.user || !['Super Admin', 'Finance Manager'].includes(session.role)) {
+    throw new Error('FORBIDDEN: Only administrators may save or schedule meetings.');
   }
 
-  memoryMeetings.set(meeting.id, meeting);
+  const supabase = await createServerClient();
+  const tenantId = session.tenantId;
 
-  // Attempt database save if table is available
-  try {
-    const supabase = await createServerClient();
-    await supabase.from('meetings').upsert({
-      id: meeting.id,
-      tenant_id: meeting.tenantId,
-      public_id: meeting.publicId,
-      title: meeting.title,
-      description: meeting.description || null,
-      programme_id: meeting.programmeId || null,
-      cohort_id: meeting.cohortId || null,
-      training_session_id: meeting.trainingSessionId || null,
-      facilitator_id: meeting.facilitatorId || null,
-      scheduled_start: meeting.scheduledStart,
-      scheduled_end: meeting.scheduledEnd,
-      actual_start: meeting.actualStart || null,
-      actual_end: meeting.actualEnd || null,
-      status: meeting.status,
-      participant_access: meeting.participantAccess,
-      sfu_provider: meeting.sfuProvider,
-      sfu_room_id: meeting.sfuRoomId || null,
-      settings: meeting.settings,
-      recording_enabled: meeting.recordingEnabled,
-      recording_status: meeting.recordingStatus,
-      recording_metadata: meeting.recordingMetadata,
-      created_by: meeting.createdBy || null,
-      created_at: meeting.createdAt,
-      updated_at: meeting.updatedAt,
-    });
-  } catch (_) {}
+  // Validate facilitator_id belongs to personnel of the tenant
+  let resolvedFacilitatorId: string | null = null;
+  if (meeting.facilitatorId && typeof meeting.facilitatorId === 'string' && meeting.facilitatorId.trim()) {
+    const { data: pers } = await supabase
+      .from('personnel')
+      .select('id')
+      .eq('id', meeting.facilitatorId.trim())
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    
+    if (pers) {
+      resolvedFacilitatorId = pers.id;
+    }
+  }
+
+  // Validate cohort_id if provided
+  let resolvedCohortId: string | null = null;
+  if (meeting.cohortId && typeof meeting.cohortId === 'string' && meeting.cohortId.trim()) {
+    const { data: coh } = await supabase
+      .from('cohorts')
+      .select('id')
+      .eq('id', meeting.cohortId.trim())
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    
+    if (coh) {
+      resolvedCohortId = coh.id;
+    }
+  }
+
+  let canonicalStatus = meeting.status as string;
+  if (canonicalStatus === 'ENDED') canonicalStatus = 'COMPLETED';
+  if (!['SCHEDULED', 'LIVE', 'COMPLETED', 'CANCELLED'].includes(canonicalStatus)) {
+    canonicalStatus = 'SCHEDULED';
+  }
+
+  const dbPayload = {
+    id: meeting.id,
+    tenant_id: tenantId,
+    public_id: meeting.publicId,
+    title: meeting.title,
+    description: meeting.description || null,
+    meeting_type: 'ONLINE_CLASS',
+    status: canonicalStatus,
+    participant_access: meeting.participantAccess || 'COHORT_ONLY',
+    cohort_id: resolvedCohortId,
+    training_session_id: meeting.trainingSessionId || null,
+    facilitator_id: resolvedFacilitatorId,
+    created_by: session.user.id,
+    provider: (meeting.sfuProvider || 'livekit').toUpperCase(),
+    provider_room_id: meeting.sfuRoomId || meeting.publicId,
+    provider_room_name: meeting.title,
+    provider_room_url: process.env.LIVEKIT_URL || null,
+    scheduled_start: meeting.scheduledStart,
+    scheduled_end: meeting.scheduledEnd,
+    actual_start: meeting.actualStart || null,
+    actual_end: meeting.actualEnd || null,
+    settings: meeting.settings || { allowChat: true, allowScreenShare: true, muteOnEntry: false },
+    recording_enabled: Boolean(meeting.recordingEnabled),
+    recording_status: meeting.recordingStatus || 'NOT_STARTED',
+    recording_url: meeting.recordingUrl || null,
+    recording_metadata: meeting.recordingMetadata || {},
+    created_at: meeting.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted_at: null,
+  };
+
+  const { error } = await supabase.from('meetings').upsert(dbPayload);
+  if (error) {
+    throw new Error(`Database error saving meeting: ${error.message}`);
+  }
 }
 
 export async function updateMeetingStatus(
@@ -394,21 +421,60 @@ export async function updateMeetingStatus(
   status: MeetingStatus
 ): Promise<{ success: boolean; error: string | null }> {
   try {
-    const meetingRes = await getMeetingById(meetingId);
-    if (!meetingRes.data) return { success: false, error: 'Meeting not found' };
-
-    const meeting = meetingRes.data;
-    meeting.status = status;
-    const now = new Date().toISOString();
-    meeting.updatedAt = now;
-
-    if (status === 'LIVE' && !meeting.actualStart) {
-      meeting.actualStart = now;
-    } else if (status === 'ENDED' || status === 'COMPLETED') {
-      meeting.actualEnd = now;
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) {
+      return { success: false, error: 'Unauthorized' };
     }
 
-    await saveMeetingRecord(meeting);
+    const meetingRes = await getMeetingById(meetingId);
+    if (!meetingRes.data) {
+      return { success: false, error: 'Meeting not found' };
+    }
+
+    const meeting = meetingRes.data;
+    const supabase = await createServerClient();
+    const tenantId = session.tenantId;
+
+    // Authorization: Admin or assigned Facilitator
+    if (session.role === 'Facilitator') {
+      const { data: persData } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (!persData?.id || meeting.facilitatorId !== persData.id) {
+        return { success: false, error: 'Forbidden: You are not authorized to update this meeting.' };
+      }
+    } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { success: false, error: 'Forbidden: Insufficient permissions.' };
+    }
+
+    const canonicalStatus = status;
+    const now = new Date().toISOString();
+
+    const updates: Record<string, unknown> = {
+      status: canonicalStatus,
+      updated_at: now,
+    };
+
+    if (canonicalStatus === 'LIVE' && !meeting.actualStart) {
+      updates.actual_start = now;
+    } else if (canonicalStatus === 'COMPLETED') {
+      updates.actual_end = now;
+    }
+
+    const { error } = await supabase
+      .from('meetings')
+      .update(updates)
+      .eq('id', meeting.id)
+      .eq('tenant_id', tenantId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
     return { success: true, error: null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to update meeting status';
@@ -422,18 +488,57 @@ export async function updateMeetingRecordingMetadata(
   metadata: RecordingMetadata
 ): Promise<{ success: boolean; error: string | null }> {
   try {
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
     const meetingRes = await getMeetingById(meetingId);
-    if (!meetingRes.data) return { success: false, error: 'Meeting not found' };
+    if (!meetingRes.data) {
+      return { success: false, error: 'Meeting not found' };
+    }
 
     const meeting = meetingRes.data;
-    meeting.recordingStatus = status;
-    meeting.recordingMetadata = {
+    const supabase = await createServerClient();
+    const tenantId = session.tenantId;
+
+    // Authorization: Admin or assigned Facilitator
+    if (session.role === 'Facilitator') {
+      const { data: persData } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (!persData?.id || meeting.facilitatorId !== persData.id) {
+        return { success: false, error: 'Forbidden: You are not authorized to update recordings for this meeting.' };
+      }
+    } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { success: false, error: 'Forbidden: Insufficient permissions.' };
+    }
+
+    const mergedMeta = {
       ...(meeting.recordingMetadata || {}),
       ...metadata,
     };
-    meeting.updatedAt = new Date().toISOString();
+    const recUrl = metadata.webViewLink || metadata.driveUrl || meeting.recordingUrl || null;
 
-    await saveMeetingRecord(meeting);
+    const { error } = await supabase
+      .from('meetings')
+      .update({
+        recording_status: status,
+        recording_metadata: mergedMeta,
+        recording_url: recUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', meeting.id)
+      .eq('tenant_id', tenantId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
     return { success: true, error: null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to update recording metadata';
@@ -446,43 +551,63 @@ export async function checkMeetingDependencies(meetingId: string): Promise<{
   blockedReason?: string;
   dependencies: Array<{ label: string; count: number }>;
 }> {
-  const meetingRes = await getMeetingById(meetingId);
-  if (!meetingRes.data) {
+  try {
+    const meetingRes = await getMeetingById(meetingId);
+    if (!meetingRes.data) {
+      return { canDelete: true, dependencies: [] };
+    }
+
+    const meeting = meetingRes.data;
+    const deps: Array<{ label: string; count: number }> = [];
+
+    const hasRecording =
+      meeting.recordingStatus === 'STORED' ||
+      Boolean(meeting.recordingMetadata?.driveUrl) ||
+      Boolean(meeting.recordingUrl);
+
+    if (hasRecording) {
+      deps.push({
+        label: 'Archived Classroom Recording & Google Drive Media',
+        count: 1,
+      });
+    }
+
+    if (meeting.status === 'COMPLETED') {
+      deps.push({
+        label: 'Delivered Academic Session & Attendance Logs',
+        count: 1,
+      });
+    }
+
+    if (meeting.cohortId) {
+      const supabase = await createServerClient();
+      const { count } = await supabase
+        .from('attendance')
+        .select('id', { count: 'exact', head: true })
+        .eq('cohort_id', meeting.cohortId)
+        .eq('tenant_id', meeting.tenantId);
+
+      if (count && count > 0) {
+        deps.push({
+          label: 'Linked Cohort Student Attendance Ledger Records',
+          count,
+        });
+      }
+    }
+
+    if (deps.length > 0) {
+      return {
+        canDelete: false,
+        blockedReason:
+          'This meeting has an archived classroom recording or delivered academic attendance records. Hard deletion is prohibited to preserve curriculum audit logs.',
+        dependencies: deps,
+      };
+    }
+
     return { canDelete: true, dependencies: [] };
+  } catch {
+    return { canDelete: false, blockedReason: 'Dependency inspection failed', dependencies: [] };
   }
-
-  const meeting = meetingRes.data;
-  const deps: Array<{ label: string; count: number }> = [];
-
-  const hasRecording =
-    meeting.recordingStatus === 'STORED' ||
-    Boolean(meeting.recordingMetadata?.driveUrl) ||
-    Boolean(meeting.recordingUrl);
-
-  if (hasRecording) {
-    deps.push({
-      label: 'Archived Classroom Recording & Google Drive Media',
-      count: 1,
-    });
-  }
-
-  if (meeting.status === 'COMPLETED' || meeting.status === 'ENDED') {
-    deps.push({
-      label: 'Delivered Academic Session & Attendance Logs',
-      count: 1,
-    });
-  }
-
-  if (deps.length > 0) {
-    return {
-      canDelete: false,
-      blockedReason:
-        'This meeting has an archived classroom recording or completed academic attendance records. Hard deletion is prohibited to preserve curriculum audit logs.',
-      dependencies: deps,
-    };
-  }
-
-  return { canDelete: true, dependencies: [] };
 }
 
 export async function deleteMeetingSafe(
@@ -490,31 +615,35 @@ export async function deleteMeetingSafe(
   tenantId?: string
 ): Promise<{ success: boolean; error: string | null }> {
   try {
+    const session = await getAuthoritativeSession();
+    if (!session || !session.user || !['Super Admin', 'Finance Manager'].includes(session.role)) {
+      return { success: false, error: 'Forbidden: Only administrators may delete meetings.' };
+    }
+
+    const targetTenantId = tenantId || session.tenantId;
+
     const depCheck = await checkMeetingDependencies(meetingId);
     if (!depCheck.canDelete) {
       return { success: false, error: depCheck.blockedReason || 'Cannot delete meeting with dependencies' };
     }
 
-    // Remove from in-memory store
-    memoryMeetings.delete(meetingId);
-    for (const [id, m] of memoryMeetings.entries()) {
-      if (m.publicId === meetingId || m.id === meetingId) {
-        memoryMeetings.delete(id);
-      }
-    }
+    const supabase = await createServerClient();
 
-    // Attempt database deletion if table is available
-    try {
-      const supabase = await createServerClient();
-      let delQuery = supabase
-        .from('meetings')
-        .delete()
-        .or(`id.eq.${meetingId},public_id.eq.${meetingId}`);
-      if (tenantId) {
-        delQuery = delQuery.eq('tenant_id', tenantId);
-      }
-      await delQuery;
-    } catch (_) {}
+    // Soft delete: sets deleted_at and status = CANCELLED
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('meetings')
+      .update({
+        deleted_at: now,
+        status: 'CANCELLED',
+        updated_at: now,
+      })
+      .or(`id.eq.${meetingId},public_id.eq.${meetingId}`)
+      .eq('tenant_id', targetTenantId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
 
     return { success: true, error: null };
   } catch (err: unknown) {
