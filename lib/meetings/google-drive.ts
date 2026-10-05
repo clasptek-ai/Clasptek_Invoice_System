@@ -8,20 +8,19 @@
 import crypto from 'crypto';
 import type { GoogleDriveStatus, RecordingMetadata } from '@/types/meetings';
 
-export const APPROVED_MEETINGS_FOLDER_ID = '1YLLgVqmSVZJgSitgNUzH7P73sRRdrt0CRan';
 export const DEFAULT_ROOT_FOLDER_NAME = 'Clasptek Meeting Recordings';
 
 /**
- * Resolves the approved Google Drive folder ID for meeting recordings.
- * Prefers server-side GOOGLE_DRIVE_MEETINGS_FOLDER_ID, then GOOGLE_DRIVE_ROOT_FOLDER_ID,
- * falling back to the approved organization folder ID.
+ * Resolves the authoritative Google Drive folder ID for meeting recordings.
+ * Requires server-side GOOGLE_DRIVE_MEETINGS_FOLDER_ID to be explicitly configured.
+ * Strictly NO hardcoded fallbacks or fallbacks to other folder variables.
  */
 export function getMeetingsFolderId(): string {
-  return (
-    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID?.trim() ||
-    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim() ||
-    APPROVED_MEETINGS_FOLDER_ID
-  );
+  const folderId = process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID?.trim();
+  if (!folderId) {
+    throw new Error('GOOGLE_DRIVE_MEETINGS_FOLDER_ID is not configured');
+  }
+  return folderId;
 }
 
 /**
@@ -32,9 +31,13 @@ export async function verifyMeetingsFolderAccess(): Promise<{
   folderId: string;
   error?: string;
 }> {
-  const folderId = getMeetingsFolderId();
-  if (!folderId) {
-    return { valid: false, folderId: '', error: 'MISSING_FOLDER_ID' };
+  let folderId: string;
+  try {
+    folderId = getMeetingsFolderId();
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error ? err.message : 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID is not configured';
+    return { valid: false, folderId: '', error: errorMsg };
   }
   // Google Drive folder IDs are base64-like alphanumeric strings with hyphens and underscores
   if (!/^[a-zA-Z0-9_-]{20,}$/.test(folderId)) {
@@ -68,11 +71,16 @@ export function generateRecordingFileName(params: {
 }
 
 export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
-  const rootFolderId = getMeetingsFolderId();
+  let rootFolderId = '';
+  try {
+    rootFolderId = getMeetingsFolderId();
+  } catch {
+    rootFolderId = '';
+  }
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-  const isConfigured = Boolean(clientId && clientSecret);
+  const isConfigured = Boolean(clientId && clientSecret && rootFolderId);
 
   return {
     connected: isConfigured,
