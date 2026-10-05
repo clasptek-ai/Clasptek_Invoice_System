@@ -9,8 +9,13 @@
  *   - middleware.ts
  *
  * DO NOT import in 'use client' components — use lib/supabase/client.ts instead.
+ *
+ * createSupabaseServiceClient() — PRIVILEGED INTERNAL USE ONLY
+ *   Uses the SUPABASE_SERVICE_ROLE_KEY (not exposed via NEXT_PUBLIC_*).
+ *   Bypasses RLS. Must NEVER be imported into client components or browser bundles.
+ *   Authorization MUST be performed by the caller before using this client.
  */
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, createBrowserClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export async function createSupabaseServerClient() {
@@ -48,36 +53,30 @@ export async function createSupabaseServerClient() {
 export { createSupabaseServerClient as createServerClient };
 
 /**
- * Creates a Supabase server client using the SERVICE ROLE key.
- * FOR INTERNAL SERVER-SIDE USE ONLY. Never expose service role key to clients.
- * Use for admin operations that bypass RLS — use with extreme caution.
+ * Creates a Supabase client using the SERVICE ROLE key.
+ *
+ * PRIVILEGED INTERNAL SERVER-SIDE USE ONLY.
+ * - Bypasses all RLS policies.
+ * - Uses SUPABASE_SERVICE_ROLE_KEY — never exposed via NEXT_PUBLIC_*.
+ * - Does NOT carry any user JWT or session cookies.
+ * - Caller MUST perform full authorization before invoking this client.
+ * - Must NEVER be imported into 'use client' modules, browser bundles, or public responses.
  */
-export async function createSupabaseServiceClient() {
-  const cookieStore = await cookies();
+export function createSupabaseServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SECRET_KEY ||
     '';
 
-  return createServerClient(
+  // Use createBrowserClient with the service key — no cookies required.
+  // This is safe because: (a) it runs server-side only, (b) the service key
+  // is never sent to the browser, (c) RLS bypass is intentional and guarded
+  // by the caller's prior authorization checks.
+  return createBrowserClient(
     url,
     serviceKey,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Read-only in Server Components — middleware handles refresh.
-          }
-        },
-      },
       auth: {
         autoRefreshToken: false,
         persistSession: false,

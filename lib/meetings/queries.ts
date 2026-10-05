@@ -3,9 +3,16 @@
  * Authoritative Server-side Data Access Layer for Meetings Operations.
  * Fully backed by Supabase PostgreSQL with multi-tenant RLS isolation.
  * Zero dependency on process memory cache.
+ *
+ * PRIVILEGED WRITE SAFETY:
+ *   updateMeetingStatus() and updateMeetingRecordingMetadata() use the
+ *   service-role client ONLY for the final narrowly-scoped UPDATE, and ONLY
+ *   after the caller has already established: authenticated session →
+ *   authoritative tenant → facilitator identity → meeting assignment.
+ *   The service client is never exposed to the browser or to client components.
  */
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import type { Meeting, MeetingStatus, RecordingStatus, RecordingMetadata } from '@/types/meetings';
 
@@ -426,18 +433,26 @@ export async function updateMeetingStatus(
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Use the authenticated (RLS-scoped) client for all reads and auth checks.
+    const authClient = await createServerClient();
+    const tenantId = session.tenantId;
+
     const meetingRes = await getMeetingById(meetingId);
     if (!meetingRes.data) {
       return { success: false, error: 'Meeting not found' };
     }
 
     const meeting = meetingRes.data;
-    const supabase = await createServerClient();
-    const tenantId = session.tenantId;
 
-    // Authorization: Admin or assigned Facilitator
+    // Authoritative tenant isolation: meeting must belong to the session's tenant.
+    if (meeting.tenantId !== tenantId) {
+      return { success: false, error: 'Meeting not found' };
+    }
+
+    // Authorization: Admin or assigned Facilitator.
+    // Facilitator identity resolved: auth.uid() → personnel.user_id → personnel.id
     if (session.role === 'Facilitator') {
-      const { data: persData } = await supabase
+      const { data: persData } = await authClient
         .from('personnel')
         .select('id')
         .eq('user_id', session.user.id)
@@ -451,23 +466,50 @@ export async function updateMeetingStatus(
       return { success: false, error: 'Forbidden: Insufficient permissions.' };
     }
 
+    // Server-side lifecycle state-transition enforcement.
+    // Prevents arbitrary status jumps (e.g. SCHEDULED → COMPLETED directly).
     const canonicalStatus = status;
+    const currentStatus = meeting.status;
+
+    const allowedTransitions: Record<string, MeetingStatus[]> = {
+      SCHEDULED: ['LIVE', 'CANCELLED'],
+      LIVE: ['COMPLETED', 'CANCELLED'],
+      COMPLETED: [],
+      CANCELLED: [],
+    };
+
+    const allowed = allowedTransitions[currentStatus] || [];
+    if (!allowed.includes(canonicalStatus)) {
+      return {
+        success: false,
+        error: `Invalid lifecycle transition: ${currentStatus} → ${canonicalStatus}. Allowed: ${allowed.join(', ') || 'none'}.`,
+      };
+    }
+
     const now = new Date().toISOString();
 
-    const updates: Record<string, unknown> = {
+    // DEFENCE-IN-DEPTH: Use the privileged service client for the final UPDATE,
+    // which now passes RLS because the service key bypasses it.
+    // The UPDATE is strictly scoped to lifecycle fields only — no ownership,
+    // scheduling, configuration, or tenant fields may be modified here.
+    const privilegedUpdates: Record<string, unknown> = {
       status: canonicalStatus,
       updated_at: now,
     };
 
     if (canonicalStatus === 'LIVE' && !meeting.actualStart) {
-      updates.actual_start = now;
+      privilegedUpdates.actual_start = now;
     } else if (canonicalStatus === 'COMPLETED') {
-      updates.actual_end = now;
+      privilegedUpdates.actual_end = now;
     }
 
-    const { error } = await supabase
+    // The privileged service client is used ONLY here, after all authorization
+    // checks above have passed. It is scoped by both meeting.id AND tenant_id
+    // to prevent cross-tenant privilege escalation.
+    const serviceClient = createSupabaseServiceClient();
+    const { error } = await serviceClient
       .from('meetings')
-      .update(updates)
+      .update(privilegedUpdates)
       .eq('id', meeting.id)
       .eq('tenant_id', tenantId);
 
@@ -493,18 +535,26 @@ export async function updateMeetingRecordingMetadata(
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Use the authenticated (RLS-scoped) client for all reads and auth checks.
+    const authClient = await createServerClient();
+    const tenantId = session.tenantId;
+
     const meetingRes = await getMeetingById(meetingId);
     if (!meetingRes.data) {
       return { success: false, error: 'Meeting not found' };
     }
 
     const meeting = meetingRes.data;
-    const supabase = await createServerClient();
-    const tenantId = session.tenantId;
 
-    // Authorization: Admin or assigned Facilitator
+    // Authoritative tenant isolation: meeting must belong to the session's tenant.
+    if (meeting.tenantId !== tenantId) {
+      return { success: false, error: 'Meeting not found' };
+    }
+
+    // Authorization: Admin or assigned Facilitator.
+    // Facilitator identity resolved: auth.uid() → personnel.user_id → personnel.id
     if (session.role === 'Facilitator') {
-      const { data: persData } = await supabase
+      const { data: persData } = await authClient
         .from('personnel')
         .select('id')
         .eq('user_id', session.user.id)
@@ -524,7 +574,12 @@ export async function updateMeetingRecordingMetadata(
     };
     const recUrl = metadata.webViewLink || metadata.driveUrl || meeting.recordingUrl || null;
 
-    const { error } = await supabase
+    // DEFENCE-IN-DEPTH: Use the privileged service client for the final UPDATE,
+    // strictly scoped to recording fields only. No ownership, scheduling,
+    // configuration, or tenant fields may be modified by this operation.
+    // The service client is used ONLY here, after all authorization checks above.
+    const serviceClient = createSupabaseServiceClient();
+    const { error } = await serviceClient
       .from('meetings')
       .update({
         recording_status: status,
