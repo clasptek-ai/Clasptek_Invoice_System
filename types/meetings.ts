@@ -20,20 +20,27 @@ export interface MeetingSettings {
 }
 
 export interface RecordingMetadata {
+  provider?: string;
   fileId?: string;
   driveFileId?: string;
+  driveFolderId?: string;
   fileName?: string;
+  mimeType?: string;
   driveUrl?: string;
   webViewLink?: string;
   webContentLink?: string;
   fileSizeBytes?: number;
+  size?: number | string;
   durationSeconds?: number;
   recordingId?: string;
   uploadedAt?: string;
   storedAt?: string;
+  source?: string;
   error?: string;
   rootFolderId?: string;
   tenantId?: string;
+  meetingId?: string;
+  meetingPublicId?: string;
 }
 
 export interface Meeting {

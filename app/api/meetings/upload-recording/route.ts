@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import { createServerClient } from '@/lib/supabase/server';
-import { uploadRecordingToDrive } from '@/lib/meetings/google-drive';
+import { uploadRecordingToDrive, generateRecordingFileName } from '@/lib/meetings/google-drive';
 import { getMeetingById, updateMeetingRecordingMetadata } from '@/lib/meetings/queries';
 
 export async function POST(req: NextRequest) {
@@ -105,13 +105,19 @@ export async function POST(req: NextRequest) {
     }
 
     const resolvedFileName =
-      fileName || `${meeting.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${meeting.publicId}.mp4`;
+      fileName ||
+      generateRecordingFileName({
+        meetingPublicId: meeting.publicId,
+        title: meeting.title,
+        scheduledStart: meeting.scheduledStart,
+      });
 
     // Perform upload to Google Drive Central Repository
     let recordingMeta;
     try {
       recordingMeta = await uploadRecordingToDrive({
         meetingId: meeting.id,
+        meetingPublicId: meeting.publicId,
         tenantId: meeting.tenantId,
         fileName: resolvedFileName,
         fileBuffer,
