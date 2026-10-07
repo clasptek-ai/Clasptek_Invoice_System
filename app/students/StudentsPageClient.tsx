@@ -25,6 +25,7 @@ import { downloadSafeCsv } from '@/lib/utils/csv';
 interface StudentsPageClientProps {
   initialStudents: StudentSummary[];
   totalCount: number;
+  initialError?: string | null;
   currentSearch: string;
   currentStatus: string;
   currentProgrammeId?: string;
@@ -34,11 +35,14 @@ interface StudentsPageClientProps {
   currentPage: number;
   pageSize: number;
   currentUserRole?: string;
+  currentSortBy?: string;
+  currentSortOrder?: 'asc' | 'desc';
 }
 
 export function StudentsPageClient({
   initialStudents,
   totalCount,
+  initialError,
   currentSearch,
   currentStatus,
   currentProgrammeId = 'ALL',
@@ -48,6 +52,8 @@ export function StudentsPageClient({
   currentPage,
   pageSize,
   currentUserRole = 'Staff',
+  currentSortBy = 'registration_date',
+  currentSortOrder = 'desc',
 }: StudentsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,6 +68,19 @@ export function StudentsPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
+
+  const handleSort = useCallback(
+    (field: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const nextOrder = currentSortBy === field ? (currentSortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
+      params.set('sortBy', field);
+      params.set('order', nextOrder);
+      params.delete('page');
+      setSelectedIds(new Set());
+      startTransition(() => router.push(`/students?${params.toString()}`));
+    },
+    [router, searchParams, currentSortBy, currentSortOrder]
+  );
 
   const canDelete = ['Super Admin', 'Staff'].includes(currentUserRole);
 
@@ -141,15 +160,15 @@ export function StudentsPageClient({
     });
   }, []);
 
-  const visibleIds = useMemo(() => initialStudents.map((s) => s.id), [initialStudents]);
+  const visibleIds = useMemo(() => initialStudents.map((s: StudentSummary) => s.id), [initialStudents]);
 
   const isAllSelected = useMemo(
-    () => visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id)),
+    () => visibleIds.length > 0 && visibleIds.every((id: string) => selectedIds.has(id)),
     [visibleIds, selectedIds]
   );
 
   const isIndeterminate = useMemo(() => {
-    const selectedCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+    const selectedCount = visibleIds.filter((id: string) => selectedIds.has(id)).length;
     return selectedCount > 0 && selectedCount < visibleIds.length;
   }, [visibleIds, selectedIds]);
 
@@ -157,13 +176,13 @@ export function StudentsPageClient({
     if (isAllSelected) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        visibleIds.forEach((id) => next.delete(id));
+        visibleIds.forEach((id: string) => next.delete(id));
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        visibleIds.forEach((id) => next.add(id));
+        visibleIds.forEach((id: string) => next.add(id));
         return next;
       });
     }
@@ -238,6 +257,30 @@ export function StudentsPageClient({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
+      {initialError && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #F87171',
+            borderRadius: '8px',
+            color: '#991B1B',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+          }}
+        >
+          <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700 }}>Database Query Error</div>
+            <div style={{ marginTop: '2px', fontFamily: 'monospace', fontSize: '12px', color: '#7F1D1D' }}>
+              {initialError}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="cp-card">
         {/* Card Header matching legacy index.html line 24670 */}
         <div className="cp-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -341,7 +384,7 @@ export function StudentsPageClient({
           </div>
         )}
 
-        {/* Directory Table with Row Selection */}
+        {/* Directory Table with Row Selection & Deterministic Sorting */}
         <StudentTable
           students={initialStudents}
           selectedIds={selectedIds}
@@ -354,6 +397,9 @@ export function StudentsPageClient({
           onOpen360={handleOpenProfile}
           onDeleteStudent={handleOpenSingleDelete}
           canDelete={canDelete}
+          sortField={currentSortBy}
+          sortOrder={currentSortOrder}
+          onSort={handleSort}
         />
 
         {/* Standard Pagination Footer */}

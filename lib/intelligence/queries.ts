@@ -91,8 +91,9 @@ export async function getManagementDashboardMetrics(
     certificatesRes,
     auditLogsRes,
     receivablesAgeingData,
+    customerTimelineRes,
   ] = await Promise.all([
-    supabase.from('enquiries').select('id, student_name, email, phone, programme_id, status, created_at').eq('tenant_id', resolvedTenant),
+    supabase.from('enquiries').select('id, student_name, email, phone, programme_id, status, notes, created_at').eq('tenant_id', resolvedTenant),
     supabase.from('crm_intake_applications').select('id, status, created_at').eq('tenant_id', resolvedTenant),
     supabase.from('students').select('id, student_number, first_name, last_name, email, status, created_at').eq('tenant_id', resolvedTenant),
     supabase.from('enrolments').select('id, student_name, enrolment_number, status, programme_id, cohort_id, agreed_tuition_fee, certificate_issued, created_at').eq('tenant_id', resolvedTenant),
@@ -108,9 +109,13 @@ export async function getManagementDashboardMetrics(
     supabase.from('certificates').select('id, status, certificate_number, created_at').eq('tenant_id', resolvedTenant),
     supabase.from('finance_audit_log').select('id, action, entity_type, entity_id, entity_name, actor_role, reason, created_at').eq('tenant_id', resolvedTenant).order('created_at', { ascending: false }).limit(25),
     getReceivablesAgeing(resolvedTenant),
+    supabase.from('customer_timeline').select('enquiry_id, next_follow_up_date').eq('tenant_id', resolvedTenant).not('next_follow_up_date', 'is', null),
   ]);
 
   // 1. Admissions Intelligence
+  if (studentsRes.error) console.error('[getIntelligenceOverview] students query error:', studentsRes.error.message);
+  if (enrolmentsRes.error) console.error('[getIntelligenceOverview] enrolments query error:', enrolmentsRes.error.message);
+
   const enquiries = enquiriesRes.data || [];
   const applications = applicationsRes.data || [];
   const totalEnquiries = enquiries.length;
@@ -237,7 +242,7 @@ export async function getManagementDashboardMetrics(
   const totalMeetings = meetings.length;
   const scheduledMeetings = meetings.filter(m => m.status === 'SCHEDULED').length;
   const liveMeetings = meetings.filter(m => m.status === 'LIVE').length;
-  const completedMeetings = meetings.filter(m => m.status === 'COMPLETED' || m.status === 'ENDED').length;
+  const completedMeetings = meetings.filter(m => m.status === 'COMPLETED').length;
   const cancelledMeetings = meetings.filter(m => m.status === 'CANCELLED').length;
   const recordingsAvailable = meetings.filter(m => m.recordingStatus === 'STORED' || (m.recordings && m.recordings.length > 0)).length;
 
@@ -304,19 +309,52 @@ export async function getManagementDashboardMetrics(
   const enrolled = enqStatusMap['ENROLLED'] || 0;
   const lost = enqStatusMap['LOST'] || 0;
 
-  const nowTime = Date.now();
   const todayDateStr = new Date().toISOString().slice(0, 10);
+
+  // Authoritative Follow-up Logic (Req #3):
+  // Must represent actual follow-up work scheduled for today, NOT simply enquiries created today.
+  // Sources:
+  // 1. customer_timeline records where next_follow_up_date = todayDateStr
+  // 2. Structured enquiries.notes containing 'Next Follow-up Scheduled: YYYY-MM-DD'
+  // Enquiries in terminal states (LOST, ENROLLED) are excluded.
+  // Note: created_at is strictly NOT used as a follow-up date proxy.
+  const timelineFollowUpEnquiryIds = new Set(
+    (customerTimelineRes?.data || [])
+      .filter((t: { next_follow_up_date?: string | null }) => t.next_follow_up_date === todayDateStr)
+      .map((t: { enquiry_id?: string | null }) => t.enquiry_id)
+      .filter(Boolean)
+  );
 
   const followUpsDueToday = enquiries.filter(e => {
     const st = (e.status || '').toUpperCase();
-    return (st === 'NEW' || st === 'CONTACTED') && (e.created_at || '').slice(0, 10) === todayDateStr;
+    if (st === 'LOST' || st === 'ENROLLED') return false;
+
+    if (timelineFollowUpEnquiryIds.has(e.id)) return true;
+
+    const notesStr = e.notes || '';
+    if (notesStr.includes(`Next Follow-up Scheduled: ${todayDateStr}`)) return true;
+
+    return false;
   }).length;
+
+  const overdueTimelineEnquiryIds = new Set(
+    (customerTimelineRes?.data || [])
+      .filter((t: { next_follow_up_date?: string | null }) => t.next_follow_up_date && t.next_follow_up_date < todayDateStr)
+      .map((t: { enquiry_id?: string | null }) => t.enquiry_id)
+      .filter(Boolean)
+  );
 
   const followUpsOverdue = enquiries.filter(e => {
     const st = (e.status || '').toUpperCase();
-    if (st !== 'NEW') return false;
-    const createdTime = new Date(e.created_at).getTime();
-    return (nowTime - createdTime) > 48 * 3600 * 1000;
+    if (st === 'LOST' || st === 'ENROLLED') return false;
+
+    if (overdueTimelineEnquiryIds.has(e.id)) return true;
+
+    const notesStr = e.notes || '';
+    const match = notesStr.match(/Next Follow-up Scheduled:\s*(\d{4}-\d{2}-\d{2})/);
+    if (match && match[1] < todayDateStr) return true;
+
+    return false;
   }).length;
 
   const recentlyContacted = contacted + interested;

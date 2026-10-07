@@ -59,6 +59,7 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
     <EnrolmentsPageClient
       initialEnrolments={enrolmentsResult.data}
       totalCount={enrolmentsResult.count}
+      initialError={enrolmentsResult.error}
       cohorts={cohortsResult.data}
       currentSearch={search}
       currentCohort={cohort}

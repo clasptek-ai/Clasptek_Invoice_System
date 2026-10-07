@@ -9,6 +9,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import type { StudentSummary } from '@/types/students';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 
 interface StudentTableProps {
   students: StudentSummary[];
@@ -22,6 +23,9 @@ interface StudentTableProps {
   onOpen360?: (studentId: string) => void;
   onDeleteStudent?: (studentId: string) => void;
   canDelete?: boolean;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSort?: (field: string) => void;
 }
 
 function fmtMoney(amount: number): string {
@@ -40,6 +44,9 @@ export function StudentTable({
   onOpen360,
   onDeleteStudent,
   canDelete = false,
+  sortField,
+  sortOrder,
+  onSort,
 }: StudentTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
@@ -91,8 +98,8 @@ export function StudentTable({
                   />
                 </th>
               )}
-              <th style={{ minWidth: '140px', maxWidth: '200px' }}>Student / Client Name</th>
-              <th style={{ width: '90px' }}>Student ID</th>
+              <SortableHeader label="Student / Client Name" field="name" currentSort={sortField} currentOrder={sortOrder} onSort={onSort} style={{ minWidth: '140px', maxWidth: '200px' }} />
+              <SortableHeader label="Student ID" field="student_number" currentSort={sortField} currentOrder={sortOrder} onSort={onSort} style={{ width: '90px' }} />
               <th style={{ minWidth: '130px', maxWidth: '180px' }}>Programmes</th>
               <th className="cp-col-secondary">Contact</th>
               <th className="cp-col-secondary" style={{ textAlign: 'right' }}>Total Invoiced</th>
@@ -100,7 +107,7 @@ export function StudentTable({
               <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Outstanding Balance</th>
               <th className="cp-col-tertiary">Enrolment</th>
               <th>Financial Status</th>
-              <th className="cp-col-secondary">Training Status</th>
+              <SortableHeader label="Training Status" field="training_status" currentSort={sortField} currentOrder={sortOrder} onSort={onSort} className="cp-col-secondary" />
               <th style={{ textAlign: 'center', minWidth: '130px' }}>Action</th>
             </tr>
           </thead>

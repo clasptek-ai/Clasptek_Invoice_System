@@ -28,53 +28,126 @@ export interface MutationActor {
  * Generate sequential student number (STU-YYYY-XXXX) using crm_intake_counters
  * or fallback to max existing student number.
  */
+/**
+ * Generate authoritative Student ID following Clasptek business format:
+ * CLASP + last two digits of registration year + two-digit registration month + continuously ascending sequence number.
+ * Established production numeric width: 5 digits (e.g. CLASP260300001, CLASP260400002).
+ * Sequence is globally continuous for the tenant/database and MUST NOT reset when month changes.
+ * Registration date is the authoritative business date.
+ */
 export async function generateNextStudentNumber(
   supabase: SupabaseClient,
-  tenantId: string
+  tenantId: string,
+  registrationDate?: string
 ): Promise<string> {
-  const currentYear = new Date().getFullYear();
+  // 1. Authoritative business registration date
+  let regDate = new Date();
+  if (registrationDate) {
+    const parsed = new Date(registrationDate);
+    if (!isNaN(parsed.getTime())) {
+      regDate = parsed;
+    }
+  }
+  const yy = String(regDate.getFullYear()).slice(-2);
+  const mm = String(regDate.getMonth() + 1).padStart(2, '0');
+
+  // 2. Determine max existing sequence across all existing formats in DB
+  let maxSeqFromDb = 0;
+  try {
+    const { data: existingRows } = await supabase
+      .from('students')
+      .select('student_number')
+      .eq('tenant_id', tenantId);
+
+    if (existingRows) {
+      for (const row of existingRows) {
+        const num = row.student_number || '';
+        // Match CLASP-YYMM-XXXXX, CLASP-YYMM-XXXX, CLASPYYMMXXXXX, STU-YYYY-XXXX
+        const claspDashMatch = num.match(/^CLASP-\d{4}-(\d+)$/i);
+        const claspDirectMatch = num.match(/^CLASP\d{4}(\d+)$/i);
+        const stuMatch = num.match(/^STU-\d{4}-(\d+)$/i);
+
+        const seqStr = claspDashMatch?.[1] || claspDirectMatch?.[1] || stuMatch?.[1];
+        if (seqStr) {
+          const parsedSeq = parseInt(seqStr, 10);
+          if (!isNaN(parsedSeq) && parsedSeq > maxSeqFromDb) {
+            maxSeqFromDb = parsedSeq;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[generateNextStudentNumber] DB sequence scan fallback:', err);
+  }
+
+  // 3. Coordinate with crm_intake_counters for concurrency-safe continuous sequence
+  let nextSeq = maxSeqFromDb + 1;
+  let counterRowId: string | null = null;
 
   try {
-    // 1. Check crm_intake_counters
     const { data: counterRow } = await supabase
       .from('crm_intake_counters')
       .select('*')
       .eq('tenant_id', tenantId)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (counterRow) {
-      const nextSeq = (counterRow.student_seq || 100) + 1;
+      counterRowId = counterRow.id;
+      nextSeq = Math.max(counterRow.student_seq || 0, maxSeqFromDb) + 1;
       await supabase
         .from('crm_intake_counters')
         .update({ student_seq: nextSeq, updated_at: new Date().toISOString() })
         .eq('id', counterRow.id);
-
-      return `STU-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
+    } else {
+      const newCounterId = crypto.randomUUID();
+      await supabase
+        .from('crm_intake_counters')
+        .insert({
+          id: newCounterId,
+          tenant_id: tenantId,
+          student_seq: nextSeq,
+          application_seq: 100,
+          enrolment_seq: 1000,
+          updated_at: new Date().toISOString(),
+        });
+      counterRowId = newCounterId;
     }
   } catch (err) {
-    console.warn('[generateNextStudentNumber] Counter query fallback:', err);
+    console.warn('[generateNextStudentNumber] Counter update warning:', err);
   }
 
-  // Fallback: Query highest existing student number for current year
-  const { data: latestStudents } = await supabase
-    .from('students')
-    .select('student_number')
-    .eq('tenant_id', tenantId)
-    .ilike('student_number', `STU-${currentYear}-%`)
-    .order('student_number', { ascending: false })
-    .limit(1);
+  // 4. Established numeric width: 5 digits (from production data inspection: 00001 - 00248)
+  const establishedWidth = 5;
+  let studentNumber = `CLASP${yy}${mm}${String(nextSeq).padStart(establishedWidth, '0')}`;
 
-  let seq = 100;
-  if (latestStudents && latestStudents.length > 0 && latestStudents[0].student_number) {
-    const parts = latestStudents[0].student_number.split('-');
-    if (parts.length === 3) {
-      const parsed = parseInt(parts[2], 10);
-      if (!isNaN(parsed)) seq = parsed + 1;
+  // 5. Concurrency safety: check for duplicate and advance sequence if collision detected
+  let isUnique = false;
+  let attempts = 0;
+  while (!isUnique && attempts < 50) {
+    attempts++;
+    const { data: collision } = await supabase
+      .from('students')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('student_number', studentNumber)
+      .maybeSingle();
+
+    if (!collision) {
+      isUnique = true;
+    } else {
+      nextSeq++;
+      studentNumber = `CLASP${yy}${mm}${String(nextSeq).padStart(establishedWidth, '0')}`;
+      if (counterRowId) {
+        await supabase
+          .from('crm_intake_counters')
+          .update({ student_seq: nextSeq, updated_at: new Date().toISOString() })
+          .eq('id', counterRowId);
+      }
     }
   }
 
-  return `STU-${currentYear}-${String(seq).padStart(4, '0')}`;
+  return studentNumber;
 }
 
 /**
@@ -195,7 +268,13 @@ export async function registerStudentFromEnquiry(
   }
 
   // 2. Generate authoritative identifiers (no Math.random)
-  const studentNumber = await generateNextStudentNumber(supabase, tenantId);
+  const regDate =
+    (candidateData as Record<string, unknown>).registrationDate ||
+    (candidateData as Record<string, unknown>).registeredAt ||
+    (candidateData.metadata?.registeredAt as string) ||
+    (candidateData.metadata?.registrationDate as string) ||
+    undefined;
+  const studentNumber = await generateNextStudentNumber(supabase, tenantId, typeof regDate === 'string' ? regDate : undefined);
   const internalId = `stu_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
   // 3. Assemble Student payload
@@ -213,10 +292,12 @@ export async function registerStudentFromEnquiry(
       : 'Direct Student Registration',
   };
 
+  const regDateValue = typeof regDate === 'string' && regDate ? regDate : new Date().toISOString().slice(0, 10);
   const metadata: Record<string, unknown> = {
     ...(candidateData.metadata || {}),
     enquiry_id: enquiryId || null,
-    registeredAt: new Date().toISOString(),
+    registeredAt: regDateValue,
+    registrationDate: regDateValue,
     source: enquiryId ? 'enquiry_registration' : 'direct_registration',
     audit_trail: [initialAudit],
   };

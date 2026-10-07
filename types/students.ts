@@ -110,6 +110,8 @@ export interface StudentSummary {
   financial_status: 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | 'OVERDUE';
   training_status: StudentStatus;
   status_display: string;
+  registration_date?: string;
+  created_at?: string;
 }
 
 export interface StudentFilters {
@@ -120,6 +122,8 @@ export interface StudentFilters {
   financialStatus?: 'ALL' | 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID' | 'NO_INVOICE' | 'OVERDUE' | string;
   page?: number;
   pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface StudentDossierInvoice {

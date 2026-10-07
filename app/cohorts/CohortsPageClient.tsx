@@ -6,22 +6,32 @@
 
 'use client';
 
-import React, { useState, useCallback, useTransition } from 'react';
+import React, { useState, useCallback, useTransition, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Cohort, Programme } from '@/types/academics';
 import { CohortKpiStrip } from '@/components/cohorts/CohortKpiStrip';
 import { CohortFilters } from '@/components/cohorts/CohortFilters';
 import { CohortTable } from '@/components/cohorts/CohortTable';
 import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { AddCohortModal } from '@/components/cohorts/AddCohortModal';
 import {
   RecordLifecycleModal,
   type LifecycleActionType,
   type RecordDependencyItem,
 } from '@/components/tables/RecordLifecycleModal';
 
+interface FacilitatorOption {
+  id: string;
+  fullName?: string;
+  name?: string;
+  employeeId?: string;
+  jobTitle?: string;
+}
+
 interface CohortsPageClientProps {
   initialCohorts: Cohort[];
   programmes: Programme[];
+  facilitators?: FacilitatorOption[];
   currentSearch: string;
   currentProg: string;
   currentStatus: string;
@@ -30,6 +40,7 @@ interface CohortsPageClientProps {
 export function CohortsPageClient({
   initialCohorts,
   programmes,
+  facilitators = [],
   currentSearch,
   currentProg,
   currentStatus,
@@ -41,6 +52,45 @@ export function CohortsPageClient({
   const [cohorts, setCohorts] = useState<Cohort[]>(initialCohorts);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isAddCohortOpen, setIsAddCohortOpen] = useState<boolean>(false);
+
+  // Table sorting state
+  const [sortField, setSortField] = useState<string>('start_date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = useCallback((field: string) => {
+    setSortOrder((prev) => (sortField === field ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setSortField(field);
+  }, [sortField]);
+
+  const sortedCohorts = useMemo(() => {
+    const list = [...cohorts];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'cohort_code') {
+        cmp = (a.cohort_code || '').localeCompare(b.cohort_code || '');
+      } else if (sortField === 'programme_name') {
+        cmp = (a.programme_name || '').localeCompare(b.programme_name || '');
+      } else if (sortField === 'delivery_mode') {
+        cmp = (a.delivery_mode || '').localeCompare(b.delivery_mode || '');
+      } else if (sortField === 'facilitator') {
+        cmp = (a.lead_facilitator_name || '').localeCompare(b.lead_facilitator_name || '');
+      } else if (sortField === 'capacity') {
+        cmp = Number(a.capacity || 0) - Number(b.capacity || 0);
+      } else if (sortField === 'status') {
+        cmp = (a.status || '').localeCompare(b.status || '');
+      } else {
+        const dateA = a.start_date || a.created_at || '';
+        const dateB = b.start_date || b.created_at || '';
+        cmp = dateA.localeCompare(dateB);
+      }
+      if (cmp !== 0) {
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return (b.cohort_code || '').localeCompare(a.cohort_code || '');
+    });
+    return list;
+  }, [cohorts, sortField, sortOrder]);
 
   const [lifecycleModal, setLifecycleModal] = useState<{
     isOpen: boolean;
@@ -63,6 +113,15 @@ export function CohortsPageClient({
     setFeedback({ type, text });
     setTimeout(() => setFeedback(null), 4000);
   };
+
+  const handleCohortCreated = useCallback(
+    (newCohort: Cohort) => {
+      setCohorts((prev) => [newCohort, ...prev]);
+      notify('success', `Cohort ${newCohort.cohort_code} successfully created.`);
+      startTransition(() => router.refresh());
+    },
+    [router]
+  );
 
   const handleFilterUpdate = useCallback(
     (key: string, value: string) => {
@@ -249,21 +308,22 @@ export function CohortsPageClient({
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <a
-            href="/enquiries"
+            href="/attendance"
             className="cp-btn sm secondary"
             id="btnScheduleTrainingSessionMain"
             style={{ fontWeight: 600, textDecoration: 'none' }}
           >
-            Enquiries &amp; Leads
+            Attendance &amp; Sessions
           </a>
-          <a
-            href="/apply"
+          <button
+            type="button"
             className="cp-btn sm primary"
             id="btnAddNewCohortBtn"
-            style={{ fontWeight: 700, textDecoration: 'none' }}
+            onClick={() => setIsAddCohortOpen(true)}
+            style={{ fontWeight: 700 }}
           >
             + Add New Cohort
-          </a>
+          </button>
         </div>
       </div>
 
@@ -338,12 +398,15 @@ export function CohortsPageClient({
 
         {/* Cohort Table */}
         <CohortTable
-          cohorts={cohorts}
+          cohorts={sortedCohorts}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
           onToggleSelectAll={handleToggleSelectAll}
           isAllSelected={isAllSelected}
           onCloseCohort={(c) => handleOpenCloseCohort([c.id], `${c.cohort_code} (${c.name})`)}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSort={handleSort}
         />
       </div>
 
@@ -359,6 +422,15 @@ export function CohortsPageClient({
         isLoading={lifecycleModal.isLoading}
         onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={handleConfirmLifecycleAction}
+      />
+
+      {/* Internal Cohort Creation Modal */}
+      <AddCohortModal
+        isOpen={isAddCohortOpen}
+        programmes={programmes}
+        facilitators={facilitators}
+        onClose={() => setIsAddCohortOpen(false)}
+        onCohortCreated={handleCohortCreated}
       />
     </div>
   );

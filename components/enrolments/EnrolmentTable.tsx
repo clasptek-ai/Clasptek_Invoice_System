@@ -11,6 +11,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import type { Enrolment } from '@/types/academics';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 
 interface EnrolmentTableProps {
   enrolments: Enrolment[];
@@ -22,6 +23,9 @@ interface EnrolmentTableProps {
   onEditStatus?: (enrolment: Enrolment) => void;
   onWithdrawEnrolment?: (enrolment: Enrolment) => void;
   canEdit?: boolean;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSort?: (field: string) => void;
 }
 
 function fmtMoney(amount: number): string {
@@ -38,6 +42,9 @@ export function EnrolmentTable({
   onEditStatus,
   onWithdrawEnrolment,
   canEdit = true,
+  sortField,
+  sortOrder,
+  onSort,
 }: EnrolmentTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
@@ -80,14 +87,78 @@ export function EnrolmentTable({
                   />
                 </th>
               )}
-              <th>Enrolment #</th>
-              <th>Student</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Enrolment #"
+                  field="enrolment_number"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Enrolment #</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Student"
+                  field="student_name"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Student</th>
+              )}
               <th>Programme &amp; Cohort</th>
-              <th style={{ textAlign: 'right' }}>Agreed Tuition</th>
-              <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Attendance</th>
-              <th className="cp-col-secondary">Completion</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Agreed Tuition"
+                  field="tuition_fee"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  align="right"
+                />
+              ) : (
+                <th style={{ textAlign: 'right' }}>Agreed Tuition</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Attendance"
+                  field="attendance"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  align="center"
+                  className="cp-col-secondary"
+                />
+              ) : (
+                <th className="cp-col-secondary" style={{ textAlign: 'center' }}>Attendance</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Completion"
+                  field="completion"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  className="cp-col-secondary"
+                />
+              ) : (
+                <th className="cp-col-secondary">Completion</th>
+              )}
               <th className="cp-col-tertiary">Credential</th>
-              <th>Status</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Status"
+                  field="status"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Status</th>
+              )}
               <th style={{ textAlign: 'center', minWidth: '130px' }}>Action</th>
             </tr>
           </thead>

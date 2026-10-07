@@ -6,18 +6,22 @@
  * Faithful reproduction of legacy Clasptek UI, design tokens (.cp-*), and workflows.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { Payslip, Personnel, FinancialMetrics, AllowanceDeductionItem } from '@/types/finance';
+import type { FinanceSettingsData } from '@/types/settings';
 import { downloadSafeCsv } from '@/lib/utils/csv';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
 import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
 import { RecordLifecycleModal } from '@/components/tables/RecordLifecycleModal';
+import { CanonicalPayslipDocument } from '@/components/payroll/CanonicalPayslipDocument';
+import { printCanonicalElement } from '@/components/finance/printCanonical';
 
 interface PayrollPageClientProps {
   initialPayslips: Payslip[];
   personnel: Personnel[];
   metrics: FinancialMetrics;
+  financeSettings?: FinanceSettingsData | null;
 }
 
 function fmtMoney(n: number): string {
@@ -30,9 +34,11 @@ export function PayrollPageClient({
   initialPayslips,
   personnel,
   metrics,
+  financeSettings,
 }: PayrollPageClientProps) {
   const [payslips, setPayslips] = useState<Payslip[]>(initialPayslips);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const payslipDocRef = useRef<HTMLDivElement>(null);
   const [lifecycleModal, setLifecycleModal] = useState<{
     isOpen: boolean;
     payslip?: Payslip;
@@ -1068,93 +1074,80 @@ export function PayrollPageClient({
         </div>
       )}
 
-      {/* VIEW STATEMENT MODAL */}
+      {/* VIEW STATEMENT MODAL — CANONICAL CLASPTEK ORIGINAL PAYROLL TEMPLATE */}
       {selectedPayslip && (
-        <div className="cp-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="cp-modal" style={{ background: '#fff', borderRadius: '8px', width: '540px', maxWidth: '95vw', padding: '24px', border: '1px solid #cbd5e1' }}>
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '0.05em', color: '#0f172a' }}>
-                CLASPTEK COACHING LIMITED
+        <div className="cp-modal-overlay">
+          <div className="cp-modal doc-modal">
+            <div className="cp-modal-header no-print">
+              <div className="cp-modal-title">
+                Corporate Payroll Statement #{selectedPayslip.payslipDisplayNo || selectedPayslip.payslipNo}
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                Staff &amp; Facilitator Monthly Compensation Statement
+              <button
+                type="button"
+                className="cp-modal-close"
+                onClick={() => setSelectedPayslip(null)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="cp-modal-body cp-doc-scroll-wrap">
+              <div ref={payslipDocRef}>
+                <CanonicalPayslipDocument
+                  payslip={selectedPayslip}
+                  personnel={personnel}
+                  financeSettings={financeSettings}
+                />
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Payslip #</span>
-                <strong style={{ fontFamily: 'monospace' }}>{selectedPayslip.payslipDisplayNo}</strong>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Pay Period</span>
-                <strong style={{ fontFamily: 'monospace' }}>{selectedPayslip.payPeriod}</strong>
-              </div>
-            </div>
+            <div className="cp-modal-footer no-print">
+              <button
+                type="button"
+                className="cp-btn secondary"
+                onClick={() => setSelectedPayslip(null)}
+              >
+                Close
+              </button>
 
-            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginBottom: '14px', fontSize: '12.5px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Employee Name</span>
-                  <strong>{selectedPayslip.employeeName}</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Role &amp; Department</span>
-                  <span>{selectedPayslip.role} ({selectedPayslip.department})</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '14px', fontSize: '13px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span>Basic Salary / Compensation:</span>
-                <strong>{fmtMoney(selectedPayslip.basicPay)}</strong>
-              </div>
-              {selectedPayslip.allowances.map((it, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#059669', fontSize: '12px' }}>
-                  <span>+ {it.description}:</span>
-                  <span>{fmtMoney(it.amount)}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderTop: '1px solid #e2e8f0', fontWeight: 600 }}>
-                <span>Gross Compensation:</span>
-                <span>{fmtMoney(selectedPayslip.grossPay)}</span>
-              </div>
-              {selectedPayslip.deductions.map((it, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#dc2626', fontSize: '12px' }}>
-                  <span>- {it.description}:</span>
-                  <span>-{fmtMoney(it.amount)}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '2px solid #0f172a', fontSize: '16px', fontWeight: 700 }}>
-                <span>Net Disbursable Pay:</span>
-                <span style={{ color: '#059669' }}>{fmtMoney(selectedPayslip.netPay)}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>Current Status: </span>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px' }}>
-                  {selectedPayslip.status}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              {selectedPayslip.status === 'issued' && (
                 <button
                   type="button"
-                  className="cp-btn secondary sm"
-                  onClick={() => window.print()}
+                  className="cp-btn success"
+                  onClick={() => handleStatusAction(selectedPayslip.id, 'acknowledge')}
                 >
-                  🖨️ Print Statement
+                  ✔ Acknowledge Payslip
                 </button>
+              )}
+
+              {selectedPayslip.status === 'acknowledged' && (
                 <button
                   type="button"
-                  className="cp-btn secondary sm"
-                  onClick={() => setSelectedPayslip(null)}
+                  className="cp-btn accent"
+                  onClick={() => handleStatusAction(selectedPayslip.id, 'approve')}
                 >
-                  Close
+                  Approve Payroll
                 </button>
-              </div>
+              )}
+
+              {selectedPayslip.status === 'approved' && (
+                <button
+                  type="button"
+                  className="cp-btn success"
+                  onClick={() => handleStatusAction(selectedPayslip.id, 'pay')}
+                >
+                  Mark as Paid
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="cp-btn accent"
+                onClick={() => printCanonicalElement(payslipDocRef.current)}
+              >
+                🖨️ Print / Save as PDF
+              </button>
             </div>
           </div>
         </div>

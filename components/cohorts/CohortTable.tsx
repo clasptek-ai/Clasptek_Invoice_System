@@ -13,6 +13,7 @@ import React, { useRef, useEffect } from 'react';
 import type { Cohort } from '@/types/academics';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 
 interface CohortTableProps {
   cohorts: Cohort[];
@@ -23,6 +24,9 @@ interface CohortTableProps {
   onToggleSelectAll?: () => void;
   isAllSelected?: boolean;
   canEdit?: boolean;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSort?: (field: string) => void;
 }
 
 function fmtDate(iso?: string | null): string {
@@ -43,6 +47,9 @@ export function CohortTable({
   onToggleSelectAll,
   isAllSelected = false,
   canEdit = true,
+  sortField,
+  sortOrder,
+  onSort,
 }: CohortTableProps) {
   const {
     paginatedItems: paginatedCohorts,
@@ -95,13 +102,86 @@ export function CohortTable({
                   />
                 </th>
               )}
-              <th>Cohort Code</th>
-              <th>Programme</th>
-              <th>Dates</th>
-              <th className="cp-col-secondary">Delivery</th>
-              <th className="cp-col-secondary">Lead Facilitator</th>
-              <th style={{ textAlign: 'center' }}>Capacity &amp; Seats</th>
-              <th>Status</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Cohort Code"
+                  field="cohort_code"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Cohort Code</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Programme"
+                  field="programme_name"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Programme</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Dates"
+                  field="start_date"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Dates</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Delivery"
+                  field="delivery_mode"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  className="cp-col-secondary"
+                />
+              ) : (
+                <th className="cp-col-secondary">Delivery</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Lead Facilitator"
+                  field="facilitator"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  className="cp-col-secondary"
+                />
+              ) : (
+                <th className="cp-col-secondary">Lead Facilitator</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Capacity & Seats"
+                  field="capacity"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  align="center"
+                />
+              ) : (
+                <th style={{ textAlign: 'center' }}>Capacity &amp; Seats</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Status"
+                  field="status"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th>Status</th>
+              )}
               <th style={{ textAlign: 'center', minWidth: '110px' }}>Action</th>
             </tr>
           </thead>

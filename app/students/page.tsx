@@ -66,6 +66,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
     <StudentsPageClient
       initialStudents={result.data}
       totalCount={result.count}
+      initialError={result.error}
       currentSearch={search}
       currentStatus={status}
       currentProgrammeId={programmeId}

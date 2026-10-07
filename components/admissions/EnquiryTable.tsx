@@ -12,6 +12,7 @@
 import React, { useRef, useEffect } from 'react';
 import type { Enquiry } from '@/types/admissions';
 import { StatusBadge } from './StatusBadge';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 
 interface EnquiryTableProps {
   enquiries: Enquiry[];
@@ -27,6 +28,9 @@ interface EnquiryTableProps {
   onToggleSelectAll?: () => void;
   isAllSelected?: boolean;
   isLoading?: boolean;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSort?: (field: string) => void;
 }
 
 function formatDate(iso: string | null): string {
@@ -93,6 +97,9 @@ export function EnquiryTable({
   onToggleSelectAll,
   isAllSelected = false,
   isLoading = false,
+  sortField,
+  sortOrder,
+  onSort,
 }: EnquiryTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
@@ -149,14 +156,56 @@ export function EnquiryTable({
                   />
                 </th>
               )}
-              <th scope="col">Prospect</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Prospect"
+                  field="student_name"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th scope="col">Prospect</th>
+              )}
               <th scope="col">Interested Programme</th>
               <th scope="col">Phone</th>
-              <th scope="col" className="cp-col-secondary">Source</th>
-              <th scope="col">Status</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Source"
+                  field="source"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  className="cp-col-secondary"
+                />
+              ) : (
+                <th scope="col" className="cp-col-secondary">Source</th>
+              )}
+              {onSort ? (
+                <SortableHeader
+                  label="Status"
+                  field="status"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                />
+              ) : (
+                <th scope="col">Status</th>
+              )}
               <th scope="col">Billing Status</th>
               <th scope="col" style={{ textAlign: 'right' }}>Balance Due</th>
-              <th scope="col" className="cp-col-tertiary">Last Follow-up</th>
+              {onSort ? (
+                <SortableHeader
+                  label="Last Follow-up"
+                  field="date"
+                  currentSort={sortField}
+                  currentOrder={sortOrder}
+                  onSort={onSort}
+                  className="cp-col-tertiary"
+                />
+              ) : (
+                <th scope="col" className="cp-col-tertiary">Last Follow-up</th>
+              )}
               <th scope="col" style={{ textAlign: 'center', minWidth: '180px' }}>Actions</th>
             </tr>
           </thead>

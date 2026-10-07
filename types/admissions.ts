@@ -291,6 +291,8 @@ export interface EnquiryFilters {
   status: EnquiryStatus | 'all';
   page: number;
   pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ApplicationFilters {

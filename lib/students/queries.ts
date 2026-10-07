@@ -111,14 +111,66 @@ export async function getStudents(
     const supabase = await createServerClient();
     const { page = 1, pageSize = PAGE_SIZE, search = '' } = filters;
 
+    // Validated sort allowlist mapping UI sort keys to database columns
+    const STUDENT_SORT_ALLOWLIST: Record<string, string> = {
+      registration_date: 'registration_date',
+      date: 'registration_date',
+      name: 'name',
+      student_number: 'student_number',
+      training_status: 'status',
+      status: 'status',
+      created_at: 'created_at',
+    };
+
+    const rawSortBy = filters.sortBy || 'registration_date';
+    const sortField = STUDENT_SORT_ALLOWLIST[rawSortBy] || 'registration_date';
+    const isAsc = filters.sortOrder === 'asc';
+
     // 1. Fetch Students with optional database-level filtering
     let query = supabase
       .from('students')
-      .select('*', { count: 'exact' })
-      .order('metadata->>registeredAt', { ascending: false, nullsFirst: false })
-      .order('metadata->>registrationDate', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .order('student_number', { ascending: false });
+      .select('*', { count: 'exact' });
+
+    // Server-side ordering based on validated allowlist BEFORE range()
+    switch (sortField) {
+      case 'name':
+        query = query
+          .order('first_name', { ascending: isAsc })
+          .order('last_name', { ascending: isAsc })
+          .order('student_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'student_number':
+        query = query
+          .order('student_number', { ascending: isAsc })
+          .order('id', { ascending: false });
+        break;
+      case 'status':
+        query = query
+          .order('status', { ascending: isAsc })
+          .order('metadata->>registeredAt', { ascending: false, nullsFirst: false })
+          .order('metadata->>registrationDate', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .order('student_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'created_at':
+        query = query
+          .order('created_at', { ascending: isAsc })
+          .order('student_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'registration_date':
+      default:
+        // Authoritative student registration date DESC (newest registrations first), falling back to created_at
+        query = query
+          .order('metadata->>registeredAt', { ascending: isAsc, nullsFirst: false })
+          .order('metadata->>registrationDate', { ascending: isAsc, nullsFirst: false })
+          .order('created_at', { ascending: isAsc })
+          .order('student_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+    }
 
     if (search.trim()) {
       const q = search.trim();
@@ -330,6 +382,8 @@ export async function getStudents(
         financial_status: fin.financialStatus,
         training_status: stu.status,
         status_display: fin.statusDisplay,
+        registration_date: (stu.metadata as any)?.registrationDate || stu.created_at || '',
+        created_at: stu.created_at || '',
       };
     });
 

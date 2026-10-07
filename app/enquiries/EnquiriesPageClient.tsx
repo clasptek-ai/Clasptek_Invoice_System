@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useCallback, useTransition, useRef } from 'react';
+import { useState, useCallback, useEffect, useTransition, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type {
   Enquiry,
@@ -43,6 +43,8 @@ interface EnquiriesPageClientProps {
   currentStatus: string;
   currentPage: number;
   pageSize?: number;
+  currentSortBy?: string;
+  currentSortOrder?: 'asc' | 'desc';
   programmes?: ProgrammeOption[];
   customers?: Customer[];
   financeSettings?: FinanceSettingsData | null;
@@ -59,6 +61,8 @@ export function EnquiriesPageClient({
   currentStatus,
   currentPage,
   pageSize = 25,
+  currentSortBy = 'created_at',
+  currentSortOrder = 'desc',
   programmes = [],
   customers = [],
   financeSettings,
@@ -73,6 +77,11 @@ export function EnquiriesPageClient({
 
   // Local state
   const [enquiries, setEnquiries] = useState<Enquiry[]>(initialEnquiries);
+
+  useEffect(() => {
+    setEnquiries(initialEnquiries);
+  }, [initialEnquiries]);
+
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [actionError, setActionError] = useState<string | null>(initialError);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
@@ -129,6 +138,19 @@ export function EnquiriesPageClient({
   const handleClearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
+
+  const handleSort = useCallback(
+    (field: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const nextOrder = currentSortBy === field ? (currentSortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
+      params.set('sortBy', field);
+      params.set('order', nextOrder);
+      params.delete('page');
+      setSelectedIds(new Set());
+      startTransition(() => router.push(`/enquiries?${params.toString()}`));
+    },
+    [router, searchParams, currentSortBy, currentSortOrder]
+  );
 
   const handleOpenDelete = useCallback(async (ids: string[], targetName?: string) => {
     setLifecycleModal({
@@ -771,6 +793,9 @@ export function EnquiriesPageClient({
             isAllSelected={isAllSelected}
             onDeleteEnquiry={(enq) => handleOpenDelete([enq.id], enq.student_name)}
             onEditEnquiry={(enq) => setSelectedEnquiry(enq)}
+            sortField={currentSortBy}
+            sortOrder={currentSortOrder}
+            onSort={handleSort}
           />
         </div>
 

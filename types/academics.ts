@@ -106,6 +106,8 @@ export interface EnrolmentFilters {
   status?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface CohortFilters {

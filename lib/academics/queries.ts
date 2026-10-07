@@ -136,14 +136,95 @@ export async function getEnrolments(
 ): Promise<{ data: Enrolment[]; count: number; error: string | null }> {
   try {
     const supabase = await createServerClient();
-    const { page = 1, pageSize = PAGE_SIZE, search = '' } = filters;
+    const {
+      page = 1,
+      pageSize = PAGE_SIZE,
+      search = '',
+      sortBy = 'enrolment_date',
+      sortOrder = 'desc',
+    } = filters;
+
+    // Validated sort allowlist mapping UI sort keys to database columns
+    const ENROLMENT_SORT_ALLOWLIST: Record<string, string> = {
+      enrolment_date: 'enrolment_date',
+      date: 'enrolment_date',
+      registration_date: 'enrolment_date',
+      enrolment_number: 'enrolment_number',
+      student_name: 'student_name',
+      name: 'student_name',
+      status: 'status',
+      agreed_tuition_fee: 'agreed_tuition_fee',
+      tuition_fee: 'agreed_tuition_fee',
+      completion_attendance_pct: 'completion_attendance_pct',
+      attendance: 'completion_attendance_pct',
+      completion_status: 'completion_status',
+      completion: 'completion_status',
+      created_at: 'created_at',
+    };
+
+    const validatedSortField = ENROLMENT_SORT_ALLOWLIST[sortBy] || 'enrolment_date';
+    const isAsc = sortOrder === 'asc';
 
     let query = supabase
       .from('enrolments')
-      .select('*, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(cohort_code, name)', { count: 'exact' })
-      .order('enrolment_date', { ascending: false })
-      .order('enrolment_number', { ascending: false })
-      .order('id', { ascending: false });
+      .select('*, programmes!fk_enrolments_programme_tenant(name), cohorts!fk_enrolments_cohort_tenant(cohort_code, name)', { count: 'exact' });
+
+    // Server-side ordering based on validated allowlist BEFORE range()
+    switch (validatedSortField) {
+      case 'enrolment_number':
+        query = query
+          .order('enrolment_number', { ascending: isAsc })
+          .order('id', { ascending: false });
+        break;
+      case 'student_name':
+        query = query
+          .order('student_name', { ascending: isAsc })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'agreed_tuition_fee':
+        query = query
+          .order('agreed_tuition_fee', { ascending: isAsc })
+          .order('enrolment_date', { ascending: false })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'completion_attendance_pct':
+        query = query
+          .order('completion_attendance_pct', { ascending: isAsc, nullsFirst: false })
+          .order('enrolment_date', { ascending: false })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'completion_status':
+        query = query
+          .order('completion_status', { ascending: isAsc })
+          .order('enrolment_date', { ascending: false })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'status':
+        query = query
+          .order('status', { ascending: isAsc })
+          .order('enrolment_date', { ascending: false })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'created_at':
+        query = query
+          .order('created_at', { ascending: isAsc })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+      case 'enrolment_date':
+      default:
+        // Authoritative enrolment date DESC (newest enrolments first)
+        query = query
+          .order('enrolment_date', { ascending: isAsc })
+          .order('enrolment_number', { ascending: false })
+          .order('id', { ascending: false });
+        break;
+    }
 
     if (filters.cohortId && filters.cohortId !== 'ALL') {
       query = query.eq('cohort_id', filters.cohortId);

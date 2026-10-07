@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useCallback, useTransition } from 'react';
+import React, { useState, useCallback, useEffect, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Enrolment, Cohort } from '@/types/academics';
 import { EnrolmentKpiStrip } from '@/components/enrolments/EnrolmentKpiStrip';
@@ -23,31 +23,55 @@ import {
 interface EnrolmentsPageClientProps {
   initialEnrolments: Enrolment[];
   totalCount: number;
+  initialError?: string | null;
   cohorts: Cohort[];
   currentSearch: string;
   currentCohort: string;
   currentStatus: string;
   currentPage: number;
   pageSize: number;
+  currentSortBy?: string;
+  currentSortOrder?: 'asc' | 'desc';
 }
 
 export function EnrolmentsPageClient({
   initialEnrolments,
   totalCount,
+  initialError,
   cohorts,
   currentSearch,
   currentCohort,
   currentStatus,
   currentPage,
   pageSize,
+  currentSortBy = 'enrolment_date',
+  currentSortOrder = 'desc',
 }: EnrolmentsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
   const [enrolments, setEnrolments] = useState<Enrolment[]>(initialEnrolments);
+
+  useEffect(() => {
+    setEnrolments(initialEnrolments);
+  }, [initialEnrolments]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSort = useCallback(
+    (field: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const nextOrder = currentSortBy === field ? (currentSortOrder === 'asc' ? 'desc' : 'asc') : 'asc';
+      params.set('sortBy', field);
+      params.set('order', nextOrder);
+      params.delete('page');
+      setSelectedIds(new Set());
+      startTransition(() => router.push(`/enrolments?${params.toString()}`));
+    },
+    [router, searchParams, currentSortBy, currentSortOrder]
+  );
 
   const [lifecycleModal, setLifecycleModal] = useState<{
     isOpen: boolean;
@@ -251,6 +275,32 @@ export function EnrolmentsPageClient({
         </div>
       )}
 
+      {initialError && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #F87171',
+            borderRadius: '8px',
+            color: '#991B1B',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+          }}
+        >
+          <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700 }}>Database Query Error</div>
+            <div style={{ marginTop: '2px', fontFamily: 'monospace', fontSize: '12px', color: '#7F1D1D' }}>
+              {initialError}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header with Action — Exact Legacy Styling */}
       <div
         style={{
@@ -376,6 +426,9 @@ export function EnrolmentsPageClient({
             handleBulkStatusChange(nextStatus);
           }}
           onWithdrawEnrolment={(en) => handleOpenWithdraw([en.id], `${en.enrolment_number} (${en.student_name})`)}
+          sortField={currentSortBy}
+          sortOrder={currentSortOrder}
+          onSort={handleSort}
         />
 
         {/* Standard Pagination Footer */}

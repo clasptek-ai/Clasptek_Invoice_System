@@ -223,9 +223,32 @@ export async function getEnquiries(
   filters: Partial<EnquiryFilters> = {}
 ): Promise<{ data: Enquiry[]; count: number; error: string | null }> {
   const supabase = await createServerClient();
-  const { search = '', status = 'all', page = 1, pageSize = PAGE_SIZE } = filters;
+  const {
+    search = '',
+    status = 'all',
+    page = 1,
+    pageSize = PAGE_SIZE,
+    sortBy = 'created_at',
+    sortOrder = 'desc',
+  } = filters;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  // Validated sort allowlist mapping UI sort keys to database columns
+  const ENQUIRY_SORT_ALLOWLIST: Record<string, string> = {
+    created_at: 'created_at',
+    date: 'created_at',
+    registration_date: 'created_at',
+    enquiry_date: 'created_at',
+    student_name: 'student_name',
+    name: 'student_name',
+    status: 'status',
+    source: 'source',
+    updated_at: 'updated_at',
+  };
+
+  const validatedSortField = ENQUIRY_SORT_ALLOWLIST[sortBy] || 'created_at';
+  const isAsc = sortOrder === 'asc';
 
   let query = supabase
     .from('enquiries')
@@ -233,10 +256,40 @@ export async function getEnquiries(
       `id, tenant_id, student_name, email, phone, programme_id, source, status, notes, created_at, updated_at,
        programmes:programme_id ( name )`,
       { count: 'exact' }
-    )
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false })
-    .range(from, to);
+    );
+
+  // Server-side ordering based on validated allowlist BEFORE range()
+  switch (validatedSortField) {
+    case 'student_name':
+      query = query
+        .order('student_name', { ascending: isAsc })
+        .order('id', { ascending: false });
+      break;
+    case 'status':
+      query = query
+        .order('status', { ascending: isAsc })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      break;
+    case 'source':
+      query = query
+        .order('source', { ascending: isAsc, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      break;
+    case 'updated_at':
+      query = query
+        .order('updated_at', { ascending: isAsc })
+        .order('id', { ascending: false });
+      break;
+    case 'created_at':
+    default:
+      // Authoritative enquiry date DESC (newest enquiries first)
+      query = query
+        .order('created_at', { ascending: isAsc })
+        .order('id', { ascending: false });
+      break;
+  }
 
   if (status && status !== 'all') {
     query = query.eq('status', status);
@@ -248,6 +301,8 @@ export async function getEnquiries(
       `student_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,notes.ilike.%${q}%`
     );
   }
+
+  query = query.range(from, to);
 
   const { data, error, count } = await query;
 
