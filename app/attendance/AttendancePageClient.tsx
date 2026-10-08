@@ -23,6 +23,7 @@ interface AttendancePageClientProps {
     name: string;
     status: string;
     programmeName?: string;
+    leadFacilitatorId?: string;
     leadFacilitatorName?: string;
   }>;
   selectedCohortId: string;
@@ -297,6 +298,7 @@ export function AttendancePageClient({
         endTime: sessionFormData.endTime,
         deliveryMode: sessionFormData.deliveryMode,
         location: sessionFormData.location,
+        facilitatorId: activeCohort?.leadFacilitatorId || undefined,
         notes: sessionFormData.notes,
       };
 
@@ -1019,7 +1021,7 @@ export function AttendancePageClient({
       {/* Schedule / Edit Training Session Modal */}
       {(isScheduleModalOpen || isEditModalOpen) && (
         <div className="cp-modal-overlay" onClick={() => { setIsScheduleModalOpen(false); setIsEditModalOpen(false); }}>
-          <div className="cp-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+          <div className="cp-modal" style={{ maxWidth: 520, width: '92%', maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="cp-modal-header">
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
                 {isEditModalOpen ? '✏️ Edit Training Session' : '📅 Schedule Training Session'}
@@ -1033,7 +1035,7 @@ export function AttendancePageClient({
             </div>
             <form onSubmit={handleSaveSession}>
               <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                       Session #
@@ -1066,7 +1068,7 @@ export function AttendancePageClient({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                       Date

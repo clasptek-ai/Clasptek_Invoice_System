@@ -21,6 +21,31 @@ import type { Certificate } from '@/types/certificates';
 import { formatCertificateOrdinalDate } from '@/lib/certificates/constants';
 import { generateCertificateQrSvg } from '@/lib/certificates/qr-svg';
 
+/**
+ * Deterministically wraps text into lines fitting within the SVG certificate boundaries.
+ */
+function wrapSvgText(text: string, maxCharsPerLine = 68): string[] {
+  if (!text) return [];
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+    } else if ((currentLine + ' ' + word).length <= maxCharsPerLine) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  return lines;
+}
+
 export interface CertificateDocumentProps {
   certificate: Certificate;
   className?: string;
@@ -75,6 +100,14 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
   // Responsive font size for long names
   const nameLen = studentName.length;
   const nameFontSize = nameLen > 35 ? '16px' : nameLen > 28 ? '20px' : '24px';
+
+  // Dynamic wrapped lines for core competencies (Req #15)
+  const competencyLines = wrapSvgText(certDescription, 68);
+  const compLineCount = competencyLines.length;
+  const compStartY = compLineCount === 1 ? 388 : compLineCount === 2 ? 384 : 378;
+  const compLineSpacing = compLineCount >= 3 ? 14 : 16;
+  const compRoleY = compLineCount === 1 ? 410 : compLineCount === 2 ? 416 : 420;
+  const compFontSize = compLineCount >= 3 ? '11.5px' : '13px';
 
   return (
     <div
@@ -318,23 +351,32 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
           {certIntro}
         </text>
 
-        {/* Programme Skill Focus / Competencies Description (Bold Demi, Y=388) */}
+        {/* Programme Skill Focus / Competencies Description (Controlled SVG text wrapping) */}
         <text
           x="420.95"
-          y="388"
+          y={compStartY}
           textAnchor="middle"
           fontFamily="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif"
           fontWeight="700"
-          fontSize="13"
+          fontSize={compFontSize}
           fill="#111111"
         >
-          {certDescription}
+          {competencyLines.map((line, idx) => (
+            <tspan
+              key={idx}
+              x="420.95"
+              y={compStartY + idx * compLineSpacing}
+              textAnchor="middle"
+            >
+              {line}
+            </tspan>
+          ))}
         </text>
 
-        {/* Professional Role (Regular + Bold Role, Y=410) */}
+        {/* Professional Role (Regular + Bold Role) */}
         <text
           x="420.95"
-          y="410"
+          y={compRoleY}
           textAnchor="middle"
           fontFamily="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif"
           fontSize="12"

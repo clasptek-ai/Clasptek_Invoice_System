@@ -193,7 +193,7 @@ export function AddEnrolmentModal({
     <div className="cp-modal-overlay" style={{ zIndex: 1100 }} onClick={onClose}>
       <div
         className="cp-modal"
-        style={{ maxWidth: '600px', width: '92%', overflow: 'hidden' }}
+        style={{ maxWidth: '600px', width: '92%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -222,8 +222,8 @@ export function AddEnrolmentModal({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit}>
-          <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px', overflowY: 'auto' }}>
             <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                 Multi-Enrolment Invariant

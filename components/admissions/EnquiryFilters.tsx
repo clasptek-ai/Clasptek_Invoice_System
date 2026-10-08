@@ -17,7 +17,7 @@ const ENQUIRY_STATUSES: { value: string; label: string }[] = [
   { value: 'INVOICE_REQUESTED', label: 'Invoice Requested' },
   { value: 'INVOICE_ISSUED', label: 'Invoice Issued' },
   { value: 'ENROLLED', label: 'Enrolled' },
-  { value: 'LOST', label: 'Lost' },
+  { value: 'LOST', label: 'Not Interested (Lost)' },
 ];
 
 interface EnquiryFiltersProps {

@@ -16,6 +16,7 @@ import { CreateProfessionalTuitionInvoiceModal } from '@/components/finance/Crea
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
 import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 import {
   RecordLifecycleModal,
   type LifecycleActionType,
@@ -152,15 +153,59 @@ export function InvoicesPageClient({
     return matchesQ && matchesStatus;
   });
 
+  // Table sorting state
+  const [sortField, setSortField] = useState<string>('invoiceDate');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: string) => {
+    setSortOrder((prev) => (sortField === field ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setSortField(field);
+  };
+
+  const sortedInvoices = React.useMemo(() => {
+    const list = [...filteredInvoices];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'invoiceDisplayNo') {
+        cmp = (a.invoiceDisplayNo || '').localeCompare(b.invoiceDisplayNo || '');
+      } else if (sortField === 'dueDate') {
+        cmp = (a.dueDate || '').localeCompare(b.dueDate || '');
+      } else if (sortField === 'studentName') {
+        cmp = (a.studentName || '').localeCompare(b.studentName || '');
+      } else if (sortField === 'programmeName') {
+        cmp = (a.programmeName || '').localeCompare(b.programmeName || '');
+      } else if (sortField === 'totalAmount') {
+        cmp = (a.totalAmount || 0) - (b.totalAmount || 0);
+      } else if (sortField === 'paidAmount') {
+        cmp = (a.paidAmount || 0) - (b.paidAmount || 0);
+      } else if (sortField === 'balance') {
+        const balA = a.balanceAmount !== undefined ? a.balanceAmount : a.totalAmount - (a.paidAmount || 0);
+        const balB = b.balanceAmount !== undefined ? b.balanceAmount : b.totalAmount - (b.paidAmount || 0);
+        cmp = balA - balB;
+      } else if (sortField === 'status') {
+        cmp = (a.status || '').localeCompare(b.status || '');
+      } else {
+        const dateA = a.invoiceDate || a.createdAt || '';
+        const dateB = b.invoiceDate || b.createdAt || '';
+        cmp = dateA.localeCompare(dateB);
+      }
+      if (cmp !== 0) {
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return (b.invoiceDisplayNo || '').localeCompare(a.invoiceDisplayNo || '');
+    });
+    return list;
+  }, [filteredInvoices, sortField, sortOrder]);
+
   const {
     currentPage,
     pageSize,
     paginatedItems: paginatedInvoices,
     setPage,
     setPageSize,
-  } = usePagination(filteredInvoices, {
+  } = usePagination(sortedInvoices, {
     initialPageSize: 25,
-    resetDeps: [searchQuery, statusFilter],
+    resetDeps: [searchQuery, statusFilter, sortField, sortOrder],
   });
 
   // Multi-row selection state
@@ -504,15 +549,75 @@ export function InvoicesPageClient({
                         style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
                       />
                     </th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Invoice #</th>
-                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Issue Date</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Due Date</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Student / Client</th>
-                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Programme</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Total</th>
-                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Paid</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Balance</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Status</th>
+                    <SortableHeader
+                      label="Invoice #"
+                      field="invoiceDisplayNo"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Issue Date"
+                      field="invoiceDate"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      className="cp-col-secondary"
+                    />
+                    <SortableHeader
+                      label="Due Date"
+                      field="dueDate"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Student / Client"
+                      field="studentName"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Programme"
+                      field="programmeName"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      className="cp-col-secondary"
+                    />
+                    <SortableHeader
+                      label="Total"
+                      field="totalAmount"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <SortableHeader
+                      label="Paid"
+                      field="paidAmount"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      align="right"
+                      className="cp-col-secondary"
+                    />
+                    <SortableHeader
+                      label="Balance"
+                      field="balance"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <SortableHeader
+                      label="Status"
+                      field="status"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>

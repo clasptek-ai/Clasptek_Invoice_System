@@ -7,7 +7,7 @@
  * PostgreSQL active connection indicator, user profile card, and 7-section navigation.
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -15,6 +15,12 @@ import { cn } from '@/lib/utils/cn';
 import { NavSection, NavSvgIcon } from './Navigation';
 import { useAuth } from '@/lib/auth/context';
 import { getNavigationForRole } from '@/lib/config/navigation';
+import {
+  runDatabaseHealthProbe,
+  INITIAL_DIAGNOSTIC_STATE,
+  type DatabaseHealthDiagnostic,
+} from '@/lib/supabase/health';
+import { SupabaseDiagnosticModal } from './SupabaseDiagnosticModal';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -33,6 +39,19 @@ export function Sidebar({
   const router = useRouter();
   const sections = getNavigationForRole(role);
 
+  const [diagnostic, setDiagnostic] = useState<DatabaseHealthDiagnostic>(INITIAL_DIAGNOSTIC_STATE);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Genuine asynchronous database health check
+  const executeProbe = useCallback(async () => {
+    const res = await runDatabaseHealthProbe();
+    setDiagnostic(res);
+  }, []);
+
+  useEffect(() => {
+    executeProbe();
+  }, [executeProbe, isAuthenticated]);
+
   const initials = user?.full_name
     ? user.full_name
         .split(' ')
@@ -47,15 +66,24 @@ export function Sidebar({
     router.push('/login');
   };
 
+  // Employees and facilitators must NOT gain access to administrator-only diagnostics
+  const isRestrictedRole = role === 'Facilitator' || role === 'Student';
+
+  const handlePillClick = () => {
+    if (isRestrictedRole) return;
+    setIsModalOpen(true);
+  };
+
   return (
-    <aside
-      id="appSidebar"
-      aria-label="Main navigation"
-      className={cn(
-        'cp-sidebar',
-        isCollapsed && 'collapsed',
-        isMobileOpen && 'mobile-open'
-      )}
+    <>
+      <aside
+        id="appSidebar"
+        aria-label="Main navigation"
+        className={cn(
+          'cp-sidebar',
+          isCollapsed && 'collapsed',
+          isMobileOpen && 'mobile-open'
+        )}
     >
       {/* Brand Header */}
       <div className="cp-sidebar-header">
@@ -118,18 +146,27 @@ export function Sidebar({
         <div
           className="cp-conn-pill"
           id="sidebarSupabaseStatus"
-          title="Supabase Database Authority Status"
+          onClick={handlePillClick}
+          title={
+            isRestrictedRole
+              ? 'PostgreSQL Database Authority Status'
+              : 'Click to launch Supabase Diagnostic Center'
+          }
+          style={{
+            cursor: isRestrictedRole ? 'default' : 'pointer',
+            userSelect: 'none',
+          }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span
               className={cn(
                 'cp-conn-dot',
-                isAuthenticated ? 'connected' : 'warning'
+                diagnostic.dotClass
               )}
             />
             {!isCollapsed && (
               <span className="cp-conn-text" style={{ fontSize: '11px', fontWeight: 600 }}>
-                {isAuthenticated ? '🟢 POSTGRESQL ACTIVE' : '🟡 CONNECTING...'}
+                {diagnostic.statusLabel}
               </span>
             )}
           </div>
@@ -173,5 +210,18 @@ export function Sidebar({
         </div>
       </div>
     </aside>
-  );
+
+    {/* Supabase Diagnostic Center Modal (Phase 3 restoration) */}
+    {!isRestrictedRole && (
+      <SupabaseDiagnosticModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        diagnostic={diagnostic}
+        user={user}
+        role={role}
+        onRecheck={executeProbe}
+      />
+    )}
+  </>
+);
 }

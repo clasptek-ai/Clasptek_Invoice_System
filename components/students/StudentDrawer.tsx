@@ -153,6 +153,15 @@ export function StudentDrawer({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                 <button
                   type="button"
+                  className="cp-btn primary"
+                  id="btnEnrolStudentFromDossier"
+                  style={{ fontSize: '12px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 700 }}
+                  onClick={() => setIsEnrolModalOpen(true)}
+                >
+                  🎓 Enrol Student
+                </button>
+                <button
+                  type="button"
                   className="cp-btn secondary"
                   style={{ fontSize: '12px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '5px' }}
                   onClick={() => setIsEditModalOpen(true)}

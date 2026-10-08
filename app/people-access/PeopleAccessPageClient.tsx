@@ -14,6 +14,7 @@ import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
 import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
 import { RecordLifecycleModal } from '@/components/tables/RecordLifecycleModal';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 
 interface PeopleAccessProps {
   initialPersonnel: AdminPersonnel[];
@@ -114,15 +115,55 @@ export function PeopleAccessPageClient({
     });
   }, [personnelList, filterType, filterStatus, searchPersonnel]);
 
+  // Personnel Table sorting state
+  const [personnelSortField, setPersonnelSortField] = useState<string>('employeeId');
+  const [personnelSortOrder, setPersonnelSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handlePersonnelSort = (field: string) => {
+    setPersonnelSortOrder((prev) => (personnelSortField === field ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setPersonnelSortField(field);
+  };
+
+  const sortedPersonnel = useMemo(() => {
+    const list = [...filteredPersonnel];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (personnelSortField === 'employeeId') {
+        cmp = (a.employeeId || '').localeCompare(b.employeeId || '');
+      } else if (personnelSortField === 'fullName') {
+        cmp = (a.fullName || '').localeCompare(b.fullName || '');
+      } else if (personnelSortField === 'employeeType') {
+        cmp = (a.employeeType || '').localeCompare(b.employeeType || '');
+      } else if (personnelSortField === 'department') {
+        cmp = (a.department || '').localeCompare(b.department || '');
+      } else if (personnelSortField === 'jobTitle') {
+        cmp = (a.jobTitle || '').localeCompare(b.jobTitle || '');
+      } else if (personnelSortField === 'basicPay') {
+        const payA = a.employeeType === 'facilitator' ? (a.facilitatorRate || 0) : (a.basicPay || 0);
+        const payB = b.employeeType === 'facilitator' ? (b.facilitatorRate || 0) : (b.basicPay || 0);
+        cmp = payA - payB;
+      } else if (personnelSortField === 'employmentStatus') {
+        cmp = (a.employmentStatus || '').localeCompare(b.employmentStatus || '');
+      } else {
+        cmp = (a.employeeId || '').localeCompare(b.employeeId || '');
+      }
+      if (cmp !== 0) {
+        return personnelSortOrder === 'asc' ? cmp : -cmp;
+      }
+      return (b.id || '').localeCompare(a.id || '');
+    });
+    return list;
+  }, [filteredPersonnel, personnelSortField, personnelSortOrder]);
+
   const {
     currentPage: personnelPage,
     pageSize: personnelPageSize,
     paginatedItems: paginatedPersonnel,
     setPage: setPersonnelPage,
     setPageSize: setPersonnelPageSize,
-  } = usePagination(filteredPersonnel, {
+  } = usePagination(sortedPersonnel, {
     initialPageSize: 25,
-    resetDeps: [filterType, filterStatus, searchPersonnel],
+    resetDeps: [filterType, filterStatus, searchPersonnel, personnelSortField, personnelSortOrder],
   });
 
   // Filtered Users
@@ -1069,14 +1110,59 @@ export function PeopleAccessPageClient({
                         style={{ cursor: 'pointer', width: '16px', height: '16px' }}
                       />
                     </th>
-                    <th style={{ padding: '10px' }}>Personnel ID</th>
-                    <th style={{ padding: '10px' }}>Full Name &amp; Contact</th>
-                    <th style={{ padding: '10px' }}>Type</th>
-                    <th className="cp-col-tertiary" style={{ padding: '10px' }}>Department / Subject</th>
-                    <th style={{ padding: '10px' }}>Role / Designation</th>
+                    <SortableHeader
+                      label="Personnel ID"
+                      field="employeeId"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                    />
+                    <SortableHeader
+                      label="Full Name & Contact"
+                      field="fullName"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                    />
+                    <SortableHeader
+                      label="Type"
+                      field="employeeType"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                    />
+                    <SortableHeader
+                      label="Department / Subject"
+                      field="department"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                      className="cp-col-tertiary"
+                    />
+                    <SortableHeader
+                      label="Role / Designation"
+                      field="jobTitle"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                    />
                     <th className="cp-col-secondary" style={{ padding: '10px' }}>Bank &amp; Account #</th>
-                    <th className="cp-col-secondary" style={{ padding: '10px', textAlign: 'right' }}>Base / Fee</th>
-                    <th style={{ padding: '10px' }}>Status</th>
+                    <SortableHeader
+                      label="Base / Fee"
+                      field="basicPay"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                      align="right"
+                      className="cp-col-secondary"
+                    />
+                    <SortableHeader
+                      label="Status"
+                      field="employmentStatus"
+                      currentSort={personnelSortField}
+                      currentOrder={personnelSortOrder}
+                      onSort={handlePersonnelSort}
+                    />
                     {canManage && <th style={{ padding: '10px', textAlign: 'center' }}>Actions</th>}
                   </tr>
                 </thead>

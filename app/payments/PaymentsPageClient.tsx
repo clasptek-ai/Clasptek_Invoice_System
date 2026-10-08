@@ -15,6 +15,7 @@ import { printCanonicalElement } from '@/components/finance/printCanonical';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
 import { TableSelectionBar } from '@/components/tables/TableSelectionBar';
+import { SortableHeader } from '@/components/tables/SortableHeader';
 import {
   RecordLifecycleModal,
   type LifecycleActionType,
@@ -196,15 +197,55 @@ export function PaymentsPageClient({
     return matchesQ && matchesMethod && matchesStatus;
   });
 
+  // Table sorting state
+  const [sortField, setSortField] = useState<string>('paymentDate');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: string) => {
+    setSortOrder((prev) => (sortField === field ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setSortField(field);
+  };
+
+  const sortedPayments = React.useMemo(() => {
+    const list = [...filteredPayments];
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'receiptDisplayNo') {
+        cmp = (a.receiptDisplayNo || '').localeCompare(b.receiptDisplayNo || '');
+      } else if (sortField === 'studentName') {
+        cmp = (a.studentName || '').localeCompare(b.studentName || '');
+      } else if (sortField === 'invoiceDisplayNo') {
+        cmp = (a.invoiceDisplayNo || '').localeCompare(b.invoiceDisplayNo || '');
+      } else if (sortField === 'paymentMethod') {
+        cmp = (a.paymentMethod || '').localeCompare(b.paymentMethod || '');
+      } else if (sortField === 'reference') {
+        cmp = (a.reference || '').localeCompare(b.reference || '');
+      } else if (sortField === 'amount' || sortField === 'amountPaid') {
+        cmp = (a.amount || 0) - (b.amount || 0);
+      } else if (sortField === 'reconciliationStatus') {
+        cmp = (a.reconciliationStatus || '').localeCompare(b.reconciliationStatus || '');
+      } else {
+        const dateA = a.paymentDate || a.createdAt || '';
+        const dateB = b.paymentDate || b.createdAt || '';
+        cmp = dateA.localeCompare(dateB);
+      }
+      if (cmp !== 0) {
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return (b.receiptDisplayNo || '').localeCompare(a.receiptDisplayNo || '');
+    });
+    return list;
+  }, [filteredPayments, sortField, sortOrder]);
+
   const {
     currentPage,
     pageSize,
     paginatedItems: paginatedPayments,
     setPage,
     setPageSize,
-  } = usePagination(filteredPayments, {
+  } = usePagination(sortedPayments, {
     initialPageSize: 25,
-    resetDeps: [searchQuery, methodFilter, statusFilter],
+    resetDeps: [searchQuery, methodFilter, statusFilter, sortField, sortOrder],
   });
 
   const visibleIds = paginatedPayments.map((p) => p.id);
@@ -495,14 +536,65 @@ export function PaymentsPageClient({
                         style={{ cursor: 'pointer' }}
                       />
                     </th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Receipt #</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Payment Date</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Student / Client</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Target Invoice</th>
-                    <th className="cp-col-tertiary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Method</th>
-                    <th className="cp-col-secondary" style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Reference</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'right' }}>Amount Paid</th>
-                    <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>Status</th>
+                    <SortableHeader
+                      label="Receipt #"
+                      field="receiptDisplayNo"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Payment Date"
+                      field="paymentDate"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Student / Client"
+                      field="studentName"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Target Invoice"
+                      field="invoiceDisplayNo"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Method"
+                      field="paymentMethod"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      className="cp-col-tertiary"
+                    />
+                    <SortableHeader
+                      label="Reference"
+                      field="reference"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      className="cp-col-secondary"
+                    />
+                    <SortableHeader
+                      label="Amount Paid"
+                      field="amountPaid"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <SortableHeader
+                      label="Status"
+                      field="reconciliationStatus"
+                      currentSort={sortField}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
                     <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-secondary, #475569)', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
