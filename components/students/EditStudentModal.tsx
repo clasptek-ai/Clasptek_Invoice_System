@@ -61,7 +61,7 @@ export function EditStudentModal({
   const [customers, setCustomers] = useState<Array<{ id: string; name: string; email?: string | null; phone?: string | null }>>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
 
-  const [registrationDate, setRegistrationDate] = useState(String(meta.registrationDate || ''));
+  const [registrationDate, setRegistrationDate] = useState(String(meta.registeredAt || meta.registrationDate || ''));
   const [referralSource, setReferralSource] = useState(String(meta.referralSource || ''));
   const [studentExpertiseLevel, setStudentExpertiseLevel] = useState(String(meta.studentExpertiseLevel || meta.expertiseLevel || 'Beginner'));
   const [employmentStatus, setEmploymentStatus] = useState(String(meta.employmentStatus || ''));
@@ -145,6 +145,7 @@ export function EditStudentModal({
           sponsorPhone: hasSponsor ? (sponsorPhone.trim() || null) : null,
           emergencyContactRelationship: emergencyRelationship.trim() || null,
           registrationDate: registrationDate || null,
+          registeredAt: registrationDate || null,
           referralSource: referralSource.trim() || null,
           studentExpertiseLevel: studentExpertiseLevel || null,
           expertiseLevel: studentExpertiseLevel || null,

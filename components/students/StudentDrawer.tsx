@@ -410,7 +410,7 @@ export function StudentDrawer({
                       <div>
                         <div className="cp-field-label">Registration Date</div>
                         <div style={{ fontSize: '13.5px', fontWeight: 600 }}>
-                          {fmtDate((meta.registrationDate as string) || stu.created_at)}
+                          {fmtDate((meta.registeredAt as string) || (meta.registrationDate as string) || stu.created_at)}
                         </div>
                       </div>
                       <div>

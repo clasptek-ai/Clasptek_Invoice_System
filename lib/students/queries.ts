@@ -382,7 +382,7 @@ export async function getStudents(
         financial_status: fin.financialStatus,
         training_status: stu.status,
         status_display: fin.statusDisplay,
-        registration_date: (stu.metadata as any)?.registrationDate || stu.created_at || '',
+        registration_date: stu.metadata?.registeredAt || stu.metadata?.registrationDate || stu.created_at || '',
         created_at: stu.created_at || '',
       };
     });
