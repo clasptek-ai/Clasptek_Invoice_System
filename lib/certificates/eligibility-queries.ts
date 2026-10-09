@@ -11,6 +11,7 @@ import type {
   CompletionStatus,
 } from '@/types/certificates';
 import { DEFAULT_ATTENDANCE_THRESHOLD } from './constants';
+import { formatRecipientName } from './format-name';
 
 interface EligibilityFilters {
   cohortId?: string;
@@ -73,7 +74,7 @@ export async function getCertificateEligibilityList(
 
     const [studentsRes, progRes, cohortsRes, sessionsRes, attendanceRes, certsRes] =
       await Promise.all([
-        supabase.from('students').select('id, name, first_name, last_name, student_number, email').in('id', studentIds),
+        supabase.from('students').select('id, name, first_name, last_name, student_number, email, metadata').in('id', studentIds),
         supabase.from('programmes').select('id, name, code, metadata').in('id', programmeIds),
         cohortIds.length > 0
           ? supabase.from('cohorts').select('id, name, metadata, lead_facilitator_id').in('id', cohortIds)
@@ -137,9 +138,16 @@ export async function getCertificateEligibilityList(
 
     const candidates: CertificateEligibilityCandidate[] = enrolments.map((en) => {
       const student = studentMap.get(en.student_id);
+      const sMeta = (student?.metadata as Record<string, unknown>) || {};
+      const sMiddle =
+        (sMeta.middleName as string) ||
+        (sMeta.middle_name as string) ||
+        (student as { middle_name?: string })?.middle_name ||
+        '';
+      const authoritativeName = formatRecipientName(student?.last_name, student?.first_name, sMiddle);
       const studentName =
+        authoritativeName ||
         student?.name ||
-        `${student?.first_name || ''} ${student?.last_name || ''}`.trim() ||
         en.student_name ||
         'Student';
       const studentNumber = student?.student_number || en.student_number || '';

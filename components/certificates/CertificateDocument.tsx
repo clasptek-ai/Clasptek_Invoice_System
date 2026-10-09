@@ -97,9 +97,8 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
   // Vector QR SVG
   const qrSvgMarkup = generateCertificateQrSvg(verificationUrl, { cellSize: 1.1, margin: 0 });
 
-  // Responsive font size for long names
+  // Recipient name length check for line boundary fit
   const nameLen = studentName.length;
-  const nameFontSize = nameLen > 35 ? '16px' : nameLen > 28 ? '20px' : '24px';
 
   // Dynamic wrapped lines for core competencies (Req #15)
   const competencyLines = wrapSvgText(certDescription, 68);
@@ -127,7 +126,7 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap');
         @media print {
           @page {
             size: A4 landscape !important;
@@ -324,17 +323,18 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
           This certifies that
         </text>
 
-        {/* Dynamic Student Name (Never Hardcoded, resting on the horizontal Name Line, baseline Y=328) */}
+        {/* Dynamic Recipient Full Name (Enforced Poppins at 24px) */}
         <text
           x="420.95"
           y="328"
           textAnchor="middle"
-          fontFamily="'Montserrat', 'Avant Garde', 'Century Gothic', sans-serif"
-          fontWeight="700"
-          fontSize={nameFontSize}
-          letterSpacing="1.5"
+          fontFamily="'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+          fontWeight="600"
+          fontSize="24px"
+          letterSpacing="1.2"
           fill="#111111"
           style={{ textTransform: 'uppercase' }}
+          {...(nameLen > 36 ? { textLength: 570, lengthAdjust: 'spacingAndGlyphs' } : {})}
         >
           {studentName}
         </text>

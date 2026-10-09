@@ -10,6 +10,8 @@ import React, { useState, useMemo } from 'react';
 import type { Certificate, CertificateEligibilityCandidate, PublicCertificateVerification } from '@/types/certificates';
 import type { UserRole } from '@/types/auth';
 import { CertificateDocument } from '@/components/certificates/CertificateDocument';
+import { EditCertificateModal } from '@/components/certificates/EditCertificateModal';
+import { printCertificateElement } from '@/components/certificates/printCertificate';
 import { DEFAULT_CERTIFICATE_TEMPLATES } from '@/lib/certificates/constants';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { Pagination } from '@/components/tables/Pagination';
@@ -51,6 +53,8 @@ export const CertificatesClient: React.FC<Props> = ({
 
   // Modal states
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
+  const [editingCertTarget, setEditingCertTarget] = useState<Certificate | null>(null);
+  const certDocumentRef = React.useRef<HTMLDivElement>(null);
   const [revokeCertTarget, setRevokeCertTarget] = useState<Certificate | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
 
@@ -79,6 +83,39 @@ export const CertificatesClient: React.FC<Props> = ({
   const roleLower = (currentUserRole || '').toLowerCase();
   const isAdminOrStaff =
     roleLower.includes('admin') || roleLower.includes('staff') || roleLower.includes('finance manager');
+
+  // Keep #print-root synchronized when preview modal is open so browser Ctrl+P works flawlessly
+  React.useEffect(() => {
+    if (selectedCert && certDocumentRef.current) {
+      let printRoot = document.getElementById('print-root');
+      if (!printRoot) {
+        printRoot = document.createElement('div');
+        printRoot.id = 'print-root';
+        document.body.appendChild(printRoot);
+      }
+      const clone = certDocumentRef.current.cloneNode(true) as HTMLElement;
+      clone.style.width = '297mm';
+      clone.style.height = '210mm';
+      clone.style.maxWidth = '297mm';
+      clone.style.maxHeight = '210mm';
+      clone.style.margin = '0';
+      clone.style.padding = '0';
+      clone.style.boxShadow = 'none';
+
+      printRoot.innerHTML = '';
+      printRoot.className = 'certificate-print-root';
+      printRoot.appendChild(clone);
+      document.body.classList.add('printing-certificate');
+
+      return () => {
+        document.body.classList.remove('printing-certificate');
+        if (printRoot) {
+          printRoot.innerHTML = '';
+          printRoot.className = '';
+        }
+      };
+    }
+  }, [selectedCert]);
 
   // Refresh certificates from server
   const refreshCertificates = async () => {
@@ -943,6 +980,15 @@ export const CertificatesClient: React.FC<Props> = ({
                               >
                                 View / Print
                               </button>
+                              {isAdminOrStaff && (
+                                <button
+                                  className="cp-btn sm secondary"
+                                  onClick={() => setEditingCertTarget(cert)}
+                                  title="Edit Certificate Record"
+                                >
+                                  &#x270F;&#xFE0F; Edit
+                                </button>
+                              )}
                               {isAdminOrStaff &&
                                 (isIssued ? (
                                   <button
@@ -1484,7 +1530,9 @@ export const CertificatesClient: React.FC<Props> = ({
               </button>
             </div>
             <div className="cp-modal-body" style={{ backgroundColor: '#F8FAFC', padding: '20px', overflowX: 'auto' }}>
-              <CertificateDocument certificate={selectedCert} />
+              <div ref={certDocumentRef}>
+                <CertificateDocument certificate={selectedCert} />
+              </div>
 
               <div
                 style={{
@@ -1537,10 +1585,22 @@ export const CertificatesClient: React.FC<Props> = ({
               <button className="cp-btn secondary" onClick={() => setSelectedCert(null)}>
                 Close
               </button>
+              {isAdminOrStaff && (
+                <button
+                  className="cp-btn secondary"
+                  onClick={() => {
+                    const certToEdit = selectedCert;
+                    setEditingCertTarget(certToEdit);
+                  }}
+                  title="Edit Certificate Record"
+                >
+                  &#x270F;&#xFE0F; Edit Certificate
+                </button>
+              )}
               <button
                 className="cp-btn primary"
                 onClick={() => {
-                  window.print();
+                  printCertificateElement(certDocumentRef.current);
                 }}
               >
                 &#x1F5B6; Print / Save as PDF
@@ -1845,6 +1905,23 @@ export const CertificatesClient: React.FC<Props> = ({
         isLoading={lifecycleModal.isLoading}
         onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={handleConfirmLifecycleAction}
+      />
+
+      {/* Edit Certificate Modal */}
+      <EditCertificateModal
+        isOpen={!!editingCertTarget}
+        certificate={editingCertTarget}
+        onClose={() => setEditingCertTarget(null)}
+        onSuccess={async (updated) => {
+          setSuccessToast(`Certificate ${updated.certificateNumber} updated successfully!`);
+          setCertificates((prev) =>
+            prev.map((c) => (c.id === updated.id ? updated : c))
+          );
+          if (selectedCert && selectedCert.id === updated.id) {
+            setSelectedCert(updated);
+          }
+          await refreshCertificates();
+        }}
       />
     </div>
   );

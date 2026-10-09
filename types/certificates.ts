@@ -41,9 +41,23 @@ export interface Certificate {
   revokedBy?: string | null;
   revokedAt?: string | null;
   reissuedFromCertificateId?: string | null;
+  studentAuthoritativeName?: string;
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface UpdateCertificateRequest {
+  action?: 'EDIT' | 'UPDATE';
+  studentNameSnapshot?: string;
+  issueDate?: string;
+  completionDate?: string;
+  certificateTitle?: string;
+  certificateDescription?: string;
+  certificateRole?: string;
+  signatoryName?: string;
+  signatoryTitle?: string;
+  reason?: string;
 }
 
 export interface CertificateTemplate {

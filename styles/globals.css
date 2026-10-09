@@ -4,7 +4,7 @@
    Design tokens ported from Phase 1 audit of index.html :root variables
    ============================================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600;700&display=swap');
 
 /* =============================================================================
    CSS CUSTOM PROPERTIES — DESIGN TOKENS
@@ -2121,6 +2121,76 @@ body.cp-modal-open {
   @page {
     size: A4 portrait;
     margin: 8mm 12mm 8mm 12mm;
+  }
+
+  /* Dedicated A4 Landscape Certificate Print Mode */
+  body.printing-certificate {
+    background: #DDDDF0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    min-width: 297mm !important;
+    min-height: 210mm !important;
+    max-width: 297mm !important;
+    max-height: 210mm !important;
+    overflow: hidden !important;
+  }
+  body.printing-certificate #print-root,
+  #print-root.certificate-print-root {
+    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    min-width: 297mm !important;
+    min-height: 210mm !important;
+    max-width: 297mm !important;
+    max-height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    background: #DDDDF0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    z-index: 99999999 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body.printing-certificate #print-root .certificate-print-page,
+  body.printing-certificate #print-root .clasptek-cert-print-container,
+  #print-root.certificate-print-root .certificate-print-page,
+  #print-root.certificate-print-root .clasptek-cert-print-container {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-width: 297mm !important;
+    min-height: 210mm !important;
+    max-width: 297mm !important;
+    max-height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-sizing: border-box !important;
+    background: #DDDDF0 !important;
+  }
+  body.printing-certificate #print-root svg,
+  #print-root.certificate-print-root svg {
+    width: 297mm !important;
+    height: 210mm !important;
+    max-width: 297mm !important;
+    max-height: 210mm !important;
+    display: block !important;
   }
 }
 

@@ -12,8 +12,10 @@ import type {
   IssueCertificateRequest,
   PublicCertificateVerification,
   ReissueCertificateRequest,
+  UpdateCertificateRequest,
 } from '@/types/certificates';
 import { getDefaultCertificateSettingsForProgramme } from './constants';
+import { formatRecipientName } from './format-name';
 
 interface CertificateFilters {
   status?: string;
@@ -56,10 +58,28 @@ export async function getCertificates(
     let revokedCount = 0;
     let reissuedCount = 0;
 
+    const studentIds = Array.from(new Set((certs || []).map((c) => c.student_id).filter(Boolean)));
+    const { data: studentsData } =
+      studentIds.length > 0
+        ? await supabase.from('students').select('id, last_name, first_name, metadata').in('id', studentIds)
+        : { data: [] };
+    const studentMap = new Map((studentsData || []).map((s) => [s.id, s]));
+
     const formatted: Certificate[] = (certs || []).map((c) => {
       if (c.status === 'ISSUED') issuedCount++;
       if (c.status === 'REVOKED') revokedCount++;
       if (c.reissued_from_certificate_id) reissuedCount++;
+
+      const stu = studentMap.get(c.student_id);
+      const stuMeta = (stu?.metadata as Record<string, unknown>) || {};
+      const sMiddle =
+        (stuMeta.middleName as string) ||
+        (stuMeta.middle_name as string) ||
+        (stu as { middle_name?: string })?.middle_name ||
+        '';
+      const studentAuthoritativeName = stu
+        ? formatRecipientName(stu.last_name, stu.first_name, sMiddle)
+        : undefined;
 
       const meta = (c.metadata as Record<string, unknown>) || {};
 
@@ -101,6 +121,7 @@ export async function getCertificates(
         revokedBy: c.revoked_by,
         revokedAt: c.revoked_at,
         reissuedFromCertificateId: c.reissued_from_certificate_id,
+        studentAuthoritativeName,
         metadata: meta,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
@@ -151,6 +172,24 @@ export async function getCertificateById(
       return { data: null, error: error ? error.message : 'Certificate not found' };
     }
 
+    let studentAuthoritativeName: string | undefined;
+    if (c.student_id) {
+      const { data: stu } = await supabase
+        .from('students')
+        .select('id, last_name, first_name, metadata')
+        .eq('id', c.student_id)
+        .maybeSingle();
+      if (stu) {
+        const stuMeta = (stu.metadata as Record<string, unknown>) || {};
+        const sMiddle =
+          (stuMeta.middleName as string) ||
+          (stuMeta.middle_name as string) ||
+          (stu as { middle_name?: string })?.middle_name ||
+          '';
+        studentAuthoritativeName = formatRecipientName(stu.last_name, stu.first_name, sMiddle);
+      }
+    }
+
     const meta = (c.metadata as Record<string, unknown>) || {};
     const cert: Certificate = {
       id: c.id,
@@ -190,6 +229,7 @@ export async function getCertificateById(
       revokedBy: c.revoked_by,
       revokedAt: c.revoked_at,
       reissuedFromCertificateId: c.reissued_from_certificate_id,
+      studentAuthoritativeName,
       metadata: meta,
       createdAt: c.created_at,
       updatedAt: c.updated_at,
@@ -271,11 +311,19 @@ export async function issueCertificate(
     const programme = progRes.data;
     const cohort = cohortRes.data;
 
-    // Student name snapshot
+    // Student name snapshot - Strictly formatted as Last Name (Surname) + First Name + Middle Name
+    const sMeta = (student?.metadata as Record<string, unknown>) || {};
+    const middleName =
+      (sMeta.middleName as string) ||
+      (sMeta.middle_name as string) ||
+      (student as { middle_name?: string })?.middle_name ||
+      '';
+    const authoritativeName = formatRecipientName(student?.last_name, student?.first_name, middleName);
+
     const studentNameSnapshot =
       request.studentNameOverride?.trim() ||
+      authoritativeName ||
       student?.name ||
-      `${student?.first_name || ''} ${student?.last_name || ''}`.trim() ||
       enr.student_name ||
       'Student';
 
@@ -616,6 +664,264 @@ export async function reissueCertificate(
     return { success: true, certificate: issueRes.certificate, error: null };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to reissue certificate';
+    return { success: false, certificate: null, error: msg };
+  }
+}
+
+export async function updateCertificateRecord(
+  tenantId: string,
+  actor: { id: string; role: string; email?: string },
+  certificateId: string,
+  updates: UpdateCertificateRequest
+): Promise<{ success: boolean; certificate: Certificate | null; error: string | null }> {
+  try {
+    const supabase = await createServerClient();
+
+    // 1. Authorisation Check
+    const roleLower = (actor.role || '').toLowerCase();
+    const isAdminOrStaff =
+      roleLower.includes('admin') || roleLower.includes('staff') || roleLower.includes('finance manager');
+    if (!isAdminOrStaff) {
+      return {
+        success: false,
+        certificate: null,
+        error: 'UNAUTHORIZED: Only an authorized Administrator or Staff member can edit issued certificates',
+      };
+    }
+
+    // 2. Fetch existing certificate with tenant isolation
+    const { data: cert, error: cErr } = await supabase
+      .from('certificates')
+      .select('*')
+      .eq('id', certificateId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (cErr || !cert) {
+      return {
+        success: false,
+        certificate: null,
+        error: 'Certificate not found or belongs to foreign tenant',
+      };
+    }
+
+    // 3. Validation: Recipient Name must not be empty if specified
+    const newStudentName =
+      updates.studentNameSnapshot !== undefined
+        ? updates.studentNameSnapshot.trim()
+        : cert.student_name_snapshot;
+
+    if (!newStudentName) {
+      return {
+        success: false,
+        certificate: null,
+        error: 'RECIPIENT_NAME_REQUIRED: The recipient name cannot be empty',
+      };
+    }
+
+    const editReason =
+      (updates.reason || '').trim() || 'Administrative correction of certificate details';
+    const nowIso = new Date().toISOString();
+    const currentMeta = (cert.metadata as Record<string, unknown>) || {};
+
+    // 4. Compute changed fields for audit log
+    const changedFields: Record<string, { old: unknown; new: unknown }> = {};
+
+    if (newStudentName !== cert.student_name_snapshot) {
+      changedFields.student_name_snapshot = {
+        old: cert.student_name_snapshot,
+        new: newStudentName,
+      };
+    }
+
+    const newIssueDate = updates.issueDate ? updates.issueDate.trim() : cert.issue_date;
+    if (newIssueDate !== cert.issue_date) {
+      changedFields.issue_date = {
+        old: cert.issue_date,
+        new: newIssueDate,
+      };
+    }
+
+    const newCompletionDate = updates.completionDate ? updates.completionDate.trim() : cert.completion_date;
+    if (newCompletionDate !== cert.completion_date) {
+      changedFields.completion_date = {
+        old: cert.completion_date,
+        new: newCompletionDate,
+      };
+    }
+
+    const newTitle =
+      updates.certificateTitle !== undefined
+        ? updates.certificateTitle.trim()
+        : (currentMeta.certificate_title_snapshot as string) ||
+          (currentMeta.certificateTitle as string) ||
+          'Certificate of Completion';
+
+    const newDesc =
+      updates.certificateDescription !== undefined
+        ? updates.certificateDescription.trim()
+        : (currentMeta.certificate_description_snapshot as string) ||
+          (currentMeta.certificateDescription as string) ||
+          '';
+
+    const newRole =
+      updates.certificateRole !== undefined
+        ? updates.certificateRole.trim()
+        : (currentMeta.certificate_role_snapshot as string) ||
+          (currentMeta.certificateRole as string) ||
+          '';
+
+    const newSigName =
+      updates.signatoryName !== undefined
+        ? updates.signatoryName.trim()
+        : (currentMeta.signatory_name as string) || 'Academy Director';
+
+    const newSigTitle =
+      updates.signatoryTitle !== undefined
+        ? updates.signatoryTitle.trim()
+        : (currentMeta.signatory_title as string) || 'Academy Director Signature';
+
+    const updatedMeta: Record<string, unknown> = {
+      ...currentMeta,
+      certificate_title_snapshot: newTitle,
+      certificate_description_snapshot: newDesc,
+      certificate_role_snapshot: newRole,
+      signatory_name: newSigName,
+      signatory_title: newSigTitle,
+    };
+
+    // Append to audit trail inside metadata
+    const existingAuditTrail = (Array.isArray(currentMeta.audit_trail) ? currentMeta.audit_trail : []) as Array<
+      Record<string, unknown>
+    >;
+    const auditEntry = {
+      timestamp: nowIso,
+      actor_id: actor.id,
+      actor_role: actor.role,
+      actor_email: actor.email,
+      action: 'CERTIFICATE_UPDATED',
+      reason: editReason,
+      changes: Object.keys(changedFields).reduce((acc, k) => {
+        acc[k] = changedFields[k].new;
+        return acc;
+      }, {} as Record<string, unknown>),
+    };
+    updatedMeta.audit_trail = [...existingAuditTrail, auditEntry];
+
+    // 5. Update certificate in-place, preserving id, certificate_number, status, relationships
+    const updatePayload = {
+      student_name_snapshot: newStudentName,
+      issue_date: newIssueDate,
+      completion_date: newCompletionDate,
+      metadata: updatedMeta,
+      updated_at: nowIso,
+    };
+
+    const { error: updErr } = await supabase
+      .from('certificates')
+      .update(updatePayload)
+      .eq('id', cert.id)
+      .eq('tenant_id', tenantId);
+
+    if (updErr) {
+      console.error('[updateCertificateRecord] error:', updErr.message);
+      return { success: false, certificate: null, error: updErr.message };
+    }
+
+    // 6. Record in authoritative finance_audit_log
+    const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
+    const { error: audErr } = await supabase.from('finance_audit_log').insert({
+      id: auditId,
+      tenant_id: tenantId,
+      action: 'CERTIFICATE_UPDATED',
+      entity_type: 'certificates',
+      entity_id: cert.id,
+      entity_name: cert.certificate_number,
+      old_state: Object.keys(changedFields).reduce((acc, k) => {
+        acc[k] = changedFields[k].old;
+        return acc;
+      }, {} as Record<string, unknown>),
+      new_state: Object.keys(changedFields).reduce((acc, k) => {
+        acc[k] = changedFields[k].new;
+        return acc;
+      }, {} as Record<string, unknown>),
+      reason: editReason,
+      actor_id: actor.id,
+      actor_role: actor.role,
+      source: 'nextjs_training_certificates',
+    });
+
+    if (audErr) {
+      console.error('[updateCertificateRecord] audit log insert error:', audErr.message);
+      return {
+        success: false,
+        certificate: null,
+        error: `AUDIT_LOG_FAILED: Required audit record could not be written (${audErr.message})`,
+      };
+    }
+
+    // 7. Re-fetch or derive studentAuthoritativeName
+    let studentAuthoritativeName: string | undefined;
+    if (cert.student_id) {
+      const { data: stu } = await supabase
+        .from('students')
+        .select('id, last_name, first_name, metadata')
+        .eq('id', cert.student_id)
+        .maybeSingle();
+      if (stu) {
+        const stuMeta = (stu.metadata as Record<string, unknown>) || {};
+        const sMiddle =
+          (stuMeta.middleName as string) ||
+          (stuMeta.middle_name as string) ||
+          (stu as { middle_name?: string })?.middle_name ||
+          '';
+        studentAuthoritativeName = formatRecipientName(stu.last_name, stu.first_name, sMiddle);
+      }
+    }
+
+    const updatedCert: Certificate = {
+      id: cert.id,
+      tenantId: cert.tenant_id,
+      studentId: cert.student_id,
+      enrolmentId: cert.enrolment_id,
+      programmeId: cert.programme_id,
+      cohortId: cert.cohort_id,
+      certificateNumber: cert.certificate_number,
+      issueDate: newIssueDate,
+      completionDate: newCompletionDate,
+      status: cert.status,
+      issuedBy: cert.issued_by,
+      verificationToken: cert.verification_token,
+      studentNameSnapshot: newStudentName,
+      programmeNameSnapshot: cert.programme_name_snapshot,
+      programmeCodeSnapshot: cert.programme_code_snapshot,
+      cohortNameSnapshot: cert.cohort_name_snapshot,
+      cohortCodeSnapshot: cert.cohort_code_snapshot,
+      attendancePctSnapshot: Number(cert.attendance_pct_snapshot || 0),
+      certificateTitleSnapshot: newTitle,
+      certificateDescriptionSnapshot: newDesc,
+      certificateIntroSnapshot:
+        (updatedMeta.certificate_intro_snapshot as string) || cert.certificate_intro_snapshot,
+      certificateRoleSnapshot: newRole,
+      signatoryName: newSigName,
+      signatoryTitle: newSigTitle,
+      certificateTemplateId: (updatedMeta.certificate_template_id as string) || cert.certificate_template_id,
+      templateVersion: (updatedMeta.template_version as string) || '1.0',
+      verificationUrl: (updatedMeta.verification_url as string) || cert.verification_url,
+      pdfUrl: cert.pdf_url,
+      revocationReason: cert.revocation_reason,
+      revokedBy: cert.revoked_by,
+      revokedAt: cert.revoked_at,
+      reissuedFromCertificateId: cert.reissued_from_certificate_id,
+      studentAuthoritativeName,
+      metadata: updatedMeta,
+      createdAt: cert.created_at,
+      updatedAt: nowIso,
+    };
+
+    return { success: true, certificate: updatedCert, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Server error updating certificate';
     return { success: false, certificate: null, error: msg };
   }
 }
