@@ -51,18 +51,32 @@ export const EditCertificateModal: React.FC<Props> = ({
     }
   }, [certificate]);
 
+  // Handle Escape key closure consistently with Clasptek modal conventions
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
+
   if (!isOpen || !certificate) return null;
 
   const authoritativeName = certificate.studentAuthoritativeName;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!studentName.trim()) {
-      setError('Recipient Name is required.');
+      setError('Recipient Full Name is required.');
       return;
     }
     if (!reason.trim()) {
-      setError('A documented correction reason is required for the audit trail.');
+      setError('A documented justification reason is required for the audit trail.');
       return;
     }
 

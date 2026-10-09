@@ -227,9 +227,30 @@ async function runSuite() {
     assert.strictEqual(apiRouteFile.includes("'verification_token'"), true);
   });
 
-  it('updateCertificateRecord fails cleanly if finance_audit_log write fails', () => {
+  it('API route maps errors to appropriate status codes (400, 403, 404, 500)', () => {
+    assert.strictEqual(apiRouteFile.includes('mapCertificateErrorToStatus'), true);
+    assert.strictEqual(apiRouteFile.includes("errLower.includes('unauthorized') || errLower.includes('forbidden')"), true);
+    assert.strictEqual(apiRouteFile.includes("errLower.includes('not found') || errLower.includes('foreign tenant')"), true);
+    assert.strictEqual(apiRouteFile.includes("errLower.includes('audit_log_failed')"), true);
+  });
+
+  it('updateCertificateRecord fails cleanly with AUDIT_LOG_FAILED if audit logging fails', () => {
     assert.strictEqual(queriesFile.includes('AUDIT_LOG_FAILED'), true);
-    assert.strictEqual(queriesFile.includes('const { error: audErr }'), true);
+    assert.strictEqual(queriesFile.includes('recordCertificateAuditLog'), true);
+    assert.strictEqual(queriesFile.includes('createSupabaseServiceClient'), true);
+  });
+
+  it('updateCertificateRecord rejects empty recipient full name with RECIPIENT_NAME_REQUIRED', () => {
+    assert.strictEqual(queriesFile.includes('RECIPIENT_NAME_REQUIRED'), true);
+  });
+
+  it('EditCertificateModal.tsx prevents duplicate submissions while saving is in progress', () => {
+    assert.strictEqual(editModalFile.includes('if (isSubmitting) return;'), true);
+    assert.strictEqual(editModalFile.includes('disabled={isSubmitting}'), true);
+  });
+
+  it('EditCertificateModal.tsx handles Escape key dismissal gracefully', () => {
+    assert.strictEqual(editModalFile.includes("e.key === 'Escape'"), true);
   });
 
   it('EditCertificateModal.tsx component renders input for recipient name, issue date, and mandatory audit reason', () => {

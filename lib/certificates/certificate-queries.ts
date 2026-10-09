@@ -6,7 +6,7 @@
  */
 
 import crypto from 'crypto';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/server';
 import type {
   Certificate,
   IssueCertificateRequest,
@@ -16,6 +16,50 @@ import type {
 } from '@/types/certificates';
 import { getDefaultCertificateSettingsForProgramme } from './constants';
 import { formatRecipientName } from './format-name';
+
+const isUuid = (val?: string | null) =>
+  typeof val === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+async function recordCertificateAuditLog(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  payload: {
+    id: string;
+    tenant_id: string;
+    action: string;
+    entity_type: string;
+    entity_id: string;
+    entity_name?: string | null;
+    old_state?: Record<string, unknown> | null;
+    new_state?: Record<string, unknown> | null;
+    reason: string;
+    actor_id?: string | null;
+    actor_role?: string;
+    source?: string;
+  }
+): Promise<{ success: boolean; error: string | null }> {
+  const auditData = {
+    ...payload,
+    actor_id: isUuid(payload.actor_id) ? payload.actor_id : null,
+    actor_role: payload.actor_role || 'Staff',
+    source: payload.source || 'nextjs_training_certificates',
+  };
+
+  try {
+    const serviceClient = createSupabaseServiceClient();
+    const { error: sErr } = await serviceClient.from('finance_audit_log').insert(auditData);
+    if (!sErr) return { success: true, error: null };
+    console.warn('[recordCertificateAuditLog] service client notice, falling back:', sErr.message);
+  } catch (initErr) {
+    console.warn('[recordCertificateAuditLog] service client init notice, falling back:', initErr);
+  }
+
+  const { error } = await supabase.from('finance_audit_log').insert(auditData);
+  if (error) {
+    return { success: false, error: error.message };
+  }
+  return { success: true, error: null };
+}
 
 interface CertificateFilters {
   status?: string;
@@ -429,7 +473,7 @@ export async function issueCertificate(
 
     // 7. Audit Log
     const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
-    await supabase.from('finance_audit_log').insert({
+    await recordCertificateAuditLog(supabase, {
       id: auditId,
       tenant_id: tenantId,
       action: 'CERTIFICATE_ISSUED',
@@ -569,7 +613,7 @@ export async function revokeCertificate(
 
     // 5. Audit Log
     const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
-    await supabase.from('finance_audit_log').insert({
+    await recordCertificateAuditLog(supabase, {
       id: auditId,
       tenant_id: tenantId,
       action: 'CERTIFICATE_REVOKED',
@@ -646,7 +690,7 @@ export async function reissueCertificate(
 
     // 4. Audit Log
     const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
-    await supabase.from('finance_audit_log').insert({
+    await recordCertificateAuditLog(supabase, {
       id: auditId,
       tenant_id: tenantId,
       action: 'CERTIFICATE_REISSUED',
@@ -830,7 +874,7 @@ export async function updateCertificateRecord(
 
     // 6. Record in authoritative finance_audit_log
     const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
-    const { error: audErr } = await supabase.from('finance_audit_log').insert({
+    const auditRes = await recordCertificateAuditLog(supabase, {
       id: auditId,
       tenant_id: tenantId,
       action: 'CERTIFICATE_UPDATED',
@@ -851,12 +895,12 @@ export async function updateCertificateRecord(
       source: 'nextjs_training_certificates',
     });
 
-    if (audErr) {
-      console.error('[updateCertificateRecord] audit log insert error:', audErr.message);
+    if (!auditRes.success) {
+      console.error('[updateCertificateRecord] audit log insert error:', auditRes.error);
       return {
         success: false,
         certificate: null,
-        error: `AUDIT_LOG_FAILED: Required audit record could not be written (${audErr.message})`,
+        error: `AUDIT_LOG_FAILED: Required audit record could not be written (${auditRes.error})`,
       };
     }
 

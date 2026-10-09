@@ -37,6 +37,39 @@ export async function GET(
   }
 }
 
+function mapCertificateErrorToStatus(error: string | null): number {
+  if (!error) return 400;
+  const errLower = error.toLowerCase();
+  if (errLower.includes('unauthorized') || errLower.includes('forbidden')) return 403;
+  if (errLower.includes('not found') || errLower.includes('foreign tenant')) return 404;
+  if (
+    errLower.includes('audit_log_failed') ||
+    errLower.includes('database') ||
+    errLower.includes('server') ||
+    errLower.includes('internal')
+  ) {
+    return 500;
+  }
+  return 400;
+}
+
+const PROTECTED_FIELDS = [
+  'id',
+  'status',
+  'certificate_number',
+  'certificateNumber',
+  'tenant_id',
+  'tenantId',
+  'verification_token',
+  'verificationToken',
+  'student_id',
+  'studentId',
+  'enrolment_id',
+  'enrolmentId',
+  'programme_id',
+  'programmeId',
+];
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -68,21 +101,6 @@ export async function PATCH(
           body.certificateRole !== undefined));
 
     if (isEdit) {
-      const PROTECTED_FIELDS = [
-        'status',
-        'certificate_number',
-        'certificateNumber',
-        'tenant_id',
-        'tenantId',
-        'verification_token',
-        'verificationToken',
-        'student_id',
-        'studentId',
-        'enrolment_id',
-        'enrolmentId',
-        'programme_id',
-        'programmeId',
-      ];
       const attemptedProtected = PROTECTED_FIELDS.find((f) => f in body);
       if (attemptedProtected) {
         return NextResponse.json(
@@ -96,7 +114,8 @@ export async function PATCH(
 
       const result = await updateCertificateRecord(auth.session.tenantId, actor, id, body);
       if (!result.success || !result.certificate) {
-        return NextResponse.json({ success: false, error: result.error || 'Failed to update certificate' }, { status: 400 });
+        const statusCode = mapCertificateErrorToStatus(result.error);
+        return NextResponse.json({ success: false, error: result.error || 'Failed to update certificate' }, { status: statusCode });
       }
 
       return NextResponse.json({
@@ -116,7 +135,8 @@ export async function PATCH(
 
     const result = await revokeCertificate(auth.session.tenantId, actor, id, body.reason);
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+      const statusCode = mapCertificateErrorToStatus(result.error);
+      return NextResponse.json({ success: false, error: result.error }, { status: statusCode });
     }
 
     return NextResponse.json({ success: true, message: 'Certificate revoked successfully' });
@@ -144,21 +164,6 @@ export async function PUT(
       email: auth.session.user.email,
     };
 
-    const PROTECTED_FIELDS = [
-      'status',
-      'certificate_number',
-      'certificateNumber',
-      'tenant_id',
-      'tenantId',
-      'verification_token',
-      'verificationToken',
-      'student_id',
-      'studentId',
-      'enrolment_id',
-      'enrolmentId',
-      'programme_id',
-      'programmeId',
-    ];
     const attemptedProtected = PROTECTED_FIELDS.find((f) => f in body);
     if (attemptedProtected) {
       return NextResponse.json(
@@ -172,7 +177,8 @@ export async function PUT(
 
     const result = await updateCertificateRecord(auth.session.tenantId, actor, id, body);
     if (!result.success || !result.certificate) {
-      return NextResponse.json({ success: false, error: result.error || 'Failed to update certificate' }, { status: 400 });
+      const statusCode = mapCertificateErrorToStatus(result.error);
+      return NextResponse.json({ success: false, error: result.error || 'Failed to update certificate' }, { status: statusCode });
     }
 
     return NextResponse.json({
@@ -221,7 +227,8 @@ export async function POST(
     });
 
     if (!result.success || !result.certificate) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+      const statusCode = mapCertificateErrorToStatus(result.error);
+      return NextResponse.json({ success: false, error: result.error }, { status: statusCode });
     }
 
     return NextResponse.json({
