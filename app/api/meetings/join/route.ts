@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { publicId, meetingId, displayName } = body;
+    const { publicId, meetingId } = body;
 
     const identifier = publicId || meetingId;
     if (!identifier) {
@@ -172,12 +172,11 @@ export async function POST(req: NextRequest) {
     }
 
     const sfu = getSFUService();
-    const pName =
-      displayName ||
-      (session.user.user_metadata?.name as string) ||
+    const authName =
       (session.user.user_metadata?.full_name as string) ||
-      session.user.email ||
-      'Participant';
+      (session.user.user_metadata?.name as string) ||
+      session.user.email;
+    const pName = authName || 'Participant';
 
     const tokenResult = await sfu.generateParticipantToken({
       roomId: meeting.publicId,

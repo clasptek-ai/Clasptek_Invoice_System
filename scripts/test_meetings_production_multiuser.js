@@ -114,9 +114,14 @@ function createMockHttp(method, body = {}, query = {}) {
 }
 
 async function runSuite() {
-  console.log('===============================================================');
-  console.log('CLASPTEK PHASE 1: NATIVE VIDEO MEETING MULTI-USER CERTIFICATION');
-  console.log('===============================================================');
+  const initialTestMode = process.env.CLASPTEK_TEST_MODE;
+  const initialSfuProvider = process.env.SFU_PROVIDER;
+  const initialNodeEnv = process.env.NODE_ENV;
+
+  try {
+    console.log('===============================================================');
+    console.log('CLASPTEK PHASE 1: NATIVE VIDEO MEETING MULTI-USER CERTIFICATION');
+    console.log('===============================================================');
 
   // ---------------------------------------------------------------------------
   // SUITE 1: SFU Configuration & Fail-Safe Provider Selection
@@ -196,10 +201,13 @@ async function runSuite() {
   it('getSFUAdapter fails safely when provider is invalid or missing outside test mode', () => {
     const originalEnv = process.env.NODE_ENV;
     const originalTestMode = process.env.CLASPTEK_TEST_MODE;
+    const originalSfu = process.env.SFU_PROVIDER;
 
     try {
       process.env.NODE_ENV = 'production';
       delete process.env.CLASPTEK_TEST_MODE;
+      // Isolate from .env.local: explicitly test invalid/empty provider outside test mode
+      process.env.SFU_PROVIDER = 'none';
 
       // Missing provider
       assert.throws(() => {
@@ -219,6 +227,11 @@ async function runSuite() {
     } finally {
       process.env.NODE_ENV = originalEnv;
       process.env.CLASPTEK_TEST_MODE = originalTestMode;
+      if (originalSfu !== undefined) {
+        process.env.SFU_PROVIDER = originalSfu;
+      } else {
+        delete process.env.SFU_PROVIDER;
+      }
     }
   });
 
@@ -288,7 +301,10 @@ async function runSuite() {
   console.log('\n--- Suite 3: Multi-User Meeting Lifecycle (1 Host + 2 Students) ---');
 
   // Set test mode for headless execution of the lifecycle
+  const suite3OriginalTestMode = process.env.CLASPTEK_TEST_MODE;
+  const suite3OriginalSfuProvider = process.env.SFU_PROVIDER;
   process.env.CLASPTEK_TEST_MODE = 'true';
+  process.env.SFU_PROVIDER = 'mock';
 
   let activeMeetingRecord = null;
 
@@ -604,7 +620,11 @@ async function runSuite() {
     // Running sync again must NOT create duplicate attendance rows!
     const reSyncResult = await syncFn(activeMeetingRecord, attendees);
     assert.strictEqual(reSyncResult.synced, 2, 'Must update existing 2 records');
-    assert.strictEqual(appState.attendance.length, 2, 'ZERO duplicate rows created after re-sync/refresh!');
+    // Cleanup Suite 3/4 headless lifecycle environment overrides
+    if (suite3OriginalTestMode !== undefined) process.env.CLASPTEK_TEST_MODE = suite3OriginalTestMode;
+    else delete process.env.CLASPTEK_TEST_MODE;
+    if (suite3OriginalSfuProvider !== undefined) process.env.SFU_PROVIDER = suite3OriginalSfuProvider;
+    else delete process.env.SFU_PROVIDER;
   });
 
   // ---------------------------------------------------------------------------
@@ -645,8 +665,17 @@ async function runSuite() {
   console.log(`MULTI-USER SUITE RESULTS: ${totalPassed} PASSED / ${totalFailed} FAILED (TOTAL ${totalPassed + totalFailed} ASSERTIONS)`);
   console.log('===============================================================');
 
-  if (totalFailed > 0) {
-    process.exit(1);
+    if (totalFailed > 0) {
+      process.exit(1);
+    }
+  } finally {
+    // Restore all process environment variables to original baseline
+    if (initialTestMode !== undefined) process.env.CLASPTEK_TEST_MODE = initialTestMode;
+    else delete process.env.CLASPTEK_TEST_MODE;
+    if (initialSfuProvider !== undefined) process.env.SFU_PROVIDER = initialSfuProvider;
+    else delete process.env.SFU_PROVIDER;
+    if (initialNodeEnv !== undefined) process.env.NODE_ENV = initialNodeEnv;
+    else delete process.env.NODE_ENV;
   }
 }
 

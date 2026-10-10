@@ -17,6 +17,7 @@ import {
   type LifecycleActionType,
   type RecordDependencyItem,
 } from '@/components/tables/RecordLifecycleModal';
+import { LiveMeetingRoom } from '@/components/meetings/LiveMeetingRoom';
 
 interface MeetingsPageClientProps {
   initialMeetings: Meeting[];
@@ -56,6 +57,7 @@ export function MeetingsPageClient({
   // Live meeting session state
   const [liveSessionState, setLiveSessionState] = useState<{
     token: string;
+    serverUrl?: string;
     isHost: boolean;
     isMicOn: boolean;
     isCamOn: boolean;
@@ -338,6 +340,7 @@ export function MeetingsPageClient({
       setActiveLiveMeeting(meeting);
       setLiveSessionState({
         token: data.token,
+        serverUrl: data.serverUrl,
         isHost: data.isHost,
         isMicOn: true,
         isCamOn: true,
@@ -394,79 +397,7 @@ export function MeetingsPageClient({
     }
   };
 
-  // Toggle Live Recording & Upload to Google Drive
-  const handleToggleRecording = async () => {
-    if (!activeLiveMeeting || !liveSessionState) return;
 
-    if (!liveSessionState.isRecording) {
-      // Start Recording
-      setLiveSessionState((p) => (p ? { ...p, isRecording: true } : null));
-      setFeedbackMsg({ type: 'success', text: 'Recording started...' });
-      setTimeout(() => setFeedbackMsg(null), 3000);
-    } else {
-      // Stop Recording & Upload to Google Drive
-      setLiveSessionState((p) => (p ? { ...p, isRecording: false } : null));
-      setFeedbackMsg({ type: 'success', text: 'Processing & uploading recording to Google Drive...' });
-
-      try {
-        const res = await fetch('/api/meetings/upload-recording', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            meetingId: activeLiveMeeting.id,
-            publicId: activeLiveMeeting.publicId,
-            durationSeconds: 1800,
-          }),
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setFeedbackMsg({
-            type: 'success',
-            text: 'Recording successfully archived to Google Drive Central Repository!',
-          });
-          setMeetings((prev) =>
-            prev.map((m) =>
-              m.id === activeLiveMeeting.id
-                ? {
-                    ...m,
-                    recordingStatus: 'STORED',
-                    recordingMetadata: data.recording,
-                    recordingUrl: data.recording.driveUrl,
-                  }
-                : m
-            )
-          );
-        } else {
-          setFeedbackMsg({ type: 'error', text: 'Recording upload failed' });
-        }
-      } catch {
-        setFeedbackMsg({ type: 'error', text: 'Network error uploading recording' });
-      }
-    }
-  };
-
-  // Send chat message in live room
-  const handleSendChat = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!liveSessionState || !liveSessionState.chatInput.trim()) return;
-
-    const newMsg = {
-      sender: currentUser.name,
-      text: liveSessionState.chatInput.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setLiveSessionState((p) =>
-      p
-        ? {
-            ...p,
-            chatMessages: [...p.chatMessages, newMsg],
-            chatInput: '',
-          }
-        : null
-    );
-  };
 
   // Verify Google Drive Central Repository
   const handleVerifyDrive = async () => {
@@ -1385,238 +1316,20 @@ export function MeetingsPageClient({
         </div>
       )}
 
-      {/* Live Meeting Room Overlay */}
+      {/* Real LiveKit WebRTC Meeting Room */}
       {activeLiveMeeting && liveSessionState && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: '#0F172A',
-            color: '#FFF',
-            display: 'flex',
-            flexDirection: 'column',
+        <LiveMeetingRoom
+          meeting={activeLiveMeeting}
+          token={liveSessionState.token}
+          serverUrl={liveSessionState.serverUrl || 'wss://clasptek-portal-tpfi0pb9.livekit.cloud'}
+          isHost={liveSessionState.isHost}
+          currentUser={currentUser}
+          onLeave={() => {
+            setActiveLiveMeeting(null);
+            setLiveSessionState(null);
           }}
-        >
-          {/* Top Live Bar */}
-          <div
-            style={{
-              padding: '12px 20px',
-              borderBottom: '1px solid #1E293B',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 20 }}>🎥</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{activeLiveMeeting.title}</div>
-                <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                  LiveKit SFU &middot; {activeLiveMeeting.publicId} &middot; Role:{' '}
-                  <span style={{ color: '#38BDF8' }}>{liveSessionState.isHost ? 'Host' : 'Participant'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              {liveSessionState.isRecording && (
-                <div
-                  style={{
-                    background: '#DC2626',
-                    color: '#FFF',
-                    padding: '4px 10px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFF' }} />
-                  RECORDING
-                </div>
-              )}
-              {liveSessionState.isHost && (
-                <button
-                  className="cp-btn sm danger"
-                  style={{ background: '#DC2626', color: '#FFF' }}
-                  onClick={handleEndLiveMeeting}
-                >
-                  End Meeting
-                </button>
-              )}
-              <button
-                className="cp-btn sm secondary"
-                style={{ background: '#334155', color: '#FFF', border: 'none' }}
-                onClick={() => {
-                  setActiveLiveMeeting(null);
-                  setLiveSessionState(null);
-                }}
-              >
-                Leave Room
-              </button>
-            </div>
-          </div>
-
-          {/* Main Stage & Chat Panel */}
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* Video Stage */}
-            <div
-              style={{
-                flex: 1,
-                padding: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  maxWidth: 900,
-                  height: 480,
-                  background: '#1E293B',
-                  borderRadius: 12,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '1px solid #334155',
-                  position: 'relative',
-                }}
-              >
-                <div
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: '50%',
-                    background: '#3B82F6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 32,
-                    fontWeight: 700,
-                  }}
-                >
-                  {currentUser.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ marginTop: 12, fontWeight: 600, fontSize: 16 }}>
-                  {currentUser.name} (You)
-                </div>
-                <div style={{ fontSize: 12, color: '#94A3B8' }}>
-                  {liveSessionState.isCamOn ? 'Camera Active' : 'Camera Muted'} &middot;{' '}
-                  {liveSessionState.isMicOn ? 'Microphone Active' : 'Microphone Muted'}
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 12,
-                    left: 14,
-                    background: 'rgba(0,0,0,0.6)',
-                    padding: '4px 10px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                  }}
-                >
-                  {liveSessionState.isHost ? '👑 Host' : '🎓 Student'}
-                </div>
-              </div>
-            </div>
-
-            {/* In-Meeting Chat Drawer */}
-            <div
-              style={{
-                width: 320,
-                borderLeft: '1px solid #1E293B',
-                background: '#0B1120',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #1E293B', fontWeight: 700, fontSize: 13 }}>
-                💬 Meeting Chat &amp; Q&amp;A
-              </div>
-              <div style={{ flex: 1, padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {liveSessionState.chatMessages.map((msg, i) => (
-                  <div key={i} style={{ fontSize: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', fontSize: 10 }}>
-                      <strong>{msg.sender}</strong>
-                      <span>{msg.time}</span>
-                    </div>
-                    <div style={{ marginTop: 2, color: '#E2E8F0' }}>{msg.text}</div>
-                  </div>
-                ))}
-              </div>
-              <form onSubmit={handleSendChat} style={{ padding: 10, borderTop: '1px solid #1E293B', display: 'flex', gap: 6 }}>
-                <input
-                  type="text"
-                  placeholder="Send a message..."
-                  className="cp-input"
-                  style={{ background: '#1E293B', color: '#FFF', border: '1px solid #334155', fontSize: 12 }}
-                  value={liveSessionState.chatInput}
-                  onChange={(e) =>
-                    setLiveSessionState((p) => (p ? { ...p, chatInput: e.target.value } : null))
-                  }
-                />
-                <button type="submit" className="cp-btn primary sm" style={{ padding: '4px 10px' }}>
-                  Send
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Bottom Live Controls Bar */}
-          <div
-            style={{
-              padding: '14px 20px',
-              borderTop: '1px solid #1E293B',
-              background: '#090D16',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: 16,
-            }}
-          >
-            <button
-              className={`cp-btn sm ${liveSessionState.isMicOn ? 'secondary' : 'danger'}`}
-              onClick={() =>
-                setLiveSessionState((p) => (p ? { ...p, isMicOn: !p.isMicOn } : null))
-              }
-            >
-              {liveSessionState.isMicOn ? '🎤 Mute Mic' : '🔇 Unmute Mic'}
-            </button>
-
-            <button
-              className={`cp-btn sm ${liveSessionState.isCamOn ? 'secondary' : 'danger'}`}
-              onClick={() =>
-                setLiveSessionState((p) => (p ? { ...p, isCamOn: !p.isCamOn } : null))
-              }
-            >
-              {liveSessionState.isCamOn ? '📹 Turn Off Camera' : '📷 Turn On Camera'}
-            </button>
-
-            <button
-              className="cp-btn sm secondary"
-              onClick={() => alert('Screen share stream simulated via LiveKit WebRTC')}
-            >
-              🖥 Share Screen
-            </button>
-
-            {liveSessionState.isHost && (
-              <button
-                className={`cp-btn sm ${liveSessionState.isRecording ? 'danger' : 'secondary'}`}
-                onClick={handleToggleRecording}
-              >
-                {liveSessionState.isRecording ? '⏹ Stop & Upload to Drive' : '⏺ Record Meeting'}
-              </button>
-            )}
-          </div>
-        </div>
+          onEndMeeting={liveSessionState.isHost ? handleEndLiveMeeting : undefined}
+        />
       )}
 
       {/* Record Lifecycle Modal (Delete / Cancel Protection) */}

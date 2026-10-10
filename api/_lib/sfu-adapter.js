@@ -31,7 +31,7 @@ function resolveEnvConfig() {
           const idx = trimmed.indexOf('=');
           const k = trimmed.slice(0, idx).trim();
           const v = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
-          if (!env[k]) env[k] = v;
+          if (process.env[k] === undefined) env[k] = v;
         }
       });
     }
@@ -90,16 +90,21 @@ class LiveKitAdapter extends SFUAdapter {
   constructor(config = {}) {
     super('livekit');
     const env = resolveEnvConfig();
-    this.url = config.url || env.LIVEKIT_URL || 'wss://clasptek-meet.livekit.cloud';
-    this.apiKey = config.apiKey || env.LIVEKIT_API_KEY || '';
-    this.apiSecret = config.apiSecret || env.LIVEKIT_API_SECRET || '';
+    const resolvedUrl = (config.url || env.LIVEKIT_URL || '').trim();
+    const resolvedKey = (config.apiKey || env.LIVEKIT_API_KEY || '').trim();
+    const resolvedSecret = (config.apiSecret || env.LIVEKIT_API_SECRET || '').trim();
 
-    if (!this.apiKey || !this.apiSecret) {
-      // In production, missing credentials must fail safely
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('CONFIGURATION_ERROR: LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be configured for LiveKit SFU');
-      }
+    if (!resolvedUrl || !resolvedKey || !resolvedSecret) {
+      const missing = [];
+      if (!resolvedUrl) missing.push('LIVEKIT_URL');
+      if (!resolvedKey) missing.push('LIVEKIT_API_KEY');
+      if (!resolvedSecret) missing.push('LIVEKIT_API_SECRET');
+      throw new Error(`CONFIGURATION_ERROR: LiveKit configuration missing: ${missing.join(', ')}. LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET must be explicitly configured.`);
     }
+
+    this.url = resolvedUrl;
+    this.apiKey = resolvedKey;
+    this.apiSecret = resolvedSecret;
   }
 
   async createRoom({ roomId, roomTitle, settings = {} }) {
@@ -422,7 +427,7 @@ class MockSFUAdapter extends SFUAdapter {
  */
 function getSFUAdapter(explicitProvider = null) {
   const env = resolveEnvConfig();
-  const provider = (explicitProvider || env.SFU_PROVIDER || '').trim().toLowerCase();
+  const provider = (explicitProvider !== null && explicitProvider !== undefined ? explicitProvider : (env.SFU_PROVIDER || '')).trim().toLowerCase();
 
   const isTestOrLocal = process.env.NODE_ENV === 'test' ||
                         process.env.CLASPTEK_TEST_MODE === 'true' ||
@@ -444,7 +449,7 @@ function getSFUAdapter(explicitProvider = null) {
   }
 
   // If no provider set, in test/dev default to mock if in test mode, otherwise FAIL SAFELY
-  if (isTestOrLocal) {
+  if (isTestOrLocal && !provider) {
     return new MockSFUAdapter();
   }
 

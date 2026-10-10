@@ -37,10 +37,22 @@ export class LiveKitService {
   private apiKey: string;
   private apiSecret: string;
 
-  constructor() {
-    this.url = process.env.LIVEKIT_URL || 'wss://clasptek-portal-tpfi0pb9.livekit.cloud';
-    this.apiKey = process.env.LIVEKIT_API_KEY || '';
-    this.apiSecret = process.env.LIVEKIT_API_SECRET || '';
+  constructor(config: { url?: string; apiKey?: string; apiSecret?: string } = {}) {
+    const rawUrl = (config.url || process.env.LIVEKIT_URL || '').trim();
+    const rawKey = (config.apiKey || process.env.LIVEKIT_API_KEY || '').trim();
+    const rawSecret = (config.apiSecret || process.env.LIVEKIT_API_SECRET || '').trim();
+
+    if (!rawUrl || !rawKey || !rawSecret) {
+      const missing: string[] = [];
+      if (!rawUrl) missing.push('LIVEKIT_URL');
+      if (!rawKey) missing.push('LIVEKIT_API_KEY');
+      if (!rawSecret) missing.push('LIVEKIT_API_SECRET');
+      throw new Error(`CONFIGURATION_ERROR: LiveKit configuration missing: ${missing.join(', ')}. LiveKit connections require explicit configuration.`);
+    }
+
+    this.url = rawUrl;
+    this.apiKey = rawKey;
+    this.apiSecret = rawSecret;
   }
 
   get provider(): string {
@@ -105,7 +117,7 @@ export class LiveKitService {
     const dataToSign = `${encodedHeader}.${encodedPayload}`;
 
     const signature = crypto
-      .createHmac('sha256', this.apiSecret || 'dev-secret-fallback')
+      .createHmac('sha256', this.apiSecret)
       .update(dataToSign)
       .digest();
     const encodedSignature = base64UrlEncode(signature);
@@ -131,4 +143,9 @@ export function getSFUService(): LiveKitService {
     sfuInstance = new LiveKitService();
   }
   return sfuInstance;
+}
+
+/** Reset singleton for testing */
+export function resetSFUService(): void {
+  sfuInstance = null;
 }

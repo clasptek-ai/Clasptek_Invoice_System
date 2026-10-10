@@ -19,21 +19,52 @@ const fs = require('fs');
 const path = require('path');
 
 function resolveCredentials() {
-  let secretKey = process.env.SUPABASE_SECRET_KEY || '';
-  let supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://logaawoigfxnisimfatf.supabase.co';
+  const hasSecretKeyInEnv = process.env.SUPABASE_SECRET_KEY !== undefined;
+  const hasServiceRoleKeyInEnv = process.env.SUPABASE_SERVICE_ROLE_KEY !== undefined;
+  const hasKeyInProcess = hasSecretKeyInEnv || hasServiceRoleKeyInEnv;
 
-  // Fallback to local .env.local for local testing suites
-  if (!secretKey) {
+  let secretKey = '';
+  if (hasSecretKeyInEnv) {
+    secretKey = (process.env.SUPABASE_SECRET_KEY || '').trim();
+  } else if (hasServiceRoleKeyInEnv) {
+    secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  }
+
+  const hasPrimaryUrlInEnv = process.env.SUPABASE_URL !== undefined;
+  const hasNextUrlInEnv = process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined;
+  const hasUrlInProcess = hasPrimaryUrlInEnv || hasNextUrlInEnv;
+
+  let supabaseUrl = '';
+  if (hasPrimaryUrlInEnv) {
+    supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+  } else if (hasNextUrlInEnv) {
+    supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  }
+
+  // Fallback to local .env.local ONLY for genuinely absent variables in local development
+  if (!hasKeyInProcess || !hasUrlInProcess) {
     try {
       const envPath = path.join(process.cwd(), '.env.local');
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, 'utf8');
         envContent.split(/\r?\n/).forEach(line => {
-          if (line.startsWith('SUPABASE_SECRET_KEY=')) {
-            secretKey = line.split('=')[1].trim().replace(/['"]/g, '');
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return;
+
+          if (!hasKeyInProcess && !secretKey) {
+            if (trimmed.startsWith('SUPABASE_SECRET_KEY=')) {
+              secretKey = trimmed.slice('SUPABASE_SECRET_KEY='.length).trim().replace(/^['"]|['"]$/g, '');
+            } else if (trimmed.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
+              secretKey = trimmed.slice('SUPABASE_SERVICE_ROLE_KEY='.length).trim().replace(/^['"]|['"]$/g, '');
+            }
           }
-          if (line.startsWith('SUPABASE_URL=')) {
-            supabaseUrl = line.split('=')[1].trim().replace(/['"]/g, '');
+
+          if (!hasUrlInProcess && !supabaseUrl) {
+            if (trimmed.startsWith('SUPABASE_URL=')) {
+              supabaseUrl = trimmed.slice('SUPABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
+            } else if (trimmed.startsWith('NEXT_PUBLIC_SUPABASE_URL=')) {
+              supabaseUrl = trimmed.slice('NEXT_PUBLIC_SUPABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
+            }
           }
         });
       }
@@ -214,10 +245,10 @@ async function allocateAuthoritativePersonnelId(supabaseUrl, secretKey, tenantId
  */
 async function handleProvisionUser(req, res, body) {
   const { secretKey, supabaseUrl } = resolveCredentials();
-  if (!secretKey) {
+  if (!secretKey || !supabaseUrl) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials unavailable.' }));
+    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials or Supabase URL unavailable.' }));
   }
 
   const authHeader = req.headers['authorization'] || '';
@@ -540,10 +571,10 @@ async function handleProvisionUser(req, res, body) {
  */
 async function handleDeletePersonnel(req, res, body) {
   const { secretKey, supabaseUrl } = resolveCredentials();
-  if (!secretKey) {
+  if (!secretKey || !supabaseUrl) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials unavailable.' }));
+    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials or Supabase URL unavailable.' }));
   }
 
   const authHeader = req.headers['authorization'] || '';
@@ -830,7 +861,7 @@ async function handleDeletePersonnel(req, res, body) {
  * MAIN DISPATCHER
  * -------------------------------------------------------------
  */
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, apikey');
@@ -880,7 +911,10 @@ module.exports = async function handler(req, res) {
     error: 'NOT_FOUND',
     message: `Unknown administrative action "${action || pathname}". Supported actions: provision-user, delete-personnel, google-forms-intake.`
   }));
-};
+}
+
+handler.resolveCredentials = resolveCredentials;
+module.exports = handler;
 
 function verifyHmacSig(signature, secret, headers, body) {
   try {
@@ -900,10 +934,10 @@ function verifyHmacSig(signature, secret, headers, body) {
  */
 async function handleGoogleFormsIntake(req, res, body) {
   const { secretKey, supabaseUrl } = resolveCredentials();
-  if (!secretKey) {
+  if (!secretKey || !supabaseUrl) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials unavailable.' }));
+    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials or Supabase URL unavailable.' }));
   }
 
   // 1. Dual Authentication Gate (Automated Server-to-Server Webhook vs Authenticated Staff)

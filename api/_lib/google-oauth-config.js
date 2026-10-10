@@ -35,7 +35,7 @@ function resolveEnv() {
           const idx = trimmed.indexOf('=');
           const k = trimmed.slice(0, idx).trim();
           const v = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
-          if (!env[k]) env[k] = v;
+          if (process.env[k] === undefined) env[k] = v;
         }
       });
     }
@@ -118,9 +118,36 @@ function resolveGoogleOAuthConfig(req = null) {
  */
 function resolveSupabaseConfig() {
   const env = resolveEnv();
-  const supabaseUrl = (env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || 'https://logaawoigfxnisimfatf.supabase.co').replace(/\/+$/, '');
-  const secretKey = (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  const anonKey = (env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+
+  let rawUrl = '';
+  if (process.env.SUPABASE_URL !== undefined) {
+    rawUrl = process.env.SUPABASE_URL;
+  } else if (process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined) {
+    rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  } else {
+    rawUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
+  }
+  const supabaseUrl = rawUrl ? rawUrl.trim().replace(/\/+$/, '') : '';
+
+  let secretKey = '';
+  if (process.env.SUPABASE_SECRET_KEY !== undefined) {
+    secretKey = process.env.SUPABASE_SECRET_KEY;
+  } else if (process.env.SUPABASE_SERVICE_ROLE_KEY !== undefined) {
+    secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  } else {
+    secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '';
+  }
+  secretKey = secretKey.trim();
+
+  let anonKey = '';
+  if (process.env.SUPABASE_ANON_KEY !== undefined) {
+    anonKey = process.env.SUPABASE_ANON_KEY;
+  } else if (process.env.SUPABASE_PUBLISHABLE_KEY !== undefined) {
+    anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  } else {
+    anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '';
+  }
+  anonKey = anonKey.trim();
 
   return { supabaseUrl, secretKey, anonKey };
 }
@@ -249,7 +276,7 @@ async function authenticateCaller(req) {
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (!secretKey) {
+  if (!secretKey || !supabaseUrl) {
     if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
       return {
         authenticated: true,
@@ -258,7 +285,7 @@ async function authenticateCaller(req) {
         role: 'SUPER_ADMIN'
       };
     }
-    return { authenticated: false, error: 'CONFIGURATION_ERROR', message: 'Server secret configuration missing' };
+    return { authenticated: false, error: 'CONFIGURATION_ERROR', message: 'Server Supabase configuration missing' };
   }
 
   try {
@@ -333,7 +360,7 @@ async function createOAuthState({
   memoryStateStore.set(state, record);
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       await httpsRequest(`${supabaseUrl}/rest/v1/oauth_states`, {
         method: 'POST',
@@ -371,7 +398,7 @@ async function validateAndConsumeOAuthState(state) {
   }
 
   // Check Supabase DB in production
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       const patchRes = await httpsRequest(
         `${supabaseUrl}/rest/v1/oauth_states?state=eq.${encodeURIComponent(state)}&used_at=is.null&expires_at=gt.${encodeURIComponent(now.toISOString())}`,
@@ -527,7 +554,7 @@ async function refreshAccessToken({ refreshToken, tenantId = null, userId = null
   // Persist new token in Supabase
   if (tenantId) {
     const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-    if (secretKey) {
+    if (secretKey && supabaseUrl) {
       try {
         const queryFilter = connectionType === 'TENANT_CENTRAL'
           ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
@@ -750,7 +777,7 @@ async function updateCentralRootFolder({ tenantId, folderId, folderName }) {
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       await httpsRequest(
         `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`,
@@ -933,7 +960,7 @@ async function upsertGoogleDriveConnection({
   memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       if (connectionType === 'TENANT_CENTRAL') {
         // Upsert by tenant_id + connection_type
@@ -979,7 +1006,7 @@ async function getTenantCentralDriveConnection(tenantId) {
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       const res = await httpsRequest(
         `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL&status=eq.CONNECTED&select=*`,
@@ -1025,7 +1052,7 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
 
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       const query = connectionType === 'TENANT_CENTRAL'
         ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
@@ -1101,7 +1128,7 @@ async function disconnectGoogleDriveConnection({ tenantId, userId = null, connec
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       const query = connectionType === 'TENANT_CENTRAL'
         ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`

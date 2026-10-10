@@ -56,7 +56,7 @@ async function findMeeting({ meetingId, tenantId }) {
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       const query = `tenant_id=eq.${tenantId}&or=(id.eq.${encodeURIComponent(meetingId)},public_id.eq.${encodeURIComponent(meetingId)})&select=*`;
       const res = await httpsRequest(`${supabaseUrl}/rest/v1/meetings?${query}`, {
@@ -89,7 +89,7 @@ async function updateMeetingRecording({ meetingId, tenantId, status, metadata })
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
-  if (secretKey) {
+  if (secretKey && supabaseUrl) {
     try {
       await httpsRequest(
         `${supabaseUrl}/rest/v1/meetings?id=eq.${encodeURIComponent(meetingId)}&tenant_id=eq.${encodeURIComponent(tenantId)}`,
