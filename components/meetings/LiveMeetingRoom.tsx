@@ -31,7 +31,14 @@ interface LiveMeetingRoomProps {
   token: string;
   serverUrl: string;
   isHost: boolean;
-  currentUser: { id: string; name: string; role: string; email: string };
+  currentUser: {
+    id: string;
+    name: string;
+    role: string;
+    email: string;
+    guestRequestId?: string;
+    guestRequestToken?: string;
+  };
   onLeave: () => void;
   onEndMeeting?: () => Promise<void>;
 }
@@ -71,9 +78,222 @@ export function LiveMeetingRoom({
   ]);
   const [chatInput, setChatInput] = useState<string>('');
 
+  // Waiting Room state for external guests (Host only)
+  interface PendingGuestItem {
+    id: string;
+    guestName: string;
+    guestEmail: string;
+    guestOrganization?: string | null;
+    status: string;
+    requestedAt: string;
+  }
+  const [pendingGuests, setPendingGuests] = useState<PendingGuestItem[]>([]);
+  const [isDecidingGuestId, setIsDecidingGuestId] = useState<string | null>(null);
+
+  const [recordingStatus, setRecordingStatus] = useState<Meeting['recordingStatus']>(
+    meeting.recordingStatus || 'NOT_STARTED'
+  );
+  const [isRecordingBusy, setIsRecordingBusy] = useState<boolean>(false);
+  const [consentSessionData, setConsentSessionData] = useState<{
+    hasActiveSession?: boolean;
+    sessionId?: string;
+    status?: string;
+    canStartRecording?: boolean;
+    myConsent?: 'PENDING' | 'GRANTED' | 'DECLINED' | 'WITHDRAWN';
+    participants?: Array<{ participantId: string; participantName: string; status: string }>;
+  } | null>(null);
+  const [myConsent, setMyConsent] = useState<'PENDING' | 'GRANTED' | 'DECLINED' | 'WITHDRAWN' | null>(null);
+  const [isSubmittingConsent, setIsSubmittingConsent] = useState<boolean>(false);
+
+  const canRecord = Boolean(
+    isHost || ['Super Admin', 'Facilitator'].includes(currentUser.role)
+  );
+
   const activeRef = useRef<boolean>(true);
   const roomInstanceRef = useRef<Room | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Poll for Server-Confirmed Recording State and Consent Session
+  useEffect(() => {
+    let active = true;
+    const meetingKey = meeting.id || meeting.publicId;
+    const guestParam =
+      currentUser.guestRequestId && currentUser.guestRequestToken
+        ? `&requestId=${encodeURIComponent(currentUser.guestRequestId)}&requestToken=${encodeURIComponent(currentUser.guestRequestToken)}`
+        : '';
+
+    const checkStatus = async () => {
+      try {
+        const [recRes, consentRes] = await Promise.all([
+          fetch(`/api/meetings/recording/status?meetingId=${encodeURIComponent(meetingKey)}`),
+          fetch(`/api/meetings/recording/consent?meetingId=${encodeURIComponent(meetingKey)}${guestParam}`),
+        ]);
+
+        if (recRes.ok) {
+          const data = await recRes.json();
+          if (active && data.recordingStatus) {
+            setRecordingStatus(data.recordingStatus);
+          }
+        }
+
+        if (consentRes.ok) {
+          const consentData = await consentRes.json();
+          if (active) {
+            setConsentSessionData(consentData);
+            if (consentData.myConsent) {
+              setMyConsent(consentData.myConsent);
+            }
+          }
+        }
+      } catch {
+        // Ignore background polling errors
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 4000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [meeting.id, meeting.publicId, currentUser.guestRequestId, currentUser.guestRequestToken]);
+
+  // Handle participant recording consent submission (affirmative, decline, or withdrawal)
+  const handleConsentDecision = async (decision: 'GRANTED' | 'DECLINED' | 'WITHDRAWN') => {
+    const sessionId = consentSessionData?.sessionId;
+    if (!sessionId || isSubmittingConsent) return;
+
+    setIsSubmittingConsent(true);
+    try {
+      const payload: Record<string, any> = {
+        meetingId: meeting.id || meeting.publicId,
+        recordingSessionId: sessionId,
+        decision,
+      };
+      if (currentUser.guestRequestId && currentUser.guestRequestToken) {
+        payload.requestId = currentUser.guestRequestId;
+        payload.requestToken = currentUser.guestRequestToken;
+      }
+
+      const res = await fetch('/api/meetings/recording/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Consent error: ${data.message || data.error || 'Failed to update consent.'}`);
+        return;
+      }
+
+      setMyConsent(decision);
+      if (data.recordingStopped) {
+        setRecordingStatus('PROCESSING');
+      } else if (data.stopFailed) {
+        alert(`Consent withdrawal recorded, but LiveKit Egress termination encountered an error: ${data.stopError || data.warning || 'Termination pending'}. Facilitator alerted.`);
+      }
+
+      // Refresh consent status immediately
+      const guestParam =
+        currentUser.guestRequestId && currentUser.guestRequestToken
+          ? `&requestId=${encodeURIComponent(currentUser.guestRequestId)}&requestToken=${encodeURIComponent(currentUser.guestRequestToken)}`
+          : '';
+      const refreshRes = await fetch(`/api/meetings/recording/consent?meetingId=${encodeURIComponent(meeting.id || meeting.publicId)}${guestParam}`);
+      if (refreshRes.ok) {
+        const refreshed = await refreshRes.json();
+        setConsentSessionData(refreshed);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update consent';
+      alert(`Consent error: ${msg}`);
+    } finally {
+      setIsSubmittingConsent(false);
+    }
+  };
+
+  const handleToggleRecord = async () => {
+    if (isRecordingBusy) return;
+
+    if (recordingStatus === 'NOT_STARTED' || recordingStatus === 'FAILED') {
+      setIsRecordingBusy(true);
+      try {
+        // Step 1: Initiate or verify affirmative consent session on the server
+        const consentInitRes = await fetch('/api/meetings/recording/consent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meetingId: meeting.id || meeting.publicId,
+            action: 'INITIATE',
+          }),
+        });
+
+        const consentInit = await consentInitRes.json();
+        if (!consentInitRes.ok) {
+          alert(`Recording consent error: ${consentInit.message || consentInit.error || 'Failed to initiate consent session'}`);
+          return;
+        }
+
+        // Check if all participants have affirmatively consented
+        if (consentInit.status !== 'ALL_GRANTED') {
+          setConsentSessionData({
+            ...consentSessionData,
+            hasActiveSession: true,
+            sessionId: consentInit.sessionId,
+            status: consentInit.status,
+            participants: consentInit.requiredParticipants,
+          });
+          alert(
+            'Recording consent request initiated for all participants.\n\nRecording will only start once all active participants affirmatively consent. Participants who decline will remain in the meeting unrecorded.'
+          );
+          return;
+        }
+
+        // Step 2: All participants consented; invoke server to start LiveKit Egress
+        const res = await fetch('/api/meetings/recording/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meetingId: meeting.id || meeting.publicId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Recording start notice: ${data.message || data.error || 'Failed to start recording.'}`);
+          return;
+        }
+        setRecordingStatus('RECORDING');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to start recording';
+        alert(`Recording error: ${msg}`);
+      } finally {
+        setIsRecordingBusy(false);
+      }
+    } else if (recordingStatus === 'RECORDING') {
+      const confirmed = window.confirm(
+        'Stop recording this session?\n\nThe recording will be processed and uploaded to the organization Google Drive repository.'
+      );
+      if (!confirmed) return;
+
+      setIsRecordingBusy(true);
+      try {
+        const res = await fetch('/api/meetings/recording/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meetingId: meeting.id || meeting.publicId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Recording stop notice: ${data.message || data.error}`);
+          return;
+        }
+        setRecordingStatus('PROCESSING');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to stop recording';
+        alert(`Recording error: ${msg}`);
+      } finally {
+        setIsRecordingBusy(false);
+      }
+    }
+  };
 
   // Meeting Elapsed Timer
   useEffect(() => {
@@ -102,6 +322,53 @@ export function LiveMeetingRoom({
       setUnreadChatCount(0);
     }
   }, [activePanel]);
+
+  // Host Poll for Pending Waiting Room Guests
+  useEffect(() => {
+    if (!isHost) return;
+    let active = true;
+    const fetchGuests = async () => {
+      try {
+        const res = await fetch(`/api/meetings/guest/requests?publicId=${encodeURIComponent(meeting.publicId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (active && Array.isArray(data.requests)) {
+            setPendingGuests(data.requests.filter((r: PendingGuestItem) => r.status === 'PENDING'));
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    };
+    fetchGuests();
+    const interval = setInterval(fetchGuests, 4000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [isHost, meeting.publicId]);
+
+  const handleGuestDecision = async (requestId: string, decision: 'APPROVE' | 'REJECT' | 'REVOKE') => {
+    setIsDecidingGuestId(requestId);
+    try {
+      const res = await fetch('/api/meetings/guest/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId,
+          decision,
+          publicId: meeting.publicId,
+        }),
+      });
+      if (res.ok) {
+        setPendingGuests((prev) => prev.filter((g) => g.id !== requestId));
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setIsDecidingGuestId(null);
+    }
+  };
 
   // Connect to LiveKit Room
   useEffect(() => {
@@ -557,6 +824,173 @@ export function LiveMeetingRoom({
           </button>
         </div>
       </div>
+
+      {/* Pre-Recording Affirmative Consent Request Banner */}
+      {consentSessionData?.hasActiveSession &&
+        recordingStatus !== 'RECORDING' &&
+        myConsent === 'PENDING' && (
+          <div
+            style={{
+              background: '#1E293B',
+              borderBottom: '2px solid #38BDF8',
+              color: '#F8FAFC',
+              padding: '12px 24px',
+              fontSize: 13,
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              zIndex: 20,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 20 }}>🎙️</span>
+              <div>
+                <div style={{ fontWeight: 700, color: '#38BDF8', fontSize: 14 }}>
+                  Recording Consent Requested
+                </div>
+                <div style={{ fontSize: 12, color: '#CBD5E1' }}>
+                  A facilitator has requested to record this session and archive it to Google Drive.
+                  Recording will only start if all participants provide affirmative consent.
+                  If you decline, you remain in the meeting and recording will remain stopped.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                disabled={isSubmittingConsent}
+                onClick={() => handleConsentDecision('GRANTED')}
+                style={{
+                  background: '#16A34A',
+                  color: '#FFF',
+                  border: 'none',
+                  padding: '7px 16px',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: isSubmittingConsent ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isSubmittingConsent ? 'Saving...' : 'I Consent'}
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingConsent}
+                onClick={() => handleConsentDecision('DECLINED')}
+                style={{
+                  background: '#475569',
+                  color: '#FFF',
+                  border: '1px solid #64748B',
+                  padding: '7px 16px',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: isSubmittingConsent ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Decline (Remain in Meeting)
+              </button>
+            </div>
+          </div>
+        )}
+
+      {/* Participant Declined Banner */}
+      {consentSessionData?.hasActiveSession &&
+        myConsent === 'DECLINED' &&
+        recordingStatus !== 'RECORDING' && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              borderBottom: '1px solid #EF4444',
+              color: '#FCA5A5',
+              padding: '8px 24px',
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              zIndex: 20,
+            }}
+          >
+            <span>✋ You declined recording consent. You remain in this meeting; recording is stopped.</span>
+          </div>
+        )}
+
+      {/* Active Recording Banner with In-Session Consent Withdrawal */}
+      {recordingStatus === 'RECORDING' && (
+        <div
+          style={{
+            background: 'rgba(220, 38, 38, 0.25)',
+            borderBottom: '1px solid rgba(239, 68, 68, 0.6)',
+            color: '#FEE2E2',
+            padding: '8px 24px',
+            fontSize: 12,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+            zIndex: 15,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: '#EF4444' }}>🔴</span>
+            <span>
+              <strong>Recording in progress:</strong> Affirmative consent verified for all participants. Media is being archived to Google Drive.
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={isSubmittingConsent}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Withdraw your recording consent?\n\nThis will immediately halt the recording session for this meeting. You will remain in the meeting.'
+                )
+              ) {
+                handleConsentDecision('WITHDRAWN');
+              }
+            }}
+            style={{
+              background: '#991B1B',
+              border: '1px solid #DC2626',
+              color: '#FFF',
+              padding: '4px 12px',
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: isSubmittingConsent ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Withdraw Consent
+          </button>
+        </div>
+      )}
+
+      {/* Consent Withdrawn Notice */}
+      {consentSessionData?.status === 'WITHDRAWN' && recordingStatus !== 'RECORDING' && (
+        <div
+          style={{
+            background: 'rgba(245, 158, 11, 0.2)',
+            borderBottom: '1px solid #F59E0B',
+            color: '#FDE68A',
+            padding: '8px 24px',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            zIndex: 20,
+          }}
+        >
+          <span>⚠️ Recording stopped: A participant withdrew consent. Meeting continues unrecorded.</span>
+        </div>
+      )}
 
       {/* Hardware / Permission Warning Notice */}
       {deviceWarning && (
@@ -1027,6 +1461,90 @@ export function LiveMeetingRoom({
                 gap: 8,
               }}
             >
+              {/* Waiting Room Section for Host */}
+              {isHost && pendingGuests.length > 0 && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    background: 'rgba(234, 179, 8, 0.1)',
+                    borderRadius: 8,
+                    border: '1px solid #EAB308',
+                    marginBottom: 4,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: '#FACC15',
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <span>⏳ Waiting Room ({pendingGuests.length})</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {pendingGuests.map((g) => (
+                      <div
+                        key={g.id}
+                        style={{
+                          background: '#0F172A',
+                          padding: 8,
+                          borderRadius: 6,
+                          border: '1px solid #334155',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#FFF' }}>{g.guestName}</div>
+                        <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                          {g.guestEmail}
+                          {g.guestOrganization ? ` • ${g.guestOrganization}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                          <button
+                            type="button"
+                            disabled={isDecidingGuestId === g.id}
+                            onClick={() => handleGuestDecision(g.id, 'APPROVE')}
+                            style={{
+                              flex: 1,
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: '#16A34A',
+                              color: '#FFF',
+                              border: 'none',
+                              borderRadius: 4,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Admit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDecidingGuestId === g.id}
+                            onClick={() => handleGuestDecision(g.id, 'REJECT')}
+                            style={{
+                              flex: 1,
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: '#DC2626',
+                              color: '#FFF',
+                              border: 'none',
+                              borderRadius: 4,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Local Participant Entry */}
               <div
                 style={{
@@ -1154,6 +1672,10 @@ export function LiveMeetingRoom({
       <MeetingControls
         room={room}
         isHost={isHost}
+        canRecord={canRecord}
+        recordingStatus={recordingStatus}
+        isRecordingBusy={isRecordingBusy}
+        onToggleRecord={handleToggleRecord}
         isMicOn={isMicOn}
         isCamOn={isCamOn}
         isScreenSharing={isScreenSharing}

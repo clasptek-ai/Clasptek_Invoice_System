@@ -8,8 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import { createServerClient } from '@/lib/supabase/server';
-import { uploadRecordingToDrive, generateRecordingFileName } from '@/lib/meetings/google-drive';
-import { getMeetingById, updateMeetingRecordingMetadata } from '@/lib/meetings/queries';
+import { generateRecordingFileName } from '@/lib/meetings/google-drive';
+import { getMeetingById } from '@/lib/meetings/queries';
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
-    } else if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+    } else if (session.role !== 'Super Admin') {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions to upload recordings.' },
         { status: 403 }
@@ -96,13 +96,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Convert base64 file data or generate binary simulation buffer
-    let fileBuffer: Buffer;
-    if (fileData) {
-      fileBuffer = Buffer.from(fileData, 'base64');
-    } else {
-      fileBuffer = Buffer.from('CLASPTEK_RECORDING_BINARY_STREAM_SIMULATION');
+    // Validate required fileData (base64 encoded recording video)
+    if (!fileData || typeof fileData !== 'string') {
+      return NextResponse.json(
+        { error: 'INVALID_RECORDING_PAYLOAD: fileData (base64 encoded video) is required for recording upload.' },
+        { status: 400 }
+      );
     }
+
+    const fileBuffer = Buffer.from(fileData, 'base64');
 
     const resolvedFileName =
       fileName ||
@@ -112,35 +114,28 @@ export async function POST(req: NextRequest) {
         scheduledStart: meeting.scheduledStart,
       });
 
-    // Perform upload to Google Drive Central Repository
-    let recordingMeta;
-    try {
-      recordingMeta = await uploadRecordingToDrive({
-        meetingId: meeting.id,
-        meetingPublicId: meeting.publicId,
-        tenantId: meeting.tenantId,
-        fileName: resolvedFileName,
-        fileBuffer,
-        durationSeconds: Number(durationSeconds) || 0,
-      });
-    } catch (uploadErr: unknown) {
-      const errMsg = uploadErr instanceof Error ? uploadErr.message : 'Google Drive upload failed';
-      await updateMeetingRecordingMetadata(meeting.id, 'FAILED', { error: errMsg });
-      return NextResponse.json({ error: 'UPLOAD_FAILED', message: errMsg }, { status: 502 });
-    }
-
-    // Persist recording metadata to PostgreSQL
-    const updateRes = await updateMeetingRecordingMetadata(meeting.id, 'STORED', recordingMeta);
-    if (!updateRes.success) {
-      return NextResponse.json({ error: updateRes.error || 'Failed to persist recording metadata' }, { status: 500 });
-    }
+    // Perform upload to Google Drive Central Repository with safe retry handling
+    const { uploadRecordingWithRetry } = await import('@/lib/meetings/recording-service');
+    const result = await uploadRecordingWithRetry({
+      meetingId: meeting.id,
+      session,
+      fileName: resolvedFileName,
+      fileBuffer,
+      durationSeconds: Number(durationSeconds) || 0,
+      maxRetries: 3,
+    });
 
     return NextResponse.json({
       success: true,
-      recording: recordingMeta,
-      status: 'STORED',
+      recording: result.metadata,
+      status: result.status,
+      alreadyStored: result.alreadyStored || false,
     });
   } catch (err: unknown) {
+    const { RecordingServiceError } = await import('@/lib/meetings/recording-service').catch(() => ({ RecordingServiceError: null }));
+    if (RecordingServiceError && err instanceof RecordingServiceError) {
+      return NextResponse.json({ error: err.code, message: err.message }, { status: err.statusCode });
+    }
     const msg = err instanceof Error ? err.message : 'Internal Server Error';
     return NextResponse.json({ error: msg }, { status: 500 });
   }

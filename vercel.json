@@ -2,6 +2,12 @@
   "version": 2,
   "buildCommand": "npm run build",
   "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/cron/reconcile-recordings",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/admin/provision-user", "destination": "/api/admin?action=provision-user" },
     { "source": "/api/admin/delete-personnel", "destination": "/api/admin?action=delete-personnel" },

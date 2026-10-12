@@ -131,6 +131,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message });
     }
 
+    if (action === 'START_RECORDING') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const { startMeetingRecording, RecordingServiceError } = await import('@/lib/meetings/recording-service');
+      try {
+        const res = await startMeetingRecording({ meetingId, session });
+        return NextResponse.json({ action: 'START_RECORDING', ...res });
+      } catch (err: unknown) {
+        if (err instanceof RecordingServiceError) {
+          return NextResponse.json({ error: err.code, message: err.message }, { status: err.statusCode });
+        }
+        throw err;
+      }
+    }
+
+    if (action === 'STOP_RECORDING') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const { stopMeetingRecording, RecordingServiceError } = await import('@/lib/meetings/recording-service');
+      try {
+        const res = await stopMeetingRecording({ meetingId, session });
+        return NextResponse.json({ action: 'STOP_RECORDING', ...res });
+      } catch (err: unknown) {
+        if (err instanceof RecordingServiceError) {
+          return NextResponse.json({ error: err.code, message: err.message }, { status: err.statusCode });
+        }
+        throw err;
+      }
+    }
+
+    if (action === 'RECORDING_STATUS') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const { getMeetingRecordingStatus, RecordingServiceError } = await import('@/lib/meetings/recording-service');
+      try {
+        const res = await getMeetingRecordingStatus({ meetingId, session });
+        return NextResponse.json({ success: true, action: 'RECORDING_STATUS', ...res });
+      } catch (err: unknown) {
+        if (err instanceof RecordingServiceError) {
+          return NextResponse.json({ error: err.code, message: err.message }, { status: err.statusCode });
+        }
+        throw err;
+      }
+    }
+
+    if (action === 'RECONCILE_RECORDING') {
+      if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
+      const { reconcileMeetingRecording, RecordingServiceError } = await import('@/lib/meetings/recording-service');
+      try {
+        const res = await reconcileMeetingRecording({ meetingId, session });
+        return NextResponse.json({ action: 'RECONCILE_RECORDING', ...res });
+      } catch (err: unknown) {
+        if (err instanceof RecordingServiceError) {
+          return NextResponse.json({ error: err.code, message: err.message }, { status: err.statusCode });
+        }
+        throw err;
+      }
+    }
+
     return NextResponse.json({ success: true, action });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal Server Error';

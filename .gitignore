@@ -11,6 +11,10 @@ Thumbs.db
 # Environment / scratch files
 .env
 .env.local
+.env.staging
+.env.staging.local
+.env*.local
+.env.*.local
 scratch/
 *.backup.html
 

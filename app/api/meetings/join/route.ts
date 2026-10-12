@@ -171,6 +171,42 @@ export async function POST(req: NextRequest) {
       await updateMeetingStatus(meeting.id, 'LIVE');
     }
 
+    // Google Meet Provider branch: direct to saved Google Meet URL, zero LiveKit token issuance
+    if (meeting.sfuProvider === 'google_meet') {
+      const meetUrl = meeting.providerRoomUrl;
+      if (!meetUrl) {
+        return NextResponse.json(
+          {
+            error: 'GOOGLE_MEET_URL_MISSING',
+            message: 'The Google Meet link for this meeting has not been configured or is missing.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const { isValidGoogleMeetUrl } = await import('@/lib/meetings/google-meet');
+      if (!isValidGoogleMeetUrl(meetUrl)) {
+        return NextResponse.json(
+          {
+            error: 'INVALID_GOOGLE_MEET_URL',
+            message: 'The saved Google Meet URL is not a valid Google Meet link.',
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        provider: 'google_meet',
+        sfuProvider: 'google_meet',
+        redirectUrl: meetUrl,
+        meetingUrl: meetUrl,
+        isHost,
+        role: participantRole,
+        meeting,
+      });
+    }
+
     const sfu = getSFUService();
     const authName =
       (session.user.user_metadata?.full_name as string) ||
@@ -178,12 +214,31 @@ export async function POST(req: NextRequest) {
       session.user.email;
     const pName = authName || 'Participant';
 
+    // Register active participant and synchronize consent restrictions
+    let canPublish = true;
+    let requiresConsent = false;
+    try {
+      const { registerMeetingParticipant } = await import('@/lib/meetings/recording-service');
+      const regRes = await registerMeetingParticipant({
+        meetingId: meeting.id,
+        participantId: session.user.id,
+        participantName: pName,
+        role: participantRole,
+        session,
+      });
+      canPublish = regRes.canPublish;
+      requiresConsent = regRes.requiresConsent;
+    } catch (_) {
+      // Safe fallback
+    }
+
     const tokenResult = await sfu.generateParticipantToken({
       roomId: meeting.publicId,
       participantId: session.user.id,
       participantName: pName,
       isHost,
       role: participantRole,
+      canPublish,
     });
 
     return NextResponse.json({
@@ -193,6 +248,8 @@ export async function POST(req: NextRequest) {
       participantName: pName,
       role: participantRole,
       isHost,
+      canPublish,
+      requiresConsent,
       sfuProvider: 'livekit',
       token: tokenResult.token,
       serverUrl: tokenResult.serverUrl,

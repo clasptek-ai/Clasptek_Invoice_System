@@ -18,6 +18,7 @@ import {
   type RecordDependencyItem,
 } from '@/components/tables/RecordLifecycleModal';
 import { LiveMeetingRoom } from '@/components/meetings/LiveMeetingRoom';
+import { ShareMeetingModal } from '@/components/meetings/ShareMeetingModal';
 
 interface MeetingsPageClientProps {
   initialMeetings: Meeting[];
@@ -52,6 +53,7 @@ export function MeetingsPageClient({
   // Modals state
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [watchModalMeeting, setWatchModalMeeting] = useState<Meeting | null>(null);
+  const [shareModalMeeting, setShareModalMeeting] = useState<Meeting | null>(null);
   const [activeLiveMeeting, setActiveLiveMeeting] = useState<Meeting | null>(null);
 
   // Live meeting session state
@@ -77,6 +79,8 @@ export function MeetingsPageClient({
     scheduledStart: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
     scheduledEnd: new Date(Date.now() + 3600000 * 3).toISOString().slice(0, 16),
     participantAccess: 'COHORT_ONLY',
+    provider: 'livekit' as 'livekit' | 'google_meet',
+    customGoogleMeetUrl: '',
     allowChat: true,
     allowScreenShare: true,
     muteOnEntry: false,
@@ -293,6 +297,8 @@ export function MeetingsPageClient({
           scheduledStart: new Date(meetingForm.scheduledStart).toISOString(),
           scheduledEnd: new Date(meetingForm.scheduledEnd).toISOString(),
           participantAccess: meetingForm.participantAccess,
+          provider: meetingForm.provider,
+          customGoogleMeetUrl: meetingForm.customGoogleMeetUrl.trim() || undefined,
           settings: {
             allowChat: meetingForm.allowChat,
             allowScreenShare: meetingForm.allowScreenShare,
@@ -303,7 +309,7 @@ export function MeetingsPageClient({
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Failed to schedule meeting');
+        alert(data.message || data.error || 'Failed to schedule meeting');
         return;
       }
 
@@ -333,6 +339,11 @@ export function MeetingsPageClient({
       const data = await res.json();
       if (!res.ok) {
         alert(data.message || data.error || 'Failed to join meeting');
+        return;
+      }
+
+      if (data.redirectUrl) {
+        window.open(data.redirectUrl, '_blank', 'noopener,noreferrer');
         return;
       }
 
@@ -478,7 +489,7 @@ export function MeetingsPageClient({
             Native browser video meeting rooms for Clasptek live classrooms, cohort lectures, and facilitator sessions.
           </div>
         </div>
-        {currentUser.role !== 'Facilitator' && (
+        {['Super Admin', 'Finance Manager', 'Facilitator'].includes(currentUser.role) && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="cp-btn primary"
@@ -847,8 +858,23 @@ export function MeetingsPageClient({
                         />
                       </td>
                       <td>
-                        <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 13.5 }}>
-                          {m.title}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 13.5 }}>
+                            {m.title}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 10,
+                              background: m.sfuProvider === 'google_meet' ? '#fef3c7' : '#dbeafe',
+                              color: m.sfuProvider === 'google_meet' ? '#b45309' : '#1d4ed8',
+                              border: `1px solid ${m.sfuProvider === 'google_meet' ? '#fcd34d' : '#bfdbfe'}`,
+                            }}
+                          >
+                            {m.sfuProvider === 'google_meet' ? 'Google Meet' : 'LiveKit'}
+                          </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                           {m.programmeName || 'Academic Course'}
@@ -910,6 +936,14 @@ export function MeetingsPageClient({
                               Summary
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className="cp-btn sm secondary"
+                            onClick={() => setShareModalMeeting(m)}
+                            title="Share Meeting Invitation (Link, WhatsApp, Email)"
+                          >
+                            🔗 Share
+                          </button>
                           {currentUser.role !== 'Facilitator' && (
                             <button
                               type="button"
@@ -971,8 +1005,22 @@ export function MeetingsPageClient({
                           style={{ cursor: 'pointer' }}
                         />
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--primary)' }}>
-                            {m.title}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--primary)' }}>
+                              {m.title}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: '1px 5px',
+                                borderRadius: 8,
+                                background: m.sfuProvider === 'google_meet' ? '#fef3c7' : '#dbeafe',
+                                color: m.sfuProvider === 'google_meet' ? '#b45309' : '#1d4ed8',
+                              }}
+                            >
+                              {m.sfuProvider === 'google_meet' ? 'Meet' : 'LiveKit'}
+                            </span>
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                             {m.programmeName || 'Academic Course'}
@@ -1042,6 +1090,17 @@ export function MeetingsPageClient({
                           ▶ Watch Recording
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={(evt) => {
+                          evt.stopPropagation();
+                          setShareModalMeeting(m);
+                        }}
+                        style={{ padding: '6px 12px' }}
+                      >
+                        🔗 Share
+                      </button>
                       {currentUser.role !== 'Facilitator' && (
                         <button
                           type="button"
@@ -1101,6 +1160,83 @@ export function MeetingsPageClient({
                     onChange={(e) => setMeetingForm((p) => ({ ...p, title: e.target.value }))}
                   />
                 </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                    Meeting Platform <span style={{ color: 'red' }}>*</span>
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        border: meetingForm.provider === 'livekit' ? '2px solid #2563eb' : '1px solid var(--border, #cbd5e1)',
+                        background: meetingForm.provider === 'livekit' ? 'rgba(37, 99, 235, 0.05)' : 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="meetingProvider"
+                        value="livekit"
+                        checked={meetingForm.provider === 'livekit'}
+                        onChange={() => setMeetingForm((p) => ({ ...p, provider: 'livekit' }))}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>Clasptek Live Meeting</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted, #64748b)' }}>Native LiveKit (Default)</div>
+                      </div>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        border: meetingForm.provider === 'google_meet' ? '2px solid #2563eb' : '1px solid var(--border, #cbd5e1)',
+                        background: meetingForm.provider === 'google_meet' ? 'rgba(37, 99, 235, 0.05)' : 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="meetingProvider"
+                        value="google_meet"
+                        checked={meetingForm.provider === 'google_meet'}
+                        onChange={() => setMeetingForm((p) => ({ ...p, provider: 'google_meet' }))}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>Google Meet</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted, #64748b)' }}>Externally hosted</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {meetingForm.provider === 'google_meet' && (
+                  <div style={{ padding: 12, background: 'var(--surface-header, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                      Custom Google Meet URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      className="cp-input"
+                      placeholder="https://meet.google.com/xxx-yyyy-zzz (or leave blank to generate via Calendar)"
+                      value={meetingForm.customGoogleMeetUrl}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, customGoogleMeetUrl: e.target.value }))}
+                    />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted, #64748b)', marginTop: 4 }}>
+                      Leave blank to auto-create via Google Calendar, or paste an existing verified Google Meet link.
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
@@ -1344,6 +1480,14 @@ export function MeetingsPageClient({
         onClose={() => setLifecycleModal((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={handleConfirmDelete}
       />
+
+      {/* Share Meeting Invitation Modal (Direct Link, WhatsApp, Email) */}
+      {shareModalMeeting && (
+        <ShareMeetingModal
+          meeting={shareModalMeeting}
+          onClose={() => setShareModalMeeting(null)}
+        />
+      )}
     </div>
   );
 }

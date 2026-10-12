@@ -11,6 +11,7 @@ import { getAuthoritativeSession } from '@/lib/auth/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { getSFUService } from '@/lib/meetings/sfu';
 import { saveMeetingRecord } from '@/lib/meetings/queries';
+import { createOrValidateGoogleMeet, GoogleMeetError } from '@/lib/meetings/google-meet';
 import type { Meeting } from '@/types/meetings';
 
 function generatePublicId(): string {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
-    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Facilitator'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions to schedule meetings.' },
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
       scheduledEnd,
       participantAccess = 'COHORT_ONLY',
       settings = {},
+      provider = 'livekit',
+      customGoogleMeetUrl,
+      googleMeetUrl,
     } = body;
 
     if (!title || !title.trim()) {
@@ -78,7 +82,22 @@ export async function POST(req: NextRequest) {
 
     // Validate facilitator ID (must be a valid personnel.id for this tenant, NEVER an auth UUID)
     let validatedFacilitatorId: string | null = null;
-    if (facilitatorId && typeof facilitatorId === 'string' && facilitatorId.trim()) {
+    if (session.role === 'Facilitator') {
+      const { data: pers } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (!pers) {
+        return NextResponse.json(
+          { error: 'INVALID_FACILITATOR', message: 'No authoritative personnel profile found for this facilitator.' },
+          { status: 403 }
+        );
+      }
+      validatedFacilitatorId = pers.id;
+    } else if (facilitatorId && typeof facilitatorId === 'string' && facilitatorId.trim()) {
       const cleanFacilitatorId = facilitatorId.trim();
       const { data: pers } = await supabase
         .from('personnel')
@@ -139,27 +158,65 @@ export async function POST(req: NextRequest) {
     const meetingId = generateMeetingId();
     const publicId = generatePublicId();
 
-    const sfu = getSFUService();
-    let sfuRoomResult;
-    try {
-      sfuRoomResult = await sfu.createRoom({
-        roomId: publicId,
-        roomTitle: title.trim(),
-        settings: {
-          emptyTimeout: 300,
-          maxParticipants: 100,
-        },
-      });
-    } catch (sfuErr: unknown) {
-      const msg = sfuErr instanceof Error ? sfuErr.message : 'SFU Room creation failed';
-      return NextResponse.json(
-        {
-          error: 'Meeting unavailable',
-          message: 'The video meeting service is temporarily unavailable. Please try again shortly.',
-          detail: msg,
-        },
-        { status: 502 }
-      );
+    const selectedProvider = String(provider || 'livekit').toLowerCase() === 'google_meet' ? 'google_meet' : 'livekit';
+    let sfuRoomResult = null;
+    let providerRoomUrl: string | null = null;
+    let sfuRoomId: string = publicId;
+
+    if (selectedProvider === 'google_meet') {
+      try {
+        const meetRes = await createOrValidateGoogleMeet({
+          tenantId,
+          title: title.trim(),
+          description: description ? description.trim() : null,
+          scheduledStart: startIso,
+          scheduledEnd: endIso,
+          customGoogleMeetUrl: customGoogleMeetUrl || googleMeetUrl || null,
+        });
+        providerRoomUrl = meetRes.meetUrl;
+        sfuRoomId = meetRes.meetUrl;
+      } catch (meetErr: unknown) {
+        if (meetErr instanceof GoogleMeetError) {
+          return NextResponse.json(
+            {
+              error: meetErr.code,
+              message: meetErr.message,
+            },
+            { status: meetErr.statusCode }
+          );
+        }
+        const msg = meetErr instanceof Error ? meetErr.message : 'Google Meet conference creation failed';
+        return NextResponse.json(
+          {
+            error: 'GOOGLE_MEET_CREATION_FAILED',
+            message: msg,
+          },
+          { status: 502 }
+        );
+      }
+    } else {
+      const sfu = getSFUService();
+      try {
+        sfuRoomResult = await sfu.createRoom({
+          roomId: publicId,
+          roomTitle: title.trim(),
+          settings: {
+            emptyTimeout: 300,
+            maxParticipants: 100,
+          },
+        });
+        providerRoomUrl = process.env.LIVEKIT_URL || null;
+      } catch (sfuErr: unknown) {
+        const msg = sfuErr instanceof Error ? sfuErr.message : 'SFU Room creation failed';
+        return NextResponse.json(
+          {
+            error: 'Meeting unavailable',
+            message: 'The video meeting service is temporarily unavailable. Please try again shortly.',
+            detail: msg,
+          },
+          { status: 502 }
+        );
+      }
     }
 
     const meetingRecord: Meeting = {
@@ -180,8 +237,9 @@ export async function POST(req: NextRequest) {
       participantAccess: ['COHORT_ONLY', 'ALL_STUDENTS', 'PUBLIC_TOKEN'].includes(participantAccess)
         ? participantAccess
         : 'COHORT_ONLY',
-      sfuProvider: 'livekit',
-      sfuRoomId: publicId,
+      sfuProvider: selectedProvider,
+      sfuRoomId,
+      providerRoomUrl,
       settings: {
         allowChat: settings.allowChat !== false,
         allowScreenShare: settings.allowScreenShare !== false,
@@ -203,7 +261,9 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         meeting: meetingRecord,
-        publicUrl: `/meet/${publicId}`,
+        provider: selectedProvider,
+        publicUrl: selectedProvider === 'google_meet' ? providerRoomUrl : `/meet/${publicId}`,
+        meetUrl: providerRoomUrl,
         sfuRoom: sfuRoomResult,
       },
       { status: 201 }

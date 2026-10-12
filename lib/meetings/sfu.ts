@@ -85,9 +85,12 @@ export class LiveKitService {
     participantName: string;
     isHost?: boolean;
     role?: string;
+    ttlSeconds?: number;
+    canPublish?: boolean;
   }): Promise<ParticipantTokenResult> {
     const now = Math.floor(Date.now() / 1000);
-    const ttlSeconds = 6 * 60 * 60; // 6 hours
+    const isGuest = params.role === 'GUEST';
+    const ttlSeconds = params.ttlSeconds || (isGuest ? 2 * 60 * 60 : 6 * 60 * 60);
 
     const header = { alg: 'HS256', typ: 'JWT' };
     const payload = {
@@ -99,15 +102,15 @@ export class LiveKitService {
       video: {
         room: params.roomId,
         roomJoin: true,
-        canPublish: true,
+        canPublish: params.canPublish === false ? false : true, // canPublish: true
         canSubscribe: true,
         canPublishData: true,
-        roomAdmin: Boolean(params.isHost),
-        roomCreate: Boolean(params.isHost),
+        roomAdmin: Boolean(params.isHost) && !isGuest,
+        roomCreate: Boolean(params.isHost) && !isGuest,
       },
       metadata: JSON.stringify({
-        role: params.role || 'STUDENT',
-        isHost: Boolean(params.isHost),
+        role: params.role || (isGuest ? 'GUEST' : 'STUDENT'),
+        isHost: Boolean(params.isHost) && !isGuest,
         displayName: params.participantName,
       }),
     };

@@ -13,6 +13,10 @@ import type { Room } from 'livekit-client';
 interface MeetingControlsProps {
   room: Room | null;
   isHost: boolean;
+  canRecord?: boolean;
+  recordingStatus?: 'NOT_STARTED' | 'RECORDING' | 'PROCESSING' | 'STORED' | 'FAILED';
+  isRecordingBusy?: boolean;
+  onToggleRecord?: () => Promise<void>;
   isMicOn: boolean;
   isCamOn: boolean;
   isScreenSharing: boolean;
@@ -33,6 +37,10 @@ interface MeetingControlsProps {
 export function MeetingControls({
   room,
   isHost,
+  canRecord = false,
+  recordingStatus = 'NOT_STARTED',
+  isRecordingBusy = false,
+  onToggleRecord,
   isMicOn,
   isCamOn,
   isScreenSharing,
@@ -115,24 +123,129 @@ export function MeetingControls({
         zIndex: 10,
       }}
     >
-      {/* Left: Connection State Badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: connColor,
-            boxShadow: `0 0 8px ${connColor}`,
-          }}
-        />
-        <span style={{ fontSize: 12, color: '#94A3B8', textTransform: 'capitalize' }}>
-          {connectionState}
-        </span>
+      {/* Left: Connection State Badge & Recording Badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: connColor,
+              boxShadow: `0 0 8px ${connColor}`,
+            }}
+          />
+          <span style={{ fontSize: 12, color: '#94A3B8', textTransform: 'capitalize' }}>
+            {connectionState}
+          </span>
+        </div>
+
+        {recordingStatus === 'RECORDING' && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(220, 38, 38, 0.2)',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+            title="Classroom session is actively being recorded to Google Drive"
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: '#EF4444',
+                boxShadow: '0 0 6px #EF4444',
+              }}
+            />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#FCA5A5' }}>
+              REC
+            </span>
+          </div>
+        )}
+
+        {recordingStatus === 'PROCESSING' && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(245, 158, 11, 0.2)',
+              border: '1px solid rgba(245, 158, 11, 0.5)',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+            title="Recording is processing and uploading to Google Drive"
+          >
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#FCD34D' }}>
+              SAVING REC...
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Center: Primary Media & Meeting Controls Dock */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Record Button (Host/Admin/Facilitator Only) */}
+        {canRecord && onToggleRecord && (
+          <button
+            type="button"
+            className="cp-btn sm"
+            disabled={!room || isRecordingBusy || recordingStatus === 'PROCESSING'}
+            onClick={onToggleRecord}
+            style={{
+              minWidth: 110,
+              background: recordingStatus === 'RECORDING' ? '#DC2626' : '#1E293B',
+              color: '#FFF',
+              border: recordingStatus === 'RECORDING' ? '1px solid #EF4444' : '1px solid #334155',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '8px 14px',
+              borderRadius: 8,
+              cursor: isRecordingBusy || recordingStatus === 'PROCESSING' ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s',
+            }}
+            title={recordingStatus === 'RECORDING' ? 'Stop Classroom Recording' : 'Start Classroom Recording (LiveKit → Google Drive)'}
+          >
+            {recordingStatus === 'RECORDING' ? (
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 2,
+                  background: '#FFF',
+                  display: 'inline-block',
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: '#EF4444',
+                  display: 'inline-block',
+                }}
+              />
+            )}
+            <span>
+              {isRecordingBusy
+                ? 'Processing...'
+                : recordingStatus === 'RECORDING'
+                ? 'Stop Rec'
+                : recordingStatus === 'PROCESSING'
+                ? 'Processing...'
+                : 'Record'}
+            </span>
+          </button>
+        )}
+
         {/* Microphone Toggle */}
         <button
           className="cp-btn sm"

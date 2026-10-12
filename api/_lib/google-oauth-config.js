@@ -51,10 +51,11 @@ function resolveGoogleDriveRootFolderId() {
   return (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim() || null;
 }
 
-// Least-privileged scope: drive.file + userinfo.email
+// Scopes: drive.file (recordings) + userinfo.email (identity) + calendar.events (Google Meet)
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/userinfo.email'
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/calendar.events'
 ];
 
 /**
@@ -502,7 +503,10 @@ async function exchangeAuthorizationCode({ code, redirectUri }) {
 /**
  * Refresh OAuth Access Token using Stored Refresh Token
  */
-async function refreshAccessToken({ refreshToken, tenantId = null, userId = null, connectionType = 'TENANT_CENTRAL' }) {
+async function refreshAccessToken(args) {
+  const options = typeof args === 'string' ? { refreshToken: args } : (args || {});
+  const { refreshToken, tenantId = null, userId = null, connectionType = 'TENANT_CENTRAL' } = options;
+
   if (!refreshToken) {
     throw new Error('GOOGLE_TOKEN_REFRESH_FAILED: Missing refresh token.');
   }
@@ -526,7 +530,12 @@ async function refreshAccessToken({ refreshToken, tenantId = null, userId = null
         memoryConnectionStore.set(cacheKey, cached);
       }
     }
-    return { accessToken: newAccessToken, expiresIn };
+    return {
+      accessToken: newAccessToken,
+      access_token: newAccessToken,
+      expiresIn,
+      expires_in: expiresIn
+    };
   }
 
   const config = resolveGoogleOAuthConfig();
@@ -575,7 +584,12 @@ async function refreshAccessToken({ refreshToken, tenantId = null, userId = null
     }
   }
 
-  return { accessToken: newAccessToken, expiresIn };
+  return {
+    accessToken: newAccessToken,
+    access_token: newAccessToken,
+    expiresIn,
+    expires_in: expiresIn
+  };
 }
 
 /**
@@ -801,17 +815,152 @@ async function updateCentralRootFolder({ tenantId, folderId, folderName }) {
 
 let _testUploadFailure = false;
 let _testUploadFailureMessage = '';
+let _testUploadTimeoutAfterCreate = false;
+const _memoryDriveFiles = new Map();
 
 function setTestUploadFailure(fail, msg) {
   _testUploadFailure = Boolean(fail);
   _testUploadFailureMessage = msg || 'Simulated Google Drive Upload Failure';
 }
 
+function setTestUploadTimeoutAfterCreate(enabled) {
+  _testUploadTimeoutAfterCreate = Boolean(enabled);
+}
+
+/**
+ * Searches authoritative folder for an existing file with matching stable identifier.
+ * Used for idempotent upload recovery (e.g. if previous upload succeeded but response timed out).
+ * Enforces:
+ * - Exact meeting identity in properties / appProperties (filename alone is strictly prohibited)
+ * - Exact tenant isolation boundary
+ * - Ambiguity rejection: if multiple files match, throws AMBIGUOUS_DRIVE_CANDIDATES
+ * - Legacy files without metadata are never adopted
+ */
+async function findExistingDriveFile({ folderId, meetingId, tenantId = null, recordingId = null, fileName = null, accessToken = null }) {
+  if (!folderId || !meetingId) return null;
+
+  // Test mode in-memory lookup
+  if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
+    const matches = [];
+    for (const f of _memoryDriveFiles.values()) {
+      if (!f.parents || !f.parents.includes(folderId) || f.trashed) continue;
+
+      const fileMeetingId = f.properties?.clasptek_meeting_id || f.appProperties?.clasptek_meeting_id;
+      if (!fileMeetingId || fileMeetingId !== meetingId) continue;
+
+      if (tenantId) {
+        const fileTenantId = f.properties?.clasptek_tenant_id || f.appProperties?.clasptek_tenant_id;
+        if (fileTenantId && fileTenantId !== tenantId) continue;
+      }
+
+      if (recordingId) {
+        const fileRecId = f.properties?.clasptek_recording_id || f.appProperties?.clasptek_recording_id;
+        if (fileRecId && fileRecId !== recordingId) continue;
+      }
+
+      matches.push(f);
+    }
+
+    if (matches.length > 1) {
+      throw new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${matches.length}) match meeting identifier '${meetingId}'. Refusing ambiguous adoption.`);
+    }
+
+    if (matches.length === 1) {
+      const f = matches[0];
+      return {
+        fileId: f.id || f.fileId,
+        fileName: f.name || f.fileName,
+        folderId,
+        parents: f.parents,
+        webViewUrl: f.webViewUrl || f.webViewLink || `https://drive.google.com/file/d/${f.id || f.fileId}/view`,
+        size: f.size || 1048576,
+        uploadedAt: f.uploadedAt || f.createdTime || new Date().toISOString(),
+        properties: f.properties || {},
+        appProperties: f.appProperties || {}
+      };
+    }
+    return null;
+  }
+
+  const config = resolveGoogleOAuthConfig();
+  const safeMeetingId = (meetingId || '').replace(/['\\]/g, '');
+  const safeFolderId = folderId.replace(/['\\]/g, '');
+
+  // Exact metadata search: search specifically by clasptek_meeting_id; do NOT search by filename alone
+  const q = `'${safeFolderId}' in parents and trashed = false and (properties has { key='clasptek_meeting_id' and value='${safeMeetingId}' } or appProperties has { key='clasptek_meeting_id' and value='${safeMeetingId}' })`;
+
+  const searchUrl = `${config.driveApiBase}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,parents,size,webViewLink,properties,appProperties,trashed,createdTime)&pageSize=20`;
+
+  try {
+    const res = await httpsRequest(searchUrl, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (res.status === 200 && res.body && Array.isArray(res.body.files) && res.body.files.length > 0) {
+      const verifiedMatches = [];
+      for (const f of res.body.files) {
+        if (!f.parents || !f.parents.includes(folderId) || f.trashed) continue;
+
+        const fileMeetingId = f.properties?.clasptek_meeting_id || f.appProperties?.clasptek_meeting_id;
+        if (!fileMeetingId || fileMeetingId !== meetingId) continue;
+
+        if (tenantId) {
+          const fileTenantId = f.properties?.clasptek_tenant_id || f.appProperties?.clasptek_tenant_id;
+          if (fileTenantId && fileTenantId !== tenantId) continue;
+        }
+
+        if (recordingId) {
+          const fileRecId = f.properties?.clasptek_recording_id || f.appProperties?.clasptek_recording_id;
+          if (fileRecId && fileRecId !== recordingId) continue;
+        }
+
+        verifiedMatches.push(f);
+      }
+
+      if (verifiedMatches.length > 1) {
+        throw new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${verifiedMatches.length}) match meeting identifier '${meetingId}'. Refusing ambiguous adoption.`);
+      }
+
+      if (verifiedMatches.length === 1) {
+        const f = verifiedMatches[0];
+        return {
+          fileId: f.id,
+          fileName: f.name,
+          folderId,
+          parents: f.parents,
+          webViewUrl: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
+          size: Number(f.size) || 0,
+          uploadedAt: f.createdTime || new Date().toISOString(),
+          properties: f.properties || {},
+          appProperties: f.appProperties || {}
+        };
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('AMBIGUOUS_DRIVE_CANDIDATES')) {
+      throw err;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Upload Recording File Directly to Google Drive
  * Uses multipart upload with parents: [folderId]
+ * Tags file with stable meeting/tenant properties for idempotent recovery
  */
-async function uploadFileToGoogleDrive({ fileName, mimeType = 'video/mp4', fileBuffer, folderId, accessToken }) {
+async function uploadFileToGoogleDrive({
+  fileName,
+  mimeType = 'video/mp4',
+  fileBuffer,
+  folderId,
+  accessToken,
+  meetingId = null,
+  tenantId = null,
+  recordingId = null
+}) {
   if (!folderId) {
     throw new Error('MISSING_ROOT_FOLDER_ID: Destination folder ID must be provided.');
   }
@@ -825,16 +974,40 @@ async function uploadFileToGoogleDrive({ fileName, mimeType = 'video/mp4', fileB
       throw new Error('FOLDER_INACCESSIBLE: Parent folder rejected upload.');
     }
     const mockFileId = 'mock_gdrive_file_' + crypto.randomBytes(8).toString('hex');
-    return {
+    const mockFileRecord = {
       fileId: mockFileId,
+      id: mockFileId,
       fileName,
+      name: fileName,
       mimeType,
       folderId,
       parents: [folderId],
       webViewUrl: `https://drive.google.com/file/d/${mockFileId}/view`,
+      webViewLink: `https://drive.google.com/file/d/${mockFileId}/view`,
       size: fileBuffer ? fileBuffer.length : 1048576,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      createdTime: new Date().toISOString(),
+      trashed: false,
+      properties: {
+        clasptek_meeting_id: meetingId || '',
+        clasptek_tenant_id: tenantId || ''
+      },
+      appProperties: {
+        clasptek_meeting_id: meetingId || '',
+        clasptek_tenant_id: tenantId || '',
+        clasptek_recording_id: recordingId || ''
+      }
     };
+
+    _memoryDriveFiles.set(mockFileId, mockFileRecord);
+
+    if (_testUploadTimeoutAfterCreate) {
+      // Simulate network socket drop / timeout AFTER Drive successfully created the file
+      _testUploadTimeoutAfterCreate = false;
+      throw new Error('HTTPS_REQUEST_TIMEOUT: Response dropped after Drive file creation');
+    }
+
+    return mockFileRecord;
   }
 
   const config = resolveGoogleOAuthConfig();
@@ -845,7 +1018,16 @@ async function uploadFileToGoogleDrive({ fileName, mimeType = 'video/mp4', fileB
   const metadata = {
     name: fileName,
     mimeType: mimeType || 'video/mp4',
-    parents: [folderId]
+    parents: [folderId],
+    properties: {
+      clasptek_meeting_id: meetingId || '',
+      clasptek_tenant_id: tenantId || ''
+    },
+    appProperties: {
+      clasptek_meeting_id: meetingId || '',
+      clasptek_tenant_id: tenantId || '',
+      clasptek_recording_id: recordingId || ''
+    }
   };
 
   const part1 = Buffer.from(
@@ -864,7 +1046,7 @@ async function uploadFileToGoogleDrive({ fileName, mimeType = 'video/mp4', fileB
   const multipartPayload = Buffer.concat([part1, part2, part3]);
 
   const res = await httpsRequest(
-    `${config.uploadApiBase}/files?uploadType=multipart&fields=id,name,mimeType,parents,size,webViewLink`,
+    `${config.uploadApiBase}/files?uploadType=multipart&fields=id,name,mimeType,parents,size,webViewLink,properties,appProperties`,
     {
       method: 'POST',
       headers: {
@@ -895,7 +1077,9 @@ async function uploadFileToGoogleDrive({ fileName, mimeType = 'video/mp4', fileB
     parents: uploadedFile.parents,
     webViewUrl: uploadedFile.webViewLink || `https://drive.google.com/file/d/${uploadedFile.id}/view`,
     size: uploadedFile.size || multipartPayload.length,
-    uploadedAt: new Date().toISOString()
+    uploadedAt: new Date().toISOString(),
+    properties: uploadedFile.properties || {},
+    appProperties: uploadedFile.appProperties || {}
   };
 }
 
@@ -1175,8 +1359,11 @@ module.exports = {
   getGoogleDriveConnectionStatus,
   disconnectGoogleDriveConnection,
   setTestUploadFailure,
+  setTestUploadTimeoutAfterCreate,
+  findExistingDriveFile,
   seedTestMeeting: (m) => require('../meetings/upload-recording').seedTestMeeting(m),
   getTestMeeting: (id) => require('../meetings/upload-recording').getTestMeeting(id),
   _memoryStateStore: memoryStateStore,
-  _memoryConnectionStore: memoryConnectionStore
+  _memoryConnectionStore: memoryConnectionStore,
+  _memoryDriveFiles: _memoryDriveFiles
 };

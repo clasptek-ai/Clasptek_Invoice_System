@@ -7,7 +7,9 @@ export type MeetingStatus = 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 
 export type ParticipantAccess = 'COHORT_ONLY' | 'ALL_STUDENTS' | 'PUBLIC_TOKEN';
 
-export type SFUProvider = 'livekit' | 'daily' | 'mock';
+export type SFUProvider = 'livekit' | 'daily' | 'mock' | 'google_meet';
+
+export type MeetingPlatform = 'livekit' | 'google_meet';
 
 export type RecordingStatus = 'NOT_STARTED' | 'RECORDING' | 'PROCESSING' | 'STORED' | 'FAILED';
 
@@ -37,10 +39,128 @@ export interface RecordingMetadata {
   storedAt?: string;
   source?: string;
   error?: string;
+  failure_reason?: string;
   rootFolderId?: string;
   tenantId?: string;
   meetingId?: string;
   meetingPublicId?: string;
+  startedAt?: string;
+  startedBy?: string;
+  stoppedAt?: string;
+  stoppedReason?: string;
+  failedAt?: string;
+  egressId?: string;
+  egress_id?: string;
+  uploadStatus?: string;
+  retryCount?: number;
+  google_drive_file_id?: string;
+  google_drive_folder_id?: string;
+  google_drive_url?: string;
+  recording_id?: string;
+  processing_claim?: {
+    token: string;
+    claimed_at: string;
+    event_id?: string;
+    worker_id?: string;
+  } | null;
+  start_intent?: {
+    token: string;
+    roomName: string;
+    tenantId: string;
+    meetingId: string;
+    startedBy: string;
+    initiatedAt: string;
+    fileName?: string;
+    filePath?: string;
+  } | null;
+  permission_reconciliation_needed?: {
+    participantId: string;
+    identity: string;
+    action: string;
+    failedAt: string;
+    error?: string;
+  } | null;
+  processed_events?: string[];
+  last_webhook_event_id?: string;
+  ambiguous_egress_candidates?: Array<{
+    egressId: string;
+    status: string;
+    roomName?: string;
+    createdAt?: string;
+    fileResults?: any[];
+  }> | null;
+  ambiguity_detected_at?: string;
+  consent_session?: RecordingConsentSession | null;
+  consent_audit_log?: ConsentAuditEntry[];
+  active_participants?: Array<{
+    participantId: string;
+    participantName: string;
+    role: string;
+    joinedAt: string;
+    canPublish?: boolean;
+    permissionRevocationPending?: boolean;
+    revocationError?: string;
+  }>;
+  unresolved_egress_artifact?: {
+    egressId?: string;
+    downloadUrl?: string;
+    location?: string;
+    filePath?: string;
+    blockedReason?: string;
+    unresolvedAt?: string;
+    [key: string]: any;
+  } | null;
+  unresolved_drive_artifact?: {
+    driveFileId?: string;
+    fileId?: string;
+    fileName?: string;
+    uploadedAt?: string;
+    discoveredAt?: string;
+    reason?: string;
+    [key: string]: any;
+  } | null;
+}
+
+export type ConsentDecision = 'GRANTED' | 'DECLINED' | 'WITHDRAWN' | 'PENDING';
+
+export interface ParticipantConsentRecord {
+  participantId: string;
+  participantName: string;
+  role: string;
+  status: ConsentDecision;
+  recordingSessionId: string;
+  updatedAt: string;
+  reason?: string;
+}
+
+export interface ConsentAuditEntry {
+  timestamp: string;
+  action:
+    | 'CONSENT_REQUESTED'
+    | 'CONSENT_GRANTED'
+    | 'CONSENT_DECLINED'
+    | 'CONSENT_WITHDRAWN'
+    | 'LATE_JOIN_REGISTERED'
+    | 'RECORDING_ALLOWED'
+    | 'RECORDING_BLOCKED'
+    | 'RECORDING_STOPPED_DUE_TO_WITHDRAWAL'
+    | 'RECORDING_STOP_FAILED_ON_WITHDRAWAL'
+    | 'CLAIM_ACQUIRED'
+    | 'CLAIM_RELEASED';
+  recordingSessionId: string;
+  participantId?: string;
+  participantRole?: string;
+  reason?: string;
+}
+
+export interface RecordingConsentSession {
+  sessionId: string;
+  requestedAt: string;
+  requestedBy: string;
+  status: 'PENDING_CONSENT' | 'ALL_GRANTED' | 'DECLINED' | 'WITHDRAWN' | 'ACTIVE_RECORDING' | 'STOPPED';
+  requiredParticipantIds: string[];
+  consents: Record<string, ParticipantConsentRecord>;
+  lockAcquiredAt?: string;
 }
 
 export interface Meeting {
@@ -61,6 +181,7 @@ export interface Meeting {
   participantAccess: ParticipantAccess;
   sfuProvider: SFUProvider;
   sfuRoomId?: string | null;
+  providerRoomUrl?: string | null;
   settings: MeetingSettings;
   recordingEnabled: boolean;
   recordingStatus: RecordingStatus;
