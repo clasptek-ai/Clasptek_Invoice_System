@@ -42,6 +42,9 @@ export interface Certificate {
   revokedAt?: string | null;
   reissuedFromCertificateId?: string | null;
   studentAuthoritativeName?: string;
+  studentNumber?: string;
+  studentNumberSnapshot?: string;
+  candidateNumber?: string;
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
@@ -115,12 +118,31 @@ export interface CertificateEligibilityCandidate {
   activeCertificateNumber?: string | null;
 }
 
+export interface PublicCertificateSummary {
+  certificateNumber: string;
+  candidateNumber?: string;
+  internalCertificateNumber?: string;
+  programmeName?: string;
+  programmeCode?: string;
+  certificateRole?: string;
+  certificateTitle?: string;
+  issueDate?: string;
+  status: 'ISSUED' | 'REVOKED';
+  isValid: boolean;
+  verificationToken?: string;
+  verificationUrl?: string;
+  revocationReason?: string | null;
+}
+
 export interface PublicCertificateVerification {
   found: boolean;
   isValid: boolean;
-  status: 'ISSUED' | 'REVOKED' | 'NOT_FOUND';
+  status: 'ISSUED' | 'REVOKED' | 'NOT_FOUND' | 'MULTIPLE_MATCHES';
   message?: string;
   certificateNumber?: string;
+  candidateNumber?: string;
+  studentNumber?: string;
+  internalCertificateNumber?: string;
   studentName?: string;
   programmeName?: string;
   programmeCode?: string;
@@ -133,6 +155,8 @@ export interface PublicCertificateVerification {
   verificationToken?: string;
   revocationReason?: string | null;
   revokedAt?: string | null;
+  hasMultipleMatches?: boolean;
+  matchingCertificates?: PublicCertificateSummary[];
 }
 
 export interface IssueCertificateRequest {

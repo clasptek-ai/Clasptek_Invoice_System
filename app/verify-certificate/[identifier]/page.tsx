@@ -29,13 +29,19 @@ export async function generateMetadata({
 
 export default async function PublicVerifyCertificatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ identifier: string }>;
+  searchParams?: Promise<{ token?: string; [key: string]: string | string[] | undefined }>;
 }) {
   const { identifier } = await params;
-  const decoded = decodeURIComponent(identifier || '');
+  const sp = searchParams ? await searchParams : {};
+  const rawToken = typeof sp?.token === 'string' ? sp.token : undefined;
 
-  const result = await verifyCertificatePublic(decoded);
+  const decoded = decodeURIComponent(identifier || '');
+  const decodedToken = rawToken ? decodeURIComponent(rawToken) : undefined;
+
+  const result = await verifyCertificatePublic(decoded, decodedToken);
 
   return (
     <div
@@ -141,10 +147,10 @@ export default async function PublicVerifyCertificatePage({
 
                   <div>
                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                      Certificate Number
+                      Certificate / Candidate No.
                     </div>
                     <div style={{ fontSize: '13.5px', fontWeight: 700, fontFamily: 'monospace', color: '#080B78', marginTop: '2px' }}>
-                      {result.certificateNumber}
+                      {result.candidateNumber || result.certificateNumber}
                     </div>
                   </div>
 
@@ -239,8 +245,10 @@ export default async function PublicVerifyCertificatePage({
 
               <div style={{ padding: '24px' }}>
                 <div style={{ marginBottom: '14px' }}>
-                  <strong>Certificate #:</strong>{' '}
-                  <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{result.certificateNumber}</span>
+                  <strong>Certificate / Candidate #:</strong>{' '}
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                    {result.candidateNumber || result.certificateNumber}
+                  </span>
                 </div>
                 <div style={{ marginBottom: '14px' }}>
                   <strong>Student Name:</strong> {result.studentName}
@@ -260,6 +268,132 @@ export default async function PublicVerifyCertificatePage({
                 >
                   <strong>Documented Revocation Reason:</strong>
                   <div style={{ marginTop: '4px' }}>{result.revocationReason || 'Administrative cancellation'}</div>
+                </div>
+              </div>
+            </div>
+          ) : result.found && (result.status === 'MULTIPLE_MATCHES' || result.hasMultipleMatches) ? (
+            <div>
+              {/* Amber / Blue Disambiguation Banner */}
+              <div
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  borderBottom: '1px solid #BFDBFE',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    backgroundColor: '#1D4ED8',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  🎓
+                </div>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 800, color: '#1E3A8A' }}>
+                    Multiple Official Credentials Found
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#2563EB', marginTop: '2px' }}>
+                    Student ID matches {result.matchingCertificates?.length || 0} registered credentials. Select a credential to view official verification.
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Header */}
+              <div style={{ padding: '24px' }}>
+                <div style={{ marginBottom: '18px', paddingBottom: '14px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                    Awarded Recipient &bull; Student ID: {result.studentNumber}
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#14213D', marginTop: '4px' }}>
+                    {result.studentName}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {result.matchingCertificates?.map((cert, idx) => (
+                    <div
+                      key={cert.internalCertificateNumber || idx}
+                      style={{
+                        padding: '16px',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '8px',
+                        backgroundColor: '#F8FAFC',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                        <div>
+                          <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1E293B' }}>
+                            {cert.programmeName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                            {cert.certificateRole || cert.certificateTitle}
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '999px',
+                            backgroundColor: cert.status === 'ISSUED' ? '#DEF7EC' : '#FDE8E8',
+                            color: cert.status === 'ISSUED' ? '#03543F' : '#9B1C1C',
+                          }}
+                        >
+                          {cert.status === 'ISSUED' ? 'Active & Valid' : 'Revoked'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+                        <div>
+                          <span>Issued: <strong>{cert.issueDate ? formatCertificateOrdinalDate(cert.issueDate) : 'N/A'}</strong></span>
+                          {cert.internalCertificateNumber && (
+                            <span style={{ marginLeft: '12px', fontFamily: 'monospace' }}>Ref: {cert.internalCertificateNumber}</span>
+                          )}
+                        </div>
+                        <Link
+                          href={cert.verificationUrl || `/verify-certificate/${encodeURIComponent(cert.internalCertificateNumber || '')}`}
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#080B78',
+                            textDecoration: 'none',
+                            padding: '6px 12px',
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                          }}
+                        >
+                          Verify Credential &rarr;
+                        </Link>
+                      </div>
+
+                      {cert.status === 'REVOKED' && cert.revocationReason && (
+                        <div style={{ fontSize: '11.5px', color: '#991B1B', marginTop: '4px', fontStyle: 'italic' }}>
+                          Reason: {cert.revocationReason}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: '20px', fontSize: '11.5px', color: '#64748B', textAlign: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '14px' }}>
+                  🔒 Tamper-evident Clasptek Verification Service. Contact details and personal student records are protected.
                 </div>
               </div>
             </div>

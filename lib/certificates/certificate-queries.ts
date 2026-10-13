@@ -105,7 +105,7 @@ export async function getCertificates(
     const studentIds = Array.from(new Set((certs || []).map((c) => c.student_id).filter(Boolean)));
     const { data: studentsData } =
       studentIds.length > 0
-        ? await supabase.from('students').select('id, last_name, first_name, metadata').in('id', studentIds)
+        ? await supabase.from('students').select('id, student_number, last_name, first_name, metadata').in('id', studentIds)
         : { data: [] };
     const studentMap = new Map((studentsData || []).map((s) => [s.id, s]));
 
@@ -115,6 +115,7 @@ export async function getCertificates(
       if (c.reissued_from_certificate_id) reissuedCount++;
 
       const stu = studentMap.get(c.student_id);
+      const meta = (c.metadata as Record<string, unknown>) || {};
       const stuMeta = (stu?.metadata as Record<string, unknown>) || {};
       const sMiddle =
         (stuMeta.middleName as string) ||
@@ -125,7 +126,11 @@ export async function getCertificates(
         ? formatRecipientName(stu.last_name, stu.first_name, sMiddle)
         : undefined;
 
-      const meta = (c.metadata as Record<string, unknown>) || {};
+      const studentNumberSnapshot =
+        (meta.student_number_snapshot as string) ||
+        (meta.student_number as string) ||
+        undefined;
+      const authoritativeStudentId = stu?.student_number || studentNumberSnapshot;
 
       return {
         id: c.id,
@@ -135,6 +140,9 @@ export async function getCertificates(
         programmeId: c.programme_id,
         cohortId: c.cohort_id,
         certificateNumber: c.certificate_number,
+        studentNumber: authoritativeStudentId,
+        studentNumberSnapshot,
+        candidateNumber: authoritativeStudentId,
         issueDate: c.issue_date,
         completionDate: c.completion_date,
         status: c.status,
@@ -177,6 +185,8 @@ export async function getCertificates(
       ? formatted.filter((c) => {
           return (
             c.certificateNumber.toLowerCase().includes(searchLower) ||
+            (c.studentNumber && c.studentNumber.toLowerCase().includes(searchLower)) ||
+            (c.candidateNumber && c.candidateNumber.toLowerCase().includes(searchLower)) ||
             c.studentNameSnapshot.toLowerCase().includes(searchLower) ||
             c.programmeNameSnapshot.toLowerCase().includes(searchLower) ||
             c.verificationToken.toLowerCase().includes(searchLower)
@@ -217,13 +227,15 @@ export async function getCertificateById(
     }
 
     let studentAuthoritativeName: string | undefined;
+    let authoritativeStudentId: string | undefined;
     if (c.student_id) {
       const { data: stu } = await supabase
         .from('students')
-        .select('id, last_name, first_name, metadata')
+        .select('id, student_number, last_name, first_name, metadata')
         .eq('id', c.student_id)
         .maybeSingle();
       if (stu) {
+        authoritativeStudentId = stu.student_number;
         const stuMeta = (stu.metadata as Record<string, unknown>) || {};
         const sMiddle =
           (stuMeta.middleName as string) ||
@@ -235,6 +247,12 @@ export async function getCertificateById(
     }
 
     const meta = (c.metadata as Record<string, unknown>) || {};
+    const studentNumberSnapshot =
+      (meta.student_number_snapshot as string) ||
+      (meta.student_number as string) ||
+      undefined;
+    const resolvedStudentId = studentNumberSnapshot || authoritativeStudentId;
+
     const cert: Certificate = {
       id: c.id,
       tenantId: c.tenant_id,
@@ -243,6 +261,9 @@ export async function getCertificateById(
       programmeId: c.programme_id,
       cohortId: c.cohort_id,
       certificateNumber: c.certificate_number,
+      studentNumber: resolvedStudentId,
+      studentNumberSnapshot,
+      candidateNumber: resolvedStudentId,
       issueDate: c.issue_date,
       completionDate: c.completion_date,
       status: c.status,
@@ -439,6 +460,7 @@ export async function issueCertificate(
       attendance_pct_snapshot: attendancePctSnapshot,
       reissued_from_certificate_id: request.reissuedFromCertificateId || null,
       metadata: {
+        student_number_snapshot: student?.student_number || null,
         certificate_title_snapshot: certTitle,
         certificate_description_snapshot: certDesc,
         certificate_intro_snapshot: certIntro,
@@ -503,6 +525,9 @@ export async function issueCertificate(
       programmeId: certRecord.programme_id,
       cohortId: certRecord.cohort_id,
       certificateNumber: certRecord.certificate_number,
+      studentNumber: student?.student_number || undefined,
+      studentNumberSnapshot: student?.student_number || undefined,
+      candidateNumber: student?.student_number || undefined,
       issueDate: certRecord.issue_date,
       completionDate: certRecord.completion_date,
       status: 'ISSUED',
@@ -904,15 +929,17 @@ export async function updateCertificateRecord(
       };
     }
 
-    // 7. Re-fetch or derive studentAuthoritativeName
+    // 7. Re-fetch or derive studentAuthoritativeName and student_number
     let studentAuthoritativeName: string | undefined;
+    let authoritativeStudentId: string | undefined;
     if (cert.student_id) {
       const { data: stu } = await supabase
         .from('students')
-        .select('id, last_name, first_name, metadata')
+        .select('id, student_number, last_name, first_name, metadata')
         .eq('id', cert.student_id)
         .maybeSingle();
       if (stu) {
+        authoritativeStudentId = stu.student_number;
         const stuMeta = (stu.metadata as Record<string, unknown>) || {};
         const sMiddle =
           (stuMeta.middleName as string) ||
@@ -923,6 +950,14 @@ export async function updateCertificateRecord(
       }
     }
 
+    const origMeta = (cert.metadata as Record<string, unknown>) || {};
+    const studentNumberSnapshot =
+      (updatedMeta.student_number_snapshot as string) ||
+      (origMeta.student_number_snapshot as string) ||
+      (origMeta.student_number as string) ||
+      undefined;
+    const resolvedStudentId = studentNumberSnapshot || authoritativeStudentId;
+
     const updatedCert: Certificate = {
       id: cert.id,
       tenantId: cert.tenant_id,
@@ -931,6 +966,9 @@ export async function updateCertificateRecord(
       programmeId: cert.programme_id,
       cohortId: cert.cohort_id,
       certificateNumber: cert.certificate_number,
+      studentNumber: resolvedStudentId,
+      studentNumberSnapshot: resolvedStudentId,
+      candidateNumber: resolvedStudentId,
       issueDate: newIssueDate,
       completionDate: newCompletionDate,
       status: cert.status,
@@ -970,56 +1008,141 @@ export async function updateCertificateRecord(
   }
 }
 
+async function formatSinglePublicVerification(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  cert: any,
+  overrideStudentNumber?: string
+): Promise<PublicCertificateVerification> {
+  const meta = (cert.metadata as Record<string, unknown>) || {};
+
+  // Precedence: 1. snapshot at issuance, 2. current student_number, 3. certificate_number
+  const snapshotId =
+    (meta.student_number_snapshot as string) ||
+    (meta.student_number as string) ||
+    null;
+
+  let authoritativeStudentId: string | null = snapshotId;
+
+  if (!authoritativeStudentId && cert.student_id) {
+    let stuQuery = supabase
+      .from('students')
+      .select('id, student_number')
+      .eq('id', cert.student_id);
+    if (cert.tenant_id) {
+      stuQuery = stuQuery.eq('tenant_id', cert.tenant_id);
+    }
+    const { data: stu } = await stuQuery.maybeSingle();
+    if (stu?.student_number) {
+      authoritativeStudentId = stu.student_number;
+    }
+  }
+
+  if (!authoritativeStudentId && overrideStudentNumber) {
+    authoritativeStudentId = overrideStudentNumber;
+  }
+
+  const displayId = authoritativeStudentId || cert.certificate_number;
+
+  return {
+    found: true,
+    isValid: cert.status === 'ISSUED',
+    status: cert.status as 'ISSUED' | 'REVOKED',
+    certificateNumber: displayId,
+    candidateNumber: displayId,
+    studentNumber: authoritativeStudentId || undefined,
+    internalCertificateNumber: cert.certificate_number,
+    studentName: cert.student_name_snapshot,
+    programmeName: cert.programme_name_snapshot,
+    programmeCode: cert.programme_code_snapshot,
+    cohortName: cert.cohort_name_snapshot,
+    certificateTitle:
+      (meta.certificate_title_snapshot as string) || (meta.certificateTitle as string) || 'Certificate of Completion',
+    certificateDescription:
+      (meta.certificate_description_snapshot as string) || (meta.certificateDescription as string) || '',
+    certificateRole: (meta.certificate_role_snapshot as string) || (meta.certificateRole as string) || '',
+    issueDate: cert.issue_date,
+    completionDate: cert.completion_date,
+    verificationToken: cert.verification_token,
+    revocationReason: cert.status === 'REVOKED' ? cert.revocation_reason : null,
+    revokedAt: cert.status === 'REVOKED' ? cert.revoked_at : null,
+    hasMultipleMatches: false,
+  };
+}
+
 export async function verifyCertificatePublic(
-  identifier: string
+  identifier: string,
+  token?: string
 ): Promise<PublicCertificateVerification> {
   try {
     const cleanId = String(identifier || '').trim();
-    if (!cleanId) {
+    const cleanToken = String(token || '').trim();
+
+    if (!cleanId && !cleanToken) {
       return { found: false, isValid: false, status: 'NOT_FOUND', message: 'No credential identifier provided' };
     }
 
     const supabase = await createServerClient();
 
-    // Lookup by certificate_number or verification_token
-    const { data: cert, error } = await supabase
-      .from('certificates')
-      .select('*')
-      .or(`certificate_number.eq."${cleanId}",verification_token.eq."${cleanId}"`)
-      .limit(1)
-      .maybeSingle();
+    // 1. Exact cryptographic token verification
+    // Tokens are generated with 128-bit cryptographic entropy (vtok_...) and are globally collision-free.
+    const effectiveToken = cleanToken || (cleanId.startsWith('vtok_') ? cleanId : '');
 
-    if (error || !cert) {
-      return {
-        found: false,
-        isValid: false,
-        status: 'NOT_FOUND',
-        message: 'No official certificate was found matching the identifier in the Clasptek authoritative registry.',
-      };
+    if (effectiveToken) {
+      let query = supabase
+        .from('certificates')
+        .select('*')
+        .eq('verification_token', effectiveToken);
+
+      // When both certificate number and token are supplied, require both to match (mirrors verify_certificate_public RPC)
+      if (cleanId && !cleanId.startsWith('vtok_')) {
+        query = query.eq('certificate_number', cleanId);
+      }
+
+      const { data: tokenCert, error: tokenErr } = await query.maybeSingle();
+      if (!tokenErr && tokenCert) {
+        return formatSinglePublicVerification(supabase, tokenCert);
+      }
+
+      if (cleanToken) {
+        return {
+          found: false,
+          isValid: false,
+          status: 'NOT_FOUND',
+          message: 'Certificate credential could not be verified with the provided verification token in the Clasptek authoritative registry.',
+        };
+      }
     }
 
-    const meta = (cert.metadata as Record<string, unknown>) || {};
+    // 2. Exact internal certificate number verification (e.g. CERT-2026-1001)
+    if (cleanId && !cleanId.startsWith('vtok_')) {
+      const { data: certMatches, error: certErr } = await supabase
+        .from('certificates')
+        .select('*')
+        .eq('certificate_number', cleanId);
 
-    // STRICT SANITIZATION: ZERO exposure of student email, phone, tenant ID, student ID, financial records
+      if (!certErr && certMatches) {
+        if (certMatches.length === 1) {
+          return formatSinglePublicVerification(supabase, certMatches[0]);
+        } else if (certMatches.length > 1) {
+          // Cross-tenant collision safeguard: multiple tenants have this certificate number
+          // Refuse to resolve without cryptographic verification token to prevent cross-tenant data leakage
+          return {
+            found: false,
+            isValid: false,
+            status: 'NOT_FOUND',
+            message: 'Multiple tenant credentials match this certificate number. Verification token required to disambiguate.',
+          };
+        }
+      }
+    }
+
+    // 3. Unscoped Student ID lookup is strictly rejected to preserve tenant isolation.
+    // Student numbers are only unique per-tenant; unscoped lookups cannot identify a credential safely.
     return {
-      found: true,
-      isValid: cert.status === 'ISSUED',
-      status: cert.status as 'ISSUED' | 'REVOKED',
-      certificateNumber: cert.certificate_number,
-      studentName: cert.student_name_snapshot,
-      programmeName: cert.programme_name_snapshot,
-      programmeCode: cert.programme_code_snapshot,
-      cohortName: cert.cohort_name_snapshot,
-      certificateTitle:
-        (meta.certificate_title_snapshot as string) || (meta.certificateTitle as string) || 'Certificate of Completion',
-      certificateDescription:
-        (meta.certificate_description_snapshot as string) || (meta.certificateDescription as string) || '',
-      certificateRole: (meta.certificate_role_snapshot as string) || (meta.certificateRole as string) || '',
-      issueDate: cert.issue_date,
-      completionDate: cert.completion_date,
-      verificationToken: cert.verification_token,
-      revocationReason: cert.status === 'REVOKED' ? cert.revocation_reason : null,
-      revokedAt: cert.status === 'REVOKED' ? cert.revoked_at : null,
+      found: false,
+      isValid: false,
+      status: 'NOT_FOUND',
+      message: 'No official certificate was found matching the credential identifier in the Clasptek authoritative registry. Please verify using the official verification token or QR code printed on the certificate.',
     };
   } catch {
     return {

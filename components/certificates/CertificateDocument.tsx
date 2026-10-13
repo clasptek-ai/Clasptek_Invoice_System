@@ -20,6 +20,7 @@ import React from 'react';
 import type { Certificate } from '@/types/certificates';
 import { formatCertificateOrdinalDate } from '@/lib/certificates/constants';
 import { generateCertificateQrSvg } from '@/lib/certificates/qr-svg';
+import { computeCertificateNameLayout } from '@/lib/certificates/format-name';
 
 /**
  * Deterministically wraps text into lines fitting within the SVG certificate boundaries.
@@ -61,7 +62,14 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
 
   const studentName = certificate.studentNameSnapshot || 'Student Name';
   const progName = certificate.programmeNameSnapshot || 'Vocational Training Programme';
-  const certNumber = certificate.certificateNumber || 'CERT-XXXX';
+  const certNumber =
+    (certificate.metadata?.student_number_snapshot as string) ||
+    certificate.studentNumberSnapshot ||
+    certificate.studentNumber ||
+    certificate.candidateNumber ||
+    (certificate.metadata?.student_number as string) ||
+    certificate.certificateNumber ||
+    'CERT-XXXX';
   const issueDate = certificate.issueDate || new Date().toISOString().slice(0, 10);
   const isRevoked = certificate.status === 'REVOKED';
 
@@ -92,13 +100,15 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://portal.clasptek.com';
   const verificationUrl =
     certificate.verificationUrl ||
-    `${baseUrl}/verify-certificate/${encodeURIComponent(certNumber)}`;
+    (certificate.verificationToken
+      ? `${baseUrl}/verify-certificate/${encodeURIComponent(certificate.verificationToken)}`
+      : `${baseUrl}/verify-certificate/${encodeURIComponent(certificate.certificateNumber || certNumber)}`);
 
   // Vector QR SVG
   const qrSvgMarkup = generateCertificateQrSvg(verificationUrl, { cellSize: 1.1, margin: 0 });
 
-  // Recipient name length check for line boundary fit
-  const nameLen = studentName.length;
+  // Dynamic Recipient Name Layout (Bolder Surname & Adaptive Sizing)
+  const nameLayout = computeCertificateNameLayout(studentName);
 
   // Dynamic wrapped lines for core competencies (Req #15)
   const competencyLines = wrapSvgText(certDescription, 68);
@@ -126,7 +136,7 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spicy+Rice&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Spicy+Rice&display=swap');
         @media print {
           @page {
             size: A4 landscape !important;
@@ -323,21 +333,31 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
           This certifies that
         </text>
 
-        {/* Dynamic Recipient Full Name (Enforced Poppins at 24px) */}
-        <text
-          x="420.95"
-          y="328"
-          textAnchor="middle"
-          fontFamily="'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-          fontWeight="600"
-          fontSize="24px"
-          letterSpacing="1.2"
-          fill="#111111"
-          style={{ textTransform: 'uppercase' }}
-          {...(nameLen > 36 ? { textLength: 570, lengthAdjust: 'spacingAndGlyphs' } : {})}
-        >
-          {studentName}
-        </text>
+        {/* Dynamic Recipient Full Name — Poppins with Bolder Surname & Adaptive Sizing */}
+        {/* Prominent base typography: fontSize="24px" */}
+        {nameLayout.lines.map((line, lineIdx) => (
+          <text
+            key={lineIdx}
+            x="420.95"
+            y={line.y}
+            textAnchor="middle"
+            fontFamily="'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+            fontSize={`${line.fontSize}px`}
+            letterSpacing="1.2"
+            fill="#111111"
+            style={{ textTransform: 'uppercase' }}
+            xmlSpace="preserve"
+          >
+            {line.segments.map((seg, segIdx) => (
+              <tspan
+                key={segIdx}
+                fontWeight={seg.isSurname ? '800' : '500'}
+              >
+                {seg.text}
+              </tspan>
+            ))}
+          </text>
+        ))}
 
         {/* Programme Statement Intro (Directly below Name Line, Y=366) */}
         <text

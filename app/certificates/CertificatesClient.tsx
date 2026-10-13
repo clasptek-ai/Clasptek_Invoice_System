@@ -144,7 +144,11 @@ export const CertificatesClient: React.FC<Props> = ({
       if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase().trim();
-        const matchNum = c.certificateNumber.toLowerCase().includes(q);
+        const matchNum =
+          (c.studentNumberSnapshot && c.studentNumberSnapshot.toLowerCase().includes(q)) ||
+          (c.studentNumber && c.studentNumber.toLowerCase().includes(q)) ||
+          (c.candidateNumber && c.candidateNumber.toLowerCase().includes(q)) ||
+          c.certificateNumber.toLowerCase().includes(q);
         const matchName = c.studentNameSnapshot.toLowerCase().includes(q);
         const matchProg = c.programmeNameSnapshot.toLowerCase().includes(q);
         const matchToken = c.verificationToken.toLowerCase().includes(q);
@@ -520,7 +524,7 @@ export const CertificatesClient: React.FC<Props> = ({
     ];
 
     const rows = filteredCertificates.map((c) => [
-      sanitize(c.certificateNumber),
+      sanitize(c.studentNumberSnapshot || c.studentNumber || c.candidateNumber || c.certificateNumber),
       sanitize(c.studentNameSnapshot),
       sanitize(c.certificateRoleSnapshot),
       sanitize(c.programmeNameSnapshot),
@@ -874,7 +878,7 @@ export const CertificatesClient: React.FC<Props> = ({
                         />
                       </th>
                       <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
-                        Certificate #
+                        Certificate / Candidate #
                       </th>
                       <th style={{ padding: '12px 14px', fontSize: '11.5px', color: '#475569', fontWeight: 700 }}>
                         Student Name
@@ -937,7 +941,12 @@ export const CertificatesClient: React.FC<Props> = ({
                               color: '#14213D',
                             }}
                           >
-                            {cert.certificateNumber}
+                            <div>{cert.studentNumberSnapshot || cert.studentNumber || cert.candidateNumber || cert.certificateNumber}</div>
+                            {(cert.studentNumberSnapshot || cert.studentNumber) && cert.certificateNumber !== (cert.studentNumberSnapshot || cert.studentNumber) && (
+                              <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>
+                                Ref: {cert.certificateNumber}
+                              </div>
+                            )}
                           </td>
 
                           <td style={{ padding: '12px 14px', fontWeight: 700, color: '#1E293B' }}>
@@ -1078,7 +1087,7 @@ export const CertificatesClient: React.FC<Props> = ({
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                           <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                            {cert.certificateNumber}
+                            {cert.studentNumberSnapshot || cert.studentNumber || cert.candidateNumber || cert.certificateNumber}
                           </span>
                           <span
                             className={`cp-pill ${isIssued ? 'paid' : 'danger'}`}
@@ -1466,7 +1475,7 @@ export const CertificatesClient: React.FC<Props> = ({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12.5px' }}>
                     <div>
-                      <strong>Certificate #:</strong> {verifyResult.certificateNumber}
+                      <strong>Certificate / Candidate #:</strong> {verifyResult.candidateNumber || verifyResult.certificateNumber}
                     </div>
                     <div>
                       <strong>Student Name:</strong> {verifyResult.studentName}
