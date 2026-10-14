@@ -22,6 +22,9 @@ const assert = require('assert');
 // Set test environment flags
 process.env.NODE_ENV = 'test';
 process.env.CLASPTEK_TEST_MODE = 'true';
+process.env.SUPABASE_URL = 'https://dwhjoiebzwnjdpcvcwvs.supabase.co';
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://dwhjoiebzwnjdpcvcwvs.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'mock_staging_service_role_key_for_offline_tests';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -204,9 +207,10 @@ async function runCentralRepositoryCertification() {
     assert.strictEqual(result.source, 'DB_AUTHORITATIVE');
   });
 
-  await runAsyncTest('4.2: Resolves root folder from GOOGLE_DRIVE_ROOT_FOLDER_ID environment bootstrap if valid', async () => {
-    const tenantId = 'tenant_resolve_test_2';
-    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder_env_bootstrap_456';
+  await runAsyncTest('4.2a: Preferred variable only (GOOGLE_DRIVE_ROOT_FOLDER_ID)', async () => {
+    const tenantId = 'tenant_resolve_test_preferred_only';
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder_preferred_bootstrap_111';
     const fakeConn = {
       tenant_id: tenantId,
       connection_type: 'TENANT_CENTRAL',
@@ -219,14 +223,249 @@ async function runCentralRepositoryCertification() {
       centralConnection: fakeConn
     });
 
-    assert.strictEqual(result.folderId, 'folder_env_bootstrap_456');
+    assert.strictEqual(result.folderId, 'folder_preferred_bootstrap_111');
     assert.strictEqual(result.source, 'BOOTSTRAP_VERIFIED');
     delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2b: Legacy variable only (GOOGLE_DRIVE_MEETINGS_FOLDER_ID fallback)', async () => {
+    const tenantId = 'tenant_resolve_test_legacy_only';
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'folder_legacy_bootstrap_222';
+    const fakeConn = {
+      tenant_id: tenantId,
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'fake_access_token'
+    };
+
+    const result = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId,
+      accessToken: 'fake_access_token',
+      centralConnection: fakeConn
+    });
+
+    assert.strictEqual(result.folderId, 'folder_legacy_bootstrap_222');
+    assert.strictEqual(result.source, 'BOOTSTRAP_VERIFIED');
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2c: Both variables set to the same value (no diagnostic warning needed)', async () => {
+    const tenantId = 'tenant_resolve_test_identical';
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder_identical_333';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'folder_identical_333';
+    const fakeConn = {
+      tenant_id: tenantId,
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'fake_access_token'
+    };
+
+    const result = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId,
+      accessToken: 'fake_access_token',
+      centralConnection: fakeConn
+    });
+
+    assert.strictEqual(result.folderId, 'folder_identical_333');
+    assert.strictEqual(result.source, 'BOOTSTRAP_VERIFIED');
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2d: Both variables set to different values (prefers preferred, emits warning)', async () => {
+    const tenantId = 'tenant_resolve_test_divergent';
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder_preferred_primary_444';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'folder_legacy_ignored_555';
+
+    let warningCaptured = false;
+    const origWarn = console.warn;
+    console.warn = (...args) => {
+      if (args[0] && args[0].includes('[GOOGLE_DRIVE_CONFIG]')) {
+        warningCaptured = true;
+      }
+      origWarn(...args);
+    };
+
+    try {
+      const fakeConn = {
+        tenant_id: tenantId,
+        connection_type: 'TENANT_CENTRAL',
+        access_token: 'fake_access_token'
+      };
+
+      const result = await oauthConfig.resolveAuthoritativeRootFolder({
+        tenantId,
+        accessToken: 'fake_access_token',
+        centralConnection: fakeConn
+      });
+
+      assert.strictEqual(result.folderId, 'folder_preferred_primary_444', 'Must use preferred primary folder ID');
+      assert.strictEqual(result.source, 'BOOTSTRAP_VERIFIED');
+      assert.strictEqual(warningCaptured, true, 'Must emit safe diagnostic warning for conflicting values');
+    } finally {
+      console.warn = origWarn;
+      delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+      delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+    }
+  });
+
+  await runAsyncTest('4.2e: Variables containing whitespace or empty strings are trimmed and treated as unset', async () => {
+    // Subcase 1: preferred has only whitespace -> falls back to legacy
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = '   ';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = '  folder_legacy_trimmed_666  ';
+    const fakeConn1 = {
+      tenant_id: 'tenant_whitespace_1',
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'fake_access_token'
+    };
+    const res1 = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId: 'tenant_whitespace_1',
+      accessToken: 'fake_access_token',
+      centralConnection: fakeConn1
+    });
+    assert.strictEqual(res1.folderId, 'folder_legacy_trimmed_666');
+
+    // Subcase 2: both are whitespace or empty -> falls back to APP_PROVISIONED
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = '';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = '   ';
+    const fakeConn2 = {
+      tenant_id: 'tenant_whitespace_2',
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'fake_access_token'
+    };
+    const res2 = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId: 'tenant_whitespace_2',
+      accessToken: 'fake_access_token',
+      centralConnection: fakeConn2
+    });
+    assert.strictEqual(res2.source, 'APP_PROVISIONED');
+
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2f: Database-configured folder takes precedence over both environment variables', async () => {
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder_env_preferred_override';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'folder_env_legacy_override';
+    const fakeConn = {
+      tenant_id: 'tenant_db_precedence',
+      connection_type: 'TENANT_CENTRAL',
+      root_folder_id: 'folder_db_wins_over_all',
+      root_folder_name: 'Clasptek DB Folder',
+      access_token: 'fake_access_token'
+    };
+
+    const result = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId: 'tenant_db_precedence',
+      accessToken: 'fake_access_token',
+      centralConnection: fakeConn
+    });
+
+    assert.strictEqual(result.folderId, 'folder_db_wins_over_all', 'Database folder must take precedence over env');
+    assert.strictEqual(result.source, 'DB_AUTHORITATIVE');
+
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2g: Folder access failure remains fail-closed (FOLDER_INACCESSIBLE)', async () => {
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'inaccessible_folder_id';
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+    const fakeConn = {
+      tenant_id: 'tenant_fail_closed',
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'fake_access_token'
+    };
+
+    let thrown = null;
+    try {
+      await oauthConfig.resolveAuthoritativeRootFolder({
+        tenantId: 'tenant_fail_closed',
+        accessToken: 'fake_access_token',
+        centralConnection: fakeConn
+      });
+    } catch (err) {
+      thrown = err;
+    }
+
+    assert(thrown, 'Must throw error on inaccessible folder');
+    assert(thrown.message.includes('FOLDER_INACCESSIBLE'), `Expected FOLDER_INACCESSIBLE, got ${thrown.message}`);
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  });
+
+  await runAsyncTest('4.2h: Tenant-specific folder and connection isolation remains intact', async () => {
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+
+    // Seed Tenant Alpha with existing root folder
+    const connAlpha = {
+      tenant_id: 'tenant_alpha',
+      connection_type: 'TENANT_CENTRAL',
+      root_folder_id: 'folder_alpha_isolated',
+      root_folder_name: 'Alpha Folder',
+      access_token: 'token_alpha'
+    };
+
+    // Seed Tenant Beta without root folder
+    const connBeta = {
+      tenant_id: 'tenant_beta',
+      connection_type: 'TENANT_CENTRAL',
+      access_token: 'token_beta'
+    };
+
+    const resAlpha = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId: 'tenant_alpha',
+      accessToken: 'token_alpha',
+      centralConnection: connAlpha
+    });
+
+    const resBeta = await oauthConfig.resolveAuthoritativeRootFolder({
+      tenantId: 'tenant_beta',
+      accessToken: 'token_beta',
+      centralConnection: connBeta
+    });
+
+    assert.strictEqual(resAlpha.folderId, 'folder_alpha_isolated');
+    assert.notStrictEqual(resBeta.folderId, 'folder_alpha_isolated', 'Tenant Beta must NOT inherit Tenant Alpha folder');
+    assert.strictEqual(resBeta.source, 'APP_PROVISIONED');
+  });
+
+  await runAsyncTest('4.2i: Direct helper testing for resolveGoogleDriveRootFolderConfig', () => {
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+
+    // Neither
+    let cfg = oauthConfig.resolveGoogleDriveRootFolderConfig();
+    assert.strictEqual(cfg.folderId, null);
+    assert.strictEqual(cfg.sourceVar, null);
+
+    // Preferred only
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'pref_1';
+    cfg = oauthConfig.resolveGoogleDriveRootFolderConfig();
+    assert.strictEqual(cfg.folderId, 'pref_1');
+    assert.strictEqual(cfg.sourceVar, 'GOOGLE_DRIVE_ROOT_FOLDER_ID');
+
+    // Legacy only
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'leg_2';
+    cfg = oauthConfig.resolveGoogleDriveRootFolderConfig();
+    assert.strictEqual(cfg.folderId, 'leg_2');
+    assert.strictEqual(cfg.sourceVar, 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID');
+
+    // Both different (prefers preferred)
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'pref_diff';
+    process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID = 'leg_diff';
+    cfg = oauthConfig.resolveGoogleDriveRootFolderConfig();
+    assert.strictEqual(cfg.folderId, 'pref_diff');
+    assert.strictEqual(cfg.sourceVar, 'GOOGLE_DRIVE_ROOT_FOLDER_ID');
+
+    delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
   });
 
   await runAsyncTest('4.3: Provisions application-owned folder when neither DB nor Env is set', async () => {
     const tenantId = 'tenant_resolve_test_3';
     delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
     const fakeConn = {
       tenant_id: tenantId,
       connection_type: 'TENANT_CENTRAL',
@@ -243,6 +482,7 @@ async function runCentralRepositoryCertification() {
     assert.strictEqual(result.folderName, 'Clasptek Meeting Recordings');
     assert.strictEqual(result.source, 'APP_PROVISIONED');
   });
+
 
   // --- SECTION 5: Privileged Repository Verification Endpoint ---
   console.log('\n--- SECTION 5: Privileged Repository Verification Endpoint ---');

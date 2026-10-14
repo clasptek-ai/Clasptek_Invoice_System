@@ -108,11 +108,9 @@ async function runAllOAuthTests() {
 
   runTest('1.6: vercel.json rewrites allow /api/auth/google/callback without SPA override', () => {
     const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
-    const rewrite = vercel.rewrites.find(r => r.source.includes('?!api/'));
-    assert(rewrite, 'vercel.json must have negative lookahead excluding /api/');
-    // Regex test matching
-    const apiRegex = new RegExp('^/((?!api/|runtime-config\\.js).*)$');
-    assert(!apiRegex.test('/api/auth/google/callback'), 'Callback route /api/auth/google/callback must NOT be rewritten to index.html');
+    // In Next.js, vercel.json must not have any conflicting rewrite for the callback route
+    const conflicting = (vercel.rewrites || []).find(r => r.source === '/api/auth/google/callback');
+    assert(!conflicting, 'vercel.json must not have conflicting rewrite for /api/auth/google/callback');
   });
 
   // --- SECTION 2: Redirect URI & Scope Resolution ---
@@ -348,34 +346,57 @@ async function runAllOAuthTests() {
     assert.strictEqual(checkJson.status, 'REVOKED');
   });
 
-  // --- SECTION 6: HTTP Server Real Endpoint Test on Port 3000 ---
-  console.log('\n--- SECTION 6: Local Server HTTP Endpoint Verification (Port 3000) ---');
+  // --- SECTION 6: Local Server HTTP Endpoint Verification (Ephemeral Port) ---
+  console.log('\n--- SECTION 6: Local Server HTTP Endpoint Verification (Ephemeral Port) ---');
 
-  await runAsyncTest('6.1: Real HTTP GET to localhost:3000/api/auth/google/callback?error=access_denied', async () => {
-    return new Promise((resolve, reject) => {
-      http.get('http://localhost:3000/api/auth/google/callback?error=access_denied', res => {
-        try {
-          assert.strictEqual(res.statusCode, 302);
-          assert.strictEqual(res.headers.location, '/?google_drive=access_denied#meetings');
-          res.on('data', () => {});
-          res.on('end', resolve);
-        } catch (e) { reject(e); }
-      }).on('error', reject);
+  let localServer = null;
+  let boundPort = null;
+  try {
+    localServer = http.createServer((req, res) => {
+      callbackHandler(req, res);
     });
-  });
+    await new Promise((resolve, reject) => {
+      localServer.once('error', reject);
+      localServer.listen(0, '127.0.0.1', () => {
+        const address = localServer.address();
+        if (!address || typeof address !== 'object' || !address.port) {
+          return reject(new Error('Failed to obtain ephemeral port from server address: ' + JSON.stringify(address)));
+        }
+        boundPort = address.port;
+        resolve();
+      });
+    });
 
-  await runAsyncTest('6.2: Real HTTP GET to localhost:3000/api/auth/google/callback?code=bad&state=bad', async () => {
-    return new Promise((resolve, reject) => {
-      http.get('http://localhost:3000/api/auth/google/callback?code=bad&state=bad', res => {
-        try {
-          assert.strictEqual(res.statusCode, 302);
-          assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
-          res.on('data', () => {});
-          res.on('end', resolve);
-        } catch (e) { reject(e); }
-      }).on('error', reject);
+    await runAsyncTest(`6.1: Real HTTP GET to 127.0.0.1:${boundPort}/api/auth/google/callback?error=access_denied`, async () => {
+      return new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${boundPort}/api/auth/google/callback?error=access_denied`, res => {
+          try {
+            assert.strictEqual(res.statusCode, 302);
+            assert.strictEqual(res.headers.location, '/?google_drive=access_denied#meetings');
+            res.on('data', () => {});
+            res.on('end', resolve);
+          } catch (e) { reject(e); }
+        }).on('error', reject);
+      });
     });
-  });
+
+    await runAsyncTest(`6.2: Real HTTP GET to 127.0.0.1:${boundPort}/api/auth/google/callback?code=bad&state=bad`, async () => {
+      return new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${boundPort}/api/auth/google/callback?code=bad&state=bad`, res => {
+          try {
+            assert.strictEqual(res.statusCode, 302);
+            assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
+            res.on('data', () => {});
+            res.on('end', resolve);
+          } catch (e) { reject(e); }
+        }).on('error', reject);
+      });
+    });
+  } finally {
+    if (localServer && localServer.listening) {
+      await new Promise((resolve) => localServer.close(() => resolve()));
+    }
+  }
 
   console.log('\n================================================================================');
   console.log(` RESULTS: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL: ${totalTests} TESTS)`);

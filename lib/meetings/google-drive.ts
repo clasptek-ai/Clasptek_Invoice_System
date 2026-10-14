@@ -12,15 +12,29 @@ export const DEFAULT_ROOT_FOLDER_NAME = 'Clasptek Meeting Recordings';
 
 /**
  * Resolves the authoritative Google Drive folder ID for meeting recordings.
- * Requires server-side GOOGLE_DRIVE_MEETINGS_FOLDER_ID to be explicitly configured.
- * Strictly NO hardcoded fallbacks or fallbacks to other folder variables.
+ * Precedence:
+ * 1. Preferred primary: GOOGLE_DRIVE_ROOT_FOLDER_ID
+ * 2. Legacy fallback: GOOGLE_DRIVE_MEETINGS_FOLDER_ID
+ * Emits a safe diagnostic warning if both are configured with different values.
+ * Never logs credentials, tokens, or sensitive values.
  */
 export function getMeetingsFolderId(): string {
-  const folderId = process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID?.trim();
-  if (!folderId) {
-    throw new Error('GOOGLE_DRIVE_MEETINGS_FOLDER_ID is not configured');
+  const preferred = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  const legacy = process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID?.trim();
+
+  if (preferred && legacy) {
+    if (preferred !== legacy) {
+      console.warn(
+        '[GOOGLE_DRIVE_CONFIG] Both GOOGLE_DRIVE_ROOT_FOLDER_ID and legacy GOOGLE_DRIVE_MEETINGS_FOLDER_ID ' +
+        'are configured with different values. Precedence rule: using primary GOOGLE_DRIVE_ROOT_FOLDER_ID.'
+      );
+    }
+    return preferred;
   }
-  return folderId;
+  if (preferred) return preferred;
+  if (legacy) return legacy;
+
+  throw new Error('GOOGLE_DRIVE_ROOT_FOLDER_ID is not configured');
 }
 
 /**
@@ -36,7 +50,7 @@ export async function verifyMeetingsFolderAccess(): Promise<{
     folderId = getMeetingsFolderId();
   } catch (err: unknown) {
     const errorMsg =
-      err instanceof Error ? err.message : 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID is not configured';
+      err instanceof Error ? err.message : 'GOOGLE_DRIVE_ROOT_FOLDER_ID is not configured';
     return { valid: false, folderId: '', error: errorMsg };
   }
   // Google Drive folder IDs are base64-like alphanumeric strings with hyphens and underscores

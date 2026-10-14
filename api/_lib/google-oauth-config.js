@@ -47,12 +47,46 @@ function resolveEnv() {
 }
 
 /**
+ * Resolve optional server-side bootstrap root folder configuration
+ * Precedence:
+ * 1. Preferred primary: GOOGLE_DRIVE_ROOT_FOLDER_ID
+ * 2. Legacy fallback: GOOGLE_DRIVE_MEETINGS_FOLDER_ID
+ * Emits a safe diagnostic warning if both are configured with different values.
+ * Never logs credentials, tokens, or sensitive values.
+ */
+function resolveGoogleDriveRootFolderConfig() {
+  const env = resolveEnv();
+  const preferred = (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
+  const legacy = (env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID || '').trim();
+
+  if (preferred && legacy) {
+    if (preferred !== legacy) {
+      console.warn(
+        '[GOOGLE_DRIVE_CONFIG] Both GOOGLE_DRIVE_ROOT_FOLDER_ID and legacy GOOGLE_DRIVE_MEETINGS_FOLDER_ID ' +
+        'are configured with different values. Precedence rule: using primary GOOGLE_DRIVE_ROOT_FOLDER_ID.'
+      );
+    }
+    return { folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' };
+  }
+
+  if (preferred) {
+    return { folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' };
+  }
+
+  if (legacy) {
+    return { folderId: legacy, sourceVar: 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID' };
+  }
+
+  return { folderId: null, sourceVar: null };
+}
+
+/**
  * Resolve optional server-side bootstrap root folder ID
  */
 function resolveGoogleDriveRootFolderId() {
-  const env = resolveEnv();
-  return (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim() || null;
+  return resolveGoogleDriveRootFolderConfig().folderId;
 }
+
 
 // Scopes: drive.file (recordings) + userinfo.email (identity) + calendar.events (Google Meet)
 const GOOGLE_SCOPES = [
@@ -855,8 +889,8 @@ async function resolveAuthoritativeRootFolder({ tenantId, accessToken, centralCo
     }
   }
 
-  // 2. Check optional GOOGLE_DRIVE_ROOT_FOLDER_ID bootstrap
-  const bootstrapId = resolveGoogleDriveRootFolderId();
+  // 2. Check optional GOOGLE_DRIVE_ROOT_FOLDER_ID / GOOGLE_DRIVE_MEETINGS_FOLDER_ID bootstrap
+  const { folderId: bootstrapId, sourceVar } = resolveGoogleDriveRootFolderConfig();
   if (bootstrapId) {
     try {
       const verified = await verifyGoogleDriveFolder({ folderId: bootstrapId, accessToken });
@@ -866,7 +900,8 @@ async function resolveAuthoritativeRootFolder({ tenantId, accessToken, centralCo
       await updateCentralRootFolder({ tenantId, folderId: verified.folderId, folderName: verified.folderName });
       return { folderId: verified.folderId, folderName: verified.folderName, source: 'BOOTSTRAP_VERIFIED' };
     } catch (err) {
-      throw new Error(`FOLDER_INACCESSIBLE: Configured GOOGLE_DRIVE_ROOT_FOLDER_ID is inaccessible: ${err.message}`);
+      const varName = sourceVar || 'GOOGLE_DRIVE_ROOT_FOLDER_ID';
+      throw new Error(`FOLDER_INACCESSIBLE: Configured ${varName} is inaccessible: ${err.message}`);
     }
   }
 
@@ -1447,6 +1482,7 @@ module.exports = {
   getAuthorizationUrl,
   resolveGoogleOAuthConfig,
   resolveGoogleDriveRootFolderId,
+  resolveGoogleDriveRootFolderConfig,
   resolveSupabaseConfig,
   httpsRequest,
   parseRequestBody,
