@@ -152,8 +152,12 @@ class LiveKitAdapter extends SFUAdapter {
     const encodedPayload = base64UrlEncode(JSON.stringify(payload));
     const signatureInput = `${encodedHeader}.${encodedPayload}`;
 
+    if (!this.apiSecret) {
+      throw new Error('CONFIGURATION_ERROR: LiveKit apiSecret is missing; cannot sign JWT participant token.');
+    }
+
     const signature = crypto
-      .createHmac('sha256', this.apiSecret || 'dev_secret_fallback')
+      .createHmac('sha256', this.apiSecret)
       .update(signatureInput)
       .digest();
 

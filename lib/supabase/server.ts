@@ -14,18 +14,35 @@
  *   Uses the SUPABASE_SERVICE_ROLE_KEY (not exposed via NEXT_PUBLIC_*).
  *   Bypasses RLS. Must NEVER be imported into client components or browser bundles.
  *   Authorization MUST be performed by the caller before using this client.
+ *
+ * SECURITY INVARIANT:
+ *   Both client factories validate the Supabase URL against the project isolation
+ *   guard before creating any client. The permanently quarantined production project
+ *   (logaawoigfxnisimfatf) is rejected at startup. Missing or malformed URLs fail closed.
  */
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import {
+  resolveValidatedSupabaseUrl,
+  resolveValidatedServiceKey,
+  resolveValidatedAnonKey
+} from '@/lib/supabase/project-guard';
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    '';
+  const url = resolveValidatedSupabaseUrl(
+    process.env.SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL'
+  );
+
+  const anonKey = resolveValidatedAnonKey(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.SUPABASE_ANON_KEY || process.env.NEXT_SUPABASE_ANON_KEY,
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_ANON_KEY'
+  );
 
   return createServerClient(
     url,
@@ -63,11 +80,26 @@ export { createSupabaseServerClient as createServerClient };
  * - Must NEVER be imported into 'use client' modules, browser bundles, or public responses.
  */
 export function createSupabaseServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    '';
+  const url = resolveValidatedSupabaseUrl(
+    process.env.SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL'
+  );
+
+  const serviceKey = resolveValidatedServiceKey(
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_SECRET_KEY,
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SUPABASE_SECRET_KEY'
+  );
+
+  if (!serviceKey) {
+    throw new Error(
+      'SUPABASE_CONFIG_ERROR: Service role key is missing. ' +
+      'Configure SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY in server environment.'
+    );
+  }
 
   // Use createBrowserClient with the service key — no cookies required.
   // This is safe because: (a) it runs server-side only, (b) the service key

@@ -6,16 +6,40 @@
  */
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
+import { resolveValidatedSupabaseUrl, resolveValidatedAnonKey } from '@/lib/supabase/project-guard';
 
 export async function updateSupabaseSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const rawPublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawServerUrl = process.env.SUPABASE_URL;
 
-  if (!supabaseUrl || !supabaseKey) {
+  // If neither URL is set, fail closed early without contacting Supabase
+  if (!rawPublicUrl && !rawServerUrl) {
     return { supabaseResponse, user: null };
   }
+
+  // Validates strict hostname, scheme, embedded credentials, and rejects quarantined project ref
+  const supabaseUrl = resolveValidatedSupabaseUrl(
+    rawServerUrl,
+    rawPublicUrl,
+    'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL'
+  );
+
+  const rawPublicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const rawAltKey = process.env.NEXT_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!rawPublicKey && !rawAltKey) {
+    return { supabaseResponse, user: null };
+  }
+
+  const supabaseKey = resolveValidatedAnonKey(
+    rawPublicKey,
+    rawAltKey,
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_ANON_KEY'
+  );
 
   const supabase = createServerClient(
     supabaseUrl,

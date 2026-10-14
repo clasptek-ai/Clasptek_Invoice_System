@@ -75,6 +75,8 @@ CREATE POLICY "cohorts_tenant_select" ON public.cohorts FOR SELECT TO authentica
 -- Ensure only Admin can insert or update cohorts
 DROP POLICY IF EXISTS "cohorts_staff_insert" ON public.cohorts;
 DROP POLICY IF EXISTS "cohorts_staff_update" ON public.cohorts;
+DROP POLICY IF EXISTS "cohorts_admin_insert" ON public.cohorts;
+DROP POLICY IF EXISTS "cohorts_admin_update" ON public.cohorts;
 
 CREATE POLICY "cohorts_admin_insert" ON public.cohorts FOR INSERT TO authenticated
     WITH CHECK (tenant_id = public.get_auth_tenant_id() AND public.can_manage_finance());

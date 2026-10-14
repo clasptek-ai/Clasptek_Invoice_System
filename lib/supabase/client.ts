@@ -3,18 +3,25 @@
  * Phase 2: Next.js Foundation
  * Uses @supabase/ssr createBrowserClient — safe for 'use client' components.
  * Reads NEXT_PUBLIC_* env vars at runtime (never server-only secrets).
+ *
+ * SECURITY INVARIANT:
+ *   Validates the Supabase URL against the project isolation guard before
+ *   creating any client. The quarantined production project is rejected.
  */
 import { createBrowserClient } from '@supabase/ssr';
+import { validateSupabaseProjectRef } from '@/lib/supabase/project-guard';
 
 export function createSupabaseBrowserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
+  if (!rawUrl || !key) {
     // During build-time static generation, env vars may not be present.
     // Return a no-op placeholder — auth will be unavailable until runtime.
     throw new Error('Supabase env vars not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
   }
+
+  const url = validateSupabaseProjectRef(rawUrl, 'NEXT_PUBLIC_SUPABASE_URL');
 
   return createBrowserClient(url, key);
 }

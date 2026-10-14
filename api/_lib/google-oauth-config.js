@@ -25,6 +25,9 @@ const memoryConnectionStore = new Map();
  */
 function resolveEnv() {
   const env = { ...process.env };
+  if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
+    return env;
+  }
   try {
     const envPath = path.join(process.cwd(), '.env.local');
     if (fs.existsSync(envPath)) {
@@ -115,40 +118,144 @@ function resolveGoogleOAuthConfig(req = null) {
 }
 
 /**
+ * Extracts Supabase project reference from a URL and rejects the
+ * permanently quarantined production project.
+ *
+ * Strict policy:
+ * - Scheme must be https:
+ * - No embedded credentials
+ * - No custom ports
+ * - Hostname must match strictly <project-ref>.supabase.co
+ * - Fails closed on malformed or non-Supabase URLs
+ */
+const QUARANTINED_PROJECT_REF = 'logaawoigfxnisimfatf';
+
+function extractProjectRefCommon(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (!trimmed) return null;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+  if (parsed.username || parsed.password) return null;
+  if (parsed.port && parsed.port !== '443') return null;
+
+  const hostname = parsed.hostname.toLowerCase();
+  const match = hostname.match(/^([a-z0-9][a-z0-9-]*)\.supabase\.co$/);
+  if (!match) return null;
+
+  const ref = match[1];
+  if (!ref || ref.length < 10 || !/^[a-z0-9]+$/.test(ref)) return null;
+  return ref;
+}
+
+function validateSupabaseUrlGuard(url, context = 'SUPABASE_URL') {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} is missing or empty. ` +
+      `Expected format: https://<project-ref>.supabase.co`
+    );
+  }
+  const trimmed = url.trim().replace(/\/+$/, '');
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} is not a valid URL syntax. ` +
+      `Expected format: https://<project-ref>.supabase.co`
+    );
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} must use the https: scheme. Insecure or unsupported protocols are rejected.`
+    );
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} must not contain embedded credentials in the URL.`
+    );
+  }
+
+  if (parsed.port && parsed.port !== '443') {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} must not specify a custom port for Supabase HTTPS API.`
+    );
+  }
+
+  const ref = extractProjectRefCommon(trimmed);
+  if (!ref) {
+    throw new Error(
+      `SUPABASE_CONFIG_ERROR: ${context} does not match an authorized Supabase domain. ` +
+      `Expected format: https://<project-ref>.supabase.co`
+    );
+  }
+
+  if (ref === QUARANTINED_PROJECT_REF) {
+    throw new Error(
+      `SUPABASE_QUARANTINE_VIOLATION: ${context} points to the permanently quarantined ` +
+      `production project. This project must never be used. ` +
+      `Configure a valid staging or production-replacement project URL instead.`
+    );
+  }
+
+  return trimmed;
+}
+
+/**
  * Supabase Backend Connection Credentials
  */
 function resolveSupabaseConfig() {
   const env = resolveEnv();
 
+  const urlA = (process.env.SUPABASE_URL !== undefined ? process.env.SUPABASE_URL : env.SUPABASE_URL || '').trim();
+  const urlB = (process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined ? process.env.NEXT_PUBLIC_SUPABASE_URL : env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+
   let rawUrl = '';
-  if (process.env.SUPABASE_URL !== undefined) {
-    rawUrl = process.env.SUPABASE_URL;
-  } else if (process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined) {
-    rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (urlA && urlB) {
+    const refA = extractProjectRefCommon(urlA);
+    const refB = extractProjectRefCommon(urlB);
+    if (refA && refB && refA !== refB) {
+      throw new Error(
+        'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase URL aliases detected. ' +
+        'SUPABASE_URL and NEXT_PUBLIC_SUPABASE_URL resolve to different projects. Align environment configuration to target a single project.'
+      );
+    }
+    rawUrl = urlA;
   } else {
-    rawUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
+    rawUrl = urlA || urlB;
   }
-  const supabaseUrl = rawUrl ? rawUrl.trim().replace(/\/+$/, '') : '';
 
-  let secretKey = '';
-  if (process.env.SUPABASE_SECRET_KEY !== undefined) {
-    secretKey = process.env.SUPABASE_SECRET_KEY;
-  } else if (process.env.SUPABASE_SERVICE_ROLE_KEY !== undefined) {
-    secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  } else {
-    secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '';
-  }
-  secretKey = secretKey.trim();
+  const supabaseUrl = rawUrl ? validateSupabaseUrlGuard(rawUrl, 'SUPABASE_URL') : '';
 
-  let anonKey = '';
-  if (process.env.SUPABASE_ANON_KEY !== undefined) {
-    anonKey = process.env.SUPABASE_ANON_KEY;
-  } else if (process.env.SUPABASE_PUBLISHABLE_KEY !== undefined) {
-    anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-  } else {
-    anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '';
+  const keyA = (process.env.SUPABASE_SERVICE_ROLE_KEY !== undefined ? process.env.SUPABASE_SERVICE_ROLE_KEY : env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const keyB = (process.env.SUPABASE_SECRET_KEY !== undefined ? process.env.SUPABASE_SECRET_KEY : env.SUPABASE_SECRET_KEY || '').trim();
+
+  if (keyA && keyB && keyA !== keyB) {
+    throw new Error(
+      'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase service key aliases detected. ' +
+      'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SECRET_KEY have divergent values. Configure identical values or specify a single canonical key.'
+    );
   }
-  anonKey = anonKey.trim();
+  const secretKey = keyA || keyB;
+
+  const anonA = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== undefined ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY : env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const anonB = (process.env.SUPABASE_ANON_KEY !== undefined ? process.env.SUPABASE_ANON_KEY : env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+
+  if (anonA && anonB && anonA !== anonB) {
+    throw new Error(
+      'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase anon key aliases detected. ' +
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_ANON_KEY have divergent values.'
+    );
+  }
+  const anonKey = anonA || anonB;
 
   return { supabaseUrl, secretKey, anonKey };
 }
