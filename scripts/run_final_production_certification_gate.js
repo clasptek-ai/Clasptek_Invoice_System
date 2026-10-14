@@ -1,18 +1,13 @@
 
-/**
- * CLASPTEK FINAL PRODUCTION CERTIFICATION & SECURITY SMOKE-TEST GATE
- * 
- * Executes the complete 13-phase certification sweep on the live production cloud:
- * - Phase 1: Target environment verification (app.clasptek.org / logaawoigfxnisimfatf)
- * - Phase 2: Live Supabase Auth normal login & network probe
- * - Phase 3 & 4: Controlled stale session terminal handling & post-logout network verification
- * - Phase 5: Business workflows with prefix PROD_CERT_AUDIT_<timestamp>
- * - Phase 6: Financial workflow (unpaid -> partial, receipt, no 23514)
- * - Phase 7: Certificate gating (Negative 1: ENROLMENT_NOT_FOUND, Negative 2: INELIGIBLE_CERTIFICATE_ISSUANCE, Positive: ISSUED)
- * - Phase 8: Role & privilege authorization boundaries
- * - Phase 9: Multi-tenant isolation & RLS non-spoofing
- * - Phase 10: Mandatory post-teardown zero-residue verification (READ-BACK count === 0)
- */
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (run_final_production_certification_gate.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
 
 const https = require('https');
 const fs = require('fs');
@@ -20,20 +15,7 @@ const path = require('path');
 const crypto = require('crypto');
 const assert = require('assert');
 
-// Load environment configuration
-const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
-let publishableKey = '';
-let serviceKey = '';
-envContent.split('\n').forEach(line => {
-  if (line.startsWith('SUPABASE_PUBLISHABLE_KEY=')) {
-    publishableKey = line.split('=')[1].trim().replace(/['"]/g, '');
-  }
-  if (line.startsWith('SUPABASE_SECRET_KEY=')) {
-    serviceKey = line.split('=')[1].trim().replace(/['"]/g, '');
-  }
-});
-
-const SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
+const SUPABASE_URL = 'QUARANTINED_ENDPOINT_DISABLED';
 const AUTHORITATIVE_TENANT_ID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 const ADMIN_EMAIL = 'admin@clasptek.org';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'BetweenClasptek@2026';

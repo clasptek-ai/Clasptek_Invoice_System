@@ -1,18 +1,19 @@
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (test_live_app_crud_path.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
+
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
 const TARGET_TENANT_UUID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
-const SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
-
-// Load publishable key from .env.local
-const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
-let pubKey = '';
-envContent.split('\n').forEach(line => {
-  if (line.startsWith('SUPABASE_PUBLISHABLE_KEY=')) {
-    pubKey = line.split('=')[1].trim().replace(/['"]/g, '');
-  }
-});
+const SUPABASE_URL = 'QUARANTINED_ENDPOINT_DISABLED';
 
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {

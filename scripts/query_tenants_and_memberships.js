@@ -1,18 +1,17 @@
-/**
- * READ-ONLY INVESTIGATION: Query tenants and tenant_memberships
- */
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (query_tenants_and_memberships.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
+
 const https = require('https');
 const fs = require('fs');
 
-const envFile = fs.readFileSync('.env.local', 'utf8');
-let key = '';
-envFile.split('\n').forEach(l => {
-  if (l.startsWith('SUPABASE_PUBLISHABLE_KEY=')) {
-    key = l.split('=')[1].trim().replace(/['"]/g, '');
-  }
-});
-
-const url = 'https://logaawoigfxnisimfatf.supabase.co';
+const url = 'QUARANTINED_ENDPOINT_DISABLED';
 
 function queryEndpoint(path) {
   return new Promise((resolve) => {

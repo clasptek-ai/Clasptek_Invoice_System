@@ -1,19 +1,17 @@
-/**
- * PRE-MIGRATION DATABASE HEALTH & AUDIT SNAPSHOT
- */
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (pre_migration_database_health.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
+
 const fs = require('fs');
 const path = require('path');
 
-const envFile = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
-let secretKey = '';
-let anonKey = '';
-envFile.split('\n').forEach(l => {
-  const line = l.trim();
-  if (line.startsWith('SUPABASE_ANON_KEY=')) anonKey = line.split('=')[1].trim().replace(/^['"]|['"]$/g, '');
-  if (line.startsWith('SUPABASE_SECRET_KEY=')) secretKey = line.split('=')[1].trim().replace(/^['"]|['"]$/g, '');
-});
-
-const url = 'https://logaawoigfxnisimfatf.supabase.co';
+const url = 'QUARANTINED_ENDPOINT_DISABLED';
 
 async function q(endpoint, apiKey = secretKey) {
   try {

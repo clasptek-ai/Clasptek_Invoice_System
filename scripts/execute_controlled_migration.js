@@ -1,9 +1,12 @@
-/**
- * CLASPTEK ENTERPRISE PLATFORM — EXPLICIT CONTROLLED MIGRATION EXECUTION
- * Target: 37 Verified Local Records to PostgreSQL (Supabase Production)
- * Target Tenant UUID: f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6
- * Strictly enforces Foreign-Key Order, Stop-on-First-Failure, Tenant Assertion & 27-Table Reconciliation.
- */
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (execute_controlled_migration.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
 
 const fs = require('fs');
 const path = require('path');
@@ -11,10 +14,7 @@ const https = require('https');
 
 const TARGET_TENANT_UUID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 const LEGACY_IDENTIFIER = 'clasptek_main';
-const SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
-
-// Load keys from .env.local
-const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
+const SUPABASE_URL = 'QUARANTINED_ENDPOINT_DISABLED';
 let serviceKey = '';
 let anonKey = '';
 envContent.split('\n').forEach(line => {

@@ -1,33 +1,18 @@
-/**
- * CLASPTEK ENTERPRISE PLATFORM — PHASE 5.1 PRODUCTION POST-DEPLOYMENT VERIFICATION & SMOKE TEST
- * 
- * Target: Real Hosted Supabase Production Cloud
- * Project Ref: logaawoigfxnisimfatf
- * Project URL: https://logaawoigfxnisimfatf.supabase.co
- * Migration:   migrations/20260907_phase5_1_crm_intake_fix02.sql
- * SHA-256:     08c1faabac51457a6c186b7a6bb971981aa134bb1a20e351a4316b386562520a
- * 
- * Forensic audit across all 13 gates:
- * 1. Database Object Inventory & Schema Definitions
- * 2. PostgREST Schema Visibility (No 404s, reload schema verified)
- * 3. Permission Boundaries (anon vs authenticated vs service_role)
- * 4. RLS & Tenant Isolation
- * 5. Controlled Public Intake Smoke Test & Privacy Masking
- * 6. Idempotency Replay & Zero Duplicate Generation
- * 7. Database Trigger Immutability (applicant_data / IMMUTABLE_FIELD)
- * 8. Application-Number Concurrency & Monotonicity
- * 9. Academic Conversion Governance & Role Authorization
- * 10. Immutable Audit Trail (APPLICATION_CREATED & Audit Immutability)
- * 11. Production Data Protection Baseline Comparison
- * 12. Controlled Cleanup of Synthetic Entities
- * 13. Final Certification Assessment Classification
- */
+// ============================================================================
+// CLASPTEK PLATFORM SECURITY QUARANTINE: PRODUCTION EXECUTION PROHIBITED
+// Project logaawoigfxnisimfatf is permanently quarantined.
+// This script is archived for forensic reference only and cannot be executed.
+// ============================================================================
+throw new Error(
+  'FATAL SAFETY HALT: Direct execution of quarantined production script (verify_phase5_1_production_cutover.js) is disabled. ' +
+  'No network clients or requests may be created against production.'
+);
 
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
+const SUPABASE_URL = 'QUARANTINED_ENDPOINT_DISABLED';
 const TARGET_TENANT_ID = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6';
 
 // Load keys from .env.local
