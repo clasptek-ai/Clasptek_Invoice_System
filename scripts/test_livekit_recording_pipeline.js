@@ -2273,6 +2273,966 @@ async function runSuite() {
     assert.strictEqual(found, null); // Conservatives: strictly refuse to adopt without metadata
   });
 
+  await test('[DRIVE IDENTITY EXACT MATCH] Exact meeting, tenant, and recording metadata matches and is adopted', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const fileId = 'mock_exact_match_file';
+    googleConfig._memoryDriveFiles.set(fileId, {
+      fileId,
+      id: fileId,
+      name: 'CLASPTEK_exact_match.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_exact_001', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_exact_001', clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_exact_001' },
+    });
+
+    const found = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_exact_001',
+      tenantId: 'tenant_a',
+      recordingId: 'rec_exact_001',
+    });
+
+    assert.ok(found);
+    assert.strictEqual(found.fileId, fileId);
+  });
+
+  await test('[DRIVE TENANT MISSING REJECTED] Candidate file with missing tenant metadata is rejected when tenantId is supplied', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const fileId = 'mock_missing_tenant_file';
+    googleConfig._memoryDriveFiles.set(fileId, {
+      fileId,
+      id: fileId,
+      name: 'CLASPTEK_missing_tenant.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_missing_tenant' },
+      appProperties: { clasptek_meeting_id: 'mtg_missing_tenant' },
+    });
+
+    const found = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_missing_tenant',
+      tenantId: 'tenant_a',
+    });
+
+    assert.strictEqual(found, null); // Strictly rejected because tenant metadata is missing!
+  });
+
+  await test('[DRIVE RECORDING MISSING REJECTED] Candidate file with missing recording metadata is rejected when recordingId is supplied', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const fileId = 'mock_missing_rec_file';
+    googleConfig._memoryDriveFiles.set(fileId, {
+      fileId,
+      id: fileId,
+      name: 'CLASPTEK_missing_rec.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_missing_rec', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_missing_rec', clasptek_tenant_id: 'tenant_a' },
+    });
+
+    const found = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_missing_rec',
+      tenantId: 'tenant_a',
+      recordingId: 'rec_specific_001',
+    });
+
+    assert.strictEqual(found, null); // Strictly rejected because recording metadata is missing when required!
+  });
+
+  await test('[DRIVE RECORDING MISMATCH REJECTED] Candidate file with mismatched recording metadata is rejected', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const fileId = 'mock_wrong_rec_file';
+    googleConfig._memoryDriveFiles.set(fileId, {
+      fileId,
+      id: fileId,
+      name: 'CLASPTEK_wrong_rec.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_wrong_rec', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_wrong_rec', clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_old_001' },
+    });
+
+    const found = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_wrong_rec',
+      tenantId: 'tenant_a',
+      recordingId: 'rec_new_002',
+    });
+
+    assert.strictEqual(found, null); // Mismatched recording ID rejected
+  });
+
+  await test('[DRIVE CONFLICTING METADATA REJECTED] Conflicting metadata between properties and appProperties is rejected safely', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+
+    // 1. Conflicting meeting ID
+    const fileMtgConflict = 'mock_conflict_mtg';
+    googleConfig._memoryDriveFiles.set(fileMtgConflict, {
+      fileId: fileMtgConflict,
+      id: fileMtgConflict,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_target', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_impostor', clasptek_tenant_id: 'tenant_a' },
+    });
+
+    const foundMtg = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_target',
+      tenantId: 'tenant_a',
+    });
+    assert.strictEqual(foundMtg, null);
+
+    // 2. Conflicting tenant ID
+    const fileTenantConflict = 'mock_conflict_tenant';
+    googleConfig._memoryDriveFiles.set(fileTenantConflict, {
+      fileId: fileTenantConflict,
+      id: fileTenantConflict,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_target_tenant', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_target_tenant', clasptek_tenant_id: 'tenant_b' },
+    });
+
+    const foundTenant = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_target_tenant',
+      tenantId: 'tenant_a',
+    });
+    assert.strictEqual(foundTenant, null);
+
+    // 3. Conflicting recording ID
+    const fileRecConflict = 'mock_conflict_rec';
+    googleConfig._memoryDriveFiles.set(fileRecConflict, {
+      fileId: fileRecConflict,
+      id: fileRecConflict,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_target_rec', clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_alpha' },
+      appProperties: { clasptek_meeting_id: 'mtg_target_rec', clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_beta' },
+    });
+
+    const foundRec = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_target_rec',
+      tenantId: 'tenant_a',
+      recordingId: 'rec_alpha',
+    });
+    assert.strictEqual(foundRec, null);
+  });
+
+  await test('[DRIVE LEGITIMATE OPTIONAL FIELDS] Legitimate recovery where recordingId is absent matches valid tenant-scoped file', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const fileId = 'mock_legit_opt_file';
+    googleConfig._memoryDriveFiles.set(fileId, {
+      fileId,
+      id: fileId,
+      name: 'CLASPTEK_opt_file.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_opt_001', clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: 'mtg_opt_001', clasptek_tenant_id: 'tenant_a' },
+    });
+
+    const found = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_opt_001',
+      tenantId: 'tenant_a',
+      // recordingId intentionally omitted (legitimate early crash recovery)
+    });
+
+    assert.ok(found);
+    assert.strictEqual(found.fileId, fileId);
+  });
+
+  await test('[DRIVE AMBIGUITY ALL FIELDS] Multiple candidate files matching meeting, tenant, and recording ID throw AMBIGUOUS_DRIVE_CANDIDATES', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const meetingId = 'mtg_ambig_full_001';
+    const tenantId = 'tenant_a';
+    const recId = 'rec_ambig_full_001';
+
+    const file1 = 'mock_ambig_full_1';
+    const file2 = 'mock_ambig_full_2';
+
+    googleConfig._memoryDriveFiles.set(file1, {
+      fileId: file1,
+      name: 'recording_copy_1.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    });
+
+    googleConfig._memoryDriveFiles.set(file2, {
+      fileId: file2,
+      name: 'recording_copy_2.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    });
+
+    await assert.rejects(
+      async () =>
+        googleConfig.findExistingDriveFile({
+          folderId: rootFolderId,
+          meetingId,
+          tenantId,
+          recordingId: recId,
+        }),
+      /AMBIGUOUS_DRIVE_CANDIDATES/
+    );
+  });
+
+  await test('[DRIVE INPUT SANITIZATION] Empty, whitespace, or invalid identifiers fail closed and return null', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+
+    // 1. Empty/whitespace meetingId
+    const resEmptyMtg = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: '   ',
+      tenantId: 'tenant_a',
+    });
+    assert.strictEqual(resEmptyMtg, null);
+
+    // 2. Empty/whitespace folderId
+    const resEmptyFolder = await googleConfig.findExistingDriveFile({
+      folderId: '   ',
+      meetingId: 'mtg_valid_123',
+      tenantId: 'tenant_a',
+    });
+    assert.strictEqual(resEmptyFolder, null);
+
+    // 3. Null meetingId
+    const resNullMtg = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: null,
+    });
+    assert.strictEqual(resNullMtg, null);
+
+    // 4. Quotation injection / malformed meetingId sanitizes safely
+    const resQuoteMtg = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: "'''\\",
+      tenantId: 'tenant_a',
+    });
+    assert.strictEqual(resQuoteMtg, null);
+  });
+
+  await test('[DRIVE SAME FILENAME IDENTITY ISOLATION] Files with identical filename but incorrect tenant or recording metadata are rejected', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const sharedFileName = 'CLASPTEK_session_recording.mp4';
+
+    // File 1: Matching meeting ID and same filename, but WRONG tenant
+    const wrongTenantFileId = 'mock_same_name_wrong_tenant';
+    googleConfig._memoryDriveFiles.set(wrongTenantFileId, {
+      fileId: wrongTenantFileId,
+      name: sharedFileName,
+      fileName: sharedFileName,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_same_name', clasptek_tenant_id: 'tenant_other' },
+      appProperties: { clasptek_meeting_id: 'mtg_same_name', clasptek_tenant_id: 'tenant_other', clasptek_recording_id: 'rec_same_name' },
+    });
+
+    const resWrongTenant = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_same_name',
+      tenantId: 'tenant_expected',
+      recordingId: 'rec_same_name',
+      fileName: sharedFileName,
+    });
+    assert.strictEqual(resWrongTenant, null); // Must not adopt!
+
+    // File 2: Matching meeting ID, matching tenant, same filename, but WRONG recordingId
+    const wrongRecFileId = 'mock_same_name_wrong_rec';
+    googleConfig._memoryDriveFiles.set(wrongRecFileId, {
+      fileId: wrongRecFileId,
+      name: sharedFileName,
+      fileName: sharedFileName,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: 'mtg_same_name', clasptek_tenant_id: 'tenant_expected' },
+      appProperties: { clasptek_meeting_id: 'mtg_same_name', clasptek_tenant_id: 'tenant_expected', clasptek_recording_id: 'rec_prior_session' },
+    });
+
+    const resWrongRec = await googleConfig.findExistingDriveFile({
+      folderId: rootFolderId,
+      meetingId: 'mtg_same_name',
+      tenantId: 'tenant_expected',
+      recordingId: 'rec_current_session',
+      fileName: sharedFileName,
+    });
+    assert.strictEqual(resWrongRec, null); // Must not adopt!
+  });
+
+  await test('[DRIVE RETRY IDEMPOTENCY VS OPERATIONAL ERROR] Ambiguity halts with 409 while transient network error triggers retry and recovery', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const meetingId = 'mtg_ambig_operational_test';
+
+    // Seed duplicate files to cause AMBIGUOUS_DRIVE_CANDIDATES
+    const f1 = 'mock_file_op_1';
+    const f2 = 'mock_file_op_2';
+    googleConfig._memoryDriveFiles.set(f1, {
+      fileId: f1,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_op_1' },
+    });
+    googleConfig._memoryDriveFiles.set(f2, {
+      fileId: f2,
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: 'tenant_a' },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: 'tenant_a', clasptek_recording_id: 'rec_op_1' },
+    });
+
+    // Verification: findExistingDriveFile surfaces AMBIGUOUS_DRIVE_CANDIDATES cleanly
+    await assert.rejects(
+      async () =>
+        googleConfig.findExistingDriveFile({
+          folderId: rootFolderId,
+          meetingId,
+          tenantId: 'tenant_a',
+          recordingId: 'rec_op_1',
+        }),
+      (err) => {
+        assert.ok(err instanceof Error);
+        assert.ok(err.message.includes('AMBIGUOUS_DRIVE_CANDIDATES'));
+        return true;
+      }
+    );
+  });
+
+  // --- Section 2 & 3: Drive Pagination & Timeout/Retry Safety Tests ---
+
+  await test('[DRIVE PAGINATION TEST A] Duplicate across pages is rejected with AMBIGUOUS_DRIVE_CANDIDATES', async () => {
+    const rootFolderId = 'mock_root_folder_pag_a';
+    const meetingId = 'mtg_pag_a';
+    const tenantId = 'tenant_a';
+    const recId = 'rec_pag_a';
+
+    const candPage1 = {
+      id: 'gdrive_file_p1',
+      name: 'recording_p1.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    };
+
+    const candPage2 = {
+      id: 'gdrive_file_p2',
+      name: 'recording_p2.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    };
+
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [candPage1], nextPageToken: 'token_to_page_2' } },
+      { status: 200, body: { files: [candPage2] } },
+    ]);
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+            recordingId: recId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'AMBIGUOUS_DRIVE_CANDIDATES');
+          assert.ok(err.message.includes('Multiple Drive files (2) match meeting identifier'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[DRIVE PAGINATION TEST B] No duplicate across pages adopts candidate only after complete search', async () => {
+    const rootFolderId = 'mock_root_folder_pag_b';
+    const meetingId = 'mtg_pag_b';
+    const tenantId = 'tenant_a';
+    const recId = 'rec_pag_b';
+
+    const candPage1 = {
+      id: 'gdrive_file_unique_p1',
+      name: 'recording_unique.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    };
+
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [candPage1], nextPageToken: 'token_to_page_2' } },
+      {
+        status: 200,
+        body: {
+          files: [],
+          nextPageToken: null,
+        },
+      },
+    ]);
+
+    try {
+      const found = await googleConfig.findExistingDriveFile({
+        folderId: rootFolderId,
+        meetingId,
+        tenantId,
+        recordingId: recId,
+      });
+
+      assert.ok(found);
+      assert.strictEqual(found.fileId, 'gdrive_file_unique_p1');
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[DRIVE PAGINATION TEST C] Later-page API failure fails closed with DRIVE_SEARCH_INCONCLUSIVE without adopting page 1 match', async () => {
+    const rootFolderId = 'mock_root_folder_pag_c';
+    const meetingId = 'mtg_pag_c';
+    const tenantId = 'tenant_a';
+    const recId = 'rec_pag_c';
+
+    const candPage1 = {
+      id: 'gdrive_file_p1_premature',
+      name: 'recording_p1.mp4',
+      parents: [rootFolderId],
+      trashed: false,
+      properties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId },
+      appProperties: { clasptek_meeting_id: meetingId, clasptek_tenant_id: tenantId, clasptek_recording_id: recId },
+    };
+
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [candPage1], nextPageToken: 'token_to_page_2' } },
+      { status: 500, body: { error: { message: 'Internal Drive API Failure on page 2' } } },
+    ]);
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+            recordingId: recId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.ok(err.message.includes('page 2'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[DRIVE PAGINATION TEST D] Pagination termination protects against cyclic, malformed, or infinite tokens', async () => {
+    const rootFolderId = 'mock_root_folder_pag_d';
+    const meetingId = 'mtg_pag_d';
+    const tenantId = 'tenant_a';
+
+    // 1. Cyclic token detection
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [], nextPageToken: 'cyclic_token_1' } },
+      { status: 200, body: { files: [], nextPageToken: 'cyclic_token_1' } },
+    ]);
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.ok(err.message.includes('Cyclic nextPageToken'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+
+    // 2. Malformed empty token
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [], nextPageToken: '   ' } },
+    ]);
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.ok(err.message.includes('Malformed empty nextPageToken'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[DRIVE RETRY SAFETY] Inconclusive lookup fails closed without treating operational error as confirmed absence', async () => {
+    const rootFolderId = 'mock_root_recordings_folder';
+    const meetingId = 'mtg_inconclusive_safety';
+    const tenantId = 'tenant_a';
+
+    googleConfig.setTestDriveSearchFailure('Simulated Google Drive Socket Timeout');
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.ok(err.message.includes('Simulated Google Drive Socket Timeout'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchFailure(null);
+    }
+  });
+
+  await test('[DRIVE PAGINATION TEST D.3] Pagination cap: exceeding maxPages = 50 fails closed with DRIVE_SEARCH_INCONCLUSIVE without looping infinitely', async () => {
+    const rootFolderId = 'mock_root_folder_pag_cap';
+    const meetingId = 'mtg_pag_cap_50';
+    const tenantId = 'tenant_a';
+
+    let pagesFetched = 0;
+    googleConfig.setTestDriveSearchPages((token, pageIndex) => {
+      pagesFetched = pageIndex;
+      return {
+        status: 200,
+        body: {
+          files: [],
+          nextPageToken: `token_for_page_${pageIndex + 1}`,
+        },
+      };
+    });
+
+    try {
+      await assert.rejects(
+        async () =>
+          googleConfig.findExistingDriveFile({
+            folderId: rootFolderId,
+            meetingId,
+            tenantId,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.ok(err.message.includes('Exceeded maximum pagination limit (50 pages)'));
+          return true;
+        }
+      );
+      assert.strictEqual(pagesFetched, 50); // Bound: stopped after 50 pages before page 51
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[CALLER RETRY TEST A] Inconclusive lookup on upload retry aborts without initiating duplicate upload', async () => {
+    const meetingId = 'mtg_caller_retry_inconclusive';
+    const tenantId = 'tenant_a';
+    seedMeeting({
+      id: meetingId,
+      publicId: 'pub_retry_inc',
+      title: 'Caller Retry Inconclusive Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_caller_retry_inc_1',
+        consent_session: {
+          sessionId: 'sess_caller_retry_inc',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_retry: { participantId: 'usr_admin_retry', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    // Attempt 1 succeeds in creating the file in Drive, but client drops connection / times out
+    googleConfig.setTestUploadTimeoutAfterCreate(true);
+
+    const adminSession = {
+      user: { id: 'usr_admin_retry', email: 'admin@tenant-a.org' },
+      tenantId,
+      role: 'Super Admin',
+    };
+
+    // Pre-flight check (call 1) returns confirmed absence (0 files).
+    // Post-error recovery check (call 2) encounters operational 500 error.
+    let searchCall = 0;
+    googleConfig.setTestDriveSearchPages((token, pageIndex) => {
+      searchCall++;
+      if (searchCall === 1) {
+        return { status: 200, body: { files: [], nextPageToken: null } };
+      }
+      return { status: 500, body: { error: { message: 'Transient Drive 500 during retry recovery search' } } };
+    });
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_retry_inc'),
+            maxRetries: 3,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.strictEqual(err.statusCode, 502);
+          return true;
+        }
+      );
+
+      // Verify that uploadFileToGoogleDrive was NOT called a second time
+      // Exactly 1 file exists in Drive memory store from attempt 1; no duplicate was created!
+      const matchingFiles = Array.from(googleConfig._memoryDriveFiles.values()).filter(
+        (f) => f.properties?.clasptek_meeting_id === meetingId
+      );
+      assert.strictEqual(matchingFiles.length, 1);
+    } finally {
+      googleConfig.setTestUploadTimeoutAfterCreate(false);
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[CALLER RETRY TEST B] Post-timeout recovery lookup failure is not swallowed and distinguishes ambiguity vs operational error', async () => {
+    const meetingId = 'mtg_caller_timeout_post_error';
+    const tenantId = 'tenant_a';
+    seedMeeting({
+      id: meetingId,
+      publicId: 'pub_post_timeout_inc',
+      title: 'Caller Post Timeout Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_post_timeout_inc_1',
+        consent_session: {
+          sessionId: 'sess_caller_timeout_post_error',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_timeout: { participantId: 'usr_admin_timeout', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const adminSession = {
+      user: { id: 'usr_admin_timeout', email: 'admin@tenant-a.org' },
+      tenantId,
+      role: 'Super Admin',
+    };
+
+    // 1. Operational error test: Lookup fails operationally with 502 DRIVE_SEARCH_INCONCLUSIVE
+    googleConfig.setTestUploadTimeoutAfterCreate(true);
+    let searchCount1 = 0;
+    googleConfig.setTestDriveSearchPages((token, pageIndex) => {
+      searchCount1++;
+      if (searchCount1 === 1) {
+        return { status: 200, body: { files: [], nextPageToken: null } };
+      }
+      return { status: 502, body: { error: { message: 'Operational Drive Search Failure' } } };
+    });
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_b1'),
+            maxRetries: 2,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.strictEqual(err.statusCode, 502);
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestUploadTimeoutAfterCreate(false);
+      googleConfig.setTestDriveSearchPages(null);
+    }
+
+    // 2. Ambiguity error test: Lookup fails with 409 AMBIGUOUS_DRIVE_CANDIDATES
+    const ambigMeetingId = 'mtg_caller_ambig_test';
+    seedMeeting({
+      id: ambigMeetingId,
+      publicId: 'pub_ambig_test',
+      title: 'Caller Ambiguity Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_ambig_test_1',
+        consent_session: {
+          sessionId: 'sess_caller_ambig',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_timeout: { participantId: 'usr_admin_timeout', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const ambigErr = new Error('AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files match meeting');
+    ambigErr.code = 'AMBIGUOUS_DRIVE_CANDIDATES';
+    googleConfig.setTestDriveSearchFailure(ambigErr);
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId: ambigMeetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_b2'),
+            maxRetries: 2,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'AMBIGUOUS_DRIVE_CANDIDATES');
+          assert.strictEqual(err.statusCode, 409);
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchFailure(null);
+    }
+  });
+
+  await test('[CALLER RETRY TEST C] Confirmed absence from complete search permits legitimate initial upload without false positive', async () => {
+    const meetingId = 'mtg_caller_confirmed_absence_legit';
+    const tenantId = 'tenant_a';
+    seedMeeting({
+      id: meetingId,
+      publicId: 'pub_confirmed_abs',
+      title: 'Caller Confirmed Absence Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_confirmed_abs_1',
+        consent_session: {
+          sessionId: 'sess_caller_confirmed_abs',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_abs: { participantId: 'usr_admin_abs', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const adminSession = {
+      user: { id: 'usr_admin_abs', email: 'admin@tenant-a.org' },
+      tenantId,
+      role: 'Super Admin',
+    };
+
+    // Pre-flight lookup completes successfully across all pages with zero files (confirmed absence)
+    googleConfig.setTestDriveSearchPages([
+      { status: 200, body: { files: [], nextPageToken: null } },
+    ]);
+
+    try {
+      const res = await uploadRecordingWithRetry({
+        meetingId,
+        session: adminSession,
+        fileBuffer: Buffer.from('test_video_bytes_legit_initial'),
+        maxRetries: 3,
+      });
+
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(res.status, 'STORED');
+      assert.ok(res.fileId);
+
+      // Verify file was legitimately created and committed
+      const matchingFiles = Array.from(googleConfig._memoryDriveFiles.values()).filter(
+        (f) => f.properties?.clasptek_meeting_id === meetingId
+      );
+      assert.strictEqual(matchingFiles.length, 1);
+    } finally {
+      googleConfig.setTestDriveSearchPages(null);
+    }
+  });
+
+  await test('[CALLER RETRY TEST E] Structured error handling distinguishes codes and treats unexpected untyped errors fail-closed', async () => {
+    const meetingId = 'mtg_caller_structured_errors';
+    const tenantId = 'tenant_a';
+    seedMeeting({
+      id: meetingId,
+      publicId: 'pub_struct_err',
+      title: 'Caller Structured Errors Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_struct_err_1',
+        consent_session: {
+          sessionId: 'sess_caller_struct_err',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_struct: { participantId: 'usr_admin_struct', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const adminSession = {
+      user: { id: 'usr_admin_struct', email: 'admin@tenant-a.org' },
+      tenantId,
+      role: 'Super Admin',
+    };
+
+    // 1. Untyped unexpected error during lookup (no recognized error code)
+    const unexpectedErr = new Error('UNKNOWN_LOWLEVEL_TRANSPORT_FAULT');
+    // Deliberately no .code property on unexpectedErr
+    googleConfig.setTestDriveSearchFailure(unexpectedErr);
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_untyped'),
+            maxRetries: 2,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.strictEqual(err.statusCode, 502);
+          assert.ok(err.message.includes('Pre-upload Drive lookup failed unexpectedly'));
+          assert.ok(err.message.includes('UNKNOWN_LOWLEVEL_TRANSPORT_FAULT'));
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchFailure(null);
+    }
+
+    // 2. Structured AMBIGUOUS_DRIVE_CANDIDATES
+    const ambigMeetingId = 'mtg_caller_structured_errors_ambig';
+    seedMeeting({
+      id: ambigMeetingId,
+      publicId: 'pub_struct_ambig',
+      title: 'Caller Structured Errors Ambiguity Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_struct_ambig_1',
+        consent_session: {
+          sessionId: 'sess_caller_struct_ambig',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_struct: { participantId: 'usr_admin_struct', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const ambigErr = new Error('AMBIGUOUS_DRIVE_CANDIDATES: Exact match ambiguity detected');
+    ambigErr.code = 'AMBIGUOUS_DRIVE_CANDIDATES';
+    googleConfig.setTestDriveSearchFailure(ambigErr);
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId: ambigMeetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_ambig'),
+            maxRetries: 2,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'AMBIGUOUS_DRIVE_CANDIDATES');
+          assert.strictEqual(err.statusCode, 409);
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchFailure(null);
+    }
+
+    // 3. Structured DRIVE_SEARCH_INCONCLUSIVE
+    const inconcMeetingId = 'mtg_caller_structured_errors_inconc';
+    seedMeeting({
+      id: inconcMeetingId,
+      publicId: 'pub_struct_inconc',
+      title: 'Caller Structured Errors Inconclusive Meeting',
+      tenantId,
+      recordingStatus: 'PROCESSING',
+      recordingMetadata: {
+        recordingId: 'rec_struct_inconc_1',
+        consent_session: {
+          sessionId: 'sess_caller_struct_inconc',
+          status: 'ALL_GRANTED',
+          consents: {
+            usr_admin_struct: { participantId: 'usr_admin_struct', status: 'GRANTED' },
+          },
+        },
+      },
+    });
+
+    const inconcErr = new Error('DRIVE_SEARCH_INCONCLUSIVE: Partial page failure');
+    inconcErr.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+    googleConfig.setTestDriveSearchFailure(inconcErr);
+
+    try {
+      await assert.rejects(
+        async () =>
+          uploadRecordingWithRetry({
+            meetingId: inconcMeetingId,
+            session: adminSession,
+            fileBuffer: Buffer.from('test_video_bytes_inconc'),
+            maxRetries: 2,
+          }),
+        (err) => {
+          assert.ok(err instanceof Error);
+          assert.strictEqual(err.code, 'DRIVE_SEARCH_INCONCLUSIVE');
+          assert.strictEqual(err.statusCode, 502);
+          return true;
+        }
+      );
+    } finally {
+      googleConfig.setTestDriveSearchFailure(null);
+    }
+  });
+
   // --- Suite 13: Download Integrity Checks ---
   console.log('\n--- Suite 13: Download Integrity Checks ---');
 

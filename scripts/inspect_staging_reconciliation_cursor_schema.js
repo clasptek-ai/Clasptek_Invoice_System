@@ -138,6 +138,7 @@ async function inspectStagingSchema(options = {}) {
         SELECT
           c.conname,
           c.contype,
+          c.convalidated,
           pg_get_constraintdef(c.oid) AS constraint_definition,
           ARRAY(
             SELECT a.attname
@@ -153,7 +154,7 @@ async function inspectStagingSchema(options = {}) {
       `);
       inspectionReport.constraints = q3.rows;
       q3.rows.forEach(con => {
-        console.log(`  - Constraint ${con.conname} (${con.contype}): ${con.constraint_definition}`);
+        console.log(`  - Constraint ${con.conname} (${con.contype}, validated: ${con.convalidated}): ${con.constraint_definition}`);
       });
 
       // Query 3b: Detect conflicting same-named constraint on other relations
@@ -170,10 +171,10 @@ async function inspectStagingSchema(options = {}) {
         console.log(`  ⚠ Conflicting constraint found on other relations: ${JSON.stringify(q3b.rows)}`);
       }
 
-      // Query 4: Inspect RLS status
-      console.log('\n--- Executing Query 4: Inspect RLS Status ---');
+      // Query 4: Inspect RLS status and catalog ACLs
+      console.log('\n--- Executing Query 4: Inspect RLS Status & Table Catalog ACL ---');
       const q4 = await client.query(`
-        SELECT relname, relrowsecurity AS rls_enabled, relforcerowsecurity AS rls_enforced 
+        SELECT relname, relrowsecurity AS rls_enabled, relforcerowsecurity AS rls_enforced, relacl::text[] AS relacl
         FROM pg_class c
         JOIN pg_namespace n ON c.relnamespace = n.oid
         WHERE n.nspname = 'public' 
@@ -181,6 +182,7 @@ async function inspectStagingSchema(options = {}) {
       `);
       inspectionReport.rls = q4.rows[0] || null;
       console.log(`  - RLS Enabled: ${inspectionReport.rls?.rls_enabled} | RLS Enforced: ${inspectionReport.rls?.rls_enforced}`);
+      console.log(`  - Catalog relacl: ${JSON.stringify(inspectionReport.rls?.relacl)}`);
 
       // Query 5: Inspect table grants
       console.log('\n--- Executing Query 5: Inspect Table Grants ---');
@@ -215,10 +217,11 @@ async function inspectStagingSchema(options = {}) {
       console.log('\nℹ Skipping Queries 2, 3, 4, 5, 8 because table does not exist.');
     }
 
-    // Query 6: Check function existence, owner, security definer, search path
+    // Query 6: Check function existence, owner, security definer, search path, catalog ACL
     console.log('\n--- Executing Query 6: Check Function Existence & Metadata ---');
     const q6 = await client.query(`
       SELECT 
+          p.oid,
           p.proname, 
           r.rolname AS function_owner, 
           p.prosecdef AS is_security_definer,
@@ -226,7 +229,8 @@ async function inspectStagingSchema(options = {}) {
           p.pronargs AS argument_count,
           pg_get_function_arguments(p.oid) AS argument_signature,
           pg_get_function_identity_arguments(p.oid) AS identity_arguments,
-          pg_get_function_result(p.oid) AS return_type
+          pg_get_function_result(p.oid) AS return_type,
+          p.proacl::text[] AS proacl
       FROM pg_proc p
       JOIN pg_namespace n ON p.pronamespace = n.oid
       JOIN pg_roles r ON p.proowner = r.oid
@@ -234,16 +238,19 @@ async function inspectStagingSchema(options = {}) {
         AND p.proname = 'advance_recording_reconciliation_cursor';
     `);
 
+    inspectionReport.functionsCount = q6.rows.length;
     if (q6.rows.length > 0) {
       inspectionReport.functionExists = true;
       inspectionReport.functionDetails = q6.rows[0];
-      console.log(`  ✔ Function EXISTS: public.${q6.rows[0].proname}`);
+      console.log(`  ✔ Function EXISTS: public.${q6.rows[0].proname} (Total overloads: ${q6.rows.length})`);
       console.log(`    - Owner: ${q6.rows[0].function_owner}`);
       console.log(`    - SECURITY DEFINER: ${q6.rows[0].is_security_definer}`);
       console.log(`    - Search Path: ${JSON.stringify(q6.rows[0].function_search_path)}`);
       console.log(`    - Argument Count: ${q6.rows[0].argument_count}`);
       console.log(`    - Signature: ${q6.rows[0].argument_signature}`);
+      console.log(`    - Identity Arguments: ${q6.rows[0].identity_arguments}`);
       console.log(`    - Return Type: ${q6.rows[0].return_type}`);
+      console.log(`    - Catalog proacl: ${JSON.stringify(q6.rows[0].proacl)}`);
     } else {
       console.log('  ℹ Function does NOT exist in staging (public.advance_recording_reconciliation_cursor).');
     }
@@ -513,6 +520,9 @@ function evaluateCertificationAssertions(report) {
     if (chk.contype !== 'c') {
       failures.push('Constraint chk_reconciliation_cursor_category_offset is not a CHECK constraint');
     }
+    if (chk.convalidated !== true && chk.convalidated !== 't') {
+      failures.push('Constraint chk_reconciliation_cursor_category_offset is not validated (convalidated = false)');
+    }
     if (Array.isArray(chk.conkey_cols) && JSON.stringify(chk.conkey_cols) !== JSON.stringify(['category_offset'])) {
       failures.push(`CHECK constraint column list [${chk.conkey_cols.join(', ')}] must strictly consist of ['category_offset']`);
     }
@@ -539,12 +549,16 @@ function evaluateCertificationAssertions(report) {
     }
   }
 
-  // 8. Stored function: existence, SECURITY DEFINER, return type, argument count, signature, search path
+  // 8. Stored function: existence, overload uniqueness, SECURITY DEFINER, return type, argument count, signature, search path
   if (!report.functionExists) {
     failures.push('Function public.advance_recording_reconciliation_cursor does not exist');
   } else if (!report.functionDetails) {
     failures.push('Missing functionDetails metadata for public.advance_recording_reconciliation_cursor');
   } else {
+    if (report.functionsCount !== undefined && report.functionsCount !== null && Number(report.functionsCount) > 1) {
+      failures.push(`Found ${report.functionsCount} overloads of function public.advance_recording_reconciliation_cursor (expected exactly 1)`);
+    }
+
     const fn = report.functionDetails;
     if (fn.is_security_definer !== true && fn.is_security_definer !== 't') {
       failures.push('Function is not SECURITY DEFINER');
@@ -588,7 +602,7 @@ function evaluateCertificationAssertions(report) {
     }
   }
 
-  // 10. Reject unintended privileges to PUBLIC, anon, authenticated
+  // 10. Reject unintended privileges to PUBLIC, anon, authenticated (information_schema and catalog ACLs)
   const unintendedGrantees = ['PUBLIC', 'anon', 'authenticated'];
   const badTableGrants = (report.tableGrants || []).filter(g => unintendedGrantees.includes(g.grantee));
   if (badTableGrants.length > 0) {
@@ -597,6 +611,25 @@ function evaluateCertificationAssertions(report) {
   const badFuncGrants = (report.functionGrants || []).filter(g => unintendedGrantees.includes(g.grantee));
   if (badFuncGrants.length > 0) {
     failures.push(`Unintended function grants detected to: ${badFuncGrants.map(g => `${g.grantee} (${g.privilege_type})`).join(', ')}`);
+  }
+
+  // Catalog ACL validation if catalog arrays are present
+  if (report.rls && Array.isArray(report.rls.relacl)) {
+    for (const aclEntry of report.rls.relacl) {
+      const grantee = aclEntry.split('=')[0];
+      if (unintendedGrantees.includes(grantee) || grantee === '') {
+        failures.push(`Catalog table ACL (relacl) contains unintended grant: ${aclEntry}`);
+      }
+    }
+  }
+
+  if (report.functionDetails && Array.isArray(report.functionDetails.proacl)) {
+    for (const aclEntry of report.functionDetails.proacl) {
+      const grantee = aclEntry.split('=')[0];
+      if (unintendedGrantees.includes(grantee) || grantee === '') {
+        failures.push(`Catalog function ACL (proacl) contains unintended grant: ${aclEntry}`);
+      }
+    }
   }
 
   return failures;

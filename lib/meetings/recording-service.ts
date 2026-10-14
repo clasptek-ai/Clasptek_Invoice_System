@@ -3312,14 +3312,32 @@ export async function reconcileMeetingRecording({
         centralConnection: centralConn,
       });
 
-      const existingDrive = await googleConfig.findExistingDriveFile({
-        folderId: rootFolder.folderId,
-        meetingId: meeting.id,
-        tenantId,
-        recordingId: meeting.recordingMetadata?.recordingId,
-        fileName: meeting.recordingMetadata?.fileName,
-        accessToken: centralConn.access_token,
-      });
+      let existingDrive: any = null;
+      try {
+        existingDrive = await googleConfig.findExistingDriveFile({
+          folderId: rootFolder.folderId,
+          meetingId: meeting.id,
+          tenantId,
+          recordingId: meeting.recordingMetadata?.recordingId,
+          fileName: meeting.recordingMetadata?.fileName,
+          accessToken: centralConn.access_token,
+        });
+      } catch (driveErr: unknown) {
+        await releaseRecordingProcessingClaim({
+          meetingId: meeting.id,
+          tenantId: meeting.tenantId,
+          claimToken,
+        }).catch(() => {});
+        const errCode = (driveErr as any)?.code;
+        const errMsg = driveErr instanceof Error ? driveErr.message : String(driveErr);
+        if (errCode === 'AMBIGUOUS_DRIVE_CANDIDATES') {
+          throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', errMsg, 409);
+        }
+        if (errCode === 'DRIVE_SEARCH_INCONCLUSIVE') {
+          throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', errMsg, 502);
+        }
+        throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Reconciliation Drive recovery lookup failed unexpectedly: ${errMsg}`, 502);
+      }
 
       if (existingDrive && existingDrive.fileId) {
         // Authoritatively verify affirmative participant consent before adopting existing drive file
@@ -3415,8 +3433,21 @@ export async function reconcileMeetingRecording({
       }
     }
   } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes('AMBIGUOUS_DRIVE_CANDIDATES')) {
-      throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', err.message, 409);
+    if (err instanceof RecordingServiceError) {
+      throw err;
+    }
+    const errCode = (err as any)?.code;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errCode === 'AMBIGUOUS_DRIVE_CANDIDATES') {
+      throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', errMsg, 409);
+    }
+    if (errCode === 'DRIVE_SEARCH_INCONCLUSIVE') {
+      await releaseRecordingProcessingClaim({
+        meetingId: meeting.id,
+        tenantId: meeting.tenantId,
+        claimToken,
+      }).catch(() => {});
+      throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', errMsg, 502);
     }
   }
 
@@ -4132,9 +4163,15 @@ export async function uploadRecordingWithRetry({
       uploadResult = existingFile;
     }
   } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes('AMBIGUOUS_DRIVE_CANDIDATES')) {
-      throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', err.message, 409);
+    const errCode = (err as any)?.code;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errCode === 'AMBIGUOUS_DRIVE_CANDIDATES') {
+      throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', errMsg, 409);
     }
+    if (errCode === 'DRIVE_SEARCH_INCONCLUSIVE') {
+      throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Pre-upload Drive recovery search is inconclusive: ${errMsg}`, 502);
+    }
+    throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Pre-upload Drive lookup failed unexpectedly: ${errMsg}`, 502);
   }
 
   // 5. Retry loop with exponential backoff on transient errors (if not already adopted)
@@ -4164,9 +4201,15 @@ export async function uploadRecordingWithRetry({
               break;
             }
           } catch (err: unknown) {
-            if (err instanceof Error && err.message.includes('AMBIGUOUS_DRIVE_CANDIDATES')) {
-              throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', err.message, 409);
+            const errCode = (err as any)?.code;
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (errCode === 'AMBIGUOUS_DRIVE_CANDIDATES') {
+              throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', errMsg, 409);
             }
+            if (errCode === 'DRIVE_SEARCH_INCONCLUSIVE') {
+              throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Retry Drive recovery search is inconclusive: ${errMsg}`, 502);
+            }
+            throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Retry Drive recovery lookup failed unexpectedly: ${errMsg}`, 502);
           }
         }
 
@@ -4211,9 +4254,15 @@ export async function uploadRecordingWithRetry({
             break;
           }
         } catch (err: unknown) {
-          if (err instanceof Error && err.message.includes('AMBIGUOUS_DRIVE_CANDIDATES')) {
-            throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', err.message, 409);
+          const errCode = (err as any)?.code;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (errCode === 'AMBIGUOUS_DRIVE_CANDIDATES') {
+            throw new RecordingServiceError('AMBIGUOUS_DRIVE_CANDIDATES', errMsg, 409);
           }
+          if (errCode === 'DRIVE_SEARCH_INCONCLUSIVE') {
+            throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Post-error Drive recovery lookup is inconclusive: ${errMsg}`, 502);
+          }
+          throw new RecordingServiceError('DRIVE_SEARCH_INCONCLUSIVE', `Post-error Drive recovery lookup failed unexpectedly: ${errMsg}`, 502);
         }
 
         if (!isTransient || attempt === maxRetries) {

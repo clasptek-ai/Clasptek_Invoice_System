@@ -453,10 +453,10 @@ async function runTestSuite() {
       ],
       constraints: [
         { conname: 'meeting_recording_reconciliation_cursor_pkey', contype: 'p', constraint_definition: 'PRIMARY KEY (id)', conkey_cols: ['id'] },
-        { conname: 'chk_reconciliation_cursor_category_offset', contype: 'c', constraint_definition: 'CHECK ((category_offset = ANY (ARRAY[0, 1, 2])))', conkey_cols: ['category_offset'] },
+        { conname: 'chk_reconciliation_cursor_category_offset', contype: 'c', convalidated: true, constraint_definition: 'CHECK ((category_offset = ANY (ARRAY[0, 1, 2])))', conkey_cols: ['category_offset'] },
       ],
       conflictingConstraints: [],
-      rls: { relname: 'meeting_recording_reconciliation_cursor', rls_enabled: true, rls_enforced: false },
+      rls: { relname: 'meeting_recording_reconciliation_cursor', rls_enabled: true, rls_enforced: false, relacl: ['service_role=arwdDxt/postgres', 'postgres=arwdDxt/postgres'] },
       tableGrants: [
         { grantee: 'service_role', privilege_type: 'SELECT' },
         { grantee: 'service_role', privilege_type: 'INSERT' },
@@ -473,6 +473,7 @@ async function runTestSuite() {
         updated_at: '2026-10-14T10:00:00Z',
       },
       functionExists: true,
+      functionsCount: 1,
       functionDetails: {
         proname: 'advance_recording_reconciliation_cursor',
         function_owner: 'postgres',
@@ -482,6 +483,7 @@ async function runTestSuite() {
         argument_signature: 'p_worker_id character varying DEFAULT \'system_reconciliation_worker\'::character varying',
         identity_arguments: 'p_worker_id character varying',
         return_type: 'jsonb',
+        proacl: ['service_role=X/postgres', 'postgres=X/postgres'],
       },
       functionGrants: [
         { grantee: 'service_role', privilege_type: 'EXECUTE' },
@@ -494,6 +496,10 @@ async function runTestSuite() {
   await runTest('Migration pre-validation enforces exact defaults, unexpected column rejection, catalog PK, and canonical check semantics', () => {
     const migrationPath = path.join(__dirname, '..', 'migrations', '20261011_meeting_recording_reconciliation_cursor.sql');
     const sql = fs.readFileSync(migrationPath, 'utf8');
+
+    // Verify BEGIN and COMMIT transaction wrapper
+    assert(sql.includes("BEGIN;"), 'Migration must be wrapped in BEGIN;');
+    assert(sql.includes("COMMIT;"), 'Migration must terminate with COMMIT;');
 
     // Verify all 6 columns checked
     const requiredCols = ['id', 'category_offset', 'advanced_by', 'last_advanced_at', 'created_at', 'updated_at'];
@@ -510,7 +516,7 @@ async function runTestSuite() {
 
     // Verify exact default checks (not loose substring)
     assert(sql.includes("regexp_replace(column_default, '::(integer|int4|int)$', '', 'i')) = '0'"), 'Migration must strictly check 0 default');
-    assert(sql.includes("regexp_replace(column_default, '::(timestamp with time zone|timestamptz)$', '', 'i'))) IN ('now()', 'current_timestamp')"), 'Migration must strictly check now() default');
+    assert(sql.includes("regexp_replace(lower(trim(column_default)), '^[\\s\\(]*(now\\(\\)|current_timestamp)[\\s\\)]*(::\\s*(timestamp with time zone|timestamptz))?[\\s\\)]*$', '\\1') IN ('now()', 'current_timestamp')"), 'Migration must strictly check now() default');
 
     // Verify unexpected extra columns rejection (exact schema contract)
     assert(sql.includes("v_extra_cols"), 'Migration must track unexpected extra columns');
@@ -524,10 +530,21 @@ async function runTestSuite() {
     assert(sql.includes("category_offset NOT IN (0, 1, 2)"), 'Migration must check existing category_offset values');
     assert(sql.includes("v_invalid_rows > 0"), 'Migration must raise exception on invalid existing rows');
 
-    // Verify canonical check constraint semantics and cross-relation collision check
+    // Verify pre-existing singleton invariant checks
+    assert(sql.includes("v_row_count > 1"), 'Migration must enforce singleton at most one row');
+    assert(sql.includes("id <> 'global_cursor'"), 'Migration must check singleton row ID');
+
+    // Verify canonical check constraint semantics, validation status, and cross-relation collision check
     assert(sql.includes("chk_reconciliation_cursor_category_offset"), 'Migration must check constraint name');
     assert(sql.includes("t.relname <> 'meeting_recording_reconciliation_cursor'"), 'Migration must check relation name for collision');
     assert(sql.includes("v_norm_def IN ("), 'Migration must check canonical constraint definitions');
+    assert(sql.includes("v_existing_validated IS NOT TRUE"), 'Migration must check convalidated');
+
+    // Verify function missing-row, offset domain, and catalog overload guards
+    assert(sql.includes("v_row.id IS NULL"), 'Function must guard against missing row');
+    assert(sql.includes("v_current_offset NOT IN (0, 1, 2)"), 'Function must guard against invalid offset domain');
+    assert(sql.includes("v_fn_record.proargtypes <> 'character varying'::regtype::oidvector"), 'Migration must guard against conflicting overloads via catalog oidvector');
+    assert(sql.includes("v_fn_record.prorettype <> 'jsonb'::regtype"), 'Migration must guard against incompatible return types via catalog regtype');
   });
 
   // 2. Base assertion pass
@@ -558,18 +575,30 @@ async function runTestSuite() {
   });
 
   await runTest('Gap A: Unit tests for isExactNowDefault validate now() and reject deceptive expressions', () => {
-    // Valid now() defaults
+    // Valid now() defaults across standard PostgreSQL representations and casts
     assert.strictEqual(isExactNowDefault('now()'), true);
     assert.strictEqual(isExactNowDefault('(now())'), true);
+    assert.strictEqual(isExactNowDefault('((now()))'), true);
+    assert.strictEqual(isExactNowDefault('now()::timestamp with time zone'), true);
+    assert.strictEqual(isExactNowDefault('now()::timestamptz'), true);
+    assert.strictEqual(isExactNowDefault('(now()::timestamp with time zone)'), true);
+    assert.strictEqual(isExactNowDefault('((now())::timestamp with time zone)'), true);
     assert.strictEqual(isExactNowDefault('CURRENT_TIMESTAMP'), true);
+    assert.strictEqual(isExactNowDefault('(CURRENT_TIMESTAMP)'), true);
     assert.strictEqual(isExactNowDefault('(CURRENT_TIMESTAMP)::timestamptz'), true);
+    assert.strictEqual(isExactNowDefault('current_timestamp::timestamp with time zone'), true);
 
-    // Deceptive expressions that contain 'now()' but are NOT default now()
+    // Deceptive expressions that contain 'now()' or invalid functions
     assert.strictEqual(isExactNowDefault('now() + interval \'1 day\''), false);
     assert.strictEqual(isExactNowDefault('clock_timestamp()'), false);
     assert.strictEqual(isExactNowDefault('statement_timestamp()'), false);
+    assert.strictEqual(isExactNowDefault('timeofday()'), false);
+    assert.strictEqual(isExactNowDefault('\'2026-01-01\'::timestamp with time zone'), false);
     assert.strictEqual(isExactNowDefault('2026-01-01 00:00:00+00'), false);
     assert.strictEqual(isExactNowDefault('not_now()'), false);
+    assert.strictEqual(isExactNowDefault('now'), false);
+    assert.strictEqual(isExactNowDefault('\'now\''), false);
+    assert.strictEqual(isExactNowDefault('NULL'), false);
     assert.strictEqual(isExactNowDefault(null), false);
     assert.strictEqual(isExactNowDefault(undefined), false);
   });
@@ -890,8 +919,33 @@ async function runTestSuite() {
     assert(evaluateCertificationAssertions(r4).some(f => f.includes('Insufficient table grants metadata in inspection report')));
   });
 
+  // 12b. Hardened catalog and overload checks
+  await runTest('Fails when check constraint is not validated (convalidated = false)', () => {
+    const r = getValidMockReport();
+    const chk = r.constraints.find(c => c.conname === 'chk_reconciliation_cursor_category_offset');
+    chk.convalidated = false;
+    const failures = evaluateCertificationAssertions(r);
+    assert(failures.some(f => f.includes('convalidated = false')), 'Must fail if convalidated is false');
+  });
 
-  // 12. Category 9: CLI assertion failures return a non-zero status
+  await runTest('Fails when multiple function overloads exist', () => {
+    const r = getValidMockReport();
+    r.functionsCount = 2;
+    const failures = evaluateCertificationAssertions(r);
+    assert(failures.some(f => f.includes('overloads of function')), 'Must fail if functionsCount > 1');
+  });
+
+  await runTest('Fails when catalog table or function ACL contains unintended grants', () => {
+    const r1 = getValidMockReport();
+    r1.rls.relacl = ['service_role=arwdDxt/postgres', 'anon=r/postgres'];
+    assert(evaluateCertificationAssertions(r1).some(f => f.includes('Catalog table ACL (relacl) contains unintended grant')));
+
+    const r2 = getValidMockReport();
+    r2.functionDetails.proacl = ['service_role=X/postgres', 'authenticated=X/postgres'];
+    assert(evaluateCertificationAssertions(r2).some(f => f.includes('Catalog function ACL (proacl) contains unintended grant')));
+  });
+
+  // 13. Category 9: CLI assertion failures return a non-zero status
   await runTest('CLI assertion failures return a non-zero exit status', () => {
     // Invoking the CLI with --assert-complete when inspection fails or throws returns non-zero exit code
     const child = child_process.spawnSync(

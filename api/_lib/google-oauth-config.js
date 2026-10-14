@@ -959,6 +959,8 @@ let _testUploadFailure = false;
 let _testUploadFailureMessage = '';
 let _testUploadTimeoutAfterCreate = false;
 const _memoryDriveFiles = new Map();
+let _testDriveSearchPages = null;
+let _testDriveSearchFailure = null;
 
 function setTestUploadFailure(fail, msg) {
   _testUploadFailure = Boolean(fail);
@@ -969,42 +971,136 @@ function setTestUploadTimeoutAfterCreate(enabled) {
   _testUploadTimeoutAfterCreate = Boolean(enabled);
 }
 
+function setTestDriveSearchPages(pages) {
+  _testDriveSearchPages = pages;
+}
+
+function setTestDriveSearchFailure(err) {
+  _testDriveSearchFailure = err;
+}
+
+/**
+ * Safely resolves a metadata key from a Drive file's properties and appProperties.
+ * Enforces conflict detection: if both stores define the key and values differ,
+ * returns { conflict: true, value: null } so callers can reject the candidate.
+ */
+function resolveDriveMetadataField(file, key) {
+  if (!file || typeof file !== 'object') {
+    return { conflict: false, value: null };
+  }
+  const rawProp = file.properties && typeof file.properties === 'object' ? file.properties[key] : null;
+  const rawAppProp = file.appProperties && typeof file.appProperties === 'object' ? file.appProperties[key] : null;
+
+  const propVal = rawProp !== null && rawProp !== undefined ? String(rawProp).trim() : null;
+  const appPropVal = rawAppProp !== null && rawAppProp !== undefined ? String(rawAppProp).trim() : null;
+
+  const hasProp = propVal !== null && propVal !== '';
+  const hasAppProp = appPropVal !== null && appPropVal !== '';
+
+  if (hasProp && hasAppProp && propVal !== appPropVal) {
+    return { conflict: true, value: null };
+  }
+
+  const resolved = hasAppProp ? appPropVal : (hasProp ? propVal : null);
+  return { conflict: false, value: resolved };
+}
+
+/**
+ * Validates a candidate Google Drive file against authoritative identity criteria:
+ * 1. Must be in authoritative parent folder and not trashed.
+ * 2. Exact meeting identity match required; missing, empty, mismatched, or conflicting meeting metadata rejected.
+ * 3. When tenantId is supplied, candidate MUST possess matching tenant metadata without conflict. Missing tenant metadata is strictly rejected.
+ * 4. When recordingId is supplied, candidate MUST possess matching recording metadata without conflict. Missing recording metadata is strictly rejected.
+ * 5. Filename is never used as proof of identity.
+ */
+function isCandidateDriveFileValid(f, { folderId, meetingId, tenantId = null, recordingId = null }) {
+  if (!f || typeof f !== 'object') return false;
+  if (!f.parents || !Array.isArray(f.parents) || !f.parents.includes(folderId)) return false;
+  if (f.trashed) return false;
+
+  const meetingMeta = resolveDriveMetadataField(f, 'clasptek_meeting_id');
+  if (meetingMeta.conflict || !meetingMeta.value || meetingMeta.value !== meetingId) {
+    return false;
+  }
+
+  const tenantMeta = resolveDriveMetadataField(f, 'clasptek_tenant_id');
+  if (tenantMeta.conflict) {
+    return false;
+  }
+  if (tenantId) {
+    if (!tenantMeta.value || tenantMeta.value !== tenantId) {
+      return false;
+    }
+  }
+
+  const recMeta = resolveDriveMetadataField(f, 'clasptek_recording_id');
+  if (recMeta.conflict) {
+    return false;
+  }
+  if (recordingId) {
+    if (!recMeta.value || recMeta.value !== recordingId) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /**
  * Searches authoritative folder for an existing file with matching stable identifier.
  * Used for idempotent upload recovery (e.g. if previous upload succeeded but response timed out).
  * Enforces:
  * - Exact meeting identity in properties / appProperties (filename alone is strictly prohibited)
- * - Exact tenant isolation boundary
- * - Ambiguity rejection: if multiple files match, throws AMBIGUOUS_DRIVE_CANDIDATES
+ * - Exact tenant isolation boundary: files missing tenant metadata are rejected when tenantId is supplied
+ * - Exact recording isolation boundary: files missing recording metadata are rejected when recordingId is supplied
+ * - Conflict detection across properties and appProperties
+ * - Complete pagination across all pages using nextPageToken before declaring candidate set unambiguous
+ * - Fail-closed error propagation: incomplete search or operational failure throws DRIVE_SEARCH_INCONCLUSIVE
+ * - Ambiguity rejection: if multiple files match across any/all pages, throws AMBIGUOUS_DRIVE_CANDIDATES
  * - Legacy files without metadata are never adopted
  */
 async function findExistingDriveFile({ folderId, meetingId, tenantId = null, recordingId = null, fileName = null, accessToken = null }) {
-  if (!folderId || !meetingId) return null;
+  const cleanFolderId = typeof folderId === 'string' ? folderId.trim() : '';
+  const cleanMeetingId = typeof meetingId === 'string' ? meetingId.trim() : '';
+  if (!cleanFolderId || !cleanMeetingId) return null;
 
-  // Test mode in-memory lookup
-  if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
+  const cleanTenantId = typeof tenantId === 'string' && tenantId.trim() !== '' ? tenantId.trim() : null;
+  const cleanRecordingId = typeof recordingId === 'string' && recordingId.trim() !== '' ? recordingId.trim() : null;
+
+  const safeMeetingId = cleanMeetingId.replace(/['\\]/g, '');
+  const safeFolderId = cleanFolderId.replace(/['\\]/g, '');
+  if (!safeMeetingId || !safeFolderId) return null;
+
+  // Test mode in-memory lookup (when mock pagination pages are not configured)
+  if ((process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') && !_testDriveSearchPages) {
+    if (_testDriveSearchFailure) {
+      const fail = _testDriveSearchFailure;
+      _testDriveSearchFailure = null;
+      let err;
+      if (fail instanceof Error) {
+        err = fail;
+      } else {
+        err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: ${fail}`);
+        err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+      }
+      throw err;
+    }
+
     const matches = [];
     for (const f of _memoryDriveFiles.values()) {
-      if (!f.parents || !f.parents.includes(folderId) || f.trashed) continue;
-
-      const fileMeetingId = f.properties?.clasptek_meeting_id || f.appProperties?.clasptek_meeting_id;
-      if (!fileMeetingId || fileMeetingId !== meetingId) continue;
-
-      if (tenantId) {
-        const fileTenantId = f.properties?.clasptek_tenant_id || f.appProperties?.clasptek_tenant_id;
-        if (fileTenantId && fileTenantId !== tenantId) continue;
-      }
-
-      if (recordingId) {
-        const fileRecId = f.properties?.clasptek_recording_id || f.appProperties?.clasptek_recording_id;
-        if (fileRecId && fileRecId !== recordingId) continue;
-      }
-
+      if (!isCandidateDriveFileValid(f, {
+        folderId: cleanFolderId,
+        meetingId: cleanMeetingId,
+        tenantId: cleanTenantId,
+        recordingId: cleanRecordingId
+      })) continue;
       matches.push(f);
     }
 
     if (matches.length > 1) {
-      throw new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${matches.length}) match meeting identifier '${meetingId}'. Refusing ambiguous adoption.`);
+      const ambigErr = new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${matches.length}) match meeting identifier '${cleanMeetingId}'. Refusing ambiguous adoption.`);
+      ambigErr.code = 'AMBIGUOUS_DRIVE_CANDIDATES';
+      throw ambigErr;
     }
 
     if (matches.length === 1) {
@@ -1012,7 +1108,7 @@ async function findExistingDriveFile({ folderId, meetingId, tenantId = null, rec
       return {
         fileId: f.id || f.fileId,
         fileName: f.name || f.fileName,
-        folderId,
+        folderId: cleanFolderId,
         parents: f.parents,
         webViewUrl: f.webViewUrl || f.webViewLink || `https://drive.google.com/file/d/${f.id || f.fileId}/view`,
         size: f.size || 1048576,
@@ -1025,64 +1121,132 @@ async function findExistingDriveFile({ folderId, meetingId, tenantId = null, rec
   }
 
   const config = resolveGoogleOAuthConfig();
-  const safeMeetingId = (meetingId || '').replace(/['\\]/g, '');
-  const safeFolderId = folderId.replace(/['\\]/g, '');
 
   // Exact metadata search: search specifically by clasptek_meeting_id; do NOT search by filename alone
   const q = `'${safeFolderId}' in parents and trashed = false and (properties has { key='clasptek_meeting_id' and value='${safeMeetingId}' } or appProperties has { key='clasptek_meeting_id' and value='${safeMeetingId}' })`;
 
-  const searchUrl = `${config.driveApiBase}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,parents,size,webViewLink,properties,appProperties,trashed,createdTime)&pageSize=20`;
+  let pageToken = null;
+  const verifiedMatches = [];
+  const visitedTokens = new Set();
+  const maxPages = 50;
+  let pageIndex = 0;
 
-  try {
-    const res = await httpsRequest(searchUrl, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-
-    if (res.status === 200 && res.body && Array.isArray(res.body.files) && res.body.files.length > 0) {
-      const verifiedMatches = [];
-      for (const f of res.body.files) {
-        if (!f.parents || !f.parents.includes(folderId) || f.trashed) continue;
-
-        const fileMeetingId = f.properties?.clasptek_meeting_id || f.appProperties?.clasptek_meeting_id;
-        if (!fileMeetingId || fileMeetingId !== meetingId) continue;
-
-        if (tenantId) {
-          const fileTenantId = f.properties?.clasptek_tenant_id || f.appProperties?.clasptek_tenant_id;
-          if (fileTenantId && fileTenantId !== tenantId) continue;
-        }
-
-        if (recordingId) {
-          const fileRecId = f.properties?.clasptek_recording_id || f.appProperties?.clasptek_recording_id;
-          if (fileRecId && fileRecId !== recordingId) continue;
-        }
-
-        verifiedMatches.push(f);
-      }
-
-      if (verifiedMatches.length > 1) {
-        throw new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${verifiedMatches.length}) match meeting identifier '${meetingId}'. Refusing ambiguous adoption.`);
-      }
-
-      if (verifiedMatches.length === 1) {
-        const f = verifiedMatches[0];
-        return {
-          fileId: f.id,
-          fileName: f.name,
-          folderId,
-          parents: f.parents,
-          webViewUrl: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
-          size: Number(f.size) || 0,
-          uploadedAt: f.createdTime || new Date().toISOString(),
-          properties: f.properties || {},
-          appProperties: f.appProperties || {}
-        };
-      }
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith('AMBIGUOUS_DRIVE_CANDIDATES')) {
+  do {
+    pageIndex++;
+    if (pageIndex > maxPages) {
+      const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Exceeded maximum pagination limit (${maxPages} pages) for meeting '${cleanMeetingId}'. Refusing inconclusive search.`);
+      err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
       throw err;
     }
+
+    if (pageToken) {
+      if (typeof pageToken !== 'string' || pageToken.trim() === '') {
+        const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Malformed empty nextPageToken received for meeting '${cleanMeetingId}'. Refusing incomplete search.`);
+        err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+        throw err;
+      }
+      const trimmedToken = pageToken.trim();
+      if (visitedTokens.has(trimmedToken)) {
+        const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Cyclic nextPageToken '${trimmedToken}' detected for meeting '${cleanMeetingId}'. Refusing incomplete search.`);
+        err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+        throw err;
+      }
+      visitedTokens.add(trimmedToken);
+    }
+
+    let searchUrl = `${config.driveApiBase}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,parents,size,webViewLink,properties,appProperties,trashed,createdTime)&pageSize=20`;
+    if (pageToken) {
+      searchUrl += `&pageToken=${encodeURIComponent(pageToken.trim())}`;
+    }
+
+    let res;
+    if ((process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') && _testDriveSearchPages) {
+      if (typeof _testDriveSearchPages === 'function') {
+        res = await _testDriveSearchPages(pageToken, pageIndex);
+      } else if (Array.isArray(_testDriveSearchPages)) {
+        res = _testDriveSearchPages[pageIndex - 1];
+        if (!res) {
+          const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Missing mock response for page ${pageIndex}. Search is incomplete.`);
+          err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+          throw err;
+        }
+      }
+    } else {
+      try {
+        res = await httpsRequest(searchUrl, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          timeout: 30000
+        });
+      } catch (reqErr) {
+        const msg = reqErr instanceof Error ? reqErr.message : String(reqErr);
+        const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Drive API request failed on page ${pageIndex} for meeting '${cleanMeetingId}': ${msg}`);
+        err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+        throw err;
+      }
+    }
+
+    if (!res || typeof res !== 'object') {
+      const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Invalid null or non-object response received from Drive API on page ${pageIndex} for meeting '${cleanMeetingId}'.`);
+      err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+      throw err;
+    }
+
+    if (res.status !== 200) {
+      const errDetail = res.body?.error?.message || res.body?.error_description || res.body?.error || `HTTP status ${res.status}`;
+      const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Drive API returned error on page ${pageIndex} for meeting '${cleanMeetingId}': ${errDetail}`);
+      err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+      throw err;
+    }
+
+    if (!res.body || typeof res.body !== 'object' || !Array.isArray(res.body.files)) {
+      const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Malformed response payload (missing files array) from Drive API on page ${pageIndex} for meeting '${cleanMeetingId}'.`);
+      err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+      throw err;
+    }
+
+    for (const f of res.body.files) {
+      if (!isCandidateDriveFileValid(f, {
+        folderId: cleanFolderId,
+        meetingId: cleanMeetingId,
+        tenantId: cleanTenantId,
+        recordingId: cleanRecordingId
+      })) continue;
+
+      verifiedMatches.push(f);
+      if (verifiedMatches.length > 1) {
+        const ambigErr = new Error(`AMBIGUOUS_DRIVE_CANDIDATES: Multiple Drive files (${verifiedMatches.length}) match meeting identifier '${cleanMeetingId}'. Refusing ambiguous adoption.`);
+        ambigErr.code = 'AMBIGUOUS_DRIVE_CANDIDATES';
+        throw ambigErr;
+      }
+    }
+
+    if (res.body.nextPageToken !== undefined && res.body.nextPageToken !== null) {
+      if (typeof res.body.nextPageToken !== 'string' || res.body.nextPageToken.trim() === '') {
+        const err = new Error(`DRIVE_SEARCH_INCONCLUSIVE: Malformed empty nextPageToken received for meeting '${cleanMeetingId}'. Refusing incomplete search.`);
+        err.code = 'DRIVE_SEARCH_INCONCLUSIVE';
+        throw err;
+      }
+      pageToken = res.body.nextPageToken.trim();
+    } else {
+      pageToken = null;
+    }
+
+  } while (pageToken !== null);
+
+  if (verifiedMatches.length === 1) {
+    const f = verifiedMatches[0];
+    return {
+      fileId: f.id || f.fileId,
+      fileName: f.name || f.fileName,
+      folderId: cleanFolderId,
+      parents: f.parents,
+      webViewUrl: f.webViewLink || f.webViewUrl || `https://drive.google.com/file/d/${f.id || f.fileId}/view`,
+      size: Number(f.size) || 0,
+      uploadedAt: f.createdTime || f.uploadedAt || new Date().toISOString(),
+      properties: f.properties || {},
+      appProperties: f.appProperties || {}
+    };
   }
 
   return null;
@@ -1503,7 +1667,11 @@ module.exports = {
   disconnectGoogleDriveConnection,
   setTestUploadFailure,
   setTestUploadTimeoutAfterCreate,
+  setTestDriveSearchPages,
+  setTestDriveSearchFailure,
   findExistingDriveFile,
+  resolveDriveMetadataField,
+  isCandidateDriveFileValid,
   seedTestMeeting: (m) => require('../meetings/upload-recording').seedTestMeeting(m),
   getTestMeeting: (id) => require('../meetings/upload-recording').getTestMeeting(id),
   _memoryStateStore: memoryStateStore,
