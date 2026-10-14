@@ -13,8 +13,26 @@
 const fs = require('fs');
 const path = require('path');
 
-const CANONICAL_SUPABASE_URL = 'https://logaawoigfxnisimfatf.supabase.co';
-const CANONICAL_SUPABASE_PROJECT_REF = 'logaawoigfxnisimfatf';
+const QUARANTINED_PROD_REF = 'logaawoigfxnisimfatf';
+const EXPECTED_STAGING_REF = 'dwhjoiebzwnjdpcvcwvs';
+
+function safeDecode(val) {
+  if (typeof val !== 'string') return '';
+  try {
+    return decodeURIComponent(val);
+  } catch (_) {
+    return val;
+  }
+}
+
+function checkQuarantine(val, fieldName = 'input') {
+  if (!val || typeof val !== 'string') return;
+  const raw = val.toLowerCase();
+  const decoded = safeDecode(val).toLowerCase();
+  if (raw.includes(QUARANTINED_PROD_REF) || decoded.includes(QUARANTINED_PROD_REF)) {
+    throw new Error(`SECURITY_VIOLATION: Quarantined production Supabase project (${QUARANTINED_PROD_REF}) cannot be targeted in ${fieldName}.`);
+  }
+}
 
 function parseEnvFile(filePath) {
   const env = {};
@@ -36,22 +54,50 @@ function parseEnvFile(filePath) {
   return env;
 }
 
-function resolveBuildCredentials() {
+function validateSupabaseUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return { valid: false, url: '', projectRef: 'none' };
+  }
+  const trimmed = rawUrl.trim();
+  checkQuarantine(trimmed, 'Supabase URL');
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (_) {
+    throw new Error('CONFIGURATION_ERROR: Malformed Supabase URL syntax');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`CONFIGURATION_ERROR: Invalid Supabase URL protocol '${parsed.protocol}'. Must be https:// or http://`);
+  }
+
+  let projectRef = 'custom';
+  const hostMatch = parsed.hostname.match(/^([a-z0-9_-]+)\.supabase\.co$/i);
+  if (hostMatch) {
+    projectRef = hostMatch[1].toLowerCase();
+    checkQuarantine(projectRef, 'Supabase host project ref');
+  }
+
+  return { valid: true, url: trimmed.replace(/\/+$/, ''), projectRef };
+}
+
+function resolveBuildCredentials(options = {}) {
+  const envDir = options.envDir || process.cwd();
   const localEnv = {
-    ...parseEnvFile(path.join(process.cwd(), '.env')),
-    ...parseEnvFile(path.join(process.cwd(), '.env.local'))
+    ...parseEnvFile(path.join(envDir, '.env')),
+    ...parseEnvFile(path.join(envDir, '.env.local'))
   };
 
-  const url = process.env.SUPABASE_URL ||
+  const rawUrl = process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
     localEnv.SUPABASE_URL ||
     localEnv.NEXT_PUBLIC_SUPABASE_URL ||
     localEnv.VITE_SUPABASE_URL ||
-    CANONICAL_SUPABASE_URL;
+    '';
 
-  // Seamless support for canonical SUPABASE_PUBLISHABLE_KEY and Vercel naming variants (Publishable_key, publishable_key, etc.)
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY ||
+  const rawKey = process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.Publishable_key ||
     process.env.publishable_key ||
     process.env.PUBLISHABLE_KEY ||
@@ -71,7 +117,19 @@ function resolveBuildCredentials() {
     localEnv.VITE_SUPABASE_ANON_KEY ||
     '';
 
-  return { url: url.trim(), key: key.trim() };
+  const { valid, url, projectRef } = validateSupabaseUrl(rawUrl);
+  const key = rawKey.trim();
+
+  if (options.requireConfig && (!valid || !url)) {
+    throw new Error('CONFIGURATION_ERROR: Missing required Supabase URL. Explicit, validated configuration is required. Implicit fallback to production is disabled.');
+  }
+
+  return {
+    url,
+    key,
+    projectRef: valid ? projectRef : 'none',
+    configured: Boolean(valid && url && key)
+  };
 }
 
 function validatePublicCredential(key) {
@@ -109,8 +167,8 @@ function validatePublicCredential(key) {
   return { safe: true };
 }
 
-function getSanitizedRuntimeConfigSummary() {
-  const { url, key } = resolveBuildCredentials();
+function getSanitizedRuntimeConfigSummary(options = {}) {
+  const { url, key, projectRef } = resolveBuildCredentials(options);
   let credType = 'none';
   if (key) {
     if (key.startsWith('pk_') || key.startsWith('sb_pub_') || key.startsWith('sb_publishable_') || key.includes('publishable')) {
@@ -124,7 +182,7 @@ function getSanitizedRuntimeConfigSummary() {
 
   return {
     configured: Boolean(url && key),
-    projectRef: CANONICAL_SUPABASE_PROJECT_REF,
+    projectRef: projectRef || 'none',
     credentialType: credType,
     credentialPresent: Boolean(key && key.length > 5)
   };
@@ -155,14 +213,16 @@ function updateHtmlMetaTags(filePath, url, key) {
   fs.writeFileSync(filePath, html, 'utf8');
 }
 
-function generateRuntimeConfig() {
+function generateRuntimeConfig(options = {}) {
   console.log('=== CLASPTEK RUNTIME CONFIG & META INJECTION ===');
-  const { url, key } = resolveBuildCredentials();
+  const creds = resolveBuildCredentials({ ...options, requireConfig: true });
+  const { url, key, projectRef } = creds;
 
   validatePublicCredential(key);
 
   const maskedKey = key.length >= 8 ? `****${key.slice(-4)}` : (key ? 'CONFIGURED' : 'NONE');
   console.log(`Target Supabase URL: ${url}`);
+  console.log(`Project Ref:         ${projectRef}`);
   console.log(`Public Key Status:   ${key ? 'PRESENT (' + maskedKey + ')' : 'NONE (Awaiting Deployment Injection)'}`);
 
   const fileContent = `// Auto-generated by Clasptek Vercel Build Script — DO NOT COMMIT REAL SECRETS
@@ -172,33 +232,45 @@ window.__CLASPTEK_ENV__ = {
 };
 `;
 
+  if (options.dryRun) {
+    return { url, key, projectRef, fileContent };
+  }
+
+  const rootDir = options.rootDir || process.cwd();
+
   // Write to root runtime-config.js
-  const rootOut = path.join(process.cwd(), 'runtime-config.js');
+  const rootOut = path.join(rootDir, 'runtime-config.js');
   fs.writeFileSync(rootOut, fileContent, 'utf8');
   console.log(`✔ Generated: ${rootOut}`);
 
-  // Mirror index.html to clasptek_invoice_system.html to maintain 100% synchronization
-  fs.copyFileSync(path.join(process.cwd(), 'index.html'), path.join(process.cwd(), 'clasptek_invoice_system.html'));
-
-  // Inject into index.html and clasptek_invoice_system.html
-  updateHtmlMetaTags(path.join(process.cwd(), 'index.html'), url, key);
-  updateHtmlMetaTags(path.join(process.cwd(), 'clasptek_invoice_system.html'), url, key);
-  console.log('✔ Updated HTML meta tags in root index.html & clasptek_invoice_system.html');
+  const indexHtmlPath = path.join(rootDir, 'index.html');
+  const invoiceHtmlPath = path.join(rootDir, 'clasptek_invoice_system.html');
+  if (fs.existsSync(indexHtmlPath)) {
+    fs.copyFileSync(indexHtmlPath, invoiceHtmlPath);
+    updateHtmlMetaTags(indexHtmlPath, url, key);
+    updateHtmlMetaTags(invoiceHtmlPath, url, key);
+    console.log('✔ Updated HTML meta tags in root index.html & clasptek_invoice_system.html');
+  }
 
   // Write to public/ directory (including index.html, runtime-config.js)
-  const publicDir = path.join(process.cwd(), 'public');
+  const publicDir = path.join(rootDir, 'public');
   if (!fs.existsSync(publicDir)) {
     fs.mkdirSync(publicDir, { recursive: true });
   }
 
   fs.writeFileSync(path.join(publicDir, 'runtime-config.js'), fileContent, 'utf8');
-  fs.copyFileSync(path.join(process.cwd(), 'index.html'), path.join(publicDir, 'index.html'));
-  fs.copyFileSync(path.join(process.cwd(), 'clasptek_invoice_system.html'), path.join(publicDir, 'clasptek_invoice_system.html'));
+  if (fs.existsSync(indexHtmlPath)) {
+    fs.copyFileSync(indexHtmlPath, path.join(publicDir, 'index.html'));
+  }
+  if (fs.existsSync(invoiceHtmlPath)) {
+    fs.copyFileSync(invoiceHtmlPath, path.join(publicDir, 'clasptek_invoice_system.html'));
+  }
   console.log('✔ Synchronized public/ distribution directory with index.html and runtime-config.js');
 
-  const summary = getSanitizedRuntimeConfigSummary();
+  const summary = getSanitizedRuntimeConfigSummary(options);
   console.log('Sanitized Runtime Summary:', JSON.stringify(summary));
   console.log('=== BUILD CONFIG GENERATION COMPLETE ===\n');
+  return summary;
 }
 
 if (require.main === module) {
@@ -211,6 +283,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  QUARANTINED_PROD_REF,
+  EXPECTED_STAGING_REF,
+  safeDecode,
+  checkQuarantine,
+  validateSupabaseUrl,
   resolveBuildCredentials,
   validatePublicCredential,
   getSanitizedRuntimeConfigSummary,
