@@ -166,11 +166,11 @@ async function runSuite() {
     assert.ok(scopeParam.includes('userinfo.email'), 'Auth URL must include userinfo.email');
   });
 
-  await test('Preserves canonical redirect URI portal.clasptek.org', () => {
+  await test('Preserves canonical redirect URI app.clasptek.org', () => {
     const config = googleConfig.resolveGoogleOAuthConfig();
-    assert.ok(!config.redirectUri.includes('app.clasptek.org'), 'Must not change portal to app.clasptek.org');
+    assert.ok(!config.redirectUri.includes('portal.clasptek.org'), 'Must not default to legacy portal.clasptek.org');
     // Default canonical without custom env
-    const canonical = 'https://portal.clasptek.org/api/auth/google/callback';
+    const canonical = 'https://app.clasptek.org/api/auth/google/callback';
     if (!process.env.GOOGLE_REDIRECT_URI) {
       assert.strictEqual(config.redirectUri, canonical);
     }

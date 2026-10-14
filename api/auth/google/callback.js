@@ -2,7 +2,7 @@
  * CLASPTEK ENTERPRISE PLATFORM — GOOGLE OAUTH CALLBACK ENDPOINT
  * Route: GET /api/auth/google/callback
  * 
- * Production URL: https://portal.clasptek.org/api/auth/google/callback
+ * Production URL: https://app.clasptek.org/api/auth/google/callback
  * Local Development: http://localhost:3000/api/auth/google/callback
  * 
  * Strictly Enforced Specification:

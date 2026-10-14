@@ -117,6 +117,7 @@ async function runAllOAuthTests() {
   console.log('\n--- SECTION 2: Canonical Redirect URI & Scope Consistency ---');
 
   const {
+    getAuthorizationUrl,
     resolveGoogleOAuthConfig,
     createOAuthState,
     validateAndConsumeOAuthState,
@@ -142,28 +143,105 @@ async function runAllOAuthTests() {
     return authHandler(req, res);
   };
 
-  runTest('2.1: Production fallback redirect URI is exactly https://portal.clasptek.org/api/auth/google/callback', () => {
+  runTest('2.1: Production fallback redirect URI is exactly https://app.clasptek.org/api/auth/google/callback', () => {
     delete process.env.GOOGLE_REDIRECT_URI;
     const config = resolveGoogleOAuthConfig();
     assert.strictEqual(
       config.redirectUri,
-      'https://portal.clasptek.org/api/auth/google/callback',
+      'https://app.clasptek.org/api/auth/google/callback',
       'Production redirect URI must be exact without trailing slashes or param suffixes'
     );
   });
 
-  runTest('2.2: Local development on localhost resolves http://localhost:3000/api/auth/google/callback', () => {
+  runTest('2.2: Explicit GOOGLE_REDIRECT_URI takes precedence over defaults and request host', () => {
+    const customUri = 'https://custom-domain.org/api/auth/google/callback';
+    process.env.GOOGLE_REDIRECT_URI = customUri;
+    try {
+      const configWithoutReq = resolveGoogleOAuthConfig();
+      assert.strictEqual(configWithoutReq.redirectUri, customUri, 'Explicit env var must take precedence');
+
+      const configWithReq = resolveGoogleOAuthConfig({ headers: { host: 'localhost:3000' } });
+      assert.strictEqual(configWithReq.redirectUri, customUri, 'Explicit env var must take precedence even over localhost');
+    } finally {
+      delete process.env.GOOGLE_REDIRECT_URI;
+    }
+  });
+
+  runTest('2.3: Malformed or non-http/https GOOGLE_REDIRECT_URI fails safely with CONFIGURATION_ERROR', () => {
+    const invalidUris = ['not-a-valid-url', 'javascript:alert(1)', 'ftp://server/callback'];
+    for (const inv of invalidUris) {
+      process.env.GOOGLE_REDIRECT_URI = inv;
+      try {
+        assert.throws(() => {
+          resolveGoogleOAuthConfig();
+        }, /CONFIGURATION_ERROR: GOOGLE_REDIRECT_URI must be a valid http: or https: URL\./);
+      } finally {
+        delete process.env.GOOGLE_REDIRECT_URI;
+      }
+    }
+  });
+
+  runTest('2.4: Local development on localhost and 127.0.0.1 resolves accurately', () => {
     delete process.env.GOOGLE_REDIRECT_URI;
-    const req = { headers: { host: 'localhost:3000' } };
-    const config = resolveGoogleOAuthConfig(req);
+    const reqLocalhost = { headers: { host: 'localhost:3000' } };
     assert.strictEqual(
-      config.redirectUri,
+      resolveGoogleOAuthConfig(reqLocalhost).redirectUri,
       'http://localhost:3000/api/auth/google/callback',
       'Local dev on localhost:3000 must resolve correctly'
     );
+
+    const reqIp = { headers: { host: '127.0.0.1:8080' } };
+    assert.strictEqual(
+      resolveGoogleOAuthConfig(reqIp).redirectUri,
+      'http://127.0.0.1:8080/api/auth/google/callback',
+      'Local dev on 127.0.0.1:8080 must resolve correctly'
+    );
+
+    const reqHttps = { headers: { host: 'localhost:3000', 'x-forwarded-proto': 'https' } };
+    assert.strictEqual(
+      resolveGoogleOAuthConfig(reqHttps).redirectUri,
+      'https://localhost:3000/api/auth/google/callback',
+      'Local dev with https proto must preserve https scheme'
+    );
   });
 
-  runTest('2.3: Least-privileged Drive scope requested (drive.file + userinfo.email)', () => {
+  runTest('2.5: Untrusted request Host header cannot override canonical production fallback', () => {
+    delete process.env.GOOGLE_REDIRECT_URI;
+    const untrustedHosts = [
+      'evil.com',
+      'attacker.org',
+      'localhost.attacker.com',
+      '127.0.0.1.evil.com',
+      'app.clasptek.org.attacker.com',
+      'subdomain.clasptek.org'
+    ];
+    for (const host of untrustedHosts) {
+      const config = resolveGoogleOAuthConfig({ headers: { host } });
+      assert.strictEqual(
+        config.redirectUri,
+        'https://app.clasptek.org/api/auth/google/callback',
+        `Host header '${host}' must not override canonical production fallback`
+      );
+    }
+  });
+
+  runTest('2.6: Authorization URL construction and Token Exchange agree on redirect URI', () => {
+    delete process.env.GOOGLE_REDIRECT_URI;
+    const req = { headers: { host: 'app.clasptek.org' } };
+    const authConfig = resolveGoogleOAuthConfig(req);
+    const authUrl = new URL(getAuthorizationUrl('test_state_123', req));
+    assert.strictEqual(
+      authUrl.searchParams.get('redirect_uri'),
+      authConfig.redirectUri,
+      'Authorization URL redirect_uri must match resolveGoogleOAuthConfig'
+    );
+    assert.strictEqual(
+      authConfig.redirectUri,
+      'https://app.clasptek.org/api/auth/google/callback'
+    );
+  });
+
+  runTest('2.7: Least-privileged Drive scope requested (drive.file + userinfo.email)', () => {
     const config = resolveGoogleOAuthConfig();
     assert(config.scopes.includes('https://www.googleapis.com/auth/drive.file'), 'Must request drive.file');
     assert(config.scopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'Must request userinfo.email');

@@ -121,20 +121,35 @@ function resolveGoogleOAuthConfig(req = null) {
   const clientSecret = env.GOOGLE_CLIENT_SECRET || '';
 
   // Canonical Redirect URI Resolution
-  let redirectUri = env.GOOGLE_REDIRECT_URI ? env.GOOGLE_REDIRECT_URI.trim() : '';
+  let redirectUri = '';
+  if (env.GOOGLE_REDIRECT_URI) {
+    const rawRedirect = env.GOOGLE_REDIRECT_URI.trim();
+    if (rawRedirect) {
+      try {
+        const parsed = new URL(rawRedirect);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new Error('Invalid scheme');
+        }
+        redirectUri = rawRedirect;
+      } catch {
+        throw new Error('CONFIGURATION_ERROR: GOOGLE_REDIRECT_URI must be a valid http: or https: URL.');
+      }
+    }
+  }
 
   if (!redirectUri) {
     if (req && req.headers && req.headers.host) {
       const host = req.headers.host.toLowerCase();
-      if (host.includes('localhost') || host.includes('127.0.0.1')) {
-        const proto = req.headers['x-forwarded-proto'] || 'http';
+      const isLocalhost = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
+      if (isLocalhost) {
+        const proto = (req.headers['x-forwarded-proto'] || 'http').toLowerCase() === 'https' ? 'https' : 'http';
         redirectUri = `${proto}://${req.headers.host}/api/auth/google/callback`;
       }
     }
   }
 
   if (!redirectUri) {
-    redirectUri = 'https://portal.clasptek.org/api/auth/google/callback';
+    redirectUri = 'https://app.clasptek.org/api/auth/google/callback';
   }
 
   return {
