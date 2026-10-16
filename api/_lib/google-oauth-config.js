@@ -54,8 +54,244 @@ function resolveEnv() {
  * Emits a safe diagnostic warning if both are configured with different values.
  * Never logs credentials, tokens, or sensitive values.
  */
+/**
+ * Detects whether the current execution context is an isolated Vercel Preview environment.
+ */
+const _stagingCreatedFolders = new Set();
+
+function resetStagingCreatedFolders() {
+  _stagingCreatedFolders.clear();
+}
+
+/**
+ * Detects whether the current execution context is an isolated Vercel Preview environment.
+ */
+function isPreviewEnvironment(req = null) {
+  if (process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview') {
+    return true;
+  }
+  if (req && req.headers && req.headers.host) {
+    const host = String(req.headers.host).toLowerCase();
+    if (host.includes('.vercel.app') && !host.includes('app.clasptek.org')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Asserts that Google OAuth initiation is permitted in the current environment.
+ * In Preview environments, OAuth initiation is DENIED by default (HTTP 503) to prevent
+ * leaking OAuth flows to the production domain or consuming uncertified credentials.
+ */
+function assertOAuthInitiationAllowed(req = null) {
+  if (isPreviewEnvironment(req)) {
+    const isStagingApproved = process.env.STAGING_GOOGLE_OAUTH_ENABLED === 'true';
+    if (!isStagingApproved) {
+      const err = new Error(
+        'GOOGLE_OAUTH_PREVIEW_DISABLED: Google OAuth initiation is disabled in Preview environments ' +
+        'until dedicated staging credentials and callback URIs are explicitly configured and certified.'
+      );
+      err.code = 'GOOGLE_OAUTH_PREVIEW_DISABLED';
+      err.statusCode = 503;
+      throw err;
+    }
+
+    const stagingClientId = (process.env.STAGING_GOOGLE_CLIENT_ID || '').trim();
+    if (!stagingClientId) {
+      const err = new Error(
+        'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR: Preview OAuth requires an explicit STAGING_GOOGLE_CLIENT_ID. ' +
+        'Inherited production GOOGLE_CLIENT_ID cannot be used.'
+      );
+      err.code = 'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR';
+      err.statusCode = 503;
+      throw err;
+    }
+
+    const stagingRedirect = (process.env.STAGING_GOOGLE_REDIRECT_URI || '').trim();
+    if (!stagingRedirect) {
+      const err = new Error(
+        'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR: Preview OAuth requires an explicit STAGING_GOOGLE_REDIRECT_URI. ' +
+        'Request Host headers and production callback defaults cannot be used.'
+      );
+      err.code = 'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR';
+      err.statusCode = 503;
+      throw err;
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(stagingRedirect);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('Invalid scheme');
+      }
+      if (parsed.hostname.toLowerCase() === 'app.clasptek.org') {
+        throw new Error('Targets production domain');
+      }
+      if (parsed.pathname !== '/api/auth/google/callback') {
+        throw new Error('Invalid callback path');
+      }
+    } catch {
+      const err = new Error(
+        'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR: STAGING_GOOGLE_REDIRECT_URI must be a valid URL ' +
+        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org.'
+      );
+      err.code = 'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR';
+      err.statusCode = 503;
+      throw err;
+    }
+  }
+}
+
+/**
+ * Known Protected Production Drive Folder references to reject in Preview.
+ */
+function getQuarantinedProductionDriveFolders() {
+  const folders = new Set();
+  const prodA = (process.env.PRODUCTION_GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
+  const prodB = (process.env.CANONICAL_PRODUCTION_DRIVE_FOLDER_ID || '').trim();
+  if (prodA) folders.add(prodA);
+  if (prodB) folders.add(prodB);
+  return folders;
+}
+
+/**
+ * Verifies whether a child folder has an authentic, durable offline-verifiable
+ * ancestry mapping to the certified staging Google Drive root.
+ */
+function verifyDurableStagingContainment(folderId, stagingRootId) {
+  if (!folderId || !stagingRootId) return false;
+  const rawMap = (process.env.STAGING_GOOGLE_DRIVE_CONTAINMENT_MAP || '').trim();
+  if (!rawMap) return false;
+
+  let map = {};
+  try {
+    if (rawMap.startsWith('{')) {
+      map = JSON.parse(rawMap);
+    } else {
+      rawMap.split(',').forEach(entry => {
+        const [c, p] = entry.split(':').map(s => s.trim());
+        if (c && p) map[c] = p;
+      });
+    }
+  } catch {
+    return false;
+  }
+
+  let curr = folderId;
+  const visited = new Set();
+  for (let i = 0; i < 5; i++) {
+    if (visited.has(curr)) return false;
+    visited.add(curr);
+    const parent = map[curr];
+    if (!parent) return false;
+    if (parent === stagingRootId) return true;
+    curr = parent;
+  }
+  return false;
+}
+
+/**
+ * Validates Google Drive destination folder for write operations.
+ * Fails closed in Preview unless an explicit, non-production staging destination is configured
+ * and the target folder is contained within the staging root.
+ */
+function assertDriveDestinationAllowed(folderId, { isWriteOperation = true, sourceVar = 'destination' } = {}) {
+  const isPreview = isPreviewEnvironment();
+  if (!isPreview) {
+    return;
+  }
+
+  const cleanId = (folderId || '').trim();
+
+  // 1. In Preview, write operations strictly require an explicit STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID
+  const stagingFolder = (process.env.STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
+  if (isWriteOperation && !stagingFolder) {
+    const err = new Error(
+      `DRIVE_STAGING_DESTINATION_REQUIRED: Preview write operations require an explicit ` +
+      `STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID. Target destination from ${sourceVar} cannot be accepted.`
+    );
+    err.code = 'DRIVE_STAGING_DESTINATION_REQUIRED';
+    err.statusCode = 422;
+    throw err;
+  }
+
+  // 2. Reject any target that matches a known production Drive folder
+  const quarantinedFolders = getQuarantinedProductionDriveFolders();
+  const inheritedProd = (process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
+  if (inheritedProd && inheritedProd !== stagingFolder) {
+    quarantinedFolders.add(inheritedProd);
+  }
+  const inheritedLegacy = (process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID || '').trim();
+  if (inheritedLegacy && inheritedLegacy !== stagingFolder) {
+    quarantinedFolders.add(inheritedLegacy);
+  }
+
+  if (cleanId && quarantinedFolders.has(cleanId)) {
+    const err = new Error(
+      `DRIVE_QUARANTINE_VIOLATION: Destination folder from ${sourceVar} matches protected production storage. ` +
+      `Preview operations are strictly quarantined from writing to or modifying production Google Drive.`
+    );
+    err.code = 'DRIVE_QUARANTINE_VIOLATION';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 3. Staging destination root-only enforcement for write operations
+  if (stagingFolder && quarantinedFolders.has(stagingFolder)) {
+    const err = new Error(
+      `DRIVE_QUARANTINE_VIOLATION: Configured STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID conflicts with quarantined production storage.`
+    );
+    err.code = 'DRIVE_QUARANTINE_VIOLATION';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (isWriteOperation) {
+    if (!cleanId) {
+      const err = new Error(`DRIVE_DESTINATION_REQUIRED: Write destination folder ID must not be empty.`);
+      err.code = 'DRIVE_DESTINATION_REQUIRED';
+      err.statusCode = 422;
+      throw err;
+    }
+
+    // In Preview, permit ONLY when normalized cleanId exactly equals configured STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID.
+    // Child-folder destinations are strictly prohibited in Preview, even if present in containment map, allowlist, or _stagingCreatedFolders.
+    if (cleanId !== stagingFolder) {
+      const err = new Error(
+        `DRIVE_DESTINATION_CONTAINMENT_FAILED: Destination folder from ${sourceVar} does not equal the configured staging root. ` +
+        `Preview writes are restricted exclusively to STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID. Child-folder destinations are prohibited.`
+      );
+      err.code = 'DRIVE_DESTINATION_CONTAINMENT_FAILED';
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+}
+
+/**
+ * Resolve optional server-side bootstrap root folder configuration
+ * Precedence:
+ * 1. Preferred primary: GOOGLE_DRIVE_ROOT_FOLDER_ID (or STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID in Preview)
+ * 2. Legacy fallback: GOOGLE_DRIVE_MEETINGS_FOLDER_ID
+ * Emits a safe diagnostic warning if both are configured with different values.
+ * Never logs credentials, tokens, or sensitive values.
+ */
 function resolveGoogleDriveRootFolderConfig() {
   const env = resolveEnv();
+  const isPreview = isPreviewEnvironment();
+
+  // In Preview, STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID takes precedence and is quarantined
+  if (isPreview) {
+    const staging = (env.STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
+    if (staging) {
+      assertDriveDestinationAllowed(staging, { isWriteOperation: true, sourceVar: 'STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID' });
+      return Object.freeze({ folderId: staging, sourceVar: 'STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID' });
+    }
+    // Never fall back to production GOOGLE_DRIVE_ROOT_FOLDER_ID in Preview
+    return Object.freeze({ folderId: null, sourceVar: null });
+  }
+
   const preferred = (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '').trim();
   const legacy = (env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID || '').trim();
 
@@ -66,18 +302,18 @@ function resolveGoogleDriveRootFolderConfig() {
         'are configured with different values. Precedence rule: using primary GOOGLE_DRIVE_ROOT_FOLDER_ID.'
       );
     }
-    return { folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' };
+    return Object.freeze({ folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' });
   }
 
   if (preferred) {
-    return { folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' };
+    return Object.freeze({ folderId: preferred, sourceVar: 'GOOGLE_DRIVE_ROOT_FOLDER_ID' });
   }
 
   if (legacy) {
-    return { folderId: legacy, sourceVar: 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID' };
+    return Object.freeze({ folderId: legacy, sourceVar: 'GOOGLE_DRIVE_MEETINGS_FOLDER_ID' });
   }
 
-  return { folderId: null, sourceVar: null };
+  return Object.freeze({ folderId: null, sourceVar: null });
 }
 
 /**
@@ -99,6 +335,7 @@ const GOOGLE_SCOPES = [
  * Build Google OAuth 2.0 Authorization URL
  */
 function getAuthorizationUrl(state, req = null) {
+  assertOAuthInitiationAllowed(req);
   const config = resolveGoogleOAuthConfig(req);
   const authUrl = new URL(config.authBaseUrl);
   authUrl.searchParams.set('client_id', config.clientId);
@@ -116,6 +353,60 @@ function getAuthorizationUrl(state, req = null) {
  */
 function resolveGoogleOAuthConfig(req = null) {
   const env = resolveEnv();
+  const isPreview = isPreviewEnvironment(req);
+
+  if (isPreview) {
+    const isStagingApproved = process.env.STAGING_GOOGLE_OAUTH_ENABLED === 'true';
+    if (!isStagingApproved) {
+      throw new Error(
+        'CONFIGURATION_ERROR: Google OAuth is disabled in Preview environments. ' +
+        'Set STAGING_GOOGLE_OAUTH_ENABLED=true with dedicated staging credentials to enable.'
+      );
+    }
+
+    const stagingClientId = (env.STAGING_GOOGLE_CLIENT_ID || '').trim();
+    if (!stagingClientId) {
+      throw new Error('CONFIGURATION_ERROR: STAGING_GOOGLE_CLIENT_ID must be configured for Preview OAuth.');
+    }
+
+    const stagingClientSecret = (env.STAGING_GOOGLE_CLIENT_SECRET || '').trim();
+
+    const stagingRedirect = (env.STAGING_GOOGLE_REDIRECT_URI || '').trim();
+    if (!stagingRedirect) {
+      throw new Error('CONFIGURATION_ERROR: STAGING_GOOGLE_REDIRECT_URI must be configured for Preview OAuth.');
+    }
+
+    try {
+      const parsed = new URL(stagingRedirect);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('Invalid scheme');
+      }
+      if (parsed.hostname.toLowerCase() === 'app.clasptek.org') {
+        throw new Error('Targets production domain');
+      }
+      if (parsed.pathname !== '/api/auth/google/callback') {
+        throw new Error('Invalid callback path');
+      }
+    } catch {
+      throw new Error(
+        'CONFIGURATION_ERROR: STAGING_GOOGLE_REDIRECT_URI must be a valid URL ' +
+        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org.'
+      );
+    }
+
+    return {
+      clientId: stagingClientId,
+      clientSecret: stagingClientSecret,
+      redirectUri: stagingRedirect,
+      scopes: GOOGLE_SCOPES.join(' '),
+      authBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      userInfoUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+      revokeUrl: 'https://oauth2.googleapis.com/revoke',
+      driveApiBase: 'https://www.googleapis.com/drive/v3',
+      uploadApiBase: 'https://www.googleapis.com/upload/drive/v3'
+    };
+  }
   
   const clientId = env.GOOGLE_CLIENT_ID || '';
   const clientSecret = env.GOOGLE_CLIENT_SECRET || '';
@@ -784,6 +1075,9 @@ async function verifyGoogleDriveFolder({ folderId, accessToken }) {
 
   const cleanId = folderId.trim();
 
+  // Validate destination against preview isolation policy
+  assertDriveDestinationAllowed(cleanId, { isWriteOperation: false, sourceVar: 'folderId' });
+
   // Test mode simulation check
   if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
     if (cleanId === 'invalid_folder_id' || cleanId === 'non_existent_folder') {
@@ -845,10 +1139,29 @@ async function createGoogleDriveFolder({ name = 'Clasptek Meeting Recordings', a
     throw new Error('GOOGLE_AUTH_REQUIRED: Access token required to create folder.');
   }
 
+  if (isPreviewEnvironment()) {
+    if (!parentFolderId || typeof parentFolderId !== 'string' || !parentFolderId.trim()) {
+      const err = new Error(
+        'DRIVE_UNPARENTED_FOLDER_REJECTED: Preview environment must never create an unparented root folder. ' +
+        'A valid parentFolderId within the staging destination is required.'
+      );
+      err.code = 'DRIVE_UNPARENTED_FOLDER_REJECTED';
+      err.statusCode = 422;
+      throw err;
+    }
+    assertDriveDestinationAllowed(parentFolderId, { isWriteOperation: true, sourceVar: 'parentFolderId' });
+  } else if (parentFolderId) {
+    assertDriveDestinationAllowed(parentFolderId, { isWriteOperation: true, sourceVar: 'parentFolderId' });
+  }
+
   // Test mode simulation
   if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
+    const mockCreatedId = 'mock_folder_' + crypto.randomBytes(6).toString('hex');
+    if (isPreviewEnvironment()) {
+      _stagingCreatedFolders.add(mockCreatedId);
+    }
     return {
-      folderId: 'mock_folder_' + crypto.randomBytes(6).toString('hex'),
+      folderId: mockCreatedId,
       folderName: name
     };
   }
@@ -875,8 +1188,13 @@ async function createGoogleDriveFolder({ name = 'Clasptek Meeting Recordings', a
     throw new Error(`GOOGLE_FOLDER_CREATION_FAILED: ${res.body?.error?.message || 'Failed to create root folder'}`);
   }
 
+  const createdId = res.body.id;
+  if (isPreviewEnvironment()) {
+    _stagingCreatedFolders.add(createdId);
+  }
+
   return {
-    folderId: res.body.id,
+    folderId: createdId,
     folderName: res.body.name || name
   };
 }
@@ -900,6 +1218,9 @@ async function resolveAuthoritativeRootFolder({ tenantId, accessToken, centralCo
       const verified = await verifyGoogleDriveFolder({ folderId: conn.root_folder_id, accessToken });
       return { folderId: verified.folderId, folderName: verified.folderName, source: 'DB_AUTHORITATIVE' };
     } catch (err) {
+      if (err.code === 'DRIVE_QUARANTINE_VIOLATION' || err.code === 'DRIVE_STAGING_DESTINATION_REQUIRED' || err.code === 'DRIVE_DESTINATION_CONTAINMENT_FAILED') {
+        throw err;
+      }
       // If folder was deleted/trashed, fall through to fallback
     }
   }
@@ -915,12 +1236,24 @@ async function resolveAuthoritativeRootFolder({ tenantId, accessToken, centralCo
       await updateCentralRootFolder({ tenantId, folderId: verified.folderId, folderName: verified.folderName });
       return { folderId: verified.folderId, folderName: verified.folderName, source: 'BOOTSTRAP_VERIFIED' };
     } catch (err) {
+      if (err.code === 'DRIVE_QUARANTINE_VIOLATION' || err.code === 'DRIVE_STAGING_DESTINATION_REQUIRED' || err.code === 'DRIVE_DESTINATION_CONTAINMENT_FAILED') {
+        throw err;
+      }
       const varName = sourceVar || 'GOOGLE_DRIVE_ROOT_FOLDER_ID';
       throw new Error(`FOLDER_INACCESSIBLE: Configured ${varName} is inaccessible: ${err.message}`);
     }
   }
 
   // 3. Provision new application-created root folder under central account
+  if (isPreviewEnvironment()) {
+    const err = new Error(
+      'DRIVE_STAGING_DESTINATION_REQUIRED: Preview environment requires an explicit pre-provisioned ' +
+      'STAGING_GOOGLE_DRIVE_ROOT_FOLDER_ID. Automated provisioning of an unparented root folder is prohibited.'
+    );
+    err.code = 'DRIVE_STAGING_DESTINATION_REQUIRED';
+    err.statusCode = 422;
+    throw err;
+  }
   const created = await createGoogleDriveFolder({
     name: 'Clasptek Meeting Recordings',
     accessToken
@@ -1285,6 +1618,8 @@ async function uploadFileToGoogleDrive({
   if (!folderId) {
     throw new Error('MISSING_ROOT_FOLDER_ID: Destination folder ID must be provided.');
   }
+
+  assertDriveDestinationAllowed(folderId, { isWriteOperation: true, sourceVar: 'folderId' });
 
   // Test mode simulation
   if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
@@ -1689,6 +2024,12 @@ module.exports = {
   isCandidateDriveFileValid,
   seedTestMeeting: (m) => require('../meetings/upload-recording').seedTestMeeting(m),
   getTestMeeting: (id) => require('../meetings/upload-recording').getTestMeeting(id),
+  isPreviewEnvironment,
+  assertOAuthInitiationAllowed,
+  assertDriveDestinationAllowed,
+  verifyDurableStagingContainment,
+  resetStagingCreatedFolders,
+  _stagingCreatedFolders,
   _memoryStateStore: memoryStateStore,
   _memoryConnectionStore: memoryConnectionStore,
   _memoryDriveFiles: _memoryDriveFiles

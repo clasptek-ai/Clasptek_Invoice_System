@@ -37,6 +37,122 @@ const APPROVED_PROFILES = Object.freeze({
   },
 });
 
+const APPROVED_TIMEOUT_PROFILES = Object.freeze({
+  PREFLIGHT: Object.freeze({
+    statement_timeout: 10000,          // 10,000ms (10s) PostgreSQL server-side statement timeout
+    query_timeout: 10000,              // 10,000ms (10s) client-side driver query timeout
+    connectionTimeoutMillis: 10000,    // 10,000ms (10s) TCP/TLS connection handshake timeout
+    overallDeadlineMs: 30000,          // 30,000ms (30s) whole-operation deadline
+  }),
+  MIGRATION: Object.freeze({
+    statement_timeout: 180000,         // 180,000ms (180s / 3m) PostgreSQL server-side statement timeout
+    query_timeout: 180000,             // 180,000ms (180s / 3m) client-side driver query timeout
+    connectionTimeoutMillis: 30000,    // 30,000ms (30s) TCP/TLS connection handshake timeout
+    overallDeadlineMs: 600000,         // 600,000ms (10m) whole-operation migration deadline
+  }),
+});
+
+const TIMEOUT_BOUNDS = Object.freeze({
+  MIN_STATEMENT_TIMEOUT_MS: 10000,    // 10s minimum permitted threshold
+  MAX_STATEMENT_TIMEOUT_MS: 600000,   // 600s (10m) maximum permitted threshold
+});
+
+/**
+ * Strictly validates a PEM-encoded CA certificate string or Buffer.
+ * Never logs or echoes the certificate contents.
+ */
+function validatePemCertificate(ca) {
+  if (ca === undefined || ca === null) {
+    return null;
+  }
+  let pemStr;
+  if (typeof ca === 'string') {
+    pemStr = ca.trim();
+  } else if (Buffer.isBuffer(ca)) {
+    pemStr = ca.toString('utf8').trim();
+  } else {
+    throw new Error('CONFIG_ERROR: CA certificate must be a PEM string or Buffer.');
+  }
+
+  if (!pemStr) {
+    throw new Error('CONFIG_ERROR: CA certificate is empty.');
+  }
+
+  // Quarantine check: CA must never contain production reference
+  if (pemStr.toLowerCase().includes(PROD_REF)) {
+    throw new Error(`QUARANTINE_VIOLATION: Production reference '${PROD_REF}' detected in CA certificate!`);
+  }
+
+  // Validate PEM header and footer boundaries
+  const beginMarker = '-----BEGIN CERTIFICATE-----';
+  const endMarker = '-----END CERTIFICATE-----';
+
+  if (!pemStr.startsWith(beginMarker) || !pemStr.endsWith(endMarker)) {
+    throw new Error(
+      'CONFIG_ERROR: Malformed CA certificate format. Expected standard PEM format with -----BEGIN CERTIFICATE----- and -----END CERTIFICATE-----.'
+    );
+  }
+
+  // Extract body between headers and validate Base64 character set
+  const body = pemStr
+    .slice(beginMarker.length, pemStr.length - endMarker.length)
+    .replace(/[\r\n\s]+/g, '');
+
+  if (body.length < 32 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body)) {
+    throw new Error('CONFIG_ERROR: Malformed Base64 payload in PEM CA certificate.');
+  }
+
+  return pemStr;
+}
+
+/**
+ * Resolves and validates discrete timeout parameters within strict safety bounds.
+ */
+function resolveTimeoutConfig(options = {}) {
+  // If a named timeout profile is requested
+  if (options.timeoutProfile !== undefined) {
+    if (typeof options.timeoutProfile !== 'string') {
+      throw new Error('CONFIG_ERROR: timeoutProfile must be a string.');
+    }
+    const profileKey = options.timeoutProfile.toUpperCase().trim();
+    if (!APPROVED_TIMEOUT_PROFILES[profileKey]) {
+      throw new Error(
+        `CONFIG_ERROR: Unknown timeout profile '${options.timeoutProfile}'. Approved profiles: ${Object.keys(APPROVED_TIMEOUT_PROFILES).join(', ')}.`
+      );
+    }
+    return APPROVED_TIMEOUT_PROFILES[profileKey];
+  }
+
+  // If an explicit statement timeout is requested
+  const hasStatementTimeout = ('statementTimeoutMs' in options) || ('timeoutMs' in options);
+  if (hasStatementTimeout) {
+    const customTimeout = options.statementTimeoutMs !== undefined ? options.statementTimeoutMs : options.timeoutMs;
+    if (typeof customTimeout !== 'number' || !Number.isFinite(customTimeout) || !Number.isInteger(customTimeout)) {
+      throw new Error('CONFIG_ERROR: Timeout value must be a finite integer in milliseconds.');
+    }
+    if (customTimeout < TIMEOUT_BOUNDS.MIN_STATEMENT_TIMEOUT_MS) {
+      throw new Error(
+        `CONFIG_ERROR: Timeout ${customTimeout}ms is below minimum permitted threshold (${TIMEOUT_BOUNDS.MIN_STATEMENT_TIMEOUT_MS}ms).`
+      );
+    }
+    if (customTimeout > TIMEOUT_BOUNDS.MAX_STATEMENT_TIMEOUT_MS) {
+      throw new Error(
+        `CONFIG_ERROR: Timeout ${customTimeout}ms exceeds maximum permitted threshold (${TIMEOUT_BOUNDS.MAX_STATEMENT_TIMEOUT_MS}ms).`
+      );
+    }
+
+    return Object.freeze({
+      statement_timeout: customTimeout,
+      query_timeout: customTimeout,
+      connectionTimeoutMillis: Math.min(customTimeout, 30000),
+      overallDeadlineMs: Math.min(customTimeout * 2, 600000),
+    });
+  }
+
+  // Default to conservative preflight profile
+  return APPROVED_TIMEOUT_PROFILES.PREFLIGHT;
+}
+
 /**
  * Redacts credentials from URL or error strings safely.
  */
@@ -74,7 +190,11 @@ function sanitizeError(err) {
  * Validates a staging database connection URL and returns frozen discrete client options.
  * Throws sanitized errors without raw passwords or connection strings if validation fails.
  */
-function validateStagingDatabaseUrl(rawUrl) {
+function validateStagingDatabaseUrl(rawUrl, options = {}) {
+  if (options && typeof options !== 'object') {
+    throw new Error('CONFIG_ERROR: Options must be an object.');
+  }
+
   if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
     throw new Error('CONFIG_ERROR: STAGING_DATABASE_URL is missing or empty.');
   }
@@ -176,20 +296,32 @@ function validateStagingDatabaseUrl(rawUrl) {
     }
   }
 
-  // 10. Build discrete, validated, frozen client options
+  // 10. Validate CA certificate if provided
+  const validatedCa = validatePemCertificate(options.ca);
+
+  // 11. Resolve and validate bounded timeout configuration
+  const timeoutConfig = resolveTimeoutConfig(options);
+
+  // 12. Build discrete, validated, frozen client options
+  const sslConfig = {
+    rejectUnauthorized: true, // Strict certificate verification enforced
+    servername: hostname,     // Strict SNI validation
+  };
+  if (validatedCa) {
+    sslConfig.ca = validatedCa;
+  }
+
   const discreteOptions = Object.freeze({
     host: hostname,
     port: port,
     database: pathname,
     user: decodedUsername,
     password: decodedPassword,
-    ssl: Object.freeze({
-      rejectUnauthorized: true, // Strict certificate verification enforced
-      servername: hostname,     // Strict SNI validation
-    }),
-    connectionTimeoutMillis: 10000,
-    statement_timeout: 10000,
-    query_timeout: 10000,
+    ssl: Object.freeze(sslConfig),
+    connectionTimeoutMillis: timeoutConfig.connectionTimeoutMillis,
+    statement_timeout: timeoutConfig.statement_timeout,
+    query_timeout: timeoutConfig.query_timeout,
+    overallDeadlineMs: timeoutConfig.overallDeadlineMs,
   });
 
   return discreteOptions;
@@ -212,6 +344,25 @@ function createStagingClient(validatedOptions, clientFactory = (opts) => new Cli
     throw new Error('SECURITY_ERROR: Strict TLS certificate verification (rejectUnauthorized: true) is required.');
   }
 
+  // Strict SNI validation against host
+  if (!validatedOptions.ssl.servername || validatedOptions.ssl.servername !== validatedOptions.host) {
+    throw new Error('SECURITY_ERROR: Strict SNI servername must match validated host.');
+  }
+
+  // If CA is present, verify it is a valid PEM format
+  if (validatedOptions.ssl.ca !== undefined) {
+    validatePemCertificate(validatedOptions.ssl.ca);
+  }
+
+  // Quarantine check on host and user
+  if (
+    (validatedOptions.host && validatedOptions.host.toLowerCase().includes(PROD_REF)) ||
+    (validatedOptions.user && validatedOptions.user.toLowerCase().includes(PROD_REF)) ||
+    (validatedOptions.database && validatedOptions.database.toLowerCase().includes(PROD_REF))
+  ) {
+    throw new Error(`QUARANTINE_VIOLATION: Production reference '${PROD_REF}' detected in client options!`);
+  }
+
   try {
     return clientFactory(validatedOptions);
   } catch (err) {
@@ -223,8 +374,12 @@ module.exports = {
   PROD_REF,
   EXPECTED_STAGING_REF,
   APPROVED_PROFILES,
+  APPROVED_TIMEOUT_PROFILES,
+  TIMEOUT_BOUNDS,
   validateStagingDatabaseUrl,
   createStagingClient,
+  validatePemCertificate,
+  resolveTimeoutConfig,
   redactCredentials,
   safeDecode,
   sanitizeError,

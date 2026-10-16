@@ -503,8 +503,18 @@ function getGoogleOAuthConfig() {
  * Generates an HS256 JWT for authenticating with the LiveKit Twirp Egress RPC API.
  */
 export function generateLiveKitEgressToken(): string {
-  const apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
-  const apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+  let apiKey = '';
+  let apiSecret = '';
+  if (isPreview) {
+    if (process.env.STAGING_LIVEKIT_ALLOW_LIVE === 'true') {
+      apiKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+      apiSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+    }
+  } else {
+    apiKey = (process.env.LIVEKIT_API_KEY || '').trim();
+    apiSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+  }
   if (!apiKey || !apiSecret) {
     throw new RecordingServiceError('LIVEKIT_CREDENTIALS_MISSING', 'LiveKit API key or secret is missing.', 500);
   }
@@ -527,6 +537,69 @@ export function generateLiveKitEgressToken(): string {
   return `${encHeader}.${encPayload}.${sig}`;
 }
 
+function assertLiveKitRpcStagingAllowed(action: string = 'operation'): string {
+  if (process.env.STAGING_LIVEKIT_ALLOW_LIVE !== 'true') {
+    throw new RecordingServiceError(
+      'LIVEKIT_PREVIEW_DENIED',
+      `Outbound LiveKit ${action} Twirp RPC requests are denied in Preview environment. Enable mock mode or certify isolated staging credentials.`,
+      503
+    );
+  }
+
+  const stagingUrl = (process.env.STAGING_LIVEKIT_URL || '').trim();
+  const stagingKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+  const stagingSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+
+  if (!stagingUrl || !stagingKey || !stagingSecret) {
+    throw new RecordingServiceError(
+      'LIVEKIT_PREVIEW_CONFIG_ERROR',
+      `STAGING_LIVEKIT_ALLOW_LIVE requires explicit STAGING_LIVEKIT_URL, STAGING_LIVEKIT_API_KEY, and STAGING_LIVEKIT_API_SECRET. Inherited production credentials cannot be used.`,
+      503
+    );
+  }
+
+  const prodUrl = (process.env.LIVEKIT_URL || '').trim();
+  const prodKey = (process.env.LIVEKIT_API_KEY || '').trim();
+  const prodSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+
+  if (prodUrl && stagingUrl.toLowerCase() === prodUrl.toLowerCase()) {
+    throw new RecordingServiceError('LIVEKIT_PREVIEW_CONFIG_ERROR', 'STAGING_LIVEKIT_URL cannot match production LIVEKIT_URL.', 503);
+  }
+
+  if ((prodKey && stagingKey === prodKey) || (prodSecret && stagingSecret === prodSecret)) {
+    throw new RecordingServiceError('LIVEKIT_PREVIEW_CONFIG_ERROR', 'Staging LiveKit credentials cannot match production credentials.', 503);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(stagingUrl.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://'));
+  } catch {
+    throw new RecordingServiceError('LIVEKIT_PREVIEW_CONFIG_ERROR', 'STAGING_LIVEKIT_URL is not a valid URL.', 503);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname.includes('app.clasptek.org') || hostname.includes('production')) {
+    throw new RecordingServiceError('LIVEKIT_PREVIEW_CONFIG_ERROR', 'STAGING_LIVEKIT_URL cannot target production domains.', 503);
+  }
+
+  const isApprovedStagingHost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('staging-') ||
+    hostname.includes('.staging.') ||
+    hostname.endsWith('.local');
+
+  if (!isApprovedStagingHost) {
+    throw new RecordingServiceError(
+      'LIVEKIT_PREVIEW_CONFIG_ERROR',
+      `STAGING_LIVEKIT_URL host '${hostname}' is not on the certified staging endpoint allowlist.`,
+      503
+    );
+  }
+
+  return stagingUrl;
+}
+
 /**
  * Calls the authoritative LiveKit Server/Cloud Twirp Egress API.
  */
@@ -542,9 +615,16 @@ export async function callLiveKitEgressRpc(
     }
   }
 
-  const livekitUrl = (process.env.LIVEKIT_URL || '').trim();
-  if (!livekitUrl) {
-    throw new RecordingServiceError('LIVEKIT_URL_MISSING', 'LIVEKIT_URL environment variable is missing.', 500);
+  // PREVIEW ISOLATION GUARD: Deny outbound cloud LiveKit RPCs in Preview
+  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+  let livekitUrl = '';
+  if (isPreview) {
+    livekitUrl = assertLiveKitRpcStagingAllowed('Egress');
+  } else {
+    livekitUrl = (process.env.LIVEKIT_URL || '').trim();
+    if (!livekitUrl) {
+      throw new RecordingServiceError('LIVEKIT_URL_MISSING', 'LIVEKIT_URL environment variable is missing.', 500);
+    }
   }
 
   const parsedUrl = new URL(livekitUrl.replace('wss://', 'https://'));
@@ -616,9 +696,16 @@ export async function callLiveKitRoomRpc(
     return { participant: { identity: body.identity, permission: body.permission } };
   }
 
-  const livekitUrl = (process.env.LIVEKIT_URL || '').trim();
-  if (!livekitUrl) {
-    throw new RecordingServiceError('LIVEKIT_URL_MISSING', 'LIVEKIT_URL environment variable is missing.', 500);
+  // PREVIEW ISOLATION GUARD: Deny outbound cloud LiveKit RPCs in Preview
+  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+  let livekitUrl = '';
+  if (isPreview) {
+    livekitUrl = assertLiveKitRpcStagingAllowed('RoomService');
+  } else {
+    livekitUrl = (process.env.LIVEKIT_URL || '').trim();
+    if (!livekitUrl) {
+      throw new RecordingServiceError('LIVEKIT_URL_MISSING', 'LIVEKIT_URL environment variable is missing.', 500);
+    }
   }
 
   const parsedUrl = new URL(livekitUrl.replace('wss://', 'https://'));
@@ -712,7 +799,7 @@ export async function updateLiveKitParticipantPermissions({
  * Resolves standard cloud storage destination parameters (supporting AWS, GCP, and LiveKit aliases).
  */
 export type StorageType = 's3' | 'gcp' | 'none';
-export type StorageConfigState = 'CONFIGURED' | 'INCOMPLETE_CONFIG' | 'UNAVAILABLE';
+export type StorageConfigState = 'CONFIGURED' | 'INCOMPLETE_CONFIG' | 'UNAVAILABLE' | 'STAGING_EGRESS_UNCERTIFIED';
 
 /**
  * Resolves standard cloud storage destination parameters (supporting AWS and GCP).
@@ -723,6 +810,7 @@ export function resolveCloudStorageConfig(): {
   type: StorageType;
   state: StorageConfigState;
   reason?: string;
+  code?: string;
   s3?: {
     bucket: string;
     accessKey?: string;
@@ -735,6 +823,18 @@ export function resolveCloudStorageConfig(): {
     credentials?: string;
   };
 } {
+  // PREVIEW ISOLATION GUARD: Egress storage must be certified before activation in Preview
+  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+  if (isPreview && process.env.STAGING_EGRESS_STORAGE_CERTIFIED !== 'true') {
+    return {
+      hasStorage: false,
+      type: 'none',
+      state: 'STAGING_EGRESS_UNCERTIFIED',
+      code: 'LIVEKIT_EGRESS_STORAGE_REQUIRED',
+      reason: 'LiveKit Egress storage is disabled in Preview environments until an isolated staging storage bucket is certified.',
+    };
+  }
+
   const s3Bucket = (
     process.env.LIVEKIT_EGRESS_S3_BUCKET ||
     process.env.AWS_S3_BUCKET ||

@@ -200,7 +200,7 @@ async function runSuite() {
     );
   });
 
-  await test('Fails closed when Google authorization is missing for tenant', async () => {
+  await test('Global LiveKit-only enforcement: createOrValidateGoogleMeet fails closed with PROVIDER_UNSUPPORTED', async () => {
     try {
       await createOrValidateGoogleMeet({
         tenantId: 'unauthorized-tenant-uuid',
@@ -208,37 +208,15 @@ async function runSuite() {
         scheduledStart: new Date().toISOString(),
         scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
       });
-      assert.fail('Should have thrown GOOGLE_MEET_AUTH_REQUIRED');
+      assert.fail('Should have thrown PROVIDER_UNSUPPORTED');
     } catch (err) {
-      assert.strictEqual(err.code, 'GOOGLE_MEET_AUTH_REQUIRED');
-      assert.match(err.message, /No active Google authorization found/);
+      assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
+      assert.strictEqual(err.statusCode, 400);
+      assert.match(err.message, /LiveKit exclusively/);
     }
   });
 
-  await test('Rejects creation when tenant Google connection has Drive scope but lacks Calendar scope', async () => {
-    googleConfig._memoryConnectionStore.set('central:tenant-drive-only', {
-      tenant_id: 'tenant-drive-only',
-      connection_type: 'TENANT_CENTRAL',
-      status: 'CONNECTED',
-      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
-      access_token: 'mock-token',
-    });
-
-    try {
-      await createOrValidateGoogleMeet({
-        tenantId: 'tenant-drive-only',
-        title: 'Weekly Seminar',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-      });
-      assert.fail('Should have thrown GOOGLE_MEET_SCOPE_MISSING');
-    } catch (err) {
-      assert.strictEqual(err.code, 'GOOGLE_MEET_SCOPE_MISSING');
-      assert.match(err.message, /calendar.events/);
-    }
-  });
-
-  await test('Succeeds automated creation when tenant has calendar.events scope', async () => {
+  await test('Global LiveKit-only enforcement: rejects creation even with Calendar scope (PROVIDER_UNSUPPORTED)', async () => {
     googleConfig._memoryConnectionStore.set('central:tenant-calendar-ok', {
       tenant_id: 'tenant-calendar-ok',
       connection_type: 'TENANT_CENTRAL',
@@ -249,37 +227,18 @@ async function runSuite() {
       _testMockMeetUrl: 'https://meet.google.com/cpk-mtng-liv',
     });
 
-    const res = await createOrValidateGoogleMeet({
-      tenantId: 'tenant-calendar-ok',
-      title: 'Physics Lab',
-      scheduledStart: new Date().toISOString(),
-      scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-    });
-
-    assert.strictEqual(res.meetUrl, 'https://meet.google.com/cpk-mtng-liv');
-    assert.strictEqual(res.createdVia, 'GOOGLE_CALENDAR_API');
-    assert.strictEqual(isValidGoogleMeetUrl(res.meetUrl), true);
-  });
-
-  await test('Never fabricates Google Meet URLs when Calendar response is invalid or missing', async () => {
-    googleConfig._memoryConnectionStore.set('central:tenant-calendar-bad-response', {
-      tenant_id: 'tenant-calendar-bad-response',
-      connection_type: 'TENANT_CENTRAL',
-      status: 'CONNECTED',
-      scope: 'https://www.googleapis.com/auth/calendar.events',
-      access_token: 'mock-token',
-      _testAllowCalendar: true,
-      _testMockMeetUrl: 'not-a-real-meet-url',
-    });
-
     await assert.rejects(
       async () => createOrValidateGoogleMeet({
-        tenantId: 'tenant-calendar-bad-response',
-        title: 'Invalid Conference Test',
+        tenantId: 'tenant-calendar-ok',
+        title: 'Physics Lab',
         scheduledStart: new Date().toISOString(),
         scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
       }),
-      /GOOGLE_MEET_CREATION_FAILED/
+      (err) => {
+        assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
+        assert.strictEqual(err.statusCode, 400);
+        return true;
+      }
     );
   });
 
@@ -299,32 +258,21 @@ async function runSuite() {
     assert.ok(uploadRes.webViewUrl.includes('drive.google.com'));
   });
 
-  await test('Accepts verified custom Google Meet URL without requiring automated API creation', async () => {
-    const res = await createOrValidateGoogleMeet({
-      tenantId: 'tenant-any',
-      title: 'Math Tutorial',
-      scheduledStart: new Date().toISOString(),
-      scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-      customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
-    });
-
-    assert.strictEqual(res.meetUrl, 'https://meet.google.com/abc-defg-hij');
-    assert.strictEqual(res.createdVia, 'CUSTOM_VERIFIED_URL');
-  });
-
-  await test('Rejects fabricated or invalid custom Google Meet URL', async () => {
-    try {
-      await createOrValidateGoogleMeet({
+  await test('Global LiveKit-only enforcement: rejects custom Google Meet URL with PROVIDER_UNSUPPORTED', async () => {
+    await assert.rejects(
+      async () => createOrValidateGoogleMeet({
         tenantId: 'tenant-any',
         title: 'Math Tutorial',
         scheduledStart: new Date().toISOString(),
         scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-        customGoogleMeetUrl: 'https://meet.google.com/fabricated-invalid-code',
-      });
-      assert.fail('Should have thrown INVALID_GOOGLE_MEET_URL');
-    } catch (err) {
-      assert.strictEqual(err.code, 'INVALID_GOOGLE_MEET_URL');
-    }
+        customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+      }),
+      (err) => {
+        assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
+        assert.strictEqual(err.statusCode, 400);
+        return true;
+      }
+    );
   });
 
   // --- Suite 3: Provider-Specific Meeting Join & Token Behavior ---

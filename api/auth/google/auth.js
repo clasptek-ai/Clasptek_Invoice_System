@@ -26,7 +26,8 @@ const {
   refreshAccessToken,
   resolveAuthoritativeRootFolder,
   verifyGoogleDriveFolder,
-  updateCentralRootFolder
+  updateCentralRootFolder,
+  assertOAuthInitiationAllowed
 } = require('../../_lib/google-oauth-config');
 
 /**
@@ -35,6 +36,24 @@ const {
  * -------------------------------------------------------------
  */
 async function handleStart(req, res, reqUrl, body) {
+  // Gate: Preview OAuth Isolation - reject initiation in Preview unless explicitly enabled
+  try {
+    assertOAuthInitiationAllowed(req);
+  } catch (err) {
+    if (err.code === 'GOOGLE_OAUTH_PREVIEW_DISABLED' || err.code === 'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR') {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.end(JSON.stringify({
+        success: false,
+        error: err.code,
+        message: err.message,
+        statusCode: 503
+      }));
+    }
+    throw err;
+  }
+
   const authResult = await authenticateCaller(req);
   if (!authResult.authenticated) {
     res.statusCode = 401;

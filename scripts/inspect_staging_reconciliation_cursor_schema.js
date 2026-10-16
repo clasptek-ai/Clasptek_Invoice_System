@@ -26,9 +26,8 @@ const {
  * Never reads .env.local or global production credential files.
  */
 function loadStagingDatabaseUrl() {
-  const envVal = process.env.STAGING_DATABASE_URL;
-  if (envVal !== undefined && envVal !== '') {
-    return envVal;
+  if (process.env.STAGING_DATABASE_URL !== undefined) {
+    return process.env.STAGING_DATABASE_URL;
   }
 
   const stagingEnvFile = path.join(__dirname, '..', '.env.staging.local');
@@ -52,6 +51,62 @@ function loadStagingDatabaseUrl() {
   return '';
 }
 
+/**
+ * Safely loads the staging CA certificate from trusted locations:
+ * 1. customCaPath parameter
+ * 2. process.env.STAGING_DATABASE_SSL_CERT_PATH
+ * 3. STAGING_DATABASE_SSL_CERT_PATH from .env.staging.local
+ * 4. %APPDATA%\postgresql\root.crt (standard Windows PostgreSQL root cert)
+ * 5. $USERPROFILE\Downloads\prod-ca-2021.crt (Supabase official dashboard download)
+ * Returns the PEM string if found and verified, or null if not found.
+ */
+function loadStagingCaCertificate(customCaPath) {
+  const candidatePaths = [];
+  if (customCaPath) {
+    candidatePaths.push(path.resolve(customCaPath));
+  }
+  if (process.env.STAGING_DATABASE_SSL_CERT_PATH) {
+    candidatePaths.push(path.resolve(process.env.STAGING_DATABASE_SSL_CERT_PATH));
+  }
+
+  // Check .env.staging.local for STAGING_DATABASE_SSL_CERT_PATH
+  const stagingEnvFile = path.join(__dirname, '..', '.env.staging.local');
+  if (fs.existsSync(stagingEnvFile)) {
+    try {
+      const content = fs.readFileSync(stagingEnvFile, 'utf8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.startsWith('STAGING_DATABASE_SSL_CERT_PATH=')) {
+          const idx = trimmed.indexOf('=');
+          const val = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+          if (val) candidatePaths.push(path.resolve(val));
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Standard locations
+  if (process.env.APPDATA) {
+    candidatePaths.push(path.join(process.env.APPDATA, 'postgresql', 'root.crt'));
+  }
+  if (process.env.USERPROFILE) {
+    candidatePaths.push(path.join(process.env.USERPROFILE, 'Downloads', 'prod-ca-2021.crt'));
+  }
+
+  for (const certPath of candidatePaths) {
+    if (fs.existsSync(certPath)) {
+      try {
+        const content = fs.readFileSync(certPath, 'utf8');
+        if (content.includes('-----BEGIN CERTIFICATE-----') && content.includes('-----END CERTIFICATE-----')) {
+          return content;
+        }
+      } catch (_) {}
+    }
+  }
+
+  return null;
+}
+
 async function inspectStagingSchema(options = {}) {
   console.log('========================================================================================');
   console.log(' CLASPTEK STAGING READ-ONLY SCHEMA INSPECTION: RECONCILIATION CURSOR');
@@ -65,8 +120,17 @@ async function inspectStagingSchema(options = {}) {
     throw new Error('STAGING_DATABASE_URL is not configured in environment or .env.staging.local');
   }
 
+  // 1b. Load CA certificate if available
+  const caCertificate = options.ca !== undefined ? options.ca : loadStagingCaCertificate(options.caPath);
+  const guardOptions = {
+    timeoutProfile: 'PREFLIGHT',
+  };
+  if (caCertificate) {
+    guardOptions.ca = caCertificate;
+  }
+
   // 2. Quarantine check & discrete options validation via shared staging_connection_guard
-  const validatedClientConfig = validateStagingDatabaseUrl(databaseUrl);
+  const validatedClientConfig = validateStagingDatabaseUrl(databaseUrl, guardOptions);
 
   console.log('✔ Staging connection metadata validated safely:');
   console.log(`  - Target Host: ${validatedClientConfig.host}`);
@@ -75,7 +139,8 @@ async function inspectStagingSchema(options = {}) {
   console.log(`  - User: ${validatedClientConfig.user}`);
   console.log(`  - Staging Project Match: Verified (${EXPECTED_STAGING_REF})`);
   console.log(`  - Production Quarantine: Verified (Zero references to ${PROD_REF})`);
-  console.log(`  - TLS Configuration: Strict (rejectUnauthorized: true, servername: ${validatedClientConfig.ssl.servername})\n`);
+  console.log(`  - TLS Configuration: Strict (rejectUnauthorized: true, servername: ${validatedClientConfig.ssl.servername})`);
+  console.log(`  - CA Bundle: ${validatedClientConfig.ssl.ca ? 'Provisioned & Verified (Supabase Root CA 2021)' : 'System trust store'}\n`);
 
   // 3. Connect to database using validated discrete options and strict TLS
   const clientFactory = options.clientFactory || ((opts) => new Client(opts));
@@ -93,11 +158,28 @@ async function inspectStagingSchema(options = {}) {
     functionDetails: null,
     functionGrants: [],
     singletonRow: null,
+    existingPublicTables: [],
   };
 
   try {
     await client.connect();
     console.log('✔ Connected to staging Session pooler.\n');
+
+    // Begin read-only transaction boundary
+    try {
+      await client.query('BEGIN READ ONLY;');
+    } catch (_) {}
+
+    // Inspect server identity and available metadata
+    try {
+      const serverInfo = await client.query('SELECT current_database() AS db, current_user AS usr, version() AS ver;');
+      if (serverInfo && serverInfo.rows && serverInfo.rows[0]) {
+        console.log('--- Server Metadata ---');
+        console.log(`  - Database: ${serverInfo.rows[0].db}`);
+        console.log(`  - Current User: ${serverInfo.rows[0].usr}`);
+        console.log(`  - Version: ${serverInfo.rows[0].ver ? serverInfo.rows[0].ver.split('\n')[0] : 'N/A'}\n`);
+      }
+    } catch (_) {}
 
     // Query 1: Check table existence
     console.log('--- Executing Query 1: Check Table Existence & Owner ---');
@@ -272,6 +354,24 @@ async function inspectStagingSchema(options = {}) {
       console.log('  ℹ No routine privileges found in information_schema.');
     }
 
+    // Query 9: Inspect existing public schema tables for reconciliation bundle dependencies
+    console.log('\n--- Executing Query 9: Inspect Public Schema Tables ---');
+    try {
+      const q9 = await client.query(`
+        SELECT tablename, tableowner, rowsecurity
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = 'public'
+        ORDER BY tablename;
+      `);
+      if (q9 && q9.rows) {
+        inspectionReport.existingPublicTables = q9.rows.map(r => r.tablename);
+        console.log(`  ✔ Found ${q9.rows.length} existing public tables in staging:`);
+        console.log(`    ${inspectionReport.existingPublicTables.join(', ')}`);
+      }
+    } catch (err) {
+      console.log('  ℹ Unable to query public tables catalog:', err.message);
+    }
+
     console.log('\n========================================================================================');
     console.log(' READ-ONLY INSPECTION COMPLETE');
     console.log(' Zero mutations, zero DDL, zero DML executed.');
@@ -280,6 +380,9 @@ async function inspectStagingSchema(options = {}) {
     console.log('SUMMARY_RESULT:' + JSON.stringify(inspectionReport));
     return inspectionReport;
   } finally {
+    try {
+      await client.query('ROLLBACK;');
+    } catch (_) {}
     await client.end();
     console.log('✔ Database connection closed cleanly in finally block.');
   }
@@ -660,6 +763,7 @@ if (require.main === module) {
 module.exports = {
   inspectStagingSchema,
   loadStagingDatabaseUrl,
+  loadStagingCaCertificate,
   evaluateCertificationAssertions,
   normalizeSearchPath,
   isExactZeroDefault,

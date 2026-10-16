@@ -110,6 +110,14 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Reject legacy Google Meet records
+    if (meetingData.sfuProvider === 'google_meet') {
+      return res.status(400).json({
+        error: 'PROVIDER_UNSUPPORTED',
+        message: 'Google Meet is no longer supported. Clasptek video meetings use LiveKit exclusively.'
+      });
+    }
+
     // Issue participant token via SFU adapter
     let sfuAdapter;
     try {
@@ -126,13 +134,25 @@ module.exports = async function handler(req, res) {
     const participantName = user.name || user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Clasptek User';
     const roomId = meetingData.publicId || publicId || meetingData.id;
 
-    const tokenResult = await sfuAdapter.generateParticipantToken({
-      roomId,
-      participantId,
-      participantName,
-      isHost,
-      role: participantRole
-    });
+    let tokenResult;
+    try {
+      tokenResult = await sfuAdapter.generateParticipantToken({
+        roomId,
+        participantId,
+        participantName,
+        isHost,
+        role: participantRole
+      });
+    } catch (tokenErr) {
+      if (tokenErr.code === 'LIVEKIT_PREVIEW_DENIED' || tokenErr.code === 'LIVEKIT_PREVIEW_CONFIG_ERROR' || tokenErr.code === 'DAILY_PREVIEW_DENIED') {
+        return res.status(503).json({
+          error: tokenErr.code,
+          message: tokenErr.message,
+          statusCode: 503
+        });
+      }
+      throw tokenErr;
+    }
 
     const participantSessionId = `mp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
 

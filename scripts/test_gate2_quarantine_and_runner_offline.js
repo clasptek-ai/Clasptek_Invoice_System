@@ -24,8 +24,12 @@ const {
   PROD_REF,
   EXPECTED_STAGING_REF,
   APPROVED_PROFILES,
+  APPROVED_TIMEOUT_PROFILES,
+  TIMEOUT_BOUNDS,
   validateStagingDatabaseUrl,
   createStagingClient,
+  validatePemCertificate,
+  resolveTimeoutConfig,
   redactCredentials,
   safeDecode,
 } = require('./staging_connection_guard');
@@ -350,6 +354,271 @@ async function runTestSuite() {
     assert.throws(() => {
       createStagingClient({ connectionString: 'postgres://localhost/db', ssl: { rejectUnauthorized: true } }, () => {});
     }, /SECURITY_ERROR/);
+  });
+
+  // ============================================================================
+  // PART 2b: Strict TLS CA Configuration & Bounded Timeout Profiles (Phase 2AI-C58)
+  // ============================================================================
+  console.log('\n--- Part 2b: Strict TLS CA & Bounded Timeout Profile Verification (C58) ---');
+
+  const validSyntheticPem = [
+    '-----BEGIN CERTIFICATE-----',
+    'MIIDdzCCAl+gAwIBAgIEAgAAuTANBgkqhkiG9w0BAQsFADBaMQswCQYDVQQGEwJV',
+    'UzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZyYW5jaXNjbzER',
+    'MA8GA1UEChMIU3VwYWJhc2UxEDAOBgNVBAMTB1Jvb3RDQTAeFw0yMTAxMDEwMDAw',
+    'MDBaFw0zMTAxMDEwMDAwMDBaMFoxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxp',
+    'Zm9ybmlhMRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMREwDwYDVQQKEwhTdXBhYmFz',
+    'ZTEQMA4GA1UEAxMHUm9vdENBMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC',
+    'AQEA0pT0z9g5f5o8a4s3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1',
+    'f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9',
+    'b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7',
+    'd6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5',
+    'f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3',
+    'b2c1d0e9wIDAQABo0IwQDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIB',
+    'BjAdBgNVHQ4EFgQU0pT0z9g5f5o8a4s3b2c1d0e9f8AwDQYJKoZIhvcNAQELBQAD',
+    'ggEBACd5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3',
+    'b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5',
+    '-----END CERTIFICATE-----',
+  ].join('\n');
+
+  // 1. PEM certificate parsing and validation
+  await runTest('CA Validator accepts valid PEM certificate string and Buffer', () => {
+    const resStr = validatePemCertificate(validSyntheticPem);
+    assert.strictEqual(resStr, validSyntheticPem.trim());
+
+    const resBuf = validatePemCertificate(Buffer.from(validSyntheticPem));
+    assert.strictEqual(resBuf, validSyntheticPem.trim());
+  });
+
+  await runTest('CA Validator returns null when CA is undefined or null', () => {
+    assert.strictEqual(validatePemCertificate(undefined), null);
+    assert.strictEqual(validatePemCertificate(null), null);
+  });
+
+  await runTest('CA Validator rejects malformed CA formats, empty strings, and non-PEM inputs', () => {
+    assert.throws(() => validatePemCertificate(''), /CONFIG_ERROR.*empty/);
+    assert.throws(() => validatePemCertificate('   '), /CONFIG_ERROR.*empty/);
+    assert.throws(() => validatePemCertificate(12345), /CONFIG_ERROR.*string or Buffer/);
+    assert.throws(() => validatePemCertificate({ cert: 'data' }), /CONFIG_ERROR.*string or Buffer/);
+    assert.throws(() => validatePemCertificate('not_a_certificate'), /CONFIG_ERROR.*Malformed CA certificate format/);
+    assert.throws(() => validatePemCertificate('-----BEGIN CERTIFICATE-----\ncorrupted'), /CONFIG_ERROR.*Malformed CA certificate format/);
+    assert.throws(() => validatePemCertificate('corrupted\n-----END CERTIFICATE-----'), /CONFIG_ERROR.*Malformed CA certificate format/);
+    assert.throws(() => validatePemCertificate('-----BEGIN RSA PRIVATE KEY-----\nMIICXAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----'), /CONFIG_ERROR.*Malformed CA certificate format/);
+  });
+
+  await runTest('CA Validator rejects malformed Base64 body in PEM certificate', () => {
+    const invalidBase64Pem = '-----BEGIN CERTIFICATE-----\n$$$!!!not-valid-base64???\n-----END CERTIFICATE-----';
+    assert.throws(() => validatePemCertificate(invalidBase64Pem), /CONFIG_ERROR.*Malformed Base64 payload/);
+  });
+
+  await runTest('CA Validator strictly rejects CA certificate containing quarantined production reference', () => {
+    const poisonedPem = `-----BEGIN CERTIFICATE-----\nMIID${PROD_REF}Al+gAwIBAgIEAgAAuTANBgkqhkiG9w0BAQsFADBaMQswCQYDVQQGEwJV\n-----END CERTIFICATE-----`;
+    assert.throws(() => validatePemCertificate(poisonedPem), /QUARANTINE_VIOLATION/);
+  });
+
+  // 2. Integration of CA in validateStagingDatabaseUrl
+  await runTest('Guard accepts valid CA option and preserves strict TLS and SNI', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:SessionPass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const config = validateStagingDatabaseUrl(poolerUrl, { ca: validSyntheticPem });
+
+    assert.strictEqual(config.ssl.rejectUnauthorized, true, 'Strict verification must remain enabled');
+    assert.strictEqual(config.ssl.servername, 'aws-0-eu-west-1.pooler.supabase.com', 'SNI servername must match validated host');
+    assert.strictEqual(config.ssl.ca, validSyntheticPem.trim(), 'ssl.ca must match provided valid PEM');
+    assert(Object.isFrozen(config.ssl), 'ssl object must be frozen');
+    assert(Object.isFrozen(config), 'discrete client options must be frozen');
+  });
+
+  await runTest('Guard rejects malformed CA option when passed to validateStagingDatabaseUrl', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:SessionPass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { ca: 'invalid_ca_data' });
+    }, /CONFIG_ERROR.*Malformed CA certificate format/);
+  });
+
+  await runTest('Guard rejects invalid options argument types', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:SessionPass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => validateStagingDatabaseUrl(poolerUrl, 'invalid_options_string'), /CONFIG_ERROR.*Options must be an object/);
+    assert.throws(() => validateStagingDatabaseUrl(poolerUrl, 12345), /CONFIG_ERROR.*Options must be an object/);
+  });
+
+  await runTest('Guard rejects wrong endpoint or production reference even when valid CA is provided', () => {
+    const prodUrl = `postgres://postgres.${PROD_REF}:SecretPass@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => validateStagingDatabaseUrl(prodUrl, { ca: validSyntheticPem }), /QUARANTINE_VIOLATION/);
+
+    const wrongHostUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass@attacker-pooler.supabase.com:5432/postgres`;
+    assert.throws(() => validateStagingDatabaseUrl(wrongHostUrl, { ca: validSyntheticPem }), /CONFIG_ERROR.*Unapproved host/);
+  });
+
+  // 3. Client factory verification with CA & Anti-tampering
+  await runTest('Client factory spy receives valid discrete CA option and enforces SNI matching', () => {
+    let spyOptions = null;
+    const mockFactory = (opts) => {
+      spyOptions = opts;
+      return { connected: true };
+    };
+
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:SessionPass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const validated = validateStagingDatabaseUrl(poolerUrl, { ca: validSyntheticPem });
+    const client = createStagingClient(validated, mockFactory);
+
+    assert(client.connected);
+    assert.strictEqual(spyOptions.ssl.rejectUnauthorized, true);
+    assert.strictEqual(spyOptions.ssl.servername, 'aws-0-eu-west-1.pooler.supabase.com');
+    assert.strictEqual(spyOptions.ssl.ca, validSyntheticPem.trim());
+    assert.strictEqual(spyOptions.connectionString, undefined);
+  });
+
+  await runTest('Client factory refuses configuration with mismatched SNI servername', () => {
+    assert.throws(() => {
+      createStagingClient(
+        {
+          host: 'aws-0-eu-west-1.pooler.supabase.com',
+          port: 5432,
+          database: 'postgres',
+          user: `postgres.${EXPECTED_STAGING_REF}`,
+          ssl: { rejectUnauthorized: true, servername: 'attacker-spoofed-sni.com' },
+        },
+        () => {}
+      );
+    }, /SECURITY_ERROR.*SNI servername must match validated host/);
+  });
+
+  await runTest('Client factory refuses configuration with malformed CA in ssl.ca', () => {
+    assert.throws(() => {
+      createStagingClient(
+        {
+          host: 'aws-0-eu-west-1.pooler.supabase.com',
+          port: 5432,
+          database: 'postgres',
+          user: `postgres.${EXPECTED_STAGING_REF}`,
+          ssl: { rejectUnauthorized: true, servername: 'aws-0-eu-west-1.pooler.supabase.com', ca: 'not_a_cert' },
+        },
+        () => {}
+      );
+    }, /CONFIG_ERROR.*Malformed CA certificate format/);
+  });
+
+  await runTest('Client factory refuses configuration containing quarantined production host or user', () => {
+    assert.throws(() => {
+      createStagingClient(
+        {
+          host: `db.${PROD_REF}.supabase.co`,
+          port: 5432,
+          database: 'postgres',
+          user: 'postgres',
+          ssl: { rejectUnauthorized: true, servername: `db.${PROD_REF}.supabase.co` },
+        },
+        () => {}
+      );
+    }, /QUARANTINE_VIOLATION/);
+  });
+
+  // 4. Timeout Profiles and Bounded Configuration
+  await runTest('Default behavior uses conservative PREFLIGHT timeout profile (10,000ms)', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const config = validateStagingDatabaseUrl(poolerUrl);
+
+    assert.strictEqual(config.statement_timeout, 10000);
+    assert.strictEqual(config.query_timeout, 10000);
+    assert.strictEqual(config.connectionTimeoutMillis, 10000);
+    assert.strictEqual(config.overallDeadlineMs, 30000);
+  });
+
+  await runTest('Explicit timeoutProfile: PREFLIGHT sets 10,000ms timeouts', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const config = validateStagingDatabaseUrl(poolerUrl, { timeoutProfile: 'PREFLIGHT' });
+
+    assert.strictEqual(config.statement_timeout, APPROVED_TIMEOUT_PROFILES.PREFLIGHT.statement_timeout);
+    assert.strictEqual(config.query_timeout, APPROVED_TIMEOUT_PROFILES.PREFLIGHT.query_timeout);
+    assert.strictEqual(config.connectionTimeoutMillis, APPROVED_TIMEOUT_PROFILES.PREFLIGHT.connectionTimeoutMillis);
+    assert.strictEqual(config.overallDeadlineMs, APPROVED_TIMEOUT_PROFILES.PREFLIGHT.overallDeadlineMs);
+  });
+
+  await runTest('Explicit timeoutProfile: MIGRATION sets 180,000ms statement/query timeout and bounded connection timeout', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const config = validateStagingDatabaseUrl(poolerUrl, { timeoutProfile: 'MIGRATION' });
+
+    assert.strictEqual(config.statement_timeout, 180000);
+    assert.strictEqual(config.query_timeout, 180000);
+    assert.strictEqual(config.connectionTimeoutMillis, 30000);
+    assert.strictEqual(config.overallDeadlineMs, 600000);
+  });
+
+  await runTest('Unknown timeout profile is strictly rejected', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { timeoutProfile: 'FAST' });
+    }, /CONFIG_ERROR.*Unknown timeout profile 'FAST'/);
+
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { timeoutProfile: 123 });
+    }, /CONFIG_ERROR.*timeoutProfile must be a string/);
+  });
+
+  await runTest('Bounded custom statementTimeoutMs within 10,000ms to 600,000ms is accepted', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+
+    // Minimum boundary: 10,000ms
+    const cMin = validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 10000 });
+    assert.strictEqual(cMin.statement_timeout, 10000);
+    assert.strictEqual(cMin.query_timeout, 10000);
+
+    // Intermediate migration value: 120,000ms
+    const c120 = validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 120000 });
+    assert.strictEqual(c120.statement_timeout, 120000);
+    assert.strictEqual(c120.query_timeout, 120000);
+    assert.strictEqual(c120.connectionTimeoutMillis, 30000);
+
+    // Proposed migration value: 180,000ms
+    const c180 = validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 180000 });
+    assert.strictEqual(c180.statement_timeout, 180000);
+    assert.strictEqual(c180.query_timeout, 180000);
+    assert.strictEqual(c180.connectionTimeoutMillis, 30000);
+
+    // Maximum boundary: 600,000ms
+    const cMax = validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 600000 });
+    assert.strictEqual(cMax.statement_timeout, 600000);
+    assert.strictEqual(cMax.query_timeout, 600000);
+  });
+
+  await runTest('Custom timeout below minimum threshold (< 10,000ms) is rejected', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 9999 });
+    }, /CONFIG_ERROR.*below minimum permitted threshold/);
+
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 5000 });
+    }, /CONFIG_ERROR.*below minimum permitted threshold/);
+  });
+
+  await runTest('Custom timeout exceeding maximum threshold (> 600,000ms) is rejected', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => {
+      validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: 600001 });
+    }, /CONFIG_ERROR.*exceeds maximum permitted threshold/);
+  });
+
+  await runTest('Negative, zero, and non-numeric timeout values are rejected', () => {
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const badTimeouts = [-1, -5000, 0, '120000', NaN, Infinity, null, false, true, {}, []];
+
+    for (const badVal of badTimeouts) {
+      assert.throws(() => {
+        validateStagingDatabaseUrl(poolerUrl, { statementTimeoutMs: badVal });
+      }, /CONFIG_ERROR/);
+    }
+  });
+
+  await runTest('Timeout options cannot be used to bypass quarantine or weaken TLS', () => {
+    const prodUrl = `postgres://postgres.${PROD_REF}:Pass@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    assert.throws(() => {
+      validateStagingDatabaseUrl(prodUrl, { timeoutProfile: 'MIGRATION' });
+    }, /QUARANTINE_VIOLATION/);
+
+    const poolerUrl = `postgres://postgres.${EXPECTED_STAGING_REF}:Pass123@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+    const config = validateStagingDatabaseUrl(poolerUrl, { timeoutProfile: 'MIGRATION' });
+    assert.strictEqual(config.ssl.rejectUnauthorized, true);
   });
 
   // ============================================================================

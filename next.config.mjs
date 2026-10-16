@@ -4,6 +4,12 @@ const nextConfig = {
   // The legacy HTML files are served through Vercel's static file hosting
   reactStrictMode: true,
 
+  // Expose Vercel deployment environment marker to client bundles at build time
+  // Enables browser Supabase project guard without requiring manual dashboard settings
+  env: {
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV || '',
+  },
+
   // Security headers
   async headers() {
     return [

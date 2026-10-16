@@ -9,7 +9,7 @@
  *   creating any client. The quarantined production project is rejected.
  */
 import { createBrowserClient } from '@supabase/ssr';
-import { validateSupabaseProjectRef } from '@/lib/supabase/project-guard';
+import { validateSupabaseBrowserProjectRef } from '@/lib/supabase/project-guard';
 
 export function createSupabaseBrowserClient() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,7 +21,7 @@ export function createSupabaseBrowserClient() {
     throw new Error('Supabase env vars not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
   }
 
-  const url = validateSupabaseProjectRef(rawUrl, 'NEXT_PUBLIC_SUPABASE_URL');
+  const url = validateSupabaseBrowserProjectRef(rawUrl, 'NEXT_PUBLIC_SUPABASE_URL');
 
   return createBrowserClient(url, key);
 }

@@ -81,6 +81,100 @@ class SFUAdapter {
   }
 }
 
+function isPreviewEnv() {
+  return process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+}
+
+function assertLiveKitStagingAllowed(action = 'operation') {
+  if (process.env.STAGING_LIVEKIT_ALLOW_LIVE !== 'true') {
+    const err = new Error(
+      `LIVEKIT_PREVIEW_DENIED: LiveKit ${action} is denied in Preview environment. ` +
+      `Enable mock mode (LIVEKIT_MOCK_ENABLED=true) or configure certified isolated staging credentials.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_DENIED';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const stagingUrl = (process.env.STAGING_LIVEKIT_URL || '').trim();
+  const stagingKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+  const stagingSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+
+  if (!stagingUrl || !stagingKey || !stagingSecret) {
+    const err = new Error(
+      `LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_ALLOW_LIVE requires explicit STAGING_LIVEKIT_URL, ` +
+      `STAGING_LIVEKIT_API_KEY, and STAGING_LIVEKIT_API_SECRET. Inherited production credentials cannot be used.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const prodUrl = (process.env.LIVEKIT_URL || '').trim();
+  const prodKey = (process.env.LIVEKIT_API_KEY || '').trim();
+  const prodSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+
+  if (prodUrl && stagingUrl.toLowerCase() === prodUrl.toLowerCase()) {
+    const err = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL cannot match production LIVEKIT_URL.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if ((prodKey && stagingKey === prodKey) || (prodSecret && stagingSecret === prodSecret)) {
+    const err = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: Staging LiveKit credentials cannot match production credentials.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(stagingUrl.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://'));
+  } catch {
+    const err = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL is not a valid URL.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname.includes('app.clasptek.org') || hostname.includes('production')) {
+    const err = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL cannot target production domains.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const isApprovedStagingHost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('staging-') ||
+    hostname.includes('.staging.') ||
+    hostname.endsWith('.local');
+
+  if (!isApprovedStagingHost) {
+    const err = new Error(
+      `LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL host '${hostname}' is not on the certified staging endpoint allowlist.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+}
+
+function assertDailyPreviewDenied(action = 'operation') {
+  if (isPreviewEnv()) {
+    const err = new Error(
+      `DAILY_PREVIEW_DENIED: Daily.co SFU ${action} is denied in Preview environment. ` +
+      `LiveKit is the authoritative meeting provider.`
+    );
+    err.code = 'DAILY_PREVIEW_DENIED';
+    err.statusCode = 503;
+    throw err;
+  }
+}
+
 /**
  * Production LiveKit SFU Adapter
  * Issues cryptographically signed HS256 JWT access tokens directly using Node.js crypto.
@@ -90,6 +184,23 @@ class LiveKitAdapter extends SFUAdapter {
   constructor(config = {}) {
     super('livekit');
     const env = resolveEnvConfig();
+    const isPreview = isPreviewEnv();
+
+    if (isPreview && process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+      this.url = 'wss://mock-preview-livekit.local';
+      this.apiKey = 'mock_preview_key';
+      this.apiSecret = 'mock_preview_secret';
+      return;
+    }
+
+    if (isPreview && process.env.STAGING_LIVEKIT_ALLOW_LIVE === 'true') {
+      assertLiveKitStagingAllowed('initialization');
+      this.url = (process.env.STAGING_LIVEKIT_URL || '').trim();
+      this.apiKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+      this.apiSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+      return;
+    }
+
     const resolvedUrl = (config.url || env.LIVEKIT_URL || '').trim();
     const resolvedKey = (config.apiKey || env.LIVEKIT_API_KEY || '').trim();
     const resolvedSecret = (config.apiSecret || env.LIVEKIT_API_SECRET || '').trim();
@@ -108,8 +219,22 @@ class LiveKitAdapter extends SFUAdapter {
   }
 
   async createRoom({ roomId, roomTitle, settings = {} }) {
-    // LiveKit rooms can be dynamically created on first participant join or pre-allocated.
-    // We return the configured room descriptor for state synchronization.
+    if (isPreviewEnv()) {
+      if (process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+        return {
+          success: true,
+          provider: 'mock',
+          roomId,
+          roomTitle,
+          serverUrl: 'wss://mock-preview-livekit.local',
+          emptyTimeout: settings.emptyTimeout || 300,
+          maxParticipants: settings.maxParticipants || 100,
+          mock: true
+        };
+      }
+      assertLiveKitStagingAllowed('createRoom');
+    }
+
     return {
       success: true,
       provider: 'livekit',
@@ -122,6 +247,23 @@ class LiveKitAdapter extends SFUAdapter {
   }
 
   async generateParticipantToken({ roomId, participantId, participantName, isHost = false, role = 'STUDENT' }) {
+    if (isPreviewEnv()) {
+      if (process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+        return {
+          token: `mock_preview_jwt_${crypto.randomBytes(16).toString('hex')}`,
+          serverUrl: 'wss://mock-preview-livekit.local',
+          roomId,
+          participantId,
+          participantName,
+          isHost: Boolean(isHost),
+          role,
+          expiresAt: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+          mock: true
+        };
+      }
+      assertLiveKitStagingAllowed('generateParticipantToken');
+    }
+
     const now = Math.floor(Date.now() / 1000);
     const ttlSeconds = 6 * 60 * 60; // 6 hours
 
@@ -211,6 +353,7 @@ class DailyAdapter extends SFUAdapter {
   }
 
   async _request(endpoint, method = 'GET', body = null) {
+    assertDailyPreviewDenied('outbound API request');
     return new Promise((resolve, reject) => {
       const u = new URL(`https://api.daily.co/v1/${endpoint.replace(/^\//, '')}`);
       const headers = {
@@ -251,6 +394,7 @@ class DailyAdapter extends SFUAdapter {
   }
 
   async createRoom({ roomId, roomTitle, settings = {} }) {
+    assertDailyPreviewDenied('createRoom');
     const roomName = `clasptek-${roomId.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()}`;
     if (!this.apiKey) {
       return {
@@ -294,6 +438,7 @@ class DailyAdapter extends SFUAdapter {
   }
 
   async generateParticipantToken({ roomId, participantId, participantName, isHost = false, role = 'STUDENT' }) {
+    assertDailyPreviewDenied('generateParticipantToken');
     const roomName = `clasptek-${roomId.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()}`;
     if (!this.apiKey) {
       return {

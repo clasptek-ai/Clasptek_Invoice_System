@@ -32,12 +32,111 @@ export interface ParticipantTokenResult {
   provider: string;
 }
 
+function isPreviewEnv(): boolean {
+  return process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview';
+}
+
+function assertLiveKitStagingAllowed(action: string = 'operation'): void {
+  if (process.env.STAGING_LIVEKIT_ALLOW_LIVE !== 'true') {
+    const err: any = new Error(
+      `LIVEKIT_PREVIEW_DENIED: LiveKit ${action} is denied in Preview environment. ` +
+      `Enable mock mode (LIVEKIT_MOCK_ENABLED=true) or configure certified isolated staging credentials.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_DENIED';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const stagingUrl = (process.env.STAGING_LIVEKIT_URL || '').trim();
+  const stagingKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+  const stagingSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+
+  if (!stagingUrl || !stagingKey || !stagingSecret) {
+    const err: any = new Error(
+      `LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_ALLOW_LIVE requires explicit STAGING_LIVEKIT_URL, ` +
+      `STAGING_LIVEKIT_API_KEY, and STAGING_LIVEKIT_API_SECRET. Inherited production credentials cannot be used.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const prodUrl = (process.env.LIVEKIT_URL || '').trim();
+  const prodKey = (process.env.LIVEKIT_API_KEY || '').trim();
+  const prodSecret = (process.env.LIVEKIT_API_SECRET || '').trim();
+
+  if (prodUrl && stagingUrl.toLowerCase() === prodUrl.toLowerCase()) {
+    const err: any = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL cannot match production LIVEKIT_URL.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if ((prodKey && stagingKey === prodKey) || (prodSecret && stagingSecret === prodSecret)) {
+    const err: any = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: Staging LiveKit credentials cannot match production credentials.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(stagingUrl.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://'));
+  } catch {
+    const err: any = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL is not a valid URL.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname.includes('app.clasptek.org') || hostname.includes('production')) {
+    const err: any = new Error('LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL cannot target production domains.');
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const isApprovedStagingHost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('staging-') ||
+    hostname.includes('.staging.') ||
+    hostname.endsWith('.local');
+
+  if (!isApprovedStagingHost) {
+    const err: any = new Error(
+      `LIVEKIT_PREVIEW_CONFIG_ERROR: STAGING_LIVEKIT_URL host '${hostname}' is not on the certified staging endpoint allowlist.`
+    );
+    err.code = 'LIVEKIT_PREVIEW_CONFIG_ERROR';
+    err.statusCode = 503;
+    throw err;
+  }
+}
+
 export class LiveKitService {
   private url: string;
   private apiKey: string;
   private apiSecret: string;
 
   constructor(config: { url?: string; apiKey?: string; apiSecret?: string } = {}) {
+    const isPreview = isPreviewEnv();
+
+    if (isPreview && process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+      this.url = 'wss://mock-preview-livekit.local';
+      this.apiKey = 'mock_preview_key';
+      this.apiSecret = 'mock_preview_secret';
+      return;
+    }
+
+    if (isPreview && process.env.STAGING_LIVEKIT_ALLOW_LIVE === 'true') {
+      assertLiveKitStagingAllowed('initialization');
+      this.url = (process.env.STAGING_LIVEKIT_URL || '').trim();
+      this.apiKey = (process.env.STAGING_LIVEKIT_API_KEY || '').trim();
+      this.apiSecret = (process.env.STAGING_LIVEKIT_API_SECRET || '').trim();
+      return;
+    }
+
     const rawUrl = (config.url || process.env.LIVEKIT_URL || '').trim();
     const rawKey = (config.apiKey || process.env.LIVEKIT_API_KEY || '').trim();
     const rawSecret = (config.apiSecret || process.env.LIVEKIT_API_SECRET || '').trim();
@@ -68,6 +167,21 @@ export class LiveKitService {
     roomTitle: string;
     settings?: { emptyTimeout?: number; maxParticipants?: number };
   }): Promise<SFURoomResult> {
+    if (isPreviewEnv()) {
+      if (process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+        return {
+          success: true,
+          provider: 'mock',
+          roomId: params.roomId,
+          roomTitle: params.roomTitle,
+          serverUrl: 'wss://mock-preview-livekit.local',
+          emptyTimeout: params.settings?.emptyTimeout || 300,
+          maxParticipants: params.settings?.maxParticipants || 100,
+        };
+      }
+      assertLiveKitStagingAllowed('createRoom');
+    }
+
     return {
       success: true,
       provider: 'livekit',
@@ -88,8 +202,24 @@ export class LiveKitService {
     ttlSeconds?: number;
     canPublish?: boolean;
   }): Promise<ParticipantTokenResult> {
-    const now = Math.floor(Date.now() / 1000);
     const isGuest = params.role === 'GUEST';
+
+    if (isPreviewEnv()) {
+      if (process.env.LIVEKIT_MOCK_ENABLED === 'true') {
+        return {
+          token: `mock_preview_jwt_${crypto.randomBytes(16).toString('hex')}`,
+          serverUrl: 'wss://mock-preview-livekit.local',
+          roomId: params.roomId,
+          participantId: params.participantId,
+          participantName: params.participantName,
+          role: params.role || (isGuest ? 'GUEST' : 'STUDENT'),
+          isHost: Boolean(params.isHost),
+          provider: 'livekit',
+        };
+      }
+      assertLiveKitStagingAllowed('generateParticipantToken');
+    }
+    const now = Math.floor(Date.now() / 1000);
     const ttlSeconds = params.ttlSeconds || (isGuest ? 2 * 60 * 60 : 6 * 60 * 60);
 
     const header = { alg: 'HS256', typ: 'JWT' };

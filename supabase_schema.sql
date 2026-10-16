@@ -3035,11 +3035,11 @@ GRANT EXECUTE ON FUNCTION public.execute_payment_transaction(TEXT, NUMERIC, TEXT
 REVOKE EXECUTE ON FUNCTION public.record_payment(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_payment(TEXT, NUMERIC, TEXT, TEXT, DATE, TEXT) TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION public.record_expense(NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.record_expense(NUMERIC, TEXT, TEXT, DATE, TEXT, TEXT) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.record_expense(JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_expense(JSONB) TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION public.approve_expense(TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.approve_expense(TEXT) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.approve_expense(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.approve_expense(TEXT, TEXT, TEXT) TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION public.void_financial_record(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.void_financial_record(TEXT, TEXT, TEXT) TO authenticated;
@@ -3051,8 +3051,8 @@ REVOKE EXECUTE ON FUNCTION public.complete_reconciliation(TEXT, NUMERIC, TEXT) F
 GRANT EXECUTE ON FUNCTION public.complete_reconciliation(TEXT, NUMERIC, TEXT) TO authenticated;
 
 -- 2. Strictly Governed Public Verification Endpoint (Only verify_certificate_public is granted to anon)
-REVOKE EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT, UUID) TO authenticated, anon;
+REVOKE EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verify_certificate_public(TEXT, TEXT) TO authenticated, anon;
 
 -- =============================================================================
 -- END OF CLASPTEK PRODUCTION SCHEMA VERSION 14.0.0
