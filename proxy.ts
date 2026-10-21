@@ -46,12 +46,28 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Proactively refresh Supabase session and get current user
-  const { supabaseResponse, user } = await updateSupabaseSession(request);
-
+  // Evaluate public routes before session initialization
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
   );
+
+  // Check whether the request carries Supabase auth session cookies
+  const hasAuthCookies = request.cookies.getAll().some(
+    (c) => c.name.startsWith('sb-')
+  );
+
+  // Anonymous visitor accessing public route: pass through without unnecessary session initialization
+  if (isPublicRoute && !hasAuthCookies) {
+    return NextResponse.next();
+  }
+
+  // Non-login public routes (e.g. /apply, /verify-certificate): always pass through
+  if (isPublicRoute && pathname !== '/login') {
+    return NextResponse.next();
+  }
+
+  // Proactively refresh Supabase session and get current user
+  const { supabaseResponse, user } = await updateSupabaseSession(request);
 
   // Unauthenticated user accessing a protected route → redirect to /login
   if (!user && !isPublicRoute) {
