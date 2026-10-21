@@ -610,7 +610,7 @@ export function MeetingsPageClient({
                   id="gdriveStatusBadge"
                   className={`cp-badge sm ${driveStatus.connected ? 'success' : 'neutral'}`}
                 >
-                  {driveStatus.connected ? '● Connected' : 'Not Connected'}
+                  {driveStatus.connected ? '● Connected' : driveStatus.status === 'CONFIGURED_UNVERIFIED' ? 'Configured · not verified' : 'Not Connected'}
                 </span>
                 <span className="cp-pill draft" style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px' }}>
                   TENANT_CENTRAL
@@ -871,7 +871,7 @@ export function MeetingsPageClient({
                               border: `1px solid ${m.sfuProvider === 'google_meet' ? '#fcd34d' : '#bfdbfe'}`,
                             }}
                           >
-                            {m.sfuProvider === 'google_meet' ? 'Google Meet' : 'LiveKit'}
+                            {m.sfuProvider === 'google_meet' ? 'Legacy (unsupported)' : 'LiveKit'}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -1017,7 +1017,7 @@ export function MeetingsPageClient({
                                 color: m.sfuProvider === 'google_meet' ? '#b45309' : '#1d4ed8',
                               }}
                             >
-                              {m.sfuProvider === 'google_meet' ? 'Meet' : 'LiveKit'}
+                              {m.sfuProvider === 'google_meet' ? 'Legacy' : 'LiveKit'}
                             </span>
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>

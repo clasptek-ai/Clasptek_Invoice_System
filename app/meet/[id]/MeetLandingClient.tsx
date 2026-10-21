@@ -317,7 +317,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
               color: '#ffffff',
             }}
           >
-            {meeting.provider === 'google_meet' ? '🌐 Platform: Google Meet' : '🎥 Platform: Clasptek LiveKit'}
+            {meeting.provider === 'google_meet' ? '⚠ Platform: Retired provider (unsupported)' : '🎥 Platform: Clasptek LiveKit'}
           </div>
         </div>
 
@@ -435,53 +435,17 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
                   <div
                     style={{
                       padding: 16,
-                      background: '#0f172a',
+                      background: '#450a0a',
                       borderRadius: 10,
-                      border: '1px solid #334155',
+                      border: '1px solid #dc2626',
                       fontSize: 13,
                       lineHeight: 1.5,
+                      color: '#fca5a5',
                     }}
                   >
-                    <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>🌐</span> Google Meet External Session
-                    </div>
-                    <div style={{ color: '#cbd5e1' }}>
-                      This classroom meeting is hosted externally on <strong>Google Meet</strong>. Participant admission, microphones, and camera permissions are managed directly by Google Meet.
-                    </div>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Meeting unavailable</div>
+                    This meeting was created on a video provider that Clasptek no longer supports. Please contact your facilitator to schedule a new Clasptek LiveKit meeting.
                   </div>
-
-                  {meeting.providerRoomUrl ? (
-                    <a
-                      href={meeting.providerRoomUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="cp-btn primary"
-                      style={{
-                        width: '100%',
-                        padding: '12px 18px',
-                        fontSize: 14,
-                        fontWeight: 700,
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        textDecoration: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                      }}
-                    >
-                      <span>🚀</span> Open Google Meet Meeting
-                    </a>
-                  ) : (
-                    <div style={{ padding: 12, background: '#450a0a', border: '1px solid #dc2626', color: '#fca5a5', borderRadius: 8, fontSize: 13 }}>
-                      No Google Meet link has been generated for this session. Please contact your facilitator.
-                    </div>
-                  )}
-
-                  {currentUser && (
-                    <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
-                      Signed in as <strong>{currentUser.name}</strong> ({currentUser.role})
-                    </div>
-                  )}
                 </div>
               ) : currentUser ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

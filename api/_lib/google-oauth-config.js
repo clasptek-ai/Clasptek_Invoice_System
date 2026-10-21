@@ -324,11 +324,11 @@ function resolveGoogleDriveRootFolderId() {
 }
 
 
-// Scopes: drive.file (recordings) + userinfo.email (identity) + calendar.events (Google Meet)
+// Scopes: drive.file (recordings) + userinfo.email (identity).
+// Clasptek meetings are LiveKit-only; Calendar access is intentionally NOT requested.
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/calendar.events'
+  'https://www.googleapis.com/auth/userinfo.email'
 ];
 
 /**
@@ -555,22 +555,50 @@ function validateSupabaseUrlGuard(url, context = 'SUPABASE_URL') {
 function resolveSupabaseConfig() {
   const env = resolveEnv();
 
-  const urlA = (process.env.SUPABASE_URL !== undefined ? process.env.SUPABASE_URL : env.SUPABASE_URL || '').trim();
-  const urlB = (process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined ? process.env.NEXT_PUBLIC_SUPABASE_URL : env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const hasPrimaryUrlInProcess = process.env.SUPABASE_URL !== undefined;
+  const hasNextUrlInProcess = process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined;
 
   let rawUrl = '';
-  if (urlA && urlB) {
-    const refA = extractProjectRefCommon(urlA);
-    const refB = extractProjectRefCommon(urlB);
-    if (refA && refB && refA !== refB) {
-      throw new Error(
-        'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase URL aliases detected. ' +
-        'SUPABASE_URL and NEXT_PUBLIC_SUPABASE_URL resolve to different projects. Align environment configuration to target a single project.'
-      );
+  if (hasPrimaryUrlInProcess || hasNextUrlInProcess) {
+    // Process-level URL variables are authoritative. Do not fall back to .env.local for URL aliases.
+    const urlA = (process.env.SUPABASE_URL || '').trim();
+    const urlB = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+
+    if (hasPrimaryUrlInProcess && hasNextUrlInProcess && urlA && urlB) {
+      const refA = extractProjectRefCommon(urlA);
+      const refB = extractProjectRefCommon(urlB);
+      if (refA && refB && refA !== refB) {
+        throw new Error(
+          'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase URL aliases detected. ' +
+          'SUPABASE_URL and NEXT_PUBLIC_SUPABASE_URL resolve to different projects. Align environment configuration to target a single project.'
+        );
+      }
+      rawUrl = urlA;
+    } else if (hasPrimaryUrlInProcess) {
+      // Primary SUPABASE_URL is defined at process level (authoritative, even if explicitly blank)
+      rawUrl = urlA;
+    } else {
+      // Only NEXT_PUBLIC_SUPABASE_URL is defined at process level
+      rawUrl = urlB;
     }
-    rawUrl = urlA;
   } else {
-    rawUrl = urlA || urlB;
+    // Both variables are genuinely absent from process.env — fallback to .env.local
+    const urlA = (env.SUPABASE_URL || '').trim();
+    const urlB = (env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+
+    if (urlA && urlB) {
+      const refA = extractProjectRefCommon(urlA);
+      const refB = extractProjectRefCommon(urlB);
+      if (refA && refB && refA !== refB) {
+        throw new Error(
+          'SUPABASE_CONFIG_CONFLICT: Conflicting Supabase URL aliases detected. ' +
+          'SUPABASE_URL and NEXT_PUBLIC_SUPABASE_URL resolve to different projects. Align environment configuration to target a single project.'
+        );
+      }
+      rawUrl = urlA;
+    } else {
+      rawUrl = urlA || urlB;
+    }
   }
 
   const supabaseUrl = rawUrl ? validateSupabaseUrlGuard(rawUrl, 'SUPABASE_URL') : '';

@@ -252,13 +252,16 @@ async function run() {
 
     it('Explicit Supabase URL is respected in google-oauth-config', () => {
       const origUrl = process.env.SUPABASE_URL;
+      const origNextUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
       try {
-        process.env.SUPABASE_URL = 'https://staging-custom-ref.supabase.co';
+        process.env.SUPABASE_URL = 'https://mockstagingref123456.supabase.co';
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
         const cfg = googleOAuthConfig.resolveSupabaseConfig();
-        assert.strictEqual(cfg.supabaseUrl, 'https://staging-custom-ref.supabase.co');
+        assert.strictEqual(cfg.supabaseUrl, 'https://mockstagingref123456.supabase.co');
       } finally {
         if (origUrl !== undefined) process.env.SUPABASE_URL = origUrl; else delete process.env.SUPABASE_URL;
+        if (origNextUrl !== undefined) process.env.NEXT_PUBLIC_SUPABASE_URL = origNextUrl; else delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       }
     });
 

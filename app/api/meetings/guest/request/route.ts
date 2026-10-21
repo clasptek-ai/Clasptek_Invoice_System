@@ -52,14 +52,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Google Meet meetings manage admission externally
+    // LiveKit-only: legacy google_meet rows cannot accept new guests and expose no external link.
     if (meeting.sfuProvider === 'google_meet') {
       return NextResponse.json(
         {
-          error: 'GOOGLE_MEET_EXTERNAL_MANAGEMENT',
-          message: 'This meeting is hosted on Google Meet. Admission and room controls are managed directly by Google Meet, not through Clasptek waiting rooms.',
-          provider: 'google_meet',
-          redirectUrl: meeting.providerRoomUrl || null,
+          error: 'PROVIDER_UNSUPPORTED',
+          message: 'This meeting was created on a retired video provider. Clasptek video meetings use LiveKit exclusively.',
         },
         { status: 400 }
       );

@@ -139,18 +139,38 @@ export async function POST(req: NextRequest) {
       validatedFacilitatorId = pers.id;
     }
 
+    // Facilitators may only schedule for cohorts they lead. The facilitator identity is the
+    // authoritative personnel.id resolved above from the session (never client-supplied), and
+    // assignment is cohorts.lead_facilitator_id, matching join / upload-recording / guest-decision.
+    const isFacilitatorActor = session.role === 'Facilitator';
+    const denyFacilitatorCohort = () =>
+      NextResponse.json(
+        {
+          error: 'COHORT_NOT_ASSIGNED',
+          message: 'You can only schedule meetings for cohorts assigned to you.',
+        },
+        { status: 403 }
+      );
+
     // Validate cohort ID if provided
     let validatedCohortId: string | null = null;
     if (cohortId && typeof cohortId === 'string' && cohortId.trim()) {
       const cleanCohortId = cohortId.trim();
-      const { data: coh } = await supabase
+      let cohortQuery = supabase
         .from('cohorts')
         .select('id')
         .eq('id', cleanCohortId)
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
+        .eq('tenant_id', tenantId);
+
+      if (isFacilitatorActor) {
+        cohortQuery = cohortQuery.eq('lead_facilitator_id', validatedFacilitatorId);
+      }
+
+      const { data: coh } = await cohortQuery.maybeSingle();
 
       if (!coh) {
+        // Uniform response for unassigned, cross-tenant and non-existent cohorts (no existence leak).
+        if (isFacilitatorActor) return denyFacilitatorCohort();
         return NextResponse.json(
           { error: 'INVALID_COHORT', message: 'The specified cohort does not exist in this tenant.' },
           { status: 400 }
@@ -165,16 +185,33 @@ export async function POST(req: NextRequest) {
       const cleanSessionId = trainingSessionId.trim();
       const { data: ts } = await supabase
         .from('training_sessions')
-        .select('id')
+        .select('id, cohort_id, facilitator_id')
         .eq('id', cleanSessionId)
         .eq('tenant_id', tenantId)
         .maybeSingle();
 
       if (!ts) {
+        if (isFacilitatorActor) return denyFacilitatorCohort();
         return NextResponse.json(
           { error: 'INVALID_TRAINING_SESSION', message: 'The specified training session does not exist in this tenant.' },
           { status: 400 }
         );
+      }
+
+      if (isFacilitatorActor && ts.facilitator_id !== validatedFacilitatorId) {
+        // Session not directly assigned: allow only if its cohort is led by this facilitator.
+        let sessionCohortAssigned = false;
+        if (ts.cohort_id) {
+          const { data: sessionCohort } = await supabase
+            .from('cohorts')
+            .select('id')
+            .eq('id', ts.cohort_id)
+            .eq('tenant_id', tenantId)
+            .eq('lead_facilitator_id', validatedFacilitatorId)
+            .maybeSingle();
+          sessionCohortAssigned = Boolean(sessionCohort);
+        }
+        if (!sessionCohortAssigned) return denyFacilitatorCohort();
       }
       validatedSessionId = ts.id;
     }

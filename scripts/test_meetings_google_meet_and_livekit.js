@@ -142,10 +142,10 @@ async function runSuite() {
 
   const googleConfig = require('../api/_lib/google-oauth-config');
 
-  await test('GOOGLE_SCOPES contains calendar.events while preserving drive.file and userinfo.email', () => {
+  await test('GOOGLE_SCOPES excludes calendar.events while preserving drive.file and userinfo.email (LiveKit-only)', () => {
     const scopes = googleConfig.GOOGLE_SCOPES;
     assert.ok(Array.isArray(scopes), 'GOOGLE_SCOPES must be an array');
-    assert.ok(scopes.includes('https://www.googleapis.com/auth/calendar.events'), 'Must request calendar.events scope');
+    assert.ok(!scopes.some((s) => /calendar/i.test(s)), 'Must NOT request any Calendar scope');
     assert.ok(scopes.includes('https://www.googleapis.com/auth/drive.file'), 'Must preserve drive.file scope');
     assert.ok(scopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'Must preserve userinfo.email scope');
     assert.ok(!scopes.includes('https://www.googleapis.com/auth/drive'), 'Must never request unrestricted full drive scope');
@@ -161,7 +161,7 @@ async function runSuite() {
     assert.strictEqual(parsed.searchParams.get('state'), 'state_test_xyz');
 
     const scopeParam = parsed.searchParams.get('scope') || '';
-    assert.ok(scopeParam.includes('calendar.events'), 'Auth URL must include calendar.events');
+    assert.ok(!/calendar/i.test(scopeParam), 'Auth URL must not include any Calendar scope');
     assert.ok(scopeParam.includes('drive.file'), 'Auth URL must include drive.file');
     assert.ok(scopeParam.includes('userinfo.email'), 'Auth URL must include userinfo.email');
   });
@@ -298,35 +298,8 @@ async function runSuite() {
     assert.strictEqual(tokenRes.serverUrl, 'wss://livekit.clasptek.org');
   });
 
-  await test('Google Meet meetings NEVER issue LiveKit tokens and return redirectUrl', () => {
-    const googleMeeting = {
-      id: 'mtg_001',
-      publicId: 'mtg-google-001',
-      sfuProvider: 'google_meet',
-      providerRoomUrl: 'https://meet.google.com/abc-defg-hij',
-      status: 'SCHEDULED',
-    };
-
-    // Simulate join route logic
-    const isGoogleMeet = googleMeeting.sfuProvider === 'google_meet';
-    assert.strictEqual(isGoogleMeet, true);
-
-    const joinResponse = {
-      success: true,
-      provider: 'google_meet',
-      sfuProvider: 'google_meet',
-      redirectUrl: googleMeeting.providerRoomUrl,
-      meetingUrl: googleMeeting.providerRoomUrl,
-      isHost: false,
-      role: 'STUDENT',
-      // Explicit invariant: no LiveKit token
-      token: undefined,
-    };
-
-    assert.strictEqual(joinResponse.redirectUrl, 'https://meet.google.com/abc-defg-hij');
-    assert.strictEqual(joinResponse.token, undefined);
-    assert.strictEqual(joinResponse.provider, 'google_meet');
-  });
+  // NOTE (Phase C10G): the former simulated 'Google Meet join returns redirectUrl' test was removed. The real
+  // join route rejects google_meet with PROVIDER_UNSUPPORTED and issues no LiveKit token.
 
   await test('Missing Google Meet URL on join fails closed without fabricating URL', () => {
     const badGoogleMeeting = {
@@ -371,25 +344,8 @@ async function runSuite() {
     assert.ok(waEncoded.includes('app.clasptek.org%2Fmeet%2Fmtg-livekit-123'));
   });
 
-  await test('Google Meet invitation shares verified Google Meet URL directly', () => {
-    const meeting = {
-      publicId: 'mtg-google-456',
-      title: 'Design Critique',
-      sfuProvider: 'google_meet',
-      providerRoomUrl: 'https://meet.google.com/des-crit-iqe',
-      facilitatorName: 'Prof. Sarah',
-      scheduledStart: '2026-10-15T14:00:00Z',
-      scheduledEnd: '2026-10-15T15:30:00Z',
-    };
-
-    const joinUrl = meeting.providerRoomUrl;
-    assert.strictEqual(joinUrl, 'https://meet.google.com/des-crit-iqe');
-
-    const message = `🎓 Clasptek Classroom Invitation — Google Meet\nMeeting: ${meeting.title}\nPlatform: Google Meet\nJoin Google Meet:\n${joinUrl}`;
-    const waEncoded = encodeURIComponent(message);
-    assert.ok(waEncoded.includes('meet.google.com%2Fdes-crit-iqe'));
-    assert.ok(message.includes('Platform: Google Meet'));
-  });
+  // NOTE (Phase C10G): the former simulated 'Google Meet invitation shares verified Google Meet URL' test
+  // was removed (retired behaviour). See scripts/test_phase_c10g_google_meet_leftovers_offline.js.
 
   // --- Suite 5: External Guest Admission Models ---
   console.log('\n--- Suite 5: Guest Admission Models (LiveKit Waiting Room vs Google Meet) ---');
@@ -424,27 +380,9 @@ async function runSuite() {
     assert.strictEqual(decision.status, 'APPROVED');
   });
 
-  await test('Google Meet meetings reject LiveKit guest waiting room requests with redirect instructions', () => {
-    const meeting = {
-      sfuProvider: 'google_meet',
-      providerRoomUrl: 'https://meet.google.com/abc-defg-hij',
-    };
-
-    // Simulated /api/meetings/guest/request route check
-    let response = null;
-    if (meeting.sfuProvider === 'google_meet') {
-      response = {
-        error: 'GOOGLE_MEET_EXTERNAL_MANAGEMENT',
-        message: 'This meeting is hosted on Google Meet. Admission and room controls are managed directly by Google Meet, not through Clasptek waiting rooms.',
-        provider: 'google_meet',
-        redirectUrl: meeting.providerRoomUrl,
-      };
-    }
-
-    assert.ok(response);
-    assert.strictEqual(response.error, 'GOOGLE_MEET_EXTERNAL_MANAGEMENT');
-    assert.strictEqual(response.redirectUrl, 'https://meet.google.com/abc-defg-hij');
-  });
+  // NOTE (Phase C10G): the former simulated 'Google Meet guest redirect' test was removed. It used
+  // hard-coded objects and asserted retired behaviour. See scripts/test_phase_c10g_google_meet_leftovers_offline.js
+  // for tests that execute the real guest/request route.
 
   // --- Suite 6: Database Persistence & Migration Invariants ---
   console.log('\n--- Suite 6: Schema, Migrations, and Recording Storage Preservation ---');

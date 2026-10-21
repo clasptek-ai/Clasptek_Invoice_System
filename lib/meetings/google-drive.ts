@@ -3,9 +3,13 @@
  * Server-side Google Drive integration for native meeting recordings.
  * Enforces least-privilege OAuth scope (drive.file), approved organization folder routing,
  * deterministic file naming, and zero client credential exposure.
+ *
+ * IMPORTANT: This module performs NO Google Drive uploads. The only genuine upload path is
+ * uploadFileToGoogleDrive() in api/_lib/google-oauth-config.js, invoked through
+ * lib/meetings/recording-service.ts (uploadRecordingWithRetry / reconcileMeetingRecording),
+ * which validates the Drive response (file id + parent folder) before a recording is marked STORED.
  */
 
-import crypto from 'crypto';
 import type { GoogleDriveStatus, RecordingMetadata } from '@/types/meetings';
 
 export const DEFAULT_ROOT_FOLDER_NAME = 'Clasptek Meeting Recordings';
@@ -84,6 +88,14 @@ export function generateRecordingFileName(params: {
   return `CLASPTEK_${params.meetingPublicId}_${dateStr}_${cleanTitle}.${ext}`;
 }
 
+/**
+ * Environment-only configuration status.
+ *
+ * This function reads environment variables only. It does NOT contact Google and does NOT consult
+ * the stored OAuth connection, so it can never prove that Drive authorization is valid. It therefore
+ * never reports `connected: true`; a complete configuration is reported as CONFIGURED_UNVERIFIED.
+ * No account e-mail or verification timestamp is fabricated.
+ */
 export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
   let rootFolderId = '';
   try {
@@ -97,16 +109,21 @@ export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
   const isConfigured = Boolean(clientId && clientSecret && rootFolderId);
 
   return {
-    connected: isConfigured,
+    connected: false,
     connectionType: 'TENANT_CENTRAL',
-    email: 'organization@clasptek.org',
     rootFolderId,
     rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
-    lastVerified: new Date().toISOString(),
-    status: isConfigured ? 'CONNECTED' : 'DISCONNECTED',
+    status: isConfigured ? 'CONFIGURED_UNVERIFIED' : 'DISCONNECTED',
   };
 }
 
+/**
+ * Unsupported direct-upload entry point — always fails closed.
+ *
+ * This function previously fabricated a Drive file ID and URL without uploading anything. It must
+ * never report success. Recording uploads are performed only by the recording service, which calls
+ * uploadFileToGoogleDrive() in api/_lib/google-oauth-config.js and validates the real Drive response.
+ */
 export async function uploadRecordingToDrive(params: {
   meetingId: string;
   tenantId: string;
@@ -116,99 +133,9 @@ export async function uploadRecordingToDrive(params: {
   durationSeconds?: number;
   meetingPublicId?: string;
 }): Promise<RecordingMetadata> {
-  // Pre-upload folder verification
-  const folderCheck = await verifyMeetingsFolderAccess();
-  if (!folderCheck.valid) {
-    throw new Error(`GOOGLE_DRIVE_FOLDER_INVALID: ${folderCheck.error}`);
-  }
-  const rootFolderId = folderCheck.folderId;
-  const mimeType = params.mimeType || 'video/mp4';
-
-  // Mock / offline fallback if Google credentials are test values or not connected
-  if (
-    !process.env.GOOGLE_CLIENT_ID ||
-    !process.env.GOOGLE_CLIENT_SECRET ||
-    process.env.NODE_ENV === 'test'
-  ) {
-    const fileId = `gdrive_${crypto.randomBytes(8).toString('hex')}`;
-    const now = new Date().toISOString();
-    return {
-      provider: 'GOOGLE_DRIVE',
-      fileId,
-      driveFileId: fileId,
-      driveFolderId: rootFolderId,
-      fileName: params.fileName,
-      mimeType,
-      driveUrl: `https://drive.google.com/file/d/${fileId}/view`,
-      webViewLink: `https://drive.google.com/file/d/${fileId}/view`,
-      webContentLink: `https://drive.google.com/uc?id=${fileId}&export=download`,
-      fileSizeBytes: params.fileBuffer.length,
-      size: params.fileBuffer.length,
-      durationSeconds: params.durationSeconds || 0,
-      recordingId: `rec_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-      uploadedAt: now,
-      storedAt: now,
-      source: 'LIVEKIT',
-      rootFolderId,
-      tenantId: params.tenantId,
-      meetingId: params.meetingId,
-      meetingPublicId: params.meetingPublicId,
-    };
-  }
-
-  // Attempt real Google Drive API multipart upload
-  try {
-    const boundary = '-------ClasptekBoundary' + crypto.randomBytes(8).toString('hex');
-    const delimiter = `\r\n--${boundary}\r\n`;
-    const closeDelimiter = `\r\n--${boundary}--`;
-
-    const metadata = {
-      name: params.fileName,
-      mimeType,
-      parents: [rootFolderId],
-    };
-
-    const part1 = Buffer.from(
-      delimiter +
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter +
-        `Content-Type: ${mimeType}\r\n` +
-        'Content-Transfer-Encoding: binary\r\n\r\n',
-      'utf8'
-    );
-
-    const part2 = params.fileBuffer;
-    const part3 = Buffer.from(closeDelimiter, 'utf8');
-    const multipartPayload = Buffer.concat([part1, part2, part3]);
-
-    const fileId = `gdrive_${crypto.randomBytes(8).toString('hex')}`;
-    const now = new Date().toISOString();
-
-    return {
-      provider: 'GOOGLE_DRIVE',
-      fileId,
-      driveFileId: fileId,
-      driveFolderId: rootFolderId,
-      fileName: params.fileName,
-      mimeType,
-      driveUrl: `https://drive.google.com/file/d/${fileId}/view`,
-      webViewLink: `https://drive.google.com/file/d/${fileId}/view`,
-      webContentLink: `https://drive.google.com/uc?id=${fileId}&export=download`,
-      fileSizeBytes: multipartPayload.length,
-      size: multipartPayload.length,
-      durationSeconds: params.durationSeconds || 0,
-      recordingId: `rec_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-      uploadedAt: now,
-      storedAt: now,
-      source: 'LIVEKIT',
-      rootFolderId,
-      tenantId: params.tenantId,
-      meetingId: params.meetingId,
-      meetingPublicId: params.meetingPublicId,
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Google Drive upload failed';
-    throw new Error(`GOOGLE_DRIVE_UPLOAD_FAILED: ${msg}`);
-  }
+  void params;
+  throw new Error(
+    'GOOGLE_DRIVE_DIRECT_UPLOAD_UNSUPPORTED: lib/meetings/google-drive.ts does not upload files. ' +
+      'Use the recording service upload path, which validates the genuine Google Drive response.'
+  );
 }

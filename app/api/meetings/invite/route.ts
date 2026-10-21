@@ -54,37 +54,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid recipient email addresses provided' }, { status: 400 });
     }
 
-    const isGoogleMeet = meeting.sfuProvider === 'google_meet';
-    let meetUrl: string;
-    let platformName: string;
-
-    if (isGoogleMeet) {
-      if (!meeting.providerRoomUrl) {
-        return NextResponse.json(
-          {
-            error: 'GOOGLE_MEET_URL_MISSING',
-            message: 'Google Meet URL has not been created or configured for this meeting.',
-          },
-          { status: 400 }
-        );
-      }
-      const { isValidGoogleMeetUrl } = await import('@/lib/meetings/google-meet');
-      if (!isValidGoogleMeetUrl(meeting.providerRoomUrl)) {
-        return NextResponse.json(
-          {
-            error: 'INVALID_GOOGLE_MEET_URL',
-            message: 'The saved Google Meet URL is not a valid Google Meet link.',
-          },
-          { status: 400 }
-        );
-      }
-      meetUrl = meeting.providerRoomUrl;
-      platformName = 'Google Meet';
-    } else {
-      const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clasptek.org';
-      meetUrl = `${origin}/meet/${meeting.publicId}`;
-      platformName = 'Clasptek LiveKit Classroom';
+    // LiveKit-only: legacy google_meet rows are never invited to an external provider link.
+    if (meeting.sfuProvider === 'google_meet') {
+      return NextResponse.json(
+        {
+          error: 'PROVIDER_UNSUPPORTED',
+          message: 'This meeting was created on a retired video provider and cannot be shared. Clasptek video meetings use LiveKit exclusively.',
+        },
+        { status: 400 }
+      );
     }
+
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clasptek.org';
+    const meetUrl = `${origin}/meet/${meeting.publicId}`;
+    const platformName = 'Clasptek LiveKit Classroom';
 
     const subject = `Invitation: ${meeting.title} — ${platformName}`;
     const inviteBody =
