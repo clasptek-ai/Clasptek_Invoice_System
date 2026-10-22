@@ -24,6 +24,8 @@ export function ShellLayout({ children }: ShellLayoutProps) {
   const isStandalone =
     pathname === '/login' ||
     pathname?.startsWith('/apply') ||
+    pathname === '/meet' ||
+    pathname?.startsWith('/meet/') ||
     pathname === '/_not-found';
 
   if (isStandalone) {

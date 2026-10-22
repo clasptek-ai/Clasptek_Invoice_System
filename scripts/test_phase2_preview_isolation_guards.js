@@ -63,7 +63,7 @@ const oauthConfig = require('../api/_lib/google-oauth-config');
 const sfuAdapter = require('../api/_lib/sfu-adapter');
 const sfuServiceMod = loadTsModule('lib/meetings/sfu.ts');
 const googleMeetMod = loadTsModule('lib/meetings/google-meet.ts');
-const joinHandler = require('../api/meetings/join');
+const joinHandler = require('../legacy/meetings/join');
 
 const {
   validateSupabaseProjectRef,

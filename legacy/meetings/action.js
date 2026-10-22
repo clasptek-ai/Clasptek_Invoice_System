@@ -15,7 +15,7 @@
  */
 
 const crypto = require('crypto');
-const { getSFUAdapter } = require('../_lib/sfu-adapter');
+const { getSFUAdapter } = require('../../api/_lib/sfu-adapter');
 
 function sendJson(res, statusCode, data) {
   if (typeof res.status === 'function') {

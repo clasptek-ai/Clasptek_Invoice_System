@@ -78,7 +78,7 @@ async function runCentralRepositoryCertification() {
 
   const oauthConfig = require('../api/_lib/google-oauth-config');
   const authHandler = require('../api/auth/google/auth');
-  const uploadRecordingHandler = require('../api/meetings/upload-recording');
+  const uploadRecordingHandler = require('../legacy/meetings/upload-recording');
   const verifyRepoHandler = (req, res) => {
     req.url = (req.url || '/api/auth/google/verify-repository') + (req.url && req.url.includes('?') ? '&' : '?') + 'action=verify-repository';
     return authHandler(req, res);
@@ -107,7 +107,7 @@ async function runCentralRepositoryCertification() {
 
   runTest('1.2: All required API handlers exist on disk', () => {
     assert(fs.existsSync(path.join(process.cwd(), 'api/auth/google/auth.js')), 'auth.js must exist');
-    assert(fs.existsSync(path.join(process.cwd(), 'api/meetings/upload-recording.js')), 'upload-recording.js must exist');
+    assert(fs.existsSync(path.join(process.cwd(), 'legacy/meetings/upload-recording.js')), 'upload-recording.js must exist');
     assert(fs.existsSync(path.join(process.cwd(), 'api/_lib/google-oauth-config.js')), 'google-oauth-config.js must exist');
   });
 
