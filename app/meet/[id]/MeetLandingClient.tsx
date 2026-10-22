@@ -109,9 +109,13 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
           window.location.href = data.redirectUrl;
           return;
         }
+        if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
+          setErrorMessage('Meeting service did not provide an approved LiveKit server URL. Please check server configuration.');
+          return;
+        }
         setLiveCredentials({
           token: data.token,
-          serverUrl: data.serverUrl,
+          serverUrl: data.serverUrl.trim(),
           isHost: Boolean(data.isHost),
           user: {
             id: data.participantId,
@@ -190,9 +194,14 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         if (res.ok) {
           if (data.status === 'APPROVED' && data.token) {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
+              setViewState('idle');
+              setErrorMessage('Host approved your entry, but the meeting service did not provide an approved LiveKit server URL.');
+              return;
+            }
             setLiveCredentials({
               token: data.token,
-              serverUrl: data.serverUrl || 'wss://clasptek-portal-tpfi0pb9.livekit.cloud',
+              serverUrl: data.serverUrl.trim(),
               isHost: false,
               user: {
                 id: `guest_${requestId}`,
@@ -217,7 +226,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
   };
 
   // Render Connected Live Room
-  if (viewState === 'connected' && liveCredentials) {
+  if (viewState === 'connected' && liveCredentials && liveCredentials.serverUrl) {
     const fullMeeting: Meeting = {
       id: meeting.id,
       tenantId: currentUser?.tenantId || 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',

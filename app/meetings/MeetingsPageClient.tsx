@@ -345,11 +345,16 @@ export function MeetingsPageClient({
         return;
       }
 
+      if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
+        alert('Meeting service did not provide an approved LiveKit server URL. Please check server configuration.');
+        return;
+      }
+
       // Enter live meeting mode
       setActiveLiveMeeting(meeting);
       setLiveSessionState({
         token: data.token,
-        serverUrl: data.serverUrl,
+        serverUrl: data.serverUrl.trim(),
         isHost: data.isHost,
         isMicOn: true,
         isCamOn: true,
@@ -1397,11 +1402,11 @@ export function MeetingsPageClient({
       )}
 
       {/* Real LiveKit WebRTC Meeting Room */}
-      {activeLiveMeeting && liveSessionState && (
+      {activeLiveMeeting && liveSessionState && liveSessionState.serverUrl && (
         <LiveMeetingRoom
           meeting={activeLiveMeeting}
           token={liveSessionState.token}
-          serverUrl={liveSessionState.serverUrl || 'wss://clasptek-portal-tpfi0pb9.livekit.cloud'}
+          serverUrl={liveSessionState.serverUrl}
           isHost={liveSessionState.isHost}
           currentUser={currentUser}
           onLeave={() => {
