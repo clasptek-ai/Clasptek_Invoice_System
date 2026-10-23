@@ -35,10 +35,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (record.status === 'APPROVED') {
+      const isGoogleMeet = record.livekitToken === 'GOOGLE_MEET' || (record.livekitServerUrl && record.livekitServerUrl.includes('meet.google.com'));
       return NextResponse.json({
         status: 'APPROVED',
-        token: record.livekitToken,
-        serverUrl: record.livekitServerUrl,
+        provider: isGoogleMeet ? 'google_meet' : 'livekit',
+        redirectUrl: isGoogleMeet ? (record.livekitServerUrl || null) : undefined,
+        token: isGoogleMeet ? undefined : record.livekitToken,
+        serverUrl: isGoogleMeet ? undefined : record.livekitServerUrl,
         guestName: record.guestName,
         message: 'Access approved! Joining classroom...',
       });

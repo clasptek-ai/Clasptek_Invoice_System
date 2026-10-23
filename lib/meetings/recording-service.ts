@@ -1367,9 +1367,18 @@ export async function initiateRecordingConsentSession({
     });
 
   if (sessInsertErr) {
+    const isSchemaError =
+      sessInsertErr.message?.includes('schema cache') ||
+      sessInsertErr.message?.includes('does not exist') ||
+      (sessInsertErr as any).code === '42P01' ||
+      (sessInsertErr as any).code === 'PGRST200' ||
+      (sessInsertErr as any).code === 'PGRST204';
+    const diagnostic = isSchemaError
+      ? `Database table 'public.meeting_recording_consent_sessions' is missing or not reloaded in schema cache. Migration 20261010_meeting_recording_consent_audit.sql must be applied to the target database and PostgREST schema cache reloaded.`
+      : sessInsertErr.message;
     throw new RecordingServiceError(
       'RELATIONAL_CONSENT_PERSISTENCE_FAILED',
-      `Failed to initialize relational consent session: ${sessInsertErr.message}`,
+      `Failed to initialize relational consent session: ${diagnostic}`,
       500
     );
   }
@@ -1396,9 +1405,18 @@ export async function initiateRecordingConsentSession({
     .insert(consentRows);
 
   if (consentsInsertErr) {
+    const isSchemaError =
+      consentsInsertErr.message?.includes('schema cache') ||
+      consentsInsertErr.message?.includes('does not exist') ||
+      (consentsInsertErr as any).code === '42P01' ||
+      (consentsInsertErr as any).code === 'PGRST200' ||
+      (consentsInsertErr as any).code === 'PGRST204';
+    const diagnostic = isSchemaError
+      ? `Database table 'public.meeting_recording_consents' is missing or not reloaded in schema cache. Migration 20261010_meeting_recording_consent_audit.sql must be applied to the target database.`
+      : consentsInsertErr.message;
     throw new RecordingServiceError(
       'RELATIONAL_CONSENT_PERSISTENCE_FAILED',
-      `Failed to initialize relational participant consents: ${consentsInsertErr.message}`,
+      `Failed to initialize relational participant consents: ${diagnostic}`,
       500
     );
   }
@@ -1423,9 +1441,18 @@ export async function initiateRecordingConsentSession({
     });
 
   if (auditInsertErr) {
+    const isSchemaError =
+      auditInsertErr.message?.includes('schema cache') ||
+      auditInsertErr.message?.includes('does not exist') ||
+      (auditInsertErr as any).code === '42P01' ||
+      (auditInsertErr as any).code === 'PGRST200' ||
+      (auditInsertErr as any).code === 'PGRST204';
+    const diagnostic = isSchemaError
+      ? `Database table 'public.meeting_recording_consent_audit_log' is missing or not reloaded in schema cache. Migration 20261010_meeting_recording_consent_audit.sql must be applied to the target database.`
+      : auditInsertErr.message;
     throw new RecordingServiceError(
       'RELATIONAL_CONSENT_PERSISTENCE_FAILED',
-      `Failed to persist consent audit record: ${auditInsertErr.message}`,
+      `Failed to persist consent audit record: ${diagnostic}`,
       500
     );
   }
@@ -2258,9 +2285,18 @@ export async function startMeetingRecording({
     .limit(1);
 
   if (sessErr) {
+    const isSchemaError =
+      sessErr.message?.includes('schema cache') ||
+      sessErr.message?.includes('does not exist') ||
+      (sessErr as any).code === '42P01' ||
+      (sessErr as any).code === 'PGRST200' ||
+      (sessErr as any).code === 'PGRST204';
+    const diagnostic = isSchemaError
+      ? `Database table 'public.meeting_recording_consent_sessions' is missing or not reloaded in schema cache. Migration 20261010_meeting_recording_consent_audit.sql must be applied to the target database.`
+      : sessErr.message;
     throw new RecordingServiceError(
       'RELATIONAL_CONSENT_READ_FAILED',
-      `Failed to read authoritative consent session from database: ${sessErr.message}`,
+      `Failed to read authoritative consent session from database: ${diagnostic}`,
       500
     );
   }

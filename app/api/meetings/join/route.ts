@@ -124,34 +124,50 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       const studentId = studData?.id;
-      if (!studentId || !meeting.cohortId) {
+      if (!studentId) {
         return NextResponse.json(
           {
             error: 'UNAUTHORIZED_MEETING_ACCESS',
-            message: 'You are not enrolled in the cohort scheduled for this meeting.',
+            message: 'No student profile found for your user account.',
           },
           { status: 403 }
         );
       }
 
-      // Check active enrolment in meeting's cohort
-      const { data: enrolment } = await supabase
-        .from('enrolments')
-        .select('id')
-        .eq('cohort_id', meeting.cohortId)
-        .eq('student_id', studentId)
-        .eq('tenant_id', tenantId)
-        .not('status', 'in', '("CANCELLED","WITHDRAWN")')
-        .maybeSingle();
+      const accessScope = meeting.participantAccess || 'COHORT_ONLY';
 
-      if (!enrolment) {
-        return NextResponse.json(
-          {
-            error: 'UNAUTHORIZED_MEETING_ACCESS',
-            message: 'You are not enrolled in the cohort scheduled for this meeting.',
-          },
-          { status: 403 }
-        );
+      if (accessScope === 'COHORT_ONLY') {
+        if (!meeting.cohortId) {
+          return NextResponse.json(
+            {
+              error: 'UNAUTHORIZED_MEETING_ACCESS',
+              message: 'This meeting is restricted to a cohort, but no cohort is assigned.',
+            },
+            { status: 403 }
+          );
+        }
+
+        // Check active enrolment in meeting's cohort
+        const { data: enrolment } = await supabase
+          .from('enrolments')
+          .select('id')
+          .eq('cohort_id', meeting.cohortId)
+          .eq('student_id', studentId)
+          .eq('tenant_id', tenantId)
+          .not('status', 'in', '("CANCELLED","WITHDRAWN")')
+          .maybeSingle();
+
+        if (!enrolment) {
+          return NextResponse.json(
+            {
+              error: 'UNAUTHORIZED_MEETING_ACCESS',
+              message: 'You are not enrolled in the cohort scheduled for this meeting.',
+            },
+            { status: 403 }
+          );
+        }
+      } else if (accessScope === 'ALL_STUDENTS') {
+        // Enforce tenant membership and student role; already confirmed via studData and tenantId
       }
 
       isHost = false;

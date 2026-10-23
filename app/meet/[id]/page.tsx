@@ -1,15 +1,20 @@
 /**
- * app/meet/[id]/page.tsx — Clasptek Meetings LiveKit Only
+ * app/meet/[id]/page.tsx — Clasptek Video Conferencing Landing Page
  * Public Invitation Landing Page Route.
- * Server component that verifies meeting validity and passes safe metadata
+ * Server component that verifies meeting validity and passes safe minimal metadata
  * to the interactive MeetLandingClient.
+ *
+ * Security Invariants:
+ * - Strict parameter validation against PostgREST filter injection.
+ * - Minimal public projection (NO settings, NO providerRoomUrl, NO internal DB UUIDs).
+ * - Provider URLs and LiveKit tokens released strictly through authenticated / authorized join.
  */
 
 import React from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getAuthoritativeSession } from '@/lib/auth/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createSupabaseServiceClient } from '@/lib/supabase/server';
 import { MeetLandingClient } from './MeetLandingClient';
 
 interface PageProps {
@@ -18,75 +23,168 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
+  const cleanId = (id || '').trim();
   return {
-    title: `Join Meeting ${id} — Clasptek LiveKit Video Conferencing`,
+    title: `Join Meeting ${cleanId} — Clasptek Video Conferencing`,
     description: 'Join live video classroom session on Clasptek Enterprise Platform.',
   };
 }
 
 export default async function MeetingLandingPage({ params }: PageProps) {
   const { id } = await params;
-  const publicId = id;
+  const cleanId = (id || '').trim();
 
-  const supabase = await createServerClient();
-  const { data: meeting, error } = await supabase
-    .from('meetings')
-    .select(`
-      id,
-      public_id,
-      title,
-      description,
-      status,
-      provider,
-      provider_room_url,
-      scheduled_start,
-      scheduled_end,
-      settings,
-      cohort_id,
-      facilitator_id,
-      cohorts (
-        cohort_code,
-        name
-      ),
-      personnel:facilitator_id (
-        first_name,
-        last_name
-      )
-    `)
-    .eq('public_id', publicId)
-    .is('deleted_at', null)
-    .maybeSingle();
+  // 1. Strict syntax validation to prevent PostgREST filter injection (Finding V-04)
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(cleanId);
+  const isPublicFormat = /^[a-zA-Z0-9_-]{3,128}$/.test(cleanId);
 
-  if (error || !meeting) {
+  if (!isPublicFormat && !isUuid) {
     notFound();
+  }
+
+  let meeting: any = null;
+
+  // Controlled offline tests mock support
+  if ((globalThis as any).__MOCK_MEETINGS_DB__) {
+    const mockDb = (globalThis as any).__MOCK_MEETINGS_DB__;
+    let m = mockDb.get(cleanId);
+    if (!m) {
+      for (const val of mockDb.values()) {
+        if (val.id === cleanId || val.publicId === cleanId) {
+          m = val;
+          break;
+        }
+      }
+    }
+    if (m && !m.deletedAt) {
+      meeting = {
+        id: m.id,
+        public_id: m.publicId,
+        tenant_id: m.tenantId,
+        title: m.title,
+        description: m.description,
+        status: m.status,
+        provider: m.sfuProvider || 'livekit',
+        provider_room_url: m.providerRoomUrl,
+        scheduled_start: m.scheduledStart,
+        scheduled_end: m.scheduledEnd,
+        cohort_id: m.cohortId,
+        facilitator_id: m.facilitatorId,
+        participant_access: m.participantAccess || 'COHORT_ONLY',
+      };
+    }
+  }
+
+  // 2. Safe, parameterized database query without composing dynamic .or() strings
+  if (!meeting) {
+    const supabase = createSupabaseServiceClient();
+
+    // Primary lookup: by public_id
+    const { data: byPublic } = await supabase
+      .from('meetings')
+      .select(`
+        id,
+        public_id,
+        tenant_id,
+        title,
+        description,
+        status,
+        provider,
+        provider_room_url,
+        scheduled_start,
+        scheduled_end,
+        cohort_id,
+        facilitator_id,
+        participant_access
+      `)
+      .eq('public_id', cleanId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (byPublic) {
+      meeting = byPublic;
+    } else if (isUuid) {
+      // Fallback lookup: by internal UUID if parameter is valid UUID format
+      const { data: byId } = await supabase
+        .from('meetings')
+        .select(`
+          id,
+          public_id,
+          tenant_id,
+          title,
+          description,
+          status,
+          provider,
+          provider_room_url,
+          scheduled_start,
+          scheduled_end,
+          cohort_id,
+          facilitator_id,
+          participant_access
+        `)
+        .eq('id', cleanId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (byId) {
+        meeting = byId;
+      }
+    }
+
+    if (!meeting) {
+      notFound();
+    }
   }
 
   const session = await getAuthoritativeSession().catch(() => null);
 
-  // Map personnel facilitator name safely
-  const pers = meeting.personnel as unknown as { first_name?: string; last_name?: string } | null;
-  const facilitatorName = pers ? `${pers.first_name || ''} ${pers.last_name || ''}`.trim() : null;
+  // Authoritatively resolve facilitator display name (tenant-scoped)
+  let facilitatorName: string | null = null;
+  if (meeting.facilitator_id && meeting.tenant_id) {
+    const supabase = createSupabaseServiceClient();
+    const { data: pers } = await supabase
+      .from('personnel')
+      .select('first_name, last_name, full_name')
+      .eq('id', meeting.facilitator_id)
+      .eq('tenant_id', meeting.tenant_id)
+      .maybeSingle();
+    if (pers) {
+      facilitatorName = (pers as any).full_name || `${(pers as any).first_name || ''} ${(pers as any).last_name || ''}`.trim() || null;
+    }
+  }
 
-  // Map cohort details safely
-  const coh = meeting.cohorts as unknown as { cohort_code?: string; name?: string } | null;
-  const cohortName = coh?.name || null;
-  const cohortCode = coh?.cohort_code || null;
+  // Authoritatively resolve cohort details (tenant-scoped)
+  let cohortName: string | null = null;
+  let cohortCode: string | null = null;
+  if (meeting.cohort_id && meeting.tenant_id) {
+    const supabase = createSupabaseServiceClient();
+    const { data: coh } = await supabase
+      .from('cohorts')
+      .select('cohort_code, name')
+      .eq('id', meeting.cohort_id)
+      .eq('tenant_id', meeting.tenant_id)
+      .maybeSingle();
+    if (coh) {
+      cohortName = coh.name || null;
+      cohortCode = (coh as any).cohort_code || null;
+    }
+  }
 
+  // 3. Metadata Minimization (Findings V-01 and V-02):
+  // Omit settings, omit internal meeting UUID, omit internal cohort UUID.
+  // CRITICAL: providerRoomUrl is NEVER disclosed to unauthenticated landing props.
   const safeMeeting = {
-    id: meeting.id,
     publicId: meeting.public_id,
     title: meeting.title,
     description: meeting.description,
     status: meeting.status,
-    provider: String(meeting.provider || 'LIVEKIT').toLowerCase(),
-    providerRoomUrl: meeting.provider_room_url || null,
+    provider: String(meeting.provider || 'LIVEKIT').toLowerCase() as 'livekit' | 'google_meet',
     scheduledStart: meeting.scheduled_start,
     scheduledEnd: meeting.scheduled_end,
-    settings: meeting.settings || {},
-    cohortId: meeting.cohort_id,
     cohortCode,
     cohortName,
     facilitatorName,
+    participantAccess: (meeting.participant_access || 'COHORT_ONLY') as 'COHORT_ONLY' | 'ALL_STUDENTS' | 'PUBLIC_TOKEN',
   };
 
   const safeUser = session?.user

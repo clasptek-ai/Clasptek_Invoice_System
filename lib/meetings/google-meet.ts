@@ -123,13 +123,13 @@ export async function createOrValidateGoogleMeet({
     } catch (_) {}
   }
 
-  // Preview Isolation: Automated conference creation in Preview without staging approval fails closed
+  // Preview Isolation: Automated conference creation in Preview requires staging approval
   if (googleConfig && typeof googleConfig.isPreviewEnvironment === 'function' && googleConfig.isPreviewEnvironment()) {
     const isStagingApproved = process.env.STAGING_GOOGLE_CALENDAR_ENABLED === 'true';
     if (!isStagingApproved) {
       throw new GoogleMeetError(
         'PROVIDER_UNSUPPORTED',
-        'Google Meet is disabled. Clasptek video meetings use LiveKit exclusively.',
+        'Google Meet automated conference creation is not enabled in this preview environment. STAGING_GOOGLE_CALENDAR_ENABLED=true is required.',
         400
       );
     }
@@ -143,11 +143,11 @@ export async function createOrValidateGoogleMeet({
     } catch (_) {}
   }
 
-  // If no connection exists for this tenant, fail closed
+  // If no connection exists for this tenant, fail closed with clear actionable error
   if (!connection) {
     throw new GoogleMeetError(
       'PROVIDER_UNSUPPORTED',
-      'Google Meet is disabled. Clasptek video meetings use LiveKit exclusively.',
+      'Google Meet is not configured for this organization. No Google account with Calendar permissions is connected for this tenant.',
       400
     );
   }
@@ -181,7 +181,6 @@ export async function createOrValidateGoogleMeet({
       createdVia: 'CUSTOM_VERIFIED_URL',
     };
   }
-
   // Idempotency: deterministic requestId derived from meeting identity/time
   const idKey = idempotencyKey || publicId || meetingId;
   const clientRequestId = idKey

@@ -92,10 +92,12 @@ export function MeetingsPageClient({
     scheduledEnd: new Date(Date.now() + 3600000 * 3).toISOString().slice(0, 16),
     participantAccess: 'COHORT_ONLY',
     provider: 'livekit' as 'livekit' | 'google_meet',
+    customGoogleMeetUrl: '',
     allowChat: true,
     allowScreenShare: true,
     muteOnEntry: false,
   });
+  const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
 
   const upcomingMeetings = [...meetings.filter((m) => m.status === 'SCHEDULED')].sort(
     (a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime() || a.id.localeCompare(b.id)
@@ -290,17 +292,50 @@ export function MeetingsPageClient({
   // Schedule meeting submission
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setScheduleModalError(null);
+
     if (!meetingForm.title.trim()) {
-      alert('Meeting title is required');
+      setScheduleModalError('Meeting title is required');
+      return;
+    }
+    const cleanTitle = meetingForm.title.trim();
+
+    const startDate = new Date(meetingForm.scheduledStart);
+    const endDate = new Date(meetingForm.scheduledEnd);
+    if (isNaN(startDate.getTime())) {
+      setScheduleModalError('Please specify a valid start date and time.');
+      return;
+    }
+    if (isNaN(endDate.getTime())) {
+      setScheduleModalError('Please specify a valid end date and time.');
+      return;
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      setScheduleModalError('Meeting end time must be after the start time.');
+      return;
+    }
+    const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+    if (durationMinutes < 5) {
+      setScheduleModalError('Meeting duration must be at least 5 minutes.');
       return;
     }
 
+    const cleanCustomUrl = meetingForm.customGoogleMeetUrl.trim();
+    if (meetingForm.provider === 'google_meet' && cleanCustomUrl) {
+      const meetUrlPattern = /^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}(\?.*)?$/i;
+      if (!meetUrlPattern.test(cleanCustomUrl)) {
+        setScheduleModalError('Invalid Google Meet URL format. Expected: https://meet.google.com/xxx-yyyy-zzz');
+        return;
+      }
+    }
+
+    setIsSubmittingSchedule(true);
     try {
       const res = await fetch('/api/meetings/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: meetingForm.title.trim(),
+          title: cleanTitle,
           description: meetingForm.description.trim(),
           programmeId: meetingForm.programmeId || null,
           cohortId: meetingForm.cohortId || null,
@@ -309,6 +344,7 @@ export function MeetingsPageClient({
           scheduledEnd: new Date(meetingForm.scheduledEnd).toISOString(),
           participantAccess: meetingForm.participantAccess,
           provider: meetingForm.provider,
+          customGoogleMeetUrl: meetingForm.provider === 'google_meet' && cleanCustomUrl ? cleanCustomUrl : undefined,
           settings: {
             allowChat: meetingForm.allowChat,
             allowScreenShare: meetingForm.allowScreenShare,
@@ -319,7 +355,7 @@ export function MeetingsPageClient({
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || data.error || 'Failed to schedule meeting');
+        setScheduleModalError(data.message || data.error || 'Failed to schedule meeting.');
         return;
       }
 
@@ -329,7 +365,9 @@ export function MeetingsPageClient({
       setTimeout(() => setFeedbackMsg(null), 3000);
       startTransition(() => router.refresh());
     } catch {
-      alert('Network error scheduling meeting');
+      setScheduleModalError('Network error connecting to meeting service. Please try again.');
+    } finally {
+      setIsSubmittingSchedule(false);
     }
   };
 
@@ -1486,6 +1524,42 @@ export function MeetingsPageClient({
                   </div>
                 </div>
 
+                {meetingForm.provider === 'google_meet' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label htmlFor="customGoogleMeetUrl" style={{ fontSize: 12, fontWeight: 600, display: 'block' }}>
+                      Custom Google Meet Link <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
+                    </label>
+                    <input
+                      id="customGoogleMeetUrl"
+                      type="url"
+                      className="cp-input"
+                      placeholder="https://meet.google.com/xxx-yyyy-zzz"
+                      value={meetingForm.customGoogleMeetUrl}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, customGoogleMeetUrl: e.target.value }))}
+                    />
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)', lineHeight: 1.4 }}>
+                      Paste an existing Google Meet link, or leave blank to automatically create a new Google Meet conference via the tenant&apos;s connected Google Calendar.
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="participantAccessScope" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                    Participant Access Scope
+                  </label>
+                  <select
+                    id="participantAccessScope"
+                    className="cp-input"
+                    style={{ width: '100%' }}
+                    value={meetingForm.participantAccess}
+                    onChange={(e) => setMeetingForm((p) => ({ ...p, participantAccess: e.target.value }))}
+                  >
+                    <option value="COHORT_ONLY">Enrolled Cohort Only (Recommended)</option>
+                    <option value="ALL_STUDENTS">All Students in Organization</option>
+                    <option value="PUBLIC_TOKEN">Public Access with Shared Link &amp; Waiting Room</option>
+                  </select>
+                </div>
+
                 {meetingForm.provider === 'livekit' ? (
                   <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
@@ -1532,11 +1606,17 @@ export function MeetingsPageClient({
                   type="button"
                   className="cp-btn secondary"
                   onClick={() => setIsScheduleModalOpen(false)}
+                  disabled={isSubmittingSchedule}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="cp-btn primary">
-                  Schedule Meeting
+                <button
+                  type="submit"
+                  className="cp-btn primary"
+                  disabled={isSubmittingSchedule}
+                  style={{ minWidth: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                >
+                  {isSubmittingSchedule ? 'Scheduling...' : 'Schedule Meeting'}
                 </button>
               </div>
             </form>

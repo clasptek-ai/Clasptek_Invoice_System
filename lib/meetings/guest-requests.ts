@@ -279,12 +279,30 @@ export async function decideGuestRequest(params: {
     try {
       const { getMeetingById } = await import('@/lib/meetings/queries');
       const mRes = await getMeetingById(record.meetingPublicId);
-      if (mRes.data && mRes.data.sfuProvider === 'google_meet') {
-        return {
-          success: false,
-          status: 'INVALID_PROVIDER',
-          error: 'Google Meet meetings do not issue LiveKit tokens. Admission is managed directly by Google Meet.',
-        };
+      if (mRes.data && (mRes.data.sfuProvider === 'google_meet' || (mRes.data.sfuProvider as string) === 'GOOGLE_MEET')) {
+        record.status = 'APPROVED';
+        record.livekitToken = 'GOOGLE_MEET';
+        record.livekitServerUrl = mRes.data.providerRoomUrl || null;
+        record.decidedAt = nowIso;
+        record.decidedBy = params.deciderUserId;
+        memoryGuestRequests.set(record.id, record);
+        try {
+          const supabase = createSupabaseServiceClient();
+          await supabase
+            .from('meeting_guest_requests')
+            .update({
+              status: record.status,
+              livekit_token: record.livekitToken,
+              livekit_server_url: record.livekitServerUrl,
+              decided_at: record.decidedAt,
+              decided_by: record.decidedBy,
+              updated_at: nowIso,
+            })
+            .eq('id', record.id);
+        } catch {
+          // Handled in memory
+        }
+        return { success: true, status: 'APPROVED' };
       }
       if (mRes.data && (mRes.data.status === 'COMPLETED' || mRes.data.status === 'CANCELLED')) {
         return {

@@ -54,20 +54,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid recipient email addresses provided' }, { status: 400 });
     }
 
-    // LiveKit-only: legacy google_meet rows are never invited to an external provider link.
-    if (meeting.sfuProvider === 'google_meet') {
-      return NextResponse.json(
-        {
-          error: 'PROVIDER_UNSUPPORTED',
-          message: 'This meeting was created on a retired video provider and cannot be shared. Clasptek video meetings use LiveKit exclusively.',
-        },
-        { status: 400 }
-      );
-    }
-
+    const isGoogleMeet = meeting.sfuProvider === 'google_meet' || (meeting.sfuProvider as string) === 'GOOGLE_MEET';
     const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clasptek.org';
     const meetUrl = `${origin}/meet/${meeting.publicId}`;
-    const platformName = 'Clasptek LiveKit Classroom';
+    const platformName = isGoogleMeet ? 'Google Meet' : 'Clasptek LiveKit Classroom';
 
     const subject = `Invitation: ${meeting.title} — ${platformName}`;
     const inviteBody =

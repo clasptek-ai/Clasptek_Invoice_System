@@ -15,19 +15,20 @@ import { LiveMeetingRoom } from '@/components/meetings/LiveMeetingRoom';
 import type { Meeting } from '@/types/meetings';
 
 interface SafeMeeting {
-  id: string;
   publicId: string;
   title: string;
   description?: string | null;
   status: string;
   scheduledStart: string;
   scheduledEnd: string;
-  settings: Record<string, unknown>;
-  cohortId?: string | null;
   cohortCode?: string | null;
   cohortName?: string | null;
   facilitatorName?: string | null;
   provider?: string;
+  participantAccess?: string;
+  id?: string;
+  cohortId?: string | null;
+  settings?: Record<string, unknown>;
   providerRoomUrl?: string | null;
 }
 
@@ -95,6 +96,10 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
 
   // Direct Join for Authenticated Users
   const handleAuthenticatedJoin = async () => {
+    if (meeting.status === 'CANCELLED') {
+      setErrorMessage('This meeting has been cancelled and cannot be joined.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
@@ -138,6 +143,10 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
   // Submit Guest Entry Request
   const handleGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (meeting.status === 'CANCELLED') {
+      setErrorMessage('This meeting has been cancelled and cannot be joined.');
+      return;
+    }
     if (!guestName.trim()) {
       setErrorMessage('Please enter your full name.');
       return;
@@ -192,27 +201,33 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         const data = await res.json();
 
         if (res.ok) {
-          if (data.status === 'APPROVED' && data.token) {
+          if (data.status === 'APPROVED') {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
-              setViewState('idle');
-              setErrorMessage('Host approved your entry, but the meeting service did not provide an approved LiveKit server URL.');
+            if (data.redirectUrl) {
+              window.location.href = data.redirectUrl;
               return;
             }
-            setLiveCredentials({
-              token: data.token,
-              serverUrl: data.serverUrl.trim(),
-              isHost: false,
-              user: {
-                id: `guest_${requestId}`,
-                email: guestEmail,
-                name: data.guestName || guestName,
-                role: 'GUEST',
-                guestRequestId: requestId,
-                guestRequestToken: requestToken,
-              },
-            });
-            setViewState('connected');
+            if (data.token) {
+              if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
+                setViewState('idle');
+                setErrorMessage('Host approved your entry, but the meeting service did not provide an approved LiveKit server URL.');
+                return;
+              }
+              setLiveCredentials({
+                token: data.token,
+                serverUrl: data.serverUrl.trim(),
+                isHost: false,
+                user: {
+                  id: `guest_${requestId}`,
+                  email: guestEmail,
+                  name: data.guestName || guestName,
+                  role: 'GUEST',
+                  guestRequestId: requestId,
+                  guestRequestToken: requestToken,
+                },
+              });
+              setViewState('connected');
+            }
           } else if (data.status === 'REJECTED' || data.status === 'REVOKED') {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setViewState('rejected');
@@ -228,7 +243,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
   // Render Connected Live Room
   if (viewState === 'connected' && liveCredentials && liveCredentials.serverUrl) {
     const fullMeeting: Meeting = {
-      id: meeting.id,
+      id: meeting.id || meeting.publicId,
       tenantId: currentUser?.tenantId || 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
       publicId: meeting.publicId,
       title: meeting.title,
@@ -332,7 +347,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
               color: '#ffffff',
             }}
           >
-            {meeting.provider === 'google_meet' ? '⚠ Platform: Retired provider (unsupported)' : '🎥 Platform: Clasptek LiveKit'}
+            {meeting.provider === 'google_meet' ? '🌐 Platform: Google Meet' : '🎥 Platform: Clasptek LiveKit'}
           </div>
         </div>
 
@@ -445,25 +460,68 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
           {/* State 3: IDLE SCREEN (Authenticated or Guest Entry) */}
           {viewState === 'idle' && (
             <>
-              {meeting.provider === 'google_meet' ? (
+              {meeting.status === 'CANCELLED' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div
                     style={{
-                      padding: 16,
-                      background: '#450a0a',
+                      padding: 20,
+                      background: '#1c1917',
                       borderRadius: 10,
-                      border: '1px solid #dc2626',
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      color: '#fca5a5',
+                      border: '1px solid #7f1d1d',
+                      textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Meeting unavailable</div>
-                    This meeting was created on a video provider that Clasptek no longer supports. Please contact your facilitator to schedule a new Clasptek LiveKit meeting.
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🚫</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: '#f87171', marginBottom: 8 }}>
+                      This Meeting Has Been Cancelled
+                    </div>
+                    <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>
+                      This video session was cancelled by the host and is no longer available to join.
+                      Please contact your course facilitator or administrator for rescheduling details.
+                    </div>
+                  </div>
+                </div>
+              ) : meeting.status === 'COMPLETED' || meeting.status === 'ENDED' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div
+                    style={{
+                      padding: 20,
+                      background: '#1c1917',
+                      borderRadius: 10,
+                      border: '1px solid #334155',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🏁</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: '#94a3b8', marginBottom: 8 }}>
+                      This Meeting Has Ended
+                    </div>
+                    <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>
+                      This video session has concluded and is no longer joinable.
+                    </div>
                   </div>
                 </div>
               ) : currentUser ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {meeting.provider === 'google_meet' && (
+                    <div
+                      style={{
+                        padding: 16,
+                        background: '#0B2038',
+                        borderRadius: 10,
+                        border: '1px solid #1E3A5F',
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: '#38bdf8', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>🌐</span> Google Meet Conference
+                      </div>
+                      This meeting is hosted externally on Google Meet. Launch the video conference below after authorized enrollment verification.
+                    </div>
+                  )}
+
                   <div
                     style={{
                       padding: 14,
@@ -493,10 +551,33 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
                       justifyContent: 'center',
                     }}
                   >
-                    {isSubmitting ? 'Joining Live Room...' : '🎥 Join Live Room'}
+                    {isSubmitting
+                      ? 'Verifying & Connecting...'
+                      : meeting.provider === 'google_meet'
+                      ? '🚀 Launch Google Meet'
+                      : '🎥 Join Live Room'}
                   </button>
                 </div>
               ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {meeting.provider === 'google_meet' && (
+                    <div
+                      style={{
+                        padding: 14,
+                        background: '#0B2038',
+                        borderRadius: 10,
+                        border: '1px solid #1E3A5F',
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: '#38bdf8', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>🌐</span> Google Meet Classroom
+                      </div>
+                      This session is hosted on Google Meet. Request guest admission below to be admitted by the facilitator.
+                    </div>
+                  )}
                 <form onSubmit={handleGuestSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#cbd5e1', marginBottom: 6 }}>
@@ -586,6 +667,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
                     </a>
                   </div>
                 </form>
+                </div>
               )}
             </>
           )}

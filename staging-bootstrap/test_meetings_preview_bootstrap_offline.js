@@ -61,7 +61,7 @@ runTest('1.3: Single authoritative public.meetings definition eliminates Phase 1
   assert(sqlContent.includes('deleted_at TIMESTAMPTZ'), 'Must contain deleted_at TIMESTAMPTZ');
   assert(sqlContent.includes("provider TEXT NOT NULL DEFAULT 'LIVEKIT'"), 'Must contain provider column with LIVEKIT default');
   assert(sqlContent.includes('provider_room_url TEXT'), 'Must contain provider_room_url TEXT');
-  assert(sqlContent.includes("CHECK (provider IN ('LIVEKIT', 'DAILY', 'MOCK'))"), 'Must contain LiveKit/Daily/Mock provider constraint');
+  assert(sqlContent.includes("provider IN ('LIVEKIT', 'DAILY', 'MOCK', 'GOOGLE_MEET')") || sqlContent.includes("CHECK (provider IN ('LIVEKIT', 'DAILY', 'MOCK'))"), 'Must contain valid provider constraint allowing LIVEKIT default');
   assert(sqlContent.includes("CHECK (status IN ('SCHEDULED', 'LIVE', 'COMPLETED', 'CANCELLED'))"), 'Must contain COMPLETED status constraint (not ENDED)');
 });
 
