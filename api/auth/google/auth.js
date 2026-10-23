@@ -105,7 +105,18 @@ async function handleStart(req, res, reqUrl, body) {
   authUrl.searchParams.set('client_id', config.clientId);
   authUrl.searchParams.set('redirect_uri', config.redirectUri);
   authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('scope', config.scopes);
+
+  const includeCalendar = Boolean(
+    (body && (body.includeCalendar || body.include_calendar)) ||
+    reqUrl.searchParams.get('include_calendar') === 'true' ||
+    reqUrl.searchParams.get('scope') === 'calendar'
+  );
+  let requestedScopes = config.scopes;
+  if (includeCalendar) {
+    requestedScopes = `${requestedScopes} https://www.googleapis.com/auth/` + 'calendar.events';
+    authUrl.searchParams.set('include_granted_scopes', 'true');
+  }
+  authUrl.searchParams.set('scope', requestedScopes);
   authUrl.searchParams.set('access_type', 'offline');
   authUrl.searchParams.set('prompt', 'consent');
   authUrl.searchParams.set('state', state);

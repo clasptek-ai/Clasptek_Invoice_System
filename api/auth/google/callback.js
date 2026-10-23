@@ -25,7 +25,8 @@ const {
   exchangeAuthorizationCode,
   fetchGoogleUserInfo,
   resolveAuthoritativeRootFolder,
-  upsertGoogleDriveConnection
+  upsertGoogleDriveConnection,
+  getTenantCentralDriveConnection
 } = require('../../_lib/google-oauth-config');
 
 module.exports = async function handler(req, res) {
@@ -128,6 +129,14 @@ module.exports = async function handler(req, res) {
     let rootFolderId = null;
     let rootFolderName = 'Clasptek Meeting Recordings';
 
+    let existingConnection = null;
+    if (connectionType === 'TENANT_CENTRAL') {
+      try {
+        existingConnection = await getTenantCentralDriveConnection(tenantId);
+      } catch (_) {}
+    }
+    const effectiveRefreshToken = refreshToken || (existingConnection && existingConnection.refresh_token) || null;
+
     if (connectionType === 'TENANT_CENTRAL') {
       try {
         const resolvedFolder = await resolveAuthoritativeRootFolder({
@@ -137,7 +146,9 @@ module.exports = async function handler(req, res) {
             tenant_id: tenantId,
             connection_type: 'TENANT_CENTRAL',
             access_token: accessToken,
-            refresh_token: refreshToken
+            refresh_token: effectiveRefreshToken,
+            root_folder_id: existingConnection && existingConnection.root_folder_id,
+            root_folder_name: existingConnection && existingConnection.root_folder_name
           }
         });
         rootFolderId = resolvedFolder.folderId;
@@ -155,9 +166,9 @@ module.exports = async function handler(req, res) {
       googleUserId,
       googleEmail,
       accessToken,
-      refreshToken,
-      rootFolderId,
-      rootFolderName,
+      refreshToken: effectiveRefreshToken,
+      rootFolderId: rootFolderId || (existingConnection && existingConnection.root_folder_id),
+      rootFolderName: rootFolderName || (existingConnection && existingConnection.root_folder_name),
       scope: grantedScope,
       expiresIn
     });

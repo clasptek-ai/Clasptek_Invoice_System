@@ -60,30 +60,23 @@ export async function POST(req: NextRequest) {
       googleMeetUrl,
     } = body;
 
-    // LiveKit-only enforcement: reject explicit Google Meet requests with structured HTTP 400
+    // Validate provider against explicit allowlist
+    const ALLOWED_PROVIDERS = ['livekit', 'google_meet'];
     const rawProvider = body.provider !== undefined && body.provider !== null
       ? String(body.provider).trim().toLowerCase()
       : 'livekit';
 
-    if (rawProvider === 'google_meet' || customGoogleMeetUrl || googleMeetUrl) {
+    if (!ALLOWED_PROVIDERS.includes(rawProvider)) {
       return NextResponse.json(
         {
           error: 'PROVIDER_UNSUPPORTED',
-          message: 'Google Meet is not supported. Clasptek video meetings use LiveKit exclusively.',
+          message: `Unsupported meeting provider '${body.provider}'. Allowed providers: ${ALLOWED_PROVIDERS.join(', ')}.`,
         },
         { status: 400 }
       );
     }
 
-    if (rawProvider !== 'livekit') {
-      return NextResponse.json(
-        {
-          error: 'PROVIDER_UNSUPPORTED',
-          message: `Unsupported meeting provider '${body.provider}'. Clasptek video meetings use LiveKit exclusively.`,
-        },
-        { status: 400 }
-      );
-    }
+
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Meeting title is required' }, { status: 400 });
@@ -219,32 +212,69 @@ export async function POST(req: NextRequest) {
     const meetingId = generateMeetingId();
     const publicId = generatePublicId();
 
-    const selectedProvider = 'livekit';
+    const selectedProvider = rawProvider as 'livekit' | 'google_meet';
     let sfuRoomResult = null;
     let providerRoomUrl: string | null = null;
-    const sfuRoomId: string = publicId;
+    let sfuRoomId: string = publicId;
 
-    const sfu = getSFUService();
-    try {
-      sfuRoomResult = await sfu.createRoom({
-        roomId: publicId,
-        roomTitle: title.trim(),
-        settings: {
-          emptyTimeout: 300,
-          maxParticipants: 100,
-        },
-      });
-      providerRoomUrl = process.env.LIVEKIT_URL || null;
-    } catch (sfuErr: unknown) {
-      const msg = sfuErr instanceof Error ? sfuErr.message : 'SFU Room creation failed';
-      return NextResponse.json(
-        {
-          error: 'Meeting unavailable',
-          message: 'The video meeting service is temporarily unavailable. Please try again shortly.',
-          detail: msg,
-        },
-        { status: 502 }
-      );
+    if (selectedProvider === 'livekit') {
+      const sfu = getSFUService();
+      try {
+        sfuRoomResult = await sfu.createRoom({
+          roomId: publicId,
+          roomTitle: title.trim(),
+          settings: {
+            emptyTimeout: 300,
+            maxParticipants: 100,
+          },
+        });
+        providerRoomUrl = process.env.LIVEKIT_URL || null;
+      } catch (sfuErr: unknown) {
+        const msg = sfuErr instanceof Error ? sfuErr.message : 'SFU Room creation failed';
+        return NextResponse.json(
+          {
+            error: 'Meeting unavailable',
+            message: 'The video meeting service is temporarily unavailable. Please try again shortly.',
+            detail: msg,
+          },
+          { status: 502 }
+        );
+      }
+    } else if (rawProvider === 'google_meet') {
+      try {
+        const { createOrValidateGoogleMeet } = await import('@/lib/meetings/google-meet');
+        const meetResult = await createOrValidateGoogleMeet({
+          tenantId,
+          title: title.trim(),
+          description: (description || '').trim() || null,
+          scheduledStart: startIso,
+          scheduledEnd: endIso,
+          customGoogleMeetUrl: customGoogleMeetUrl || googleMeetUrl || null,
+          idempotencyKey: publicId,
+          publicId,
+        });
+        providerRoomUrl = meetResult.meetUrl;
+        sfuRoomId = meetResult.calendarEventId || meetResult.conferenceId || publicId;
+      } catch (gmErr: unknown) {
+        if (gmErr instanceof Error && 'code' in gmErr && 'statusCode' in gmErr) {
+          const gm = gmErr as { code: string; message: string; statusCode: number };
+          return NextResponse.json(
+            {
+              error: gm.code,
+              message: gm.message,
+            },
+            { status: gm.statusCode || 400 }
+          );
+        }
+        const msg = gmErr instanceof Error ? gmErr.message : 'Google Meet creation failed';
+        return NextResponse.json(
+          {
+            error: 'GOOGLE_MEET_CREATION_FAILED',
+            message: msg,
+          },
+          { status: 502 }
+        );
+      }
     }
 
     const meetingRecord: Meeting = {
@@ -272,6 +302,10 @@ export async function POST(req: NextRequest) {
         allowChat: settings.allowChat !== false,
         allowScreenShare: settings.allowScreenShare !== false,
         muteOnEntry: Boolean(settings.muteOnEntry),
+        ...(rawProvider === 'google_meet' ? {
+          calendarEventId: sfuRoomId,
+          providerRoomUrl: providerRoomUrl,
+        } : {}),
       },
       recordingEnabled: false,
       recordingStatus: 'NOT_STARTED',
@@ -283,7 +317,17 @@ export async function POST(req: NextRequest) {
     };
 
     // Save to PostgreSQL with strict error propagation
-    await saveMeetingRecord(meetingRecord);
+    try {
+      await saveMeetingRecord(meetingRecord);
+    } catch (saveErr) {
+      if (selectedProvider === 'google_meet' && sfuRoomId && sfuRoomId !== publicId) {
+        try {
+          const { deleteGoogleCalendarEvent } = await import('@/lib/meetings/google-meet');
+          await deleteGoogleCalendarEvent({ tenantId, eventId: sfuRoomId });
+        } catch (_) {}
+      }
+      throw saveErr;
+    }
 
     return NextResponse.json(
       {

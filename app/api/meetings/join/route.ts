@@ -171,15 +171,35 @@ export async function POST(req: NextRequest) {
       await updateMeetingStatus(meeting.id, 'LIVE');
     }
 
-    // Google Meet Provider rejection: Google Meet is not supported; zero LiveKit token issuance
-    if (meeting.sfuProvider === 'google_meet') {
+    // Reject unsupported providers
+    if (meeting.sfuProvider && !['livekit', 'google_meet'].includes(meeting.sfuProvider.toLowerCase())) {
       return NextResponse.json(
         {
           error: 'PROVIDER_UNSUPPORTED',
-          message: 'Google Meet is no longer supported. Clasptek video meetings use LiveKit exclusively.',
+          message: `Meeting provider '${meeting.sfuProvider}' is not supported.`,
         },
         { status: 400 }
       );
+    }
+
+    // Google Meet Provider join: validate canonical URL and redirect; zero LiveKit token issuance
+    if (meeting.sfuProvider === 'google_meet' || (meeting.sfuProvider as string) === 'GOOGLE_MEET') {
+      const { isValidGoogleMeetUrl } = await import('@/lib/meetings/google-meet');
+      if (!meeting.providerRoomUrl || !isValidGoogleMeetUrl(meeting.providerRoomUrl)) {
+        return NextResponse.json(
+          {
+            error: 'INVALID_PROVIDER_URL',
+            message: 'This Google Meet meeting does not have a valid conference URL.',
+          },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        sfuProvider: 'google_meet',
+        redirectUrl: meeting.providerRoomUrl,
+        meeting,
+      });
     }
 
     const sfu = getSFUService();

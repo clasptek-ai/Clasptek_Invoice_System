@@ -36,10 +36,11 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
 
   if (!meeting) return null;
 
-  // Google Meet is retired: legacy rows remain readable, but no external link is ever offered.
-  const isGoogleMeet = meeting.sfuProvider === 'google_meet';
+  const isGoogleMeet = meeting.sfuProvider === 'google_meet' || (meeting.sfuProvider as string) === 'GOOGLE_MEET';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.clasptek.org';
-  const meetingUrl = isGoogleMeet ? '' : `${origin}/meet/${meeting.publicId}`;
+  const meetingUrl = isGoogleMeet && meeting.providerRoomUrl
+    ? meeting.providerRoomUrl
+    : `${origin}/meet/${meeting.publicId}`;
 
   // Formatted date and time
   const startDate = meeting.scheduledStart ? new Date(meeting.scheduledStart) : new Date();
@@ -53,13 +54,18 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
   const timeStr = `${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
   const defaultInvitationText = isGoogleMeet
-    ? `This meeting was created on a retired video provider and can no longer be shared.\n` +
+    ? `🎓 Clasptek Online Classroom Invitation\n` +
       `Meeting: ${meeting.title}\n` +
-      `Please schedule a new Clasptek LiveKit meeting.`
+      `Facilitator: ${meeting.facilitatorName || 'Course Facilitator'}\n` +
+      `Platform: Google Meet\n` +
+      `Date: ${dateStr}\n` +
+      `Time: ${timeStr}\n\n` +
+      `Join via Google Meet:\n` +
+      `${meetingUrl}`
     : `🎓 Clasptek Online Classroom Invitation\n` +
       `Meeting: ${meeting.title}\n` +
       `Facilitator: ${meeting.facilitatorName || 'Course Facilitator'}\n` +
-      `Platform: Clasptek LiveKit\n` +
+      `Platform: Clasptek Live Meeting (LiveKit)\n` +
       `Date: ${dateStr}\n` +
       `Time: ${timeStr}\n\n` +
       `Join via Clasptek LiveKit Classroom:\n` +
@@ -104,8 +110,8 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
 
   const handleSendEmailServer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isGoogleMeet) {
-      setEmailFeedback({ type: 'error', message: 'This meeting uses a retired provider and cannot be shared. Schedule a new LiveKit meeting.' });
+    if (isGoogleMeet && !meetingUrl) {
+      setEmailFeedback({ type: 'error', message: 'This Google Meet meeting does not have a valid conference URL.' });
       return;
     }
 
@@ -313,19 +319,19 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
 
         {/* Modal Body */}
         <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-          {isGoogleMeet && (
+          {isGoogleMeet && meeting.providerRoomUrl && (
             <div
               style={{
-                padding: '12px 16px',
+                padding: '10px 14px',
                 borderRadius: 8,
-                background: '#fef2f2',
-                border: '1px solid #f87171',
-                color: '#991b1b',
+                background: '#f0fdf4',
+                border: '1px solid #86efac',
+                color: '#166534',
                 fontSize: 13,
                 marginBottom: 16,
               }}
             >
-              ⚠️ <strong>Unsupported provider:</strong> This meeting was created on a retired video provider. Clasptek meetings use LiveKit only, so it cannot be shared. Please schedule a new meeting.
+              📅 <strong>Google Meet:</strong> This meeting is hosted externally on Google Meet. The invitation contains the verified meeting link.
             </div>
           )}
 

@@ -901,8 +901,17 @@ export async function checkMeetingDependencies(meetingId: string): Promise<{
 
 export async function deleteMeetingSafe(
   meetingId: string,
-  tenantId?: string
-): Promise<{ success: boolean; error: string | null }> {
+  tenantId?: string,
+  options?: {
+    transport?: (url: string, opts: any) => Promise<{ status: number; body: any }>;
+  }
+): Promise<{
+  success: boolean;
+  error: string | null;
+  message?: string;
+  provider?: string;
+  calendarDeleted?: boolean;
+}> {
   try {
     const session = await getAuthoritativeSession();
     if (!session || !session.user || !['Super Admin', 'Finance Manager'].includes(session.role)) {
@@ -917,6 +926,81 @@ export async function deleteMeetingSafe(
     }
 
     const supabase = await createServerClient();
+
+    // 1. Authoritative lookup: obtain meeting record scoped to tenant
+    let meetingRow: any = null;
+    if ((globalThis as any).__MOCK_MEETINGS_DB__) {
+      const mockDb = (globalThis as any).__MOCK_MEETINGS_DB__;
+      meetingRow = mockDb.get(meetingId);
+      if (!meetingRow) {
+        for (const val of mockDb.values()) {
+          if (val.id === meetingId || val.publicId === meetingId) {
+            meetingRow = val;
+            break;
+          }
+        }
+      }
+    } else {
+      const { data: row } = await supabase
+        .from('meetings')
+        .select('*')
+        .or(`id.eq.${meetingId},public_id.eq.${meetingId}`)
+        .eq('tenant_id', targetTenantId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (row) {
+        meetingRow = row;
+      }
+    }
+
+    if (!meetingRow) {
+      return { success: false, error: 'Meeting not found or access denied.' };
+    }
+
+    const rawProvider = String(meetingRow.provider || meetingRow.sfuProvider || 'LIVEKIT').toLowerCase();
+    const isGoogleMeet = rawProvider === 'google_meet';
+
+    let calendarDeleted = false;
+    if (isGoogleMeet) {
+      const calendarEventId =
+        meetingRow.calendar_event_id ||
+        meetingRow.calendarEventId ||
+        meetingRow.settings?.calendarEventId ||
+        (meetingRow.provider_room_id &&
+         !String(meetingRow.provider_room_id).startsWith('meet_') &&
+         meetingRow.provider_room_id !== meetingRow.public_id &&
+         meetingRow.provider_room_id !== (meetingRow as any).publicId
+          ? String(meetingRow.provider_room_id)
+          : null);
+
+      if (calendarEventId) {
+        try {
+          const { deleteGoogleCalendarEvent } = await import('@/lib/meetings/google-meet');
+          const delOk = await deleteGoogleCalendarEvent({
+            tenantId: targetTenantId,
+            eventId: calendarEventId,
+            transport: options?.transport,
+          });
+
+          if (!delOk) {
+            return {
+              success: false,
+              error: 'CALENDAR_EVENT_DELETION_FAILED',
+              message: 'Failed to delete external Google Calendar event. Meeting cancellation was halted to prevent orphaned external events.',
+              calendarDeleted: false,
+            };
+          }
+          calendarDeleted = true;
+        } catch (calErr: any) {
+          return {
+            success: false,
+            error: 'CALENDAR_EVENT_DELETION_FAILED',
+            message: calErr?.message || 'Failed to delete external Google Calendar event.',
+            calendarDeleted: false,
+          };
+        }
+      }
+    }
 
     // Soft delete: sets deleted_at and status = CANCELLED
     const now = new Date().toISOString();
@@ -934,7 +1018,20 @@ export async function deleteMeetingSafe(
       return { success: false, error: error.message };
     }
 
-    return { success: true, error: null };
+    if ((globalThis as any).__MOCK_MEETINGS_DB__) {
+      meetingRow.status = 'CANCELLED';
+      meetingRow.deleted_at = now;
+      meetingRow.deletedAt = now;
+      meetingRow.updated_at = now;
+      meetingRow.updatedAt = now;
+    }
+
+    return {
+      success: true,
+      error: null,
+      provider: rawProvider,
+      calendarDeleted,
+    };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to delete meeting';
     return { success: false, error: msg };

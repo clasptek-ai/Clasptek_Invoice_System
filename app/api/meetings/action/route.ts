@@ -55,16 +55,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, ...depCheck });
     }
 
-    if (action === 'DELETE_MEETING') {
+    if (action === 'DELETE_MEETING' || action === 'CANCEL_MEETING' || action === 'CANCEL') {
       if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
         return NextResponse.json({ error: 'Forbidden: Insufficient permissions to delete meetings.' }, { status: 403 });
       }
       if (!meetingId) return NextResponse.json({ error: 'meetingId required' }, { status: 400 });
       const delRes = await deleteMeetingSafe(meetingId, session.tenantId);
       if (!delRes.success) {
-        return NextResponse.json({ error: delRes.error }, { status: 400 });
+        const statusCode = delRes.error === 'CALENDAR_EVENT_DELETION_FAILED' ? 502 : 400;
+        return NextResponse.json({ error: delRes.error, message: delRes.message || delRes.error }, { status: statusCode });
       }
-      return NextResponse.json({ success: true, action: 'DELETE_MEETING' });
+      return NextResponse.json({
+        success: true,
+        action: 'DELETE_MEETING',
+        calendarDeleted: delRes.calendarDeleted,
+      });
     }
 
     if (action === 'START_MEETING' || action === 'START') {

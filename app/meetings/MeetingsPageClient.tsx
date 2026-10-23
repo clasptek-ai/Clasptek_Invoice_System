@@ -6,7 +6,7 @@
  * Faithful reproduction of legacy Clasptek UI, design tokens (.cp-*), and workflows.
  */
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Meeting, GoogleDriveStatus } from '@/types/meetings';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -48,13 +48,25 @@ export function MeetingsPageClient({
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus>(initialDriveStatus);
   const [subTab, setSubTab] = useState(currentSubTab);
   const [search, setSearch] = useState(currentSearch);
-  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Modals state
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduleModalError, setScheduleModalError] = useState<string | null>(null);
   const [watchModalMeeting, setWatchModalMeeting] = useState<Meeting | null>(null);
   const [shareModalMeeting, setShareModalMeeting] = useState<Meeting | null>(null);
   const [activeLiveMeeting, setActiveLiveMeeting] = useState<Meeting | null>(null);
+  // Close schedule modal on Escape
+  useEffect(() => {
+    if (!isScheduleModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsScheduleModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isScheduleModalOpen]);
 
   // Live meeting session state
   const [liveSessionState, setLiveSessionState] = useState<{
@@ -79,7 +91,7 @@ export function MeetingsPageClient({
     scheduledStart: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
     scheduledEnd: new Date(Date.now() + 3600000 * 3).toISOString().slice(0, 16),
     participantAccess: 'COHORT_ONLY',
-    provider: 'livekit' as const,
+    provider: 'livekit' as 'livekit' | 'google_meet',
     allowChat: true,
     allowScreenShare: true,
     muteOnEntry: false,
@@ -296,7 +308,7 @@ export function MeetingsPageClient({
           scheduledStart: new Date(meetingForm.scheduledStart).toISOString(),
           scheduledEnd: new Date(meetingForm.scheduledEnd).toISOString(),
           participantAccess: meetingForm.participantAccess,
-          provider: 'livekit',
+          provider: meetingForm.provider,
           settings: {
             allowChat: meetingForm.allowChat,
             allowScreenShare: meetingForm.allowScreenShare,
@@ -323,6 +335,12 @@ export function MeetingsPageClient({
 
   // Join meeting handler
   const handleJoinMeeting = async (meeting: Meeting) => {
+    // If meeting is external Google Meet with a direct providerRoomUrl, open it in a new window/tab
+    if (meeting.sfuProvider === 'google_meet' && meeting.providerRoomUrl) {
+      window.open(meeting.providerRoomUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     try {
       const res = await fetch('/api/meetings/join', {
         method: 'POST',
@@ -415,22 +433,74 @@ export function MeetingsPageClient({
 
   // Verify Google Drive Central Repository
   const handleVerifyDrive = async () => {
-    setFeedbackMsg({ type: 'success', text: 'Verifying Google Drive repository...' });
+    setFeedbackMsg({ type: 'info', text: 'Checking Google Drive repository status...' });
     try {
       const res = await fetch('/api/meetings/drive-status');
       const data = await res.json();
-      if (res.ok && data.connected) {
+      if (res.ok) {
         setDriveStatus(data);
+        if (data.connected) {
+          setFeedbackMsg({
+            type: 'success',
+            text: `Google Drive Central Repository verified: Folder "${data.rootFolderName}" is active.`,
+          });
+        } else if (data.status === 'CONFIGURED_UNVERIFIED') {
+          setFeedbackMsg({
+            type: 'info',
+            text: `Repository configuration detected (Folder "${data.rootFolderName}"), but authorization has not been verified with Google.`,
+          });
+        } else {
+          setFeedbackMsg({
+            type: 'error',
+            text: 'Google Drive Central Repository is disconnected. Connect an organization account to enable recording storage.',
+          });
+        }
+      } else {
+        const errorMsg = data?.error || 'Unable to check Google Drive repository status.';
+        setFeedbackMsg({ type: 'error', text: `Google Drive status check failed: ${errorMsg}` });
+      }
+      setTimeout(() => setFeedbackMsg(null), 5000);
+    } catch {
+      setFeedbackMsg({ type: 'error', text: 'Network error verifying Google Drive repository.' });
+    }
+  };
+
+  // Connect Google Drive Central Repository via authoritative OAuth flow
+  const handleConnectDrive = async () => {
+    setFeedbackMsg({ type: 'info', text: 'Initiating Google Drive authorization...' });
+    try {
+      const res = await fetch('/api/auth/google/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionType: 'TENANT_CENTRAL',
+          redirectTarget: '/meetings',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.authUrl) {
+        window.location.href = data.authUrl;
+        return;
+      }
+      if (data.error === 'GOOGLE_OAUTH_PREVIEW_DISABLED') {
         setFeedbackMsg({
-          type: 'success',
-          text: `Google Drive Central Repository verified: Folder "${data.rootFolderName}" is active.`,
+          type: 'info',
+          text: 'Google OAuth is disabled in Preview environments to prevent production credential reuse.',
+        });
+      } else if (res.status === 403) {
+        setFeedbackMsg({
+          type: 'error',
+          text: data.message || 'Only tenant administrators may connect the central Google Drive repository.',
         });
       } else {
-        setFeedbackMsg({ type: 'error', text: 'Google Drive repository verification failed.' });
+        setFeedbackMsg({
+          type: 'error',
+          text: data.message || data.error || 'Failed to start Google Drive connection.',
+        });
       }
-      setTimeout(() => setFeedbackMsg(null), 4000);
+      setTimeout(() => setFeedbackMsg(null), 5000);
     } catch {
-      setFeedbackMsg({ type: 'error', text: 'Network error verifying Google Drive' });
+      setFeedbackMsg({ type: 'error', text: 'Network error connecting to Google Drive.' });
     }
   };
 
@@ -445,9 +515,25 @@ export function MeetingsPageClient({
             borderRadius: 6,
             fontSize: 13,
             fontWeight: 600,
-            background: feedbackMsg.type === 'success' ? '#ECFDF5' : '#FEF2F2',
-            border: `1px solid ${feedbackMsg.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
-            color: feedbackMsg.type === 'success' ? '#065F46' : '#991B1B',
+            background:
+              feedbackMsg.type === 'success'
+                ? '#ECFDF5'
+                : feedbackMsg.type === 'info'
+                ? '#EFF6FF'
+                : '#FEF2F2',
+            border: `1px solid ${
+              feedbackMsg.type === 'success'
+                ? '#A7F3D0'
+                : feedbackMsg.type === 'info'
+                ? '#BFDBFE'
+                : '#FECACA'
+            }`,
+            color:
+              feedbackMsg.type === 'success'
+                ? '#065F46'
+                : feedbackMsg.type === 'info'
+                ? '#1E40AF'
+                : '#991B1B',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -455,6 +541,7 @@ export function MeetingsPageClient({
         >
           <span>{feedbackMsg.text}</span>
           <button
+            type="button"
             onClick={() => setFeedbackMsg(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
           >
@@ -680,6 +767,7 @@ export function MeetingsPageClient({
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {driveStatus.connected ? (
               <button
+                type="button"
                 className="cp-btn sm secondary"
                 id="btnVerifyRepository"
                 title="Verify repository folder exists and is accessible"
@@ -689,9 +777,10 @@ export function MeetingsPageClient({
               </button>
             ) : (
               <button
+                type="button"
                 className="cp-btn primary"
                 id="btnConnectGoogleDrive"
-                onClick={handleVerifyDrive}
+                onClick={handleConnectDrive}
               >
                 🔗 Connect Organization Account
               </button>
@@ -1140,16 +1229,36 @@ export function MeetingsPageClient({
       {isScheduleModalOpen && (
         <div className="cp-modal-overlay" onClick={() => setIsScheduleModalOpen(false)}>
           <div className="cp-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-            <div className="cp-modal-header">
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+            <div className="cp-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, fontSize: 16.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                 📅 Schedule New Video Meeting
               </h3>
-              <button className="cp-btn ghost sm" onClick={() => setIsScheduleModalOpen(false)}>
+              <button
+                type="button"
+                className="cp-btn ghost sm"
+                style={{ padding: '4px 8px', fontSize: 14, lineHeight: 1 }}
+                onClick={() => setIsScheduleModalOpen(false)}
+              >
                 ✕
               </button>
             </div>
-            <form onSubmit={handleScheduleSubmit}>
-              <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleScheduleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '20px', overflowY: 'auto', flex: 1 }}>
+                {scheduleModalError && (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 6,
+                      background: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      color: '#B91C1C',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {scheduleModalError}
+                  </div>
+                )}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                     Meeting Title <span style={{ color: 'red' }}>*</span>
@@ -1169,20 +1278,130 @@ export function MeetingsPageClient({
                     Meeting Platform
                   </label>
                   <div
+                    role="radiogroup"
+                    aria-label="Meeting Platform"
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      border: '2px solid #2563eb',
-                      background: 'rgba(37, 99, 235, 0.05)',
-                      fontSize: 13,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: 10,
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600 }}>Clasptek Live Meeting</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted, #64748b)' }}>Native LiveKit (Default)</div>
+                    {/* LiveKit Provider Card */}
+                    <div
+                      role="radio"
+                      id="platformLiveKit"
+                      aria-checked={meetingForm.provider === 'livekit'}
+                      tabIndex={0}
+                      onClick={() => setMeetingForm((p) => ({ ...p, provider: 'livekit' }))}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          setMeetingForm((p) => ({ ...p, provider: 'livekit' }));
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        border: meetingForm.provider === 'livekit'
+                          ? '1.5px solid var(--primary, #2563eb)'
+                          : '1px solid var(--border, #e2e8f0)',
+                        background: meetingForm.provider === 'livekit'
+                          ? 'rgba(37, 99, 235, 0.04)'
+                          : 'var(--surface, #ffffff)',
+                        transition: 'border-color 0.15s, background-color 0.15s',
+                        fontSize: 13,
+                        outline: 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span
+                          style={{
+                            color: meetingForm.provider === 'livekit' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #94a3b8)',
+                            fontSize: 16,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {meetingForm.provider === 'livekit' ? '●' : '○'}
+                        </span>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text, #0f172a)' }}>Clasptek Live Meeting</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)' }}>
+                            LiveKit SFU · Native browser video &amp; audio
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <span
+                          className="cp-pill active"
+                          style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px' }}
+                        >
+                          Default Provider
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Google Meet Provider Card */}
+                    <div
+                      role="radio"
+                      id="platformGoogleMeet"
+                      aria-checked={meetingForm.provider === 'google_meet'}
+                      tabIndex={0}
+                      onClick={() => setMeetingForm((p) => ({ ...p, provider: 'google_meet' }))}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          setMeetingForm((p) => ({ ...p, provider: 'google_meet' }));
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        border: meetingForm.provider === 'google_meet'
+                          ? '1.5px solid var(--primary, #2563eb)'
+                          : '1px solid var(--border, #e2e8f0)',
+                        background: meetingForm.provider === 'google_meet'
+                          ? 'rgba(37, 99, 235, 0.04)'
+                          : 'var(--surface, #ffffff)',
+                        transition: 'border-color 0.15s, background-color 0.15s',
+                        fontSize: 13,
+                        outline: 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span
+                          style={{
+                            color: meetingForm.provider === 'google_meet' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #94a3b8)',
+                            fontSize: 16,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {meetingForm.provider === 'google_meet' ? '●' : '○'}
+                        </span>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text, #0f172a)' }}>Google Meet</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)' }}>
+                            External Google Meet conference
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <span
+                          className="cp-pill secondary"
+                          style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px' }}
+                        >
+                          Optional
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1267,27 +1486,48 @@ export function MeetingsPageClient({
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 4 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                    <input
-                      type="checkbox"
-                      checked={meetingForm.allowChat}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, allowChat: e.target.checked }))}
-                    />
-                    Enable Room Chat
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                    <input
-                      type="checkbox"
-                      checked={meetingForm.allowScreenShare}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, allowScreenShare: e.target.checked }))}
-                    />
-                    Enable Screen Share
-                  </label>
-                </div>
+                {meetingForm.provider === 'livekit' ? (
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={meetingForm.allowChat}
+                        onChange={(e) => setMeetingForm((p) => ({ ...p, allowChat: e.target.checked }))}
+                      />
+                      Enable Room Chat
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={meetingForm.allowScreenShare}
+                        onChange={(e) => setMeetingForm((p) => ({ ...p, allowScreenShare: e.target.checked }))}
+                      />
+                      Enable Screen Share
+                    </label>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 6,
+                      background: '#EFF6FF',
+                      border: '1px solid #BFDBFE',
+                      fontSize: 12,
+                      color: '#1E40AF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>ℹ</span>
+                    <span>
+                      Google Meet conferences manage room chat, screen sharing, and participant controls externally within Google Meet.
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <div className="cp-modal-footer">
+              <div className="cp-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', flexShrink: 0, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="cp-btn secondary"

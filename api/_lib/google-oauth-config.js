@@ -334,14 +334,19 @@ const GOOGLE_SCOPES = [
 /**
  * Build Google OAuth 2.0 Authorization URL
  */
-function getAuthorizationUrl(state, req = null) {
+function getAuthorizationUrl(state, req = null, options = {}) {
   assertOAuthInitiationAllowed(req);
   const config = resolveGoogleOAuthConfig(req);
   const authUrl = new URL(config.authBaseUrl);
   authUrl.searchParams.set('client_id', config.clientId);
   authUrl.searchParams.set('redirect_uri', config.redirectUri);
   authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('scope', config.scopes);
+  let scopes = config.scopes;
+  if (options && options.includeCalendar) {
+    scopes = `${scopes} https://www.googleapis.com/auth/` + 'calendar.events';
+    authUrl.searchParams.set('include_granted_scopes', 'true');
+  }
+  authUrl.searchParams.set('scope', scopes);
   authUrl.searchParams.set('access_type', 'offline');
   authUrl.searchParams.set('prompt', 'consent');
   authUrl.searchParams.set('state', state);
@@ -1824,10 +1829,44 @@ async function upsertGoogleDriveConnection({
       connectionRecord.root_folder_id = existingCached.root_folder_id;
       connectionRecord.root_folder_name = existingCached.root_folder_name;
     }
+    if (!connectionRecord.scope && existingCached.scope) {
+      connectionRecord.scope = existingCached.scope;
+    }
   }
-  memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
+
+  // If refresh_token is missing, query database to preserve existing token from prior authorization
+  if (!connectionRecord.refresh_token && secretKey && supabaseUrl) {
+    try {
+      const filter = connectionType === 'TENANT_CENTRAL'
+        ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
+        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
+      const existingRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/google_drive_connections?${filter}&select=refresh_token,root_folder_id,root_folder_name,scope`,
+        {
+          method: 'GET',
+          headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
+        }
+      );
+      if (existingRes && existingRes.status === 200 && Array.isArray(existingRes.body) && existingRes.body.length > 0) {
+        const existingDb = existingRes.body[0];
+        if (existingDb.refresh_token) {
+          connectionRecord.refresh_token = existingDb.refresh_token;
+        }
+        if (!connectionRecord.root_folder_id && existingDb.root_folder_id) {
+          connectionRecord.root_folder_id = existingDb.root_folder_id;
+          connectionRecord.root_folder_name = existingDb.root_folder_name;
+        }
+        if (!connectionRecord.scope && existingDb.scope) {
+          connectionRecord.scope = existingDb.scope;
+        }
+      }
+    } catch (_) {}
+  }
+
+  memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
+
   if (secretKey && supabaseUrl) {
     try {
       if (connectionType === 'TENANT_CENTRAL') {
