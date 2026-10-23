@@ -19,6 +19,7 @@ import {
 } from '@/components/tables/RecordLifecycleModal';
 import { LiveMeetingRoom } from '@/components/meetings/LiveMeetingRoom';
 import { ShareMeetingModal } from '@/components/meetings/ShareMeetingModal';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 interface MeetingsPageClientProps {
   initialMeetings: Meeting[];
@@ -53,6 +54,22 @@ export function MeetingsPageClient({
   // Modals state
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleModalError, setScheduleModalError] = useState<string | null>(null);
+
+  // Google Calendar Connection Status for Schedule Modal (Phase C124)
+  const [calendarStatus, setCalendarStatus] = useState<{
+    isLoading: boolean;
+    connected: boolean;
+    hasCalendarScope: boolean;
+    status: 'IDLE' | 'LOADING' | 'CONNECTED' | 'NOT_CONNECTED' | 'PERMISSION_REQUIRED' | 'FAILED' | 'PREVIEW_DISABLED';
+    googleEmail?: string;
+    errorMessage?: string;
+  }>({
+    isLoading: false,
+    connected: false,
+    hasCalendarScope: false,
+    status: 'IDLE',
+  });
+  const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
   const [watchModalMeeting, setWatchModalMeeting] = useState<Meeting | null>(null);
   const [shareModalMeeting, setShareModalMeeting] = useState<Meeting | null>(null);
   const [activeLiveMeeting, setActiveLiveMeeting] = useState<Meeting | null>(null);
@@ -67,6 +84,36 @@ export function MeetingsPageClient({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isScheduleModalOpen]);
+
+  // Restore meeting form draft after OAuth redirect and check URL triggers (Phase C124)
+  useEffect(() => {
+    try {
+      const savedDraft = sessionStorage.getItem('clasptek_meeting_form_draft');
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed && typeof parsed === 'object') {
+          setMeetingForm((prev) => ({
+            ...prev,
+            ...parsed,
+          }));
+        }
+        sessionStorage.removeItem('clasptek_meeting_form_draft');
+        setIsScheduleModalOpen(true);
+      }
+    } catch (_) {}
+
+    // Check if query param indicates schedule modal or google connect return
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'schedule' || params.get('schedule') === 'true') {
+        setIsScheduleModalOpen(true);
+      }
+      if (params.get('google_drive') === 'connected') {
+        setFeedbackMsg({ type: 'success', text: 'Google account connected successfully.' });
+        setTimeout(() => setFeedbackMsg(null), 4000);
+      }
+    }
+  }, []);
 
   // Live meeting session state
   const [liveSessionState, setLiveSessionState] = useState<{
@@ -289,6 +336,126 @@ export function MeetingsPageClient({
     });
   };
 
+  // Query Authoritative Google Calendar Connection Status (Phase C124)
+  const fetchCalendarStatus = async () => {
+    setCalendarStatus((prev) => ({ ...prev, isLoading: true, errorMessage: undefined }));
+    try {
+      const res = await fetch('/api/meetings/calendar-status');
+      if (res.ok) {
+        const data = await res.json();
+        setCalendarStatus({
+          isLoading: false,
+          connected: Boolean(data.connected),
+          hasCalendarScope: Boolean(data.hasCalendarScope),
+          status: data.status || (data.connected ? 'CONNECTED' : 'NOT_CONNECTED'),
+          googleEmail: data.googleEmail,
+        });
+      } else if (res.status === 401) {
+        setCalendarStatus({
+          isLoading: false,
+          connected: false,
+          hasCalendarScope: false,
+          status: 'NOT_CONNECTED',
+          errorMessage: 'Authentication required to inspect Google connection.',
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setCalendarStatus({
+          isLoading: false,
+          connected: false,
+          hasCalendarScope: false,
+          status: 'FAILED',
+          errorMessage: errData.message || 'Unable to verify Google Calendar connection.',
+        });
+      }
+    } catch {
+      setCalendarStatus({
+        isLoading: false,
+        connected: false,
+        hasCalendarScope: false,
+        status: 'FAILED',
+        errorMessage: 'Network error checking Google Calendar connection.',
+      });
+    }
+  };
+
+  // Fetch Calendar status whenever Google Meet is selected or modal opened
+  useEffect(() => {
+    if (isScheduleModalOpen && meetingForm.provider === 'google_meet' && calendarStatus.status === 'IDLE') {
+      fetchCalendarStatus();
+    }
+  }, [isScheduleModalOpen, meetingForm.provider, calendarStatus.status]);
+
+  // Connect Google Calendar with Calendar Scope and Session Bearer Auth (Phase C124)
+  const handleConnectCalendar = async () => {
+    if (isConnectingCalendar) return;
+    setIsConnectingCalendar(true);
+    setScheduleModalError(null);
+
+    try {
+      // 1. Resolve browser session access token if available
+      let token = '';
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data: authData } = await supabase.auth.getSession();
+        token = authData?.session?.access_token || '';
+      } catch (_) {}
+
+      // 2. Preserve entered meeting details across OAuth redirect
+      try {
+        sessionStorage.setItem('clasptek_meeting_form_draft', JSON.stringify(meetingForm));
+      } catch (_) {}
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/auth/google/start', {
+        method: 'POST',
+        headers,
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          connectionType: 'TENANT_CENTRAL',
+          redirectTarget: '/meetings?tab=schedule',
+          includeCalendar: true,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.authUrl) {
+        // Anti-open-redirect validation: target must be official Google OAuth
+        const targetUrl = new URL(data.authUrl);
+        if (targetUrl.hostname === 'accounts.google.com') {
+          window.location.href = data.authUrl;
+          return;
+        } else {
+          setScheduleModalError('Received an untrusted authorization URL from server.');
+        }
+      } else if (res.status === 401) {
+        setScheduleModalError('Session expired or authentication required. Please sign in to connect Google Calendar.');
+      } else if (res.status === 403) {
+        setScheduleModalError(data.message || 'Only tenant administrators (Super Admin, Finance Manager) may connect Google Calendar.');
+      } else if (data.error === 'GOOGLE_OAUTH_PREVIEW_DISABLED') {
+        setCalendarStatus((prev) => ({
+          ...prev,
+          status: 'PREVIEW_DISABLED',
+          errorMessage: 'Google OAuth is disabled in Preview environments to prevent production credential reuse.',
+        }));
+        setScheduleModalError('Google OAuth is disabled in Preview environments to prevent production credential reuse.');
+      } else {
+        setScheduleModalError(data.message || data.error || 'Failed to start Google Calendar connection.');
+      }
+    } catch {
+      setScheduleModalError('Network error connecting to Google authorization service. Please check your network.');
+    } finally {
+      setIsConnectingCalendar(false);
+    }
+  };
+
   // Schedule meeting submission
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,6 +496,17 @@ export function MeetingsPageClient({
       }
     }
 
+    // Client-side prevention of guaranteed-invalid automated Google Meet creation
+    if (meetingForm.provider === 'google_meet' && !cleanCustomUrl) {
+      if (!calendarStatus.connected || !calendarStatus.hasCalendarScope) {
+        setScheduleModalError(
+          'Google Calendar is not configured for this organization. Connect Google Calendar above before automated scheduling, or enter a Custom Google Meet Link.'
+        );
+        return;
+      }
+    }
+
+    if (isSubmittingSchedule) return;
     setIsSubmittingSchedule(true);
     try {
       const res = await fetch('/api/meetings/create', {
@@ -392,7 +570,7 @@ export function MeetingsPageClient({
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || data.error || 'Failed to join meeting');
+        setFeedbackMsg({ type: 'error', text: data.message || data.error || 'Failed to join meeting' });
         return;
       }
 
@@ -402,7 +580,7 @@ export function MeetingsPageClient({
       }
 
       if (!data.serverUrl || typeof data.serverUrl !== 'string' || !data.serverUrl.trim()) {
-        alert('Meeting service did not provide an approved LiveKit server URL. Please check server configuration.');
+        setFeedbackMsg({ type: 'error', text: 'Meeting service did not provide an approved LiveKit server URL. Please check server configuration.' });
         return;
       }
 
@@ -433,7 +611,7 @@ export function MeetingsPageClient({
         );
       }
     } catch {
-      alert('Network error joining meeting');
+      setFeedbackMsg({ type: 'error', text: 'Network error joining meeting' });
     }
   };
 
@@ -507,12 +685,28 @@ export function MeetingsPageClient({
   const handleConnectDrive = async () => {
     setFeedbackMsg({ type: 'info', text: 'Initiating Google Drive authorization...' });
     try {
+      let token = '';
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data: authData } = await supabase.auth.getSession();
+        token = authData?.session?.access_token || '';
+      } catch (_) {}
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/auth/google/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        credentials: 'same-origin',
         body: JSON.stringify({
           connectionType: 'TENANT_CENTRAL',
           redirectTarget: '/meetings',
+          includeCalendar: true,
         }),
       });
       const data = await res.json();
@@ -1266,7 +1460,7 @@ export function MeetingsPageClient({
       {/* Schedule Meeting Modal */}
       {isScheduleModalOpen && (
         <div className="cp-modal-overlay" onClick={() => setIsScheduleModalOpen(false)}>
-          <div className="cp-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+          <div className="cp-modal" style={{ maxWidth: 580 }} onClick={(e) => e.stopPropagation()}>
             <div className="cp-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', flexShrink: 0 }}>
               <h3 style={{ margin: 0, fontSize: 16.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                 📅 Schedule New Video Meeting
@@ -1281,7 +1475,9 @@ export function MeetingsPageClient({
               </button>
             </div>
             <form onSubmit={handleScheduleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '20px', overflowY: 'auto', flex: 1 }}>
+              <div className="cp-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px', overflowY: 'auto', flex: 1 }}>
+
+                {/* Error Banner */}
                 {scheduleModalError && (
                   <div
                     style={{
@@ -1292,25 +1488,47 @@ export function MeetingsPageClient({
                       color: '#B91C1C',
                       fontSize: 12.5,
                       fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
                     }}
                   >
-                    {scheduleModalError}
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+                    <span style={{ flex: 1 }}>{scheduleModalError}</span>
                   </div>
                 )}
+
+                {/* 1. Meeting Title & Description / Agenda */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                  <label htmlFor="meetingTitleInput" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                     Meeting Title <span style={{ color: 'red' }}>*</span>
                   </label>
                   <input
+                    id="meetingTitleInput"
                     type="text"
                     required
                     className="cp-input"
-                    placeholder="e.g. Cohort Lecture: Cloud Infrastructure & DevOps"
+                    placeholder="e.g. Live Session: Cloud Infrastructure & DevOps"
                     value={meetingForm.title}
                     onChange={(e) => setMeetingForm((p) => ({ ...p, title: e.target.value }))}
                   />
                 </div>
 
+                <div>
+                  <label htmlFor="meetingDescriptionInput" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                    Description / Agenda <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
+                  </label>
+                  <textarea
+                    id="meetingDescriptionInput"
+                    rows={2}
+                    className="cp-input"
+                    placeholder="Topics to discuss, agenda, and guidelines..."
+                    value={meetingForm.description}
+                    onChange={(e) => setMeetingForm((p) => ({ ...p, description: e.target.value }))}
+                  />
+                </div>
+
+                {/* 2. Platform Selection */}
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>
                     Meeting Platform
@@ -1320,7 +1538,7 @@ export function MeetingsPageClient({
                     aria-label="Meeting Platform"
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
                       gap: 10,
                     }}
                   >
@@ -1342,7 +1560,7 @@ export function MeetingsPageClient({
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 10,
-                        padding: '10px 14px',
+                        padding: '12px 14px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         border: meetingForm.provider === 'livekit'
@@ -1389,11 +1607,19 @@ export function MeetingsPageClient({
                       id="platformGoogleMeet"
                       aria-checked={meetingForm.provider === 'google_meet'}
                       tabIndex={0}
-                      onClick={() => setMeetingForm((p) => ({ ...p, provider: 'google_meet' }))}
+                      onClick={() => {
+                        setMeetingForm((p) => ({ ...p, provider: 'google_meet' }));
+                        if (calendarStatus.status === 'IDLE') {
+                          fetchCalendarStatus();
+                        }
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === ' ' || e.key === 'Enter') {
                           e.preventDefault();
                           setMeetingForm((p) => ({ ...p, provider: 'google_meet' }));
+                          if (calendarStatus.status === 'IDLE') {
+                            fetchCalendarStatus();
+                          }
                         }
                       }}
                       style={{
@@ -1401,7 +1627,7 @@ export function MeetingsPageClient({
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 10,
-                        padding: '10px 14px',
+                        padding: '12px 14px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         border: meetingForm.provider === 'google_meet'
@@ -1444,122 +1670,7 @@ export function MeetingsPageClient({
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                    Description
-                  </label>
-                  <textarea
-                    rows={2}
-                    className="cp-input"
-                    placeholder="Topics to discuss, agenda, and guidelines..."
-                    value={meetingForm.description}
-                    onChange={(e) => setMeetingForm((p) => ({ ...p, description: e.target.value }))}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                      Cohort
-                    </label>
-                    <select
-                      className="cp-input"
-                      style={{ width: '100%' }}
-                      value={meetingForm.cohortId}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, cohortId: e.target.value }))}
-                    >
-                      <option value="">No Cohort (All Students)</option>
-                      {cohorts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.cohortCode} - {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                      Host / Facilitator
-                    </label>
-                    <select
-                      className="cp-input"
-                      style={{ width: '100%' }}
-                      value={meetingForm.facilitatorId}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, facilitatorId: e.target.value }))}
-                    >
-                      {personnel.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                      Start Time
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      className="cp-input"
-                      style={{ width: '100%' }}
-                      value={meetingForm.scheduledStart}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledStart: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                      End Time
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      className="cp-input"
-                      style={{ width: '100%' }}
-                      value={meetingForm.scheduledEnd}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledEnd: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                {meetingForm.provider === 'google_meet' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label htmlFor="customGoogleMeetUrl" style={{ fontSize: 12, fontWeight: 600, display: 'block' }}>
-                      Custom Google Meet Link <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
-                    </label>
-                    <input
-                      id="customGoogleMeetUrl"
-                      type="url"
-                      className="cp-input"
-                      placeholder="https://meet.google.com/xxx-yyyy-zzz"
-                      value={meetingForm.customGoogleMeetUrl}
-                      onChange={(e) => setMeetingForm((p) => ({ ...p, customGoogleMeetUrl: e.target.value }))}
-                    />
-                    <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)', lineHeight: 1.4 }}>
-                      Paste an existing Google Meet link, or leave blank to automatically create a new Google Meet conference via the tenant&apos;s connected Google Calendar.
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="participantAccessScope" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                    Participant Access Scope
-                  </label>
-                  <select
-                    id="participantAccessScope"
-                    className="cp-input"
-                    style={{ width: '100%' }}
-                    value={meetingForm.participantAccess}
-                    onChange={(e) => setMeetingForm((p) => ({ ...p, participantAccess: e.target.value }))}
-                  >
-                    <option value="COHORT_ONLY">Enrolled Cohort Only (Recommended)</option>
-                    <option value="ALL_STUDENTS">All Students in Organization</option>
-                    <option value="PUBLIC_TOKEN">Public Access with Shared Link &amp; Waiting Room</option>
-                  </select>
-                </div>
-
+                {/* 3. Platform-specific Settings & Google Calendar Connection Status */}
                 {meetingForm.provider === 'livekit' ? (
                   <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
@@ -1580,27 +1691,201 @@ export function MeetingsPageClient({
                     </label>
                   </div>
                 ) : (
-                  <div
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: 6,
-                      background: '#EFF6FF',
-                      border: '1px solid #BFDBFE',
-                      fontSize: 12,
-                      color: '#1E40AF',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 14 }}>ℹ</span>
-                    <span>
-                      Google Meet conferences manage room chat, screen sharing, and participant controls externally within Google Meet.
-                    </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 6,
+                        background: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        fontSize: 12,
+                        color: '#1E40AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>ℹ</span>
+                      <span>
+                        Google Meet conferences manage room chat, screen sharing, and participant controls externally within Google Meet.
+                      </span>
+                    </div>
+
+                    {/* Google Calendar Connection Status Card (Phase C124) */}
+                    <div
+                      id="googleCalendarStatusCard"
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: 8,
+                        border: calendarStatus.connected && calendarStatus.hasCalendarScope
+                          ? '1px solid #BBF7D0'
+                          : '1px solid #FED7AA',
+                        background: calendarStatus.connected && calendarStatus.hasCalendarScope
+                          ? '#F0FDF4'
+                          : '#FFFBEB',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 14 }}>
+                            {calendarStatus.connected && calendarStatus.hasCalendarScope ? '📅' : '⚠️'}
+                          </span>
+                          <span style={{ fontWeight: 600, fontSize: 12.5, color: calendarStatus.connected && calendarStatus.hasCalendarScope ? '#166534' : '#9A3412' }}>
+                            {calendarStatus.isLoading
+                              ? 'Checking Google Calendar Connection...'
+                              : calendarStatus.connected && calendarStatus.hasCalendarScope
+                              ? `Google Calendar Connected (${calendarStatus.googleEmail || 'Organization Account'})`
+                              : calendarStatus.status === 'PERMISSION_REQUIRED'
+                              ? 'Calendar Permission Required'
+                              : 'Google Calendar Not Connected'}
+                          </span>
+                        </div>
+                        {(!calendarStatus.connected || !calendarStatus.hasCalendarScope) && (
+                          <button
+                            type="button"
+                            className="cp-btn primary sm"
+                            id="btnConnectCalendar"
+                            onClick={handleConnectCalendar}
+                            disabled={isConnectingCalendar || calendarStatus.isLoading}
+                            style={{ fontSize: 11.5, padding: '4px 10px', height: 'auto' }}
+                          >
+                            {isConnectingCalendar
+                              ? 'Connecting...'
+                              : calendarStatus.status === 'PERMISSION_REQUIRED'
+                              ? 'Grant Calendar Permission'
+                              : 'Connect Google Calendar'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 11.5, color: '#4B5563', lineHeight: 1.4 }}>
+                        {calendarStatus.connected && calendarStatus.hasCalendarScope ? (
+                          'Your organization is authorized. New Google Meet conferences will be scheduled automatically via Google Calendar.'
+                        ) : calendarStatus.status === 'PERMISSION_REQUIRED' ? (
+                          'The connected Google account has Drive permissions but has not granted Google Calendar permission. Please re-authorize to grant Calendar access.'
+                        ) : (
+                          'Google Calendar must be connected for this organization before automatic Google Meet conference scheduling. Connect above, or enter an existing Google Meet link below.'
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Custom Google Meet URL Input */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label htmlFor="customGoogleMeetUrl" style={{ fontSize: 12, fontWeight: 600, display: 'block' }}>
+                        Custom Google Meet Link <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
+                      </label>
+                      <input
+                        id="customGoogleMeetUrl"
+                        type="url"
+                        className="cp-input"
+                        placeholder="https://meet.google.com/xxx-yyyy-zzz"
+                        value={meetingForm.customGoogleMeetUrl}
+                        onChange={(e) => setMeetingForm((p) => ({ ...p, customGoogleMeetUrl: e.target.value }))}
+                      />
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)', lineHeight: 1.4 }}>
+                        Paste an existing Google Meet link, or leave blank to automatically create a new Google Meet conference via the organization&apos;s connected Google Calendar.
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* 4. Start and End Date / Time */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                      Start Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      id="scheduledStartInput"
+                      required
+                      className="cp-input"
+                      style={{ width: '100%' }}
+                      value={meetingForm.scheduledStart}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledStart: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                      End Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      id="scheduledEndInput"
+                      required
+                      className="cp-input"
+                      style={{ width: '100%' }}
+                      value={meetingForm.scheduledEnd}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledEnd: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Cohort and Facilitator / Host */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                  <div>
+                    <label htmlFor="cohortSelect" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                      Cohort
+                    </label>
+                    <select
+                      id="cohortSelect"
+                      className="cp-input"
+                      style={{ width: '100%' }}
+                      value={meetingForm.cohortId}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, cohortId: e.target.value }))}
+                    >
+                      <option value="">No Cohort (All Students)</option>
+                      {cohorts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.cohortCode} - {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="facilitatorSelect" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                      Host / Facilitator
+                    </label>
+                    <select
+                      id="facilitatorSelect"
+                      className="cp-input"
+                      style={{ width: '100%' }}
+                      value={meetingForm.facilitatorId}
+                      onChange={(e) => setMeetingForm((p) => ({ ...p, facilitatorId: e.target.value }))}
+                    >
+                      {personnel.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 6. Participant Access Scope */}
+                <div>
+                  <label htmlFor="participantAccessScope" style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                    Participant Access Scope
+                  </label>
+                  <select
+                    id="participantAccessScope"
+                    className="cp-input"
+                    style={{ width: '100%' }}
+                    value={meetingForm.participantAccess}
+                    onChange={(e) => setMeetingForm((p) => ({ ...p, participantAccess: e.target.value }))}
+                  >
+                    <option value="COHORT_ONLY">Enrolled Cohort Only (Recommended)</option>
+                    <option value="ALL_STUDENTS">All Students in Organization</option>
+                    <option value="PUBLIC_TOKEN">Public Access with Shared Link &amp; Waiting Room</option>
+                  </select>
+                </div>
+
               </div>
 
+              {/* 7. Action Footer */}
               <div className="cp-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', flexShrink: 0, flexWrap: 'wrap' }}>
                 <button
                   type="button"

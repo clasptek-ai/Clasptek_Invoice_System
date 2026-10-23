@@ -722,7 +722,65 @@ async function parseRequestBody(req) {
 }
 
 /**
- * Validate Supabase Caller Identity from Authorization: Bearer JWT
+ * Safely extracts Supabase auth access token from Cookie header.
+ * Supports standard `@supabase/ssr` cookies (e.g. sb-<project>-auth-token or chunked .0, .1)
+ * Never logs cookies or exposes tokens.
+ */
+function extractSupabaseTokenFromCookies(cookieHeader) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null;
+  const cookies = {};
+  cookieHeader.split(';').forEach(part => {
+    const idx = part.indexOf('=');
+    if (idx !== -1) {
+      const key = part.slice(0, idx).trim();
+      const val = part.slice(idx + 1).trim();
+      if (key) cookies[key] = val;
+    }
+  });
+
+  const baseKeys = new Set();
+  for (const k of Object.keys(cookies)) {
+    const match = k.match(/^(sb-[a-zA-Z0-9_-]+-auth-token)(\.\d+)?$/);
+    if (match) {
+      baseKeys.add(match[1]);
+    }
+  }
+
+  for (const baseKey of baseKeys) {
+    let combinedVal = '';
+    if (cookies[baseKey]) {
+      combinedVal = cookies[baseKey];
+    } else {
+      let chunkIdx = 0;
+      while (cookies[`${baseKey}.${chunkIdx}`] !== undefined) {
+        combinedVal += cookies[`${baseKey}.${chunkIdx}`];
+        chunkIdx++;
+      }
+    }
+
+    if (combinedVal) {
+      try {
+        let decoded = combinedVal;
+        if (decoded.startsWith('base64-')) {
+          decoded = Buffer.from(decoded.slice(7), 'base64').toString('utf8');
+        } else {
+          decoded = decodeURIComponent(decoded);
+        }
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed) && typeof parsed[0] === 'string' && parsed[0]) {
+          return parsed[0];
+        }
+        if (parsed && typeof parsed.access_token === 'string' && parsed.access_token) {
+          return parsed.access_token;
+        }
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+
+/**
+ * Validate Supabase Caller Identity from Authorization: Bearer JWT or Session Cookie
  */
 async function authenticateCaller(req) {
   if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
@@ -740,7 +798,12 @@ async function authenticateCaller(req) {
   }
 
   const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+  if (!token) {
+    const cookieHeader = req.headers?.cookie || req.headers?.Cookie || '';
+    token = extractSupabaseTokenFromCookies(cookieHeader) || '';
+  }
 
   if (!token) {
     return { authenticated: false, error: 'MISSING_TOKEN', message: 'Authentication required' };
@@ -1942,6 +2005,12 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
     const cacheKey = connectionType === 'TENANT_CENTRAL' ? `central:${tenantId}` : `user:${tenantId}:${userId}`;
     const cached = memoryConnectionStore.get(cacheKey);
     if (cached) {
+      const grantedScope = String(cached.scope || '');
+      const hasCalendarScope =
+        grantedScope.includes('calendar.events') ||
+        grantedScope.includes('calendar') ||
+        Boolean(cached._testAllowCalendar);
+
       return {
         connected: cached.status === 'CONNECTED',
         connectionType: cached.connection_type || connectionType,
@@ -1952,7 +2021,8 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
         connectedAt: cached.created_at || cached.updated_at,
         lastUpdated: cached.updated_at,
         canRefresh: Boolean(cached.refresh_token),
-        status: cached.status
+        status: cached.status,
+        hasCalendarScope
       };
     }
   }
@@ -1966,7 +2036,7 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
         : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
 
       const res = await httpsRequest(
-        `${supabaseUrl}/rest/v1/google_drive_connections?${query}&select=id,connection_type,google_email,root_folder_id,root_folder_name,last_verified_at,status,created_at,updated_at,refresh_token`,
+        `${supabaseUrl}/rest/v1/google_drive_connections?${query}&select=id,connection_type,google_email,root_folder_id,root_folder_name,last_verified_at,status,created_at,updated_at,refresh_token,scope`,
         {
           method: 'GET',
           headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
@@ -1975,6 +2045,11 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
 
       if (res.status === 200 && Array.isArray(res.body) && res.body.length > 0) {
         const row = res.body[0];
+        const grantedScope = String(row.scope || '');
+        const hasCalendarScope =
+          grantedScope.includes('calendar.events') ||
+          grantedScope.includes('calendar');
+
         return {
           connected: row.status === 'CONNECTED',
           connectionType: row.connection_type || connectionType,
@@ -1985,7 +2060,8 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
           connectedAt: row.created_at,
           lastUpdated: row.updated_at,
           canRefresh: Boolean(row.refresh_token),
-          status: row.status
+          status: row.status,
+          hasCalendarScope
         };
       }
     } catch (_) {}
@@ -1994,6 +2070,12 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
   const cacheKey = connectionType === 'TENANT_CENTRAL' ? `central:${tenantId}` : `user:${tenantId}:${userId}`;
   const cached = memoryConnectionStore.get(cacheKey);
   if (cached) {
+    const grantedScope = String(cached.scope || '');
+    const hasCalendarScope =
+      grantedScope.includes('calendar.events') ||
+      grantedScope.includes('calendar') ||
+      Boolean(cached._testAllowCalendar);
+
     return {
       connected: cached.status === 'CONNECTED',
       connectionType: cached.connection_type || connectionType,
@@ -2004,7 +2086,8 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
       connectedAt: cached.created_at || cached.updated_at,
       lastUpdated: cached.updated_at,
       canRefresh: Boolean(cached.refresh_token),
-      status: cached.status
+      status: cached.status,
+      hasCalendarScope
     };
   }
 
@@ -2018,7 +2101,8 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
     connectedAt: null,
     lastUpdated: null,
     canRefresh: false,
-    status: 'NOT_CONNECTED'
+    status: 'NOT_CONNECTED',
+    hasCalendarScope: false
   };
 }
 
@@ -2097,6 +2181,7 @@ module.exports = {
   verifyDurableStagingContainment,
   resetStagingCreatedFolders,
   _stagingCreatedFolders,
+  extractSupabaseTokenFromCookies,
   _memoryStateStore: memoryStateStore,
   _memoryConnectionStore: memoryConnectionStore,
   _memoryDriveFiles: _memoryDriveFiles

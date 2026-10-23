@@ -195,6 +195,7 @@ async function handleStatus(req, res, reqUrl) {
     ...status,
     email: status.googleEmail || status.email,
     googleEmail: status.googleEmail || status.email,
+    hasCalendarScope: Boolean(status.hasCalendarScope),
     tenantId: authResult.tenantId
   }));
 }
