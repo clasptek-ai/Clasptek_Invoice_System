@@ -101,7 +101,7 @@ export function StudentDrawer({
     <div className="cp-modal-overlay" style={{ zIndex: 1000 }} onClick={onClose}>
       <div
         className="cp-modal"
-        style={{ maxWidth: '880px', width: '95%', maxHeight: '92vh', overflowY: 'auto' }}
+        style={{ maxWidth: '880px', width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading ? (
@@ -150,7 +150,7 @@ export function StudentDrawer({
                   {stu.phone || 'No phone'}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="cp-btn primary"

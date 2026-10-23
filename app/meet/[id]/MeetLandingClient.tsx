@@ -283,6 +283,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
+        overflowY: 'auto',
         fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
       }}
     >
@@ -290,6 +291,10 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         style={{
           width: '100%',
           maxWidth: 480,
+          maxHeight: 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
+          margin: 'auto',
           background: '#1e293b',
           border: '1px solid #334155',
           borderRadius: 16,
@@ -301,6 +306,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         {/* Banner */}
         <div
           style={{
+            flexShrink: 0,
             background: 'linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%)',
             padding: '24px 28px',
             textAlign: 'center',
@@ -331,8 +337,8 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         </div>
 
         {/* Meeting Metadata */}
-        <div style={{ padding: '20px 28px', borderBottom: '1px solid #334155', background: '#0f172a' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+        <div style={{ flexShrink: 0, padding: '20px 28px', borderBottom: '1px solid #334155', background: '#0f172a' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, fontSize: 13 }}>
             <div>
               <span style={{ color: '#94a3b8', display: 'block', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>
                 Facilitator
@@ -354,7 +360,7 @@ export function MeetLandingClient({ meeting, currentUser }: MeetLandingClientPro
         </div>
 
         {/* Content Area */}
-        <div style={{ padding: 28 }}>
+        <div style={{ padding: 28, overflowY: 'auto', flex: 1, overscrollBehavior: 'contain' }}>
           {errorMessage && (
             <div
               style={{

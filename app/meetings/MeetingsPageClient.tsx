@@ -1200,13 +1200,14 @@ export function MeetingsPageClient({
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                       Cohort
                     </label>
                     <select
                       className="cp-input"
+                      style={{ width: '100%' }}
                       value={meetingForm.cohortId}
                       onChange={(e) => setMeetingForm((p) => ({ ...p, cohortId: e.target.value }))}
                     >
@@ -1224,6 +1225,7 @@ export function MeetingsPageClient({
                     </label>
                     <select
                       className="cp-input"
+                      style={{ width: '100%' }}
                       value={meetingForm.facilitatorId}
                       onChange={(e) => setMeetingForm((p) => ({ ...p, facilitatorId: e.target.value }))}
                     >
@@ -1236,7 +1238,7 @@ export function MeetingsPageClient({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                       Start Time
@@ -1245,6 +1247,7 @@ export function MeetingsPageClient({
                       type="datetime-local"
                       required
                       className="cp-input"
+                      style={{ width: '100%' }}
                       value={meetingForm.scheduledStart}
                       onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledStart: e.target.value }))}
                     />
@@ -1257,6 +1260,7 @@ export function MeetingsPageClient({
                       type="datetime-local"
                       required
                       className="cp-input"
+                      style={{ width: '100%' }}
                       value={meetingForm.scheduledEnd}
                       onChange={(e) => setMeetingForm((p) => ({ ...p, scheduledEnd: e.target.value }))}
                     />
