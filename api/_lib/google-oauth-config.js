@@ -125,8 +125,8 @@ function assertOAuthInitiationAllowed(req = null) {
       if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
         throw new Error('Invalid scheme');
       }
-      if (parsed.hostname.toLowerCase() === 'app.clasptek.org') {
-        throw new Error('Targets production domain');
+      if (parsed.hostname.toLowerCase() === 'app.clasptek.org' || parsed.hostname.toLowerCase() === 'portal.clasptek.org') {
+        throw new Error('Targets production or deprecated legacy domain');
       }
       if (parsed.pathname !== '/api/auth/google/callback') {
         throw new Error('Invalid callback path');
@@ -134,7 +134,7 @@ function assertOAuthInitiationAllowed(req = null) {
     } catch {
       const err = new Error(
         'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR: STAGING_GOOGLE_REDIRECT_URI must be a valid URL ' +
-        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org.'
+        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org or legacy domain portal.clasptek.org.'
       );
       err.code = 'GOOGLE_OAUTH_PREVIEW_CONFIG_ERROR';
       err.statusCode = 503;
@@ -386,8 +386,8 @@ function resolveGoogleOAuthConfig(req = null) {
       if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
         throw new Error('Invalid scheme');
       }
-      if (parsed.hostname.toLowerCase() === 'app.clasptek.org') {
-        throw new Error('Targets production domain');
+      if (parsed.hostname.toLowerCase() === 'app.clasptek.org' || parsed.hostname.toLowerCase() === 'portal.clasptek.org') {
+        throw new Error('Targets production or deprecated legacy domain');
       }
       if (parsed.pathname !== '/api/auth/google/callback') {
         throw new Error('Invalid callback path');
@@ -395,7 +395,7 @@ function resolveGoogleOAuthConfig(req = null) {
     } catch {
       throw new Error(
         'CONFIGURATION_ERROR: STAGING_GOOGLE_REDIRECT_URI must be a valid URL ' +
-        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org.'
+        'targeting /api/auth/google/callback and cannot target production domain app.clasptek.org or legacy domain portal.clasptek.org.'
       );
     }
 
@@ -421,16 +421,34 @@ function resolveGoogleOAuthConfig(req = null) {
   if (env.GOOGLE_REDIRECT_URI) {
     const rawRedirect = env.GOOGLE_REDIRECT_URI.trim();
     if (rawRedirect) {
+      let parsed;
       try {
-        const parsed = new URL(rawRedirect);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          throw new Error('Invalid scheme');
-        }
-        redirectUri = rawRedirect;
+        parsed = new URL(rawRedirect);
       } catch {
         throw new Error('CONFIGURATION_ERROR: GOOGLE_REDIRECT_URI must be a valid http: or https: URL.');
       }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('CONFIGURATION_ERROR: GOOGLE_REDIRECT_URI must be a valid http: or https: URL.');
+      }
+      if (parsed.hostname.toLowerCase() === 'portal.clasptek.org') {
+        throw new Error(
+          'CONFIGURATION_ERROR: GOOGLE_REDIRECT_URI references deprecated legacy domain portal.clasptek.org. ' +
+          'The canonical production callback is https://app.clasptek.org/api/auth/google/callback.'
+        );
+      }
+      redirectUri = rawRedirect;
     }
+  }
+
+  // In verified production environment, redirectUri MUST be canonical app.clasptek.org
+  if (isVerifiedProductionEnvironmentCommon()) {
+    if (redirectUri && redirectUri !== 'https://app.clasptek.org/api/auth/google/callback') {
+      throw new Error(
+        `CONFIGURATION_ERROR: Production environment requires GOOGLE_REDIRECT_URI to be exactly ` +
+        `'https://app.clasptek.org/api/auth/google/callback'. Detected conflicting configuration: '${redirectUri}'.`
+      );
+    }
+    redirectUri = 'https://app.clasptek.org/api/auth/google/callback';
   }
 
   if (!redirectUri) {
