@@ -35,10 +35,39 @@ export async function GET(request: NextRequest) {
     }
 
     let connection: any = null;
+    let fetchError: any = null;
     if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
       try {
         connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
-      } catch (_) {}
+      } catch (err) {
+        fetchError = err;
+      }
+    }
+
+    if (fetchError) {
+      const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      if (errorMsg.includes('SUPABASE_QUARANTINE_VIOLATION') || errorMsg.includes('SUPABASE_CONFIG_')) {
+        return NextResponse.json(
+          {
+            connected: false,
+            hasCalendarScope: false,
+            status: 'DATABASE_GUARD_ERROR',
+            error: 'DATABASE_CONFIGURATION_ERROR',
+            message: 'Database connection blocked by security guard: ' + errorMsg,
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json(
+        {
+          connected: false,
+          hasCalendarScope: false,
+          status: 'ERROR',
+          error: errorMsg,
+          message: 'Unable to query Google connection status.',
+        },
+        { status: 500 }
+      );
     }
 
     if (!connection || connection.status !== 'CONNECTED') {

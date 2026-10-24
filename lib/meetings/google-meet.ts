@@ -137,13 +137,26 @@ export async function createOrValidateGoogleMeet({
 
   // Check tenant-central connection
   let connection: any = null;
+  let connectionError: any = null;
   if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
     try {
       connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
-    } catch (_) {}
+    } catch (err) {
+      connectionError = err;
+    }
   }
 
-  // If no connection exists for this tenant, fail closed with clear actionable error
+  if (connectionError) {
+    const errorMsg = connectionError instanceof Error ? connectionError.message : String(connectionError);
+    if (errorMsg.includes('SUPABASE_QUARANTINE_VIOLATION') || errorMsg.includes('SUPABASE_CONFIG_')) {
+      throw new GoogleMeetError(
+        'DATABASE_CONFIGURATION_ERROR',
+        'Database connection blocked by security guard: ' + errorMsg,
+        500
+      );
+    }
+  }
+
   if (!connection) {
     throw new GoogleMeetError(
       'PROVIDER_UNSUPPORTED',

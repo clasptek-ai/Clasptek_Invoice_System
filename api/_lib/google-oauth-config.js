@@ -473,7 +473,54 @@ function resolveGoogleOAuthConfig(req = null) {
  * - Hostname must match strictly <project-ref>.supabase.co
  * - Fails closed on malformed or non-Supabase URLs
  */
-const QUARANTINED_PROJECT_REF = 'logaawoigfxnisimfatf';
+/** Canonical production Supabase project reference. */
+const PRODUCTION_PROJECT_REF = 'logaawoigfxnisimfatf';
+
+/** Canonical isolated staging Supabase project reference. */
+const STAGING_PROJECT_REF = 'dwhjoiebzwnjdpcvcwvs';
+
+/** Quarantined production project reference (maintained for backward compatibility). */
+const QUARANTINED_PROJECT_REF = PRODUCTION_PROJECT_REF;
+
+/**
+ * Evaluates whether any Preview or Staging environment marker is present.
+ */
+function isPreviewOrStagingEnvironmentCommon() {
+  if (
+    process.env.VERCEL_ENV === 'preview' ||
+    process.env.CLASPTEK_ENV === 'preview' ||
+    process.env.CLASPTEK_ENV === 'staging' ||
+    process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' ||
+    process.env.NEXT_PUBLIC_CLASPTEK_ENV === 'preview' ||
+    process.env.NEXT_PUBLIC_CLASPTEK_ENV === 'staging'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Detects whether contradictory or conflicting environment markers exist.
+ */
+function hasConflictingEnvironmentMarkersCommon() {
+  const hasProdMarker =
+    process.env.VERCEL_ENV === 'production' ||
+    process.env.CLASPTEK_ENV === 'production';
+  const hasPreviewOrStagingMarker = isPreviewOrStagingEnvironmentCommon();
+  return Boolean(hasProdMarker && hasPreviewOrStagingMarker);
+}
+
+/**
+ * Evaluates whether the current execution context is positively verified as trusted Production.
+ */
+function isVerifiedProductionEnvironmentCommon() {
+  if (hasConflictingEnvironmentMarkersCommon()) return false;
+  if (isPreviewOrStagingEnvironmentCommon()) return false;
+  if (process.env.VERCEL_ENV === 'production' || process.env.CLASPTEK_ENV === 'production') {
+    return true;
+  }
+  return false;
+}
 
 function extractProjectRefCommon(url) {
   if (!url || typeof url !== 'string') return null;
@@ -543,15 +590,67 @@ function validateSupabaseUrlGuard(url, context = 'SUPABASE_URL') {
     );
   }
 
-  if (ref === QUARANTINED_PROJECT_REF) {
+  // Reject unexpected or unauthorized project references in all environments
+  if (ref !== PRODUCTION_PROJECT_REF && ref !== STAGING_PROJECT_REF) {
     throw new Error(
-      `SUPABASE_QUARANTINE_VIOLATION: ${context} points to the permanently quarantined ` +
-      `production project. This project must never be used. ` +
-      `Configure a valid staging or production-replacement project URL instead.`
+      `SUPABASE_CONFIG_ERROR: ${context} references unauthorized project '${ref}'. ` +
+      `Only authorized Clasptek project references are permitted.`
     );
   }
 
-  return trimmed;
+  // Rule 1: Contradictory environment markers fail closed immediately
+  if (hasConflictingEnvironmentMarkersCommon()) {
+    throw new Error(
+      `SUPABASE_CONFIG_CONFLICT: Conflicting environment markers detected for ${context}. ` +
+      `Production and Preview/Staging markers cannot be present simultaneously.`
+    );
+  }
+
+  // Rule 2: Preview and Staging isolation: Production project is strictly quarantined
+  if (isPreviewOrStagingEnvironmentCommon()) {
+    if (ref === PRODUCTION_PROJECT_REF) {
+      throw new Error(
+        `SUPABASE_QUARANTINE_VIOLATION: ${context} points to the production project in a Preview or Staging environment. ` +
+        `Production database access is strictly prohibited in Preview/Staging. Use staging project (${STAGING_PROJECT_REF}) instead.`
+      );
+    }
+    if (ref !== STAGING_PROJECT_REF) {
+      throw new Error(
+        `SUPABASE_CONFIG_ERROR: ${context} does not match the designated staging project (${STAGING_PROJECT_REF}).`
+      );
+    }
+    return trimmed;
+  }
+
+  // Rule 3: Authoritative Production Environment validation via trusted server-side context
+  if (isVerifiedProductionEnvironmentCommon()) {
+    if (ref === STAGING_PROJECT_REF) {
+      throw new Error(
+        `SUPABASE_CONFIG_CONFLICT: ${context} points to staging project (${STAGING_PROJECT_REF}) in Production environment. ` +
+        `Production environment must use authoritative production project (${PRODUCTION_PROJECT_REF}).`
+      );
+    }
+    if (ref === PRODUCTION_PROJECT_REF) {
+      return trimmed;
+    }
+  }
+
+  // Rule 4: Default / Unverified / Ambiguous Environment: fail closed against production project
+  if (ref === PRODUCTION_PROJECT_REF) {
+    throw new Error(
+      `SUPABASE_QUARANTINE_VIOLATION: ${context} points to the production project in an unverified or non-production environment. ` +
+      `Execution environment must be positively verified as Vercel Production via trusted server-side deployment context to access ${PRODUCTION_PROJECT_REF}.`
+    );
+  }
+
+  // Local development fallback with staging project is allowed
+  if (ref === STAGING_PROJECT_REF) {
+    return trimmed;
+  }
+
+  throw new Error(
+    `SUPABASE_CONFIG_ERROR: ${context} cannot be validated for the current execution context.`
+  );
 }
 
 /**
@@ -2182,6 +2281,11 @@ module.exports = {
   resetStagingCreatedFolders,
   _stagingCreatedFolders,
   extractSupabaseTokenFromCookies,
+  PRODUCTION_PROJECT_REF,
+  STAGING_PROJECT_REF,
+  validateSupabaseUrlGuard,
+  isVerifiedProductionEnvironment: isVerifiedProductionEnvironmentCommon,
+  isPreviewOrStagingEnvironment: isPreviewOrStagingEnvironmentCommon,
   _memoryStateStore: memoryStateStore,
   _memoryConnectionStore: memoryConnectionStore,
   _memoryDriveFiles: _memoryDriveFiles
