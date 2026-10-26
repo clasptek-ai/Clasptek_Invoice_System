@@ -77,7 +77,7 @@ export async function getCertificateEligibilityList(
         supabase.from('students').select('id, name, first_name, last_name, student_number, email, metadata').in('id', studentIds),
         supabase.from('programmes').select('id, name, code, metadata').in('id', programmeIds),
         cohortIds.length > 0
-          ? supabase.from('cohorts').select('id, name, metadata, lead_facilitator_id').in('id', cohortIds)
+          ? supabase.from('cohorts').select('id, name, cohort_code, lead_facilitator_id').in('id', cohortIds)
           : Promise.resolve({ data: [] }),
         cohortIds.length > 0
           ? supabase
@@ -158,8 +158,7 @@ export async function getCertificateEligibilityList(
       const progCode = prog?.code || 'CLP';
 
       const cohort = cohortMap.get(en.cohort_id);
-      const meta = (cohort?.metadata as Record<string, unknown>) || {};
-      const cohortCode = (meta.cohort_code as string) || (meta.cohortCode as string) || en.cohort || 'Cohort';
+      const cohortCode = (cohort?.cohort_code as string) || en.cohort || 'Cohort';
       const cohortName = cohort?.name || en.cohort || 'Cohort';
 
       // Delivered sessions for this cohort

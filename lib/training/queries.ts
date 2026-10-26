@@ -33,7 +33,7 @@ export async function getTrainingCohorts(): Promise<{
     const supabase = await createServerClient();
     let query = supabase
       .from('cohorts')
-      .select('id, name, status, programme_id, lead_facilitator_id, metadata, start_date, cohort_code, created_at')
+      .select('id, name, status, programme_id, lead_facilitator_id, start_date, cohort_code, created_at')
       .order('start_date', { ascending: false })
       .order('cohort_code', { ascending: false })
       .order('id', { ascending: false });
@@ -77,8 +77,7 @@ export async function getTrainingCohorts(): Promise<{
     );
 
     const formatted = cohorts.map((c) => {
-      const meta = (c.metadata as Record<string, unknown>) || {};
-      const cohortCode = (meta.cohort_code as string) || (meta.cohortCode as string) || c.id;
+      const cohortCode = (c.cohort_code as string) || c.id;
       return {
         id: c.id,
         cohortCode,
@@ -903,7 +902,7 @@ export async function getFacilitatorReports(filters?: {
 
     // Fetch cohort, programme, and facilitator details for reports
     const [cohortsRes, personnelRes, progRes] = await Promise.all([
-      supabase.from('cohorts').select('id, name, programme_id, metadata'),
+      supabase.from('cohorts').select('id, name, programme_id, cohort_code'),
       supabase.from('personnel').select('id, name, first_name, last_name'),
       supabase.from('programmes').select('id, name'),
     ]);
@@ -917,8 +916,7 @@ export async function getFacilitatorReports(filters?: {
     );
     const cohortMap = new Map(
       (cohortsRes.data || []).map((c) => {
-        const meta = (c.metadata as Record<string, unknown>) || {};
-        const code = (meta.cohort_code as string) || (meta.cohortCode as string) || c.id;
+        const code = (c.cohort_code as string) || c.id;
         const pName = c.programme_id ? progMap.get(c.programme_id) || '' : '';
         return [c.id, { name: c.name, code, programmeName: pName }];
       })

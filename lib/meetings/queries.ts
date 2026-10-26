@@ -178,7 +178,7 @@ export async function getMeetings(filters?: {
 
     // Metadata joins: Cohorts, Personnel, Programmes
     const [cohortsRes, personnelRes, progRes] = await Promise.all([
-      supabase.from('cohorts').select('id, name, programme_id, metadata').eq('tenant_id', tenantId),
+      supabase.from('cohorts').select('id, name, programme_id, cohort_code').eq('tenant_id', tenantId),
       supabase.from('personnel').select('id, full_name, first_name, last_name').eq('tenant_id', tenantId),
       supabase.from('programmes').select('id, name').eq('tenant_id', tenantId),
     ]);
@@ -192,8 +192,7 @@ export async function getMeetings(filters?: {
     );
     const cohortMap = new Map(
       (cohortsRes.data || []).map((c) => {
-        const meta = (c.metadata as Record<string, unknown>) || {};
-        const code = (meta.cohort_code as string) || (meta.cohortCode as string) || c.id;
+        const code = (c.cohort_code as string) || c.id;
         const pName = c.programme_id ? progMap.get(c.programme_id) || '' : '';
         return [c.id, { name: c.name, code, programmeName: pName, programmeId: c.programme_id }];
       })
