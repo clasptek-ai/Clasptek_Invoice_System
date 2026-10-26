@@ -754,6 +754,9 @@ function resolveSupabaseConfig() {
  * Universal HTTPS Request Client
  */
 function httpsRequest(url, options = {}, payload = null) {
+  if (_testHttpsInterceptor) {
+    return _testHttpsInterceptor(url, options, payload);
+  }
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const resolvedPayload = payload !== null ? payload : (options.body || null);
@@ -992,6 +995,60 @@ async function authenticateCaller(req) {
 }
 
 /**
+ * Safely encode connectionType within redirectTarget to ensure persistence
+ * across serverless instances even when public.oauth_states table schema does not yet
+ * have connection_type column.
+ */
+function encodeRedirectTarget(target = '/#meetings', connectionType = 'USER_PERSONAL') {
+  const normType = connectionType === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
+  try {
+    const raw = (target || '/#meetings').trim();
+    const u = new URL(raw, 'https://internal.clasptek.org');
+    u.searchParams.set('__clasptek_ct', normType);
+    return u.pathname + u.search + u.hash;
+  } catch (_) {
+    const sep = (target || '/#meetings').includes('?') ? '&' : '?';
+    return `${target || '/#meetings'}${sep}__clasptek_ct=${encodeURIComponent(normType)}`;
+  }
+}
+
+/**
+ * Decode connectionType from encoded redirectTarget.
+ */
+function decodeRedirectTarget(encoded) {
+  if (!encoded || typeof encoded !== 'string') {
+    return { redirectTarget: '/#meetings', connectionType: 'USER_PERSONAL' };
+  }
+  try {
+    let ct = null;
+    const u = new URL(encoded, 'https://internal.clasptek.org');
+    ct = u.searchParams.get('__clasptek_ct');
+    u.searchParams.delete('__clasptek_ct');
+    if (!ct && u.hash && u.hash.includes('__clasptek_ct=')) {
+      const match = u.hash.match(/[?&]?__clasptek_ct=([A-Z_]+)/);
+      if (match) {
+        ct = match[1];
+        u.hash = u.hash.replace(match[0], '');
+      }
+    }
+    const redirectTarget = u.pathname + u.search + u.hash;
+    const connectionType = ct === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
+    return {
+      redirectTarget: redirectTarget || '/#meetings',
+      connectionType
+    };
+  } catch (_) {
+    const match = encoded.match(/[?&]?__clasptek_ct=([A-Z_]+)/);
+    const ct = match ? match[1] : null;
+    const cleaned = encoded.replace(/[?&]?__clasptek_ct=[A-Z_]+/, '');
+    return {
+      redirectTarget: cleaned || '/#meetings',
+      connectionType: ct === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL'
+    };
+  }
+}
+
+/**
  * Generate and Save OAuth State (Anti-Replay / CSRF Protection)
  * Default TTL: 10 minutes (600 seconds)
  * Supports connectionType: 'TENANT_CENTRAL' or 'USER_PERSONAL'
@@ -1005,36 +1062,66 @@ async function createOAuthState({
 }) {
   const state = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const normalizedConnectionType = connectionType === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
+  const encodedRedirect = encodeRedirectTarget(redirectTarget, normalizedConnectionType);
 
-  const record = {
+  // In-memory cache stores full unencoded & encoded state
+  const inMemoryRecord = {
     state,
     tenant_id: tenantId,
     user_id: userId,
     provider: 'google',
     redirect_target: redirectTarget,
-    connection_type: connectionType,
+    connection_type: normalizedConnectionType,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
     used_at: null
   };
-
-  memoryStateStore.set(state, record);
+  memoryStateStore.set(state, inMemoryRecord);
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
   if (secretKey && supabaseUrl) {
+    // Database payload strictly omits unsupported connection_type column to preserve compatibility
+    // with canonical public.oauth_states table.
+    const dbPayload = {
+      state,
+      tenant_id: tenantId,
+      user_id: userId,
+      provider: 'google',
+      redirect_target: encodedRedirect,
+      created_at: inMemoryRecord.created_at,
+      expires_at: expiresAt,
+      used_at: null
+    };
+
+    let postRes;
     try {
-      await httpsRequest(`${supabaseUrl}/rest/v1/oauth_states`, {
+      postRes = await httpsRequest(`${supabaseUrl}/rest/v1/oauth_states`, {
         method: 'POST',
         headers: {
           'apikey': secretKey,
           'Authorization': `Bearer ${secretKey}`,
           'Prefer': 'return=representation'
         }
-      }, record);
-    } catch (_) {}
+      }, dbPayload);
+    } catch (dbErr) {
+      console.error('[OAuth State] Database network error persisting OAuth state');
+      const err = new Error('OAUTH_STATE_PERSISTENCE_FAILED');
+      err.code = 'OAUTH_STATE_PERSISTENCE_FAILED';
+      err.statusCode = 500;
+      throw err;
+    }
+
+    if (!postRes || postRes.status < 200 || postRes.status >= 300) {
+      console.error('[OAuth State] Failed to persist OAuth state in database. Status:', postRes ? postRes.status : 'no_response');
+      const err = new Error('OAUTH_STATE_PERSISTENCE_FAILED');
+      err.code = 'OAUTH_STATE_PERSISTENCE_FAILED';
+      err.statusCode = 500;
+      throw err;
+    }
   }
 
-  return { state, expiresAt, connectionType };
+  return { state, expiresAt, connectionType: normalizedConnectionType };
 }
 
 /**
@@ -1055,7 +1142,15 @@ async function validateAndConsumeOAuthState(state) {
     if (new Date(cached.expires_at) <= now) return { valid: false, reason: 'STATE_EXPIRED' };
     cached.used_at = now.toISOString();
     memoryStateStore.set(state, cached);
-    return { valid: true, stateRecord: cached };
+    const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(cached.redirect_target);
+    return {
+      valid: true,
+      stateRecord: {
+        ...cached,
+        connection_type: cached.connection_type || decodedType || 'USER_PERSONAL',
+        redirect_target: decodedTarget || cached.redirect_target
+      }
+    };
   }
 
   // Check Supabase DB in production
@@ -1075,7 +1170,13 @@ async function validateAndConsumeOAuthState(state) {
       );
 
       if (patchRes.status >= 200 && patchRes.status < 300 && Array.isArray(patchRes.body) && patchRes.body.length > 0) {
-        const stateRecord = patchRes.body[0];
+        const rawRecord = patchRes.body[0];
+        const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(rawRecord.redirect_target);
+        const stateRecord = {
+          ...rawRecord,
+          connection_type: rawRecord.connection_type || decodedType || 'USER_PERSONAL',
+          redirect_target: decodedTarget || rawRecord.redirect_target
+        };
         memoryStateStore.set(state, { ...stateRecord, used_at: now.toISOString() });
         return { valid: true, stateRecord };
       }
@@ -1095,7 +1196,14 @@ async function validateAndConsumeOAuthState(state) {
       }
 
       return { valid: false, reason: 'STATE_NOT_FOUND' };
-    } catch (_) {}
+    } catch (dbErr) {
+      console.error('[OAuth State] Database error verifying state');
+      if (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') {
+        // Fall back to memory cache in test mode if DB call errored
+      } else {
+        return { valid: false, reason: 'STATE_STORAGE_ERROR' };
+      }
+    }
   }
 
   const fallbackCached = memoryStateStore.get(state);
@@ -1113,8 +1221,16 @@ async function validateAndConsumeOAuthState(state) {
 
   fallbackCached.used_at = now.toISOString();
   memoryStateStore.set(state, fallbackCached);
+  const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(fallbackCached.redirect_target);
 
-  return { valid: true, stateRecord: fallbackCached };
+  return {
+    valid: true,
+    stateRecord: {
+      ...fallbackCached,
+      connection_type: fallbackCached.connection_type || decodedType || 'USER_PERSONAL',
+      redirect_target: decodedTarget || fallbackCached.redirect_target
+    }
+  };
 }
 
 /**
@@ -1521,6 +1637,11 @@ let _testUploadFailureMessage = '';
 let _testUploadTimeoutAfterCreate = false;
 const _memoryDriveFiles = new Map();
 let _testDriveSearchPages = null;
+let _testHttpsInterceptor = null;
+function setTestHttpsInterceptor(fn) {
+  _testHttpsInterceptor = fn;
+}
+
 let _testDriveSearchFailure = null;
 
 function setTestUploadFailure(fail, msg) {
@@ -1978,109 +2099,198 @@ async function upsertGoogleDriveConnection({
     expiryDate = new Date(tokens.expiry_date).toISOString();
   }
 
+  const isCentral = connectionType === 'TENANT_CENTRAL';
+  const cacheKey = isCentral ? `central:${tenantId}` : `user:${tenantId}:${userId}`;
+  const existingCached = memoryConnectionStore.get(cacheKey);
+
   const connectionRecord = {
     tenant_id: tenantId,
     user_id: userId,
-    connection_type: connectionType,
+    connection_type: isCentral ? 'TENANT_CENTRAL' : 'USER_PERSONAL',
     google_user_id: googleUserId || null,
     google_email: googleEmail,
     access_token: effectiveAccessToken,
-    refresh_token: effectiveRefreshToken || null,
-    root_folder_id: rootFolderId || null,
-    root_folder_name: rootFolderName || 'Clasptek Meeting Recordings',
-    last_verified_at: rootFolderId ? now.toISOString() : null,
+    refresh_token: effectiveRefreshToken || (existingCached && existingCached.refresh_token) || null,
+    root_folder_id: rootFolderId || (existingCached && existingCached.root_folder_id) || null,
+    root_folder_name: rootFolderName || (existingCached && existingCached.root_folder_name) || 'Clasptek Meeting Recordings',
+    last_verified_at: (rootFolderId || (existingCached && existingCached.root_folder_id)) ? now.toISOString() : null,
     token_type: 'Bearer',
-    scope: scope || null,
+    scope: scope || (existingCached && existingCached.scope) || null,
     expiry_date: expiryDate,
     status: 'CONNECTED',
     updated_at: now.toISOString()
   };
 
-  const cacheKey = connectionType === 'TENANT_CENTRAL'
-    ? `central:${tenantId}`
-    : `user:${tenantId}:${userId}`;
-
-  const existingCached = memoryConnectionStore.get(cacheKey);
-  if (existingCached) {
-    if (!connectionRecord.refresh_token && existingCached.refresh_token) {
-      connectionRecord.refresh_token = existingCached.refresh_token;
-    }
-    if (!connectionRecord.root_folder_id && existingCached.root_folder_id) {
-      connectionRecord.root_folder_id = existingCached.root_folder_id;
-      connectionRecord.root_folder_name = existingCached.root_folder_name;
-    }
-    if (!connectionRecord.scope && existingCached.scope) {
-      connectionRecord.scope = existingCached.scope;
-    }
-  }
-
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
 
-  // If refresh_token is missing, query database to preserve existing token from prior authorization
-  if (!connectionRecord.refresh_token && secretKey && supabaseUrl) {
+  if (secretKey && supabaseUrl) {
+    // 1. SELECT existing record to preserve valid refresh token and metadata
+    let existingDb = null;
     try {
-      const filter = connectionType === 'TENANT_CENTRAL'
-        ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
-        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
-      const existingRes = await httpsRequest(
-        `${supabaseUrl}/rest/v1/google_drive_connections?${filter}&select=refresh_token,root_folder_id,root_folder_name,scope`,
+      const selectFilter = isCentral
+        ? `tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL`
+        : `tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}&connection_type=eq.USER_PERSONAL`;
+      const selectRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/google_drive_connections?${selectFilter}&select=id,refresh_token,root_folder_id,root_folder_name,scope`,
         {
           method: 'GET',
           headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
         }
       );
-      if (existingRes && existingRes.status === 200 && Array.isArray(existingRes.body) && existingRes.body.length > 0) {
-        const existingDb = existingRes.body[0];
-        if (existingDb.refresh_token) {
-          connectionRecord.refresh_token = existingDb.refresh_token;
-        }
-        if (!connectionRecord.root_folder_id && existingDb.root_folder_id) {
-          connectionRecord.root_folder_id = existingDb.root_folder_id;
-          connectionRecord.root_folder_name = existingDb.root_folder_name;
-        }
-        if (!connectionRecord.scope && existingDb.scope) {
-          connectionRecord.scope = existingDb.scope;
-        }
+      if (selectRes && selectRes.status === 200 && Array.isArray(selectRes.body) && selectRes.body.length > 0) {
+        existingDb = selectRes.body[0];
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[Google Drive Connection] Database error querying existing connection');
+      const error = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+      error.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+      error.statusCode = 500;
+      throw error;
+    }
+
+    if (existingDb) {
+      if (!connectionRecord.refresh_token && existingDb.refresh_token) {
+        connectionRecord.refresh_token = existingDb.refresh_token;
+      }
+      if (!connectionRecord.root_folder_id && existingDb.root_folder_id) {
+        connectionRecord.root_folder_id = existingDb.root_folder_id;
+        connectionRecord.root_folder_name = existingDb.root_folder_name || connectionRecord.root_folder_name;
+      }
+      if (!connectionRecord.scope && existingDb.scope) {
+        connectionRecord.scope = existingDb.scope;
+      }
+
+      // 2. PATCH existing connection
+      const patchFilter = isCentral
+        ? `id=eq.${encodeURIComponent(existingDb.id)}&tenant_id=eq.${encodeURIComponent(tenantId)}`
+        : `id=eq.${encodeURIComponent(existingDb.id)}&tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}`;
+
+      let patchRes;
+      try {
+        patchRes = await httpsRequest(
+          `${supabaseUrl}/rest/v1/google_drive_connections?${patchFilter}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'apikey': secretKey,
+              'Authorization': `Bearer ${secretKey}`,
+              'Prefer': 'return=representation'
+            }
+          },
+          connectionRecord
+        );
+      } catch (patchErr) {
+        console.error('[Google Drive Connection] Database error patching connection');
+        const error = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+        error.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        error.statusCode = 500;
+        throw error;
+      }
+
+      if (!patchRes || patchRes.status < 200 || patchRes.status >= 300) {
+        console.error('[Google Drive Connection] Failed to update connection. Status:', patchRes ? patchRes.status : 'no_response');
+        const error = new Error(`GOOGLE_CONNECTION_PERSISTENCE_FAILED: Update returned ${patchRes ? patchRes.status : 'no_response'}`);
+        error.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        error.statusCode = patchRes ? patchRes.status : 500;
+        throw error;
+      }
+
+      const updatedRecord = Array.isArray(patchRes.body) && patchRes.body[0] ? patchRes.body[0] : connectionRecord;
+      memoryConnectionStore.set(cacheKey, { ...existingCached, ...updatedRecord });
+      return { success: true, connection: updatedRecord };
+    } else {
+      // 3. INSERT new connection
+      let postRes;
+      try {
+        postRes = await httpsRequest(
+          `${supabaseUrl}/rest/v1/google_drive_connections`,
+          {
+            method: 'POST',
+            headers: {
+              'apikey': secretKey,
+              'Authorization': `Bearer ${secretKey}`,
+              'Prefer': 'return=representation'
+            }
+          },
+          connectionRecord
+        );
+      } catch (postErr) {
+        console.error('[Google Drive Connection] Database error inserting connection');
+        const error = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+        error.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        error.statusCode = 500;
+        throw error;
+      }
+
+      // Handle 409 Conflict gracefully by re-reading and patching
+      if (postRes && postRes.status === 409) {
+        try {
+          const reselectFilter = isCentral
+            ? `tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL`
+            : `tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}&connection_type=eq.USER_PERSONAL`;
+          const reselectRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/google_drive_connections?${reselectFilter}&select=id,refresh_token,root_folder_id,root_folder_name,scope`,
+            {
+              method: 'GET',
+              headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
+            }
+          );
+          if (reselectRes && reselectRes.status === 200 && Array.isArray(reselectRes.body) && reselectRes.body.length > 0) {
+            const conflictDb = reselectRes.body[0];
+            if (!connectionRecord.refresh_token && conflictDb.refresh_token) {
+              connectionRecord.refresh_token = conflictDb.refresh_token;
+            }
+            if (!connectionRecord.root_folder_id && conflictDb.root_folder_id) {
+              connectionRecord.root_folder_id = conflictDb.root_folder_id;
+              connectionRecord.root_folder_name = conflictDb.root_folder_name || connectionRecord.root_folder_name;
+            }
+            if (!connectionRecord.scope && conflictDb.scope) {
+              connectionRecord.scope = conflictDb.scope;
+            }
+
+            const patchFilter = isCentral
+              ? `id=eq.${encodeURIComponent(conflictDb.id)}&tenant_id=eq.${encodeURIComponent(tenantId)}`
+              : `id=eq.${encodeURIComponent(conflictDb.id)}&tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}`;
+
+            const retryPatch = await httpsRequest(
+              `${supabaseUrl}/rest/v1/google_drive_connections?${patchFilter}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'apikey': secretKey,
+                  'Authorization': `Bearer ${secretKey}`,
+                  'Prefer': 'return=representation'
+                }
+              },
+              connectionRecord
+            );
+
+            if (retryPatch && retryPatch.status >= 200 && retryPatch.status < 300) {
+              const patchedRecord = Array.isArray(retryPatch.body) && retryPatch.body[0] ? retryPatch.body[0] : connectionRecord;
+              memoryConnectionStore.set(cacheKey, { ...existingCached, ...patchedRecord });
+              return { success: true, connection: patchedRecord };
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!postRes || postRes.status < 200 || postRes.status >= 300) {
+        console.error('[Google Drive Connection] Failed to insert connection. Status:', postRes ? postRes.status : 'no_response');
+        const error = new Error(`GOOGLE_CONNECTION_PERSISTENCE_FAILED: Insert returned ${postRes ? postRes.status : 'no_response'}`);
+        error.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        error.statusCode = postRes ? postRes.status : 500;
+        throw error;
+      }
+
+      const insertedRecord = Array.isArray(postRes.body) && postRes.body[0] ? postRes.body[0] : connectionRecord;
+      memoryConnectionStore.set(cacheKey, { ...existingCached, ...insertedRecord });
+      return { success: true, connection: insertedRecord };
+    }
   }
 
+  // Fallback / offline test mode
   memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
-
-  if (secretKey && supabaseUrl) {
-    try {
-      if (connectionType === 'TENANT_CENTRAL') {
-        // Upsert by tenant_id + connection_type
-        await httpsRequest(
-          `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,connection_type`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': secretKey,
-              'Authorization': `Bearer ${secretKey}`,
-              'Prefer': 'resolution=merge-duplicates,return=representation'
-            }
-          },
-          connectionRecord
-        );
-      } else {
-        await httpsRequest(
-          `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,user_id`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': secretKey,
-              'Authorization': `Bearer ${secretKey}`,
-              'Prefer': 'resolution=merge-duplicates,return=representation'
-            }
-          },
-          connectionRecord
-        );
-      }
-    } catch (_) {}
-  }
-
-  return { success: true };
+  return { success: true, connection: connectionRecord };
 }
 
 /**
@@ -2105,7 +2315,10 @@ async function getTenantCentralDriveConnection(tenantId) {
       if (res.status === 200 && Array.isArray(res.body) && res.body.length > 0) {
         return res.body[0];
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[Google Drive Connection] Database error querying central connection');
+      throw err;
+    }
   }
 
   const cached = memoryConnectionStore.get(`central:${tenantId}`);
@@ -2271,6 +2484,9 @@ module.exports = {
   authenticateCaller,
   createOAuthState,
   validateAndConsumeOAuthState,
+  encodeRedirectTarget,
+  decodeRedirectTarget,
+  setTestHttpsInterceptor,
   exchangeAuthorizationCode,
   refreshAccessToken,
   fetchGoogleUserInfo,

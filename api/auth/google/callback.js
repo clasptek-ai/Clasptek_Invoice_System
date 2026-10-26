@@ -85,6 +85,9 @@ module.exports = async function handler(req, res) {
     // Enforces: matching state, used_at IS NULL, expires_at > NOW()
     const stateCheck = await validateAndConsumeOAuthState(state);
     if (!stateCheck.valid) {
+      if (stateCheck.reason === 'STATE_STORAGE_ERROR') {
+        return safeRedirect('/?google_drive=error&reason=persistence_failed#meetings', 'Database error verifying authorization session. Please try again.');
+      }
       // Rejects invalid, expired, or replayed state
       return safeRedirect('/?google_drive=invalid_state#meetings', 'Google authorization could not be verified. State token is invalid, expired, or has already been used.');
     }
@@ -159,19 +162,24 @@ module.exports = async function handler(req, res) {
     }
 
     // 9. Upsert connection into public.google_drive_connections associated with tenant_id & connection_type
-    await upsertGoogleDriveConnection({
-      tenantId,
-      userId,
-      connectionType,
-      googleUserId,
-      googleEmail,
-      accessToken,
-      refreshToken: effectiveRefreshToken,
-      rootFolderId: rootFolderId || (existingConnection && existingConnection.root_folder_id),
-      rootFolderName: rootFolderName || (existingConnection && existingConnection.root_folder_name),
-      scope: grantedScope,
-      expiresIn
-    });
+    try {
+      await upsertGoogleDriveConnection({
+        tenantId,
+        userId,
+        connectionType,
+        googleUserId,
+        googleEmail,
+        accessToken,
+        refreshToken: effectiveRefreshToken,
+        rootFolderId: rootFolderId || (existingConnection && existingConnection.root_folder_id),
+        rootFolderName: rootFolderName || (existingConnection && existingConnection.root_folder_name),
+        scope: grantedScope,
+        expiresIn
+      });
+    } catch (persistErr) {
+      console.error('[OAuth Callback] Connection persistence failed:', persistErr ? persistErr.message : 'failed');
+      return safeRedirect('/?google_drive=error&reason=persistence_failed#meetings', 'Failed to save Google Drive connection. Please try again.');
+    }
 
     // 10. On success, redirect to appropriate portal view
     if (connectionType === 'TENANT_CENTRAL') {

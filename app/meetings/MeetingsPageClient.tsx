@@ -108,9 +108,52 @@ export function MeetingsPageClient({
       if (params.get('tab') === 'schedule' || params.get('schedule') === 'true') {
         setIsScheduleModalOpen(true);
       }
-      if (params.get('google_drive') === 'connected') {
-        setFeedbackMsg({ type: 'success', text: 'Google account connected successfully.' });
-        setTimeout(() => setFeedbackMsg(null), 4000);
+      if (params.has('google_drive')) {
+        const googleDriveParam = params.get('google_drive');
+        const reasonParam = params.get('reason');
+
+        // Refresh connection status from server endpoints
+        fetch('/api/meetings/drive-status')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d) setDriveStatus(d);
+          })
+          .catch(() => {});
+
+        fetchCalendarStatus();
+
+        if (googleDriveParam === 'connected') {
+          setFeedbackMsg({ type: 'success', text: 'Google account connected successfully.' });
+        } else if (googleDriveParam === 'access_denied') {
+          setFeedbackMsg({ type: 'error', text: 'Google authorization was cancelled.' });
+        } else if (googleDriveParam === 'invalid_state') {
+          setFeedbackMsg({
+            type: 'error',
+            text: 'Google authorization could not be verified (invalid or expired session). Please try again.',
+          });
+        } else if (googleDriveParam === 'error') {
+          let message = 'Google authorization was cancelled or denied.';
+          if (reasonParam === 'token_exchange_failed') {
+            message = 'Failed to exchange authorization code with Google. Please try again.';
+          } else if (reasonParam === 'userinfo_failed') {
+            message = 'Connected to Google, but failed to retrieve account details.';
+          } else if (reasonParam === 'persistence_failed') {
+            message = 'Failed to save Google connection in database. Please try again.';
+          }
+          setFeedbackMsg({ type: 'error', text: message });
+        }
+
+        // Clean up handled OAuth parameters from URL so reload does not re-trigger
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('google_drive');
+          url.searchParams.delete('type');
+          url.searchParams.delete('reason');
+          const cleanUrl = url.pathname + (url.search ? url.search : '') + url.hash;
+          window.history.replaceState({}, '', cleanUrl);
+        } catch (_) {}
+
+        setTimeout(() => setFeedbackMsg(null), 5000);
       }
     }
   }, []);

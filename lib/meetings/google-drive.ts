@@ -11,6 +11,7 @@
  */
 
 import type { GoogleDriveStatus, RecordingMetadata } from '@/types/meetings';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 
 export const DEFAULT_ROOT_FOLDER_NAME = 'Clasptek Meeting Recordings';
 
@@ -96,7 +97,7 @@ export function generateRecordingFileName(params: {
  * never reports `connected: true`; a complete configuration is reported as CONFIGURED_UNVERIFIED.
  * No account e-mail or verification timestamp is fabricated.
  */
-export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
+export async function getGoogleDriveStatus(tenantId?: string): Promise<GoogleDriveStatus> {
   let rootFolderId = '';
   try {
     rootFolderId = getMeetingsFolderId();
@@ -108,12 +109,87 @@ export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
 
   const isConfigured = Boolean(clientId && clientSecret && rootFolderId);
 
+  let targetTenantId = tenantId;
+  if (!targetTenantId) {
+    try {
+      const session = await getAuthoritativeSession();
+      targetTenantId = session?.tenantId;
+    } catch {
+      // Outside request context
+    }
+  }
+
+  if (targetTenantId) {
+    let googleConfig: any = null;
+    try {
+      googleConfig = require('@/api/_lib/google-oauth-config');
+    } catch {
+      try {
+        googleConfig = require('../../api/_lib/google-oauth-config');
+      } catch (_) {}
+    }
+
+    if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
+      try {
+        const connection = await googleConfig.getTenantCentralDriveConnection(targetTenantId);
+        if (connection && connection.status === 'CONNECTED') {
+          const grantedScopes = String(connection.scope || '');
+          const hasDriveScope =
+            grantedScopes.includes('drive.file') ||
+            grantedScopes.includes('https://www.googleapis.com/auth/drive') ||
+            Boolean(connection._testAllowDrive);
+
+          if (!hasDriveScope) {
+            return {
+              connected: false,
+              connectionType: 'TENANT_CENTRAL',
+              email: connection.google_email || undefined,
+              rootFolderId: connection.root_folder_id || rootFolderId || undefined,
+              rootFolderName: connection.root_folder_name || DEFAULT_ROOT_FOLDER_NAME,
+              lastVerified: connection.last_verified_at || undefined,
+              status: 'PERMISSION_REQUIRED',
+              error: 'MISSING_DRIVE_SCOPE',
+            };
+          }
+
+          return {
+            connected: true,
+            connectionType: 'TENANT_CENTRAL',
+            email: connection.google_email || undefined,
+            rootFolderId: connection.root_folder_id || rootFolderId || undefined,
+            rootFolderName: connection.root_folder_name || DEFAULT_ROOT_FOLDER_NAME,
+            lastVerified: connection.last_verified_at || undefined,
+            status: 'CONNECTED',
+          };
+        }
+
+        return {
+          connected: false,
+          connectionType: 'TENANT_CENTRAL',
+          rootFolderId: rootFolderId || undefined,
+          rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
+          status: 'NOT_CONNECTED',
+        };
+      } catch (fetchErr: any) {
+        const errorMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        return {
+          connected: false,
+          connectionType: 'TENANT_CENTRAL',
+          rootFolderId: rootFolderId || undefined,
+          rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
+          status: 'ERROR',
+          error: errorMsg,
+        };
+      }
+    }
+  }
+
   return {
     connected: false,
     connectionType: 'TENANT_CENTRAL',
-    rootFolderId,
+    rootFolderId: rootFolderId || undefined,
     rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
-    status: isConfigured ? 'CONFIGURED_UNVERIFIED' : 'DISCONNECTED',
+    status: isConfigured ? 'CONFIGURED_UNVERIFIED' : 'NOT_CONNECTED',
   };
 }
 
