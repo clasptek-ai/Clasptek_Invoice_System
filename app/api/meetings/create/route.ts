@@ -224,7 +224,23 @@ export async function POST(req: NextRequest) {
     let providerRoomUrl: string | null = null;
     const sfuRoomId: string = publicId;
 
-    const sfu = getSFUService();
+    let sfu;
+    try {
+      sfu = getSFUService();
+    } catch (configErr: unknown) {
+      const msg = configErr instanceof Error ? configErr.message : '';
+      const isMissingConfig = msg.includes('CONFIGURATION_ERROR') || msg.includes('missing');
+      return NextResponse.json(
+        {
+          error: isMissingConfig ? 'SERVICE_UNCONFIGURED' : 'SERVICE_UNAVAILABLE',
+          message: isMissingConfig
+            ? 'The video meeting service is not configured. Please contact an administrator.'
+            : 'The video meeting service is temporarily unavailable. Please try again shortly.',
+        },
+        { status: 503 }
+      );
+    }
+
     try {
       sfuRoomResult = await sfu.createRoom({
         roomId: publicId,
@@ -236,12 +252,10 @@ export async function POST(req: NextRequest) {
       });
       providerRoomUrl = process.env.LIVEKIT_URL || null;
     } catch (sfuErr: unknown) {
-      const msg = sfuErr instanceof Error ? sfuErr.message : 'SFU Room creation failed';
       return NextResponse.json(
         {
-          error: 'Meeting unavailable',
+          error: 'SERVICE_UNAVAILABLE',
           message: 'The video meeting service is temporarily unavailable. Please try again shortly.',
-          detail: msg,
         },
         { status: 502 }
       );

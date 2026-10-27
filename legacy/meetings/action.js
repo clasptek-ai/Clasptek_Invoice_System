@@ -1,6 +1,6 @@
 /**
  * CLASPTEK ENTERPRISE PLATFORM — CONSOLIDATED MEETING OPERATIONAL ACTIONS
- * File: api/meetings/action.js
+ * File: legacy/meetings/action.js (Relocated from api/meetings/action.js in Phase C196)
  * 
  * Endpoints Dispatched:
  * 1. POST /api/meetings/action (action: MUTE_PARTICIPANT, REMOVE_PARTICIPANT, END_MEETING)
@@ -15,7 +15,7 @@
  */
 
 const crypto = require('crypto');
-const { getSFUAdapter } = require('../_lib/sfu-adapter');
+const { getSFUAdapter } = require('../../api/_lib/sfu-adapter');
 
 function sendJson(res, statusCode, data) {
   if (typeof res.status === 'function') {

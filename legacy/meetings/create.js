@@ -1,6 +1,7 @@
 /**
  * CLASPTEK ENTERPRISE PLATFORM — MEETING CREATION ENDPOINT
  * Route: POST /api/meetings/create
+ * File: legacy/meetings/create.js (Relocated from api/meetings/create.js in Phase C196)
  * 
  * Secure Serverless Function on Vercel
  * Invariants:
@@ -11,7 +12,7 @@
  */
 
 const crypto = require('crypto');
-const { getSFUAdapter } = require('../_lib/sfu-adapter');
+const { getSFUAdapter } = require('../../api/_lib/sfu-adapter');
 
 function generatePublicId() {
   const p1 = crypto.randomBytes(4).toString('hex');
@@ -24,18 +25,22 @@ function generateMeetingId() {
 }
 
 async function parseRequestBody(req) {
-  if (req.body !== undefined && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+  if (req.body !== undefined && req.body !== null && typeof req.body === 'object') {
     return req.body;
   }
   if (typeof req.body === 'string' && req.body.length > 0) {
     try { return JSON.parse(req.body); } catch (_) { return {}; }
   }
   return new Promise(resolve => {
+    if (req.readableEnded || req.complete) {
+      return resolve({});
+    }
     let raw = '';
     req.on('data', chunk => raw += chunk);
     req.on('end', () => {
-      try { resolve(JSON.parse(raw)); } catch (_) { resolve({}); }
+      try { resolve(raw ? JSON.parse(raw) : {}); } catch (_) { resolve({}); }
     });
+    req.on('error', () => resolve({}));
   });
 }
 
@@ -68,6 +73,15 @@ module.exports = async function handler(req, res) {
       settings = {},
       user = null
     } = body;
+
+    // LiveKit-only enforcement
+    const rawProvider = String(body.provider || 'livekit').trim().toLowerCase();
+    if (rawProvider === 'google_meet' || body.customGoogleMeetUrl || body.googleMeetUrl) {
+      return res.status(400).json({
+        error: 'PROVIDER_UNSUPPORTED',
+        message: 'Google Meet is not supported. Clasptek video meetings use LiveKit exclusively.',
+      });
+    }
 
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Meeting title is required' });

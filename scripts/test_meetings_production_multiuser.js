@@ -38,9 +38,9 @@ const {
   getSFUAdapter
 } = require('../api/_lib/sfu-adapter');
 
-const createHandler = require('../api/meetings/create');
-const joinHandler = require('../api/meetings/join');
-const actionHandler = require('../api/meetings/action');
+const createHandler = require('../legacy/meetings/create');
+const joinHandler = require('../legacy/meetings/join');
+const actionHandler = require('../legacy/meetings/action');
 
 // Leave, chat, and status are consolidated sub-actions of api/meetings/action.js
 const leaveHandler = (req, res) => {

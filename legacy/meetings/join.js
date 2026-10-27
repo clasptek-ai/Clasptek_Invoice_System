@@ -1,6 +1,7 @@
 /**
  * CLASPTEK ENTERPRISE PLATFORM — MEETING JOIN & TOKEN ISSUANCE ENDPOINT
  * Route: POST /api/meetings/join
+ * File: legacy/meetings/join.js (Relocated from api/meetings/join.js in Phase C196)
  * 
  * Secure Serverless Function on Vercel
  * Invariants:
@@ -11,7 +12,7 @@
  */
 
 const crypto = require('crypto');
-const { getSFUAdapter } = require('../_lib/sfu-adapter');
+const { getSFUAdapter } = require('../../api/_lib/sfu-adapter');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
