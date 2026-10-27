@@ -563,7 +563,7 @@ async function runCentralRepositoryCertification() {
   const testMeetingIdA = 'mtg_rec_cert_test_A';
 
   // Seed meeting in memory store
-  oauthConfig.seedTestMeeting({
+  uploadRecordingHandler.seedTestMeeting({
     id: testMeetingIdA,
     tenantId: testTenantA,
     title: 'Data Science Cohort 12 — Machine Learning 101',
@@ -631,7 +631,7 @@ async function runCentralRepositoryCertification() {
 
   await runAsyncTest('6.3: Rejects upload if Tenant has NO central Drive connection (400 NO_CENTRAL_DRIVE_CONNECTION)', async () => {
     const testMeetingNoConn = 'mtg_no_conn_test';
-    oauthConfig.seedTestMeeting({
+    uploadRecordingHandler.seedTestMeeting({
       id: testMeetingNoConn,
       tenantId: 'tenant_with_no_gdrive',
       title: 'Session Without GDrive',
@@ -674,7 +674,7 @@ async function runCentralRepositoryCertification() {
 
   await runAsyncTest('7.1: Zero Fake Success: Upload failure NEVER marks recording as STORED', async () => {
     const testMeetingFail = 'mtg_rec_fail_test';
-    oauthConfig.seedTestMeeting({
+    uploadRecordingHandler.seedTestMeeting({
       id: testMeetingFail,
       tenantId: testTenantA,
       title: 'Failing Upload Session',
@@ -714,7 +714,7 @@ async function runCentralRepositoryCertification() {
     assert.strictEqual(res.statusCode, 502, `Expected 502 for failed Google Drive upload, got ${res.statusCode}`);
 
     // Verify DB meeting status: MUST NOT be STORED
-    const updatedMeeting = oauthConfig.getTestMeeting(testMeetingFail);
+    const updatedMeeting = uploadRecordingHandler.getTestMeeting(testMeetingFail);
     assert.strictEqual(updatedMeeting.recording_status, 'FAILED', 'On upload failure, recording_status must be FAILED');
     assert.notStrictEqual(updatedMeeting.recording_status, 'STORED', 'CRITICAL: Must NEVER mark STORED on failure');
     assert.strictEqual(updatedMeeting.recording_metadata.upload_status, 'FAILED');
@@ -759,7 +759,7 @@ async function runCentralRepositoryCertification() {
     assert(data.googleDriveUrl, 'Response must contain googleDriveUrl');
 
     // Verify DB meeting record
-    const updatedMeeting = oauthConfig.getTestMeeting(testMeetingIdA);
+    const updatedMeeting = uploadRecordingHandler.getTestMeeting(testMeetingIdA);
     assert.strictEqual(updatedMeeting.recording_status, 'STORED');
     assert.strictEqual(updatedMeeting.recording_metadata.google_drive_file_id, data.fileId);
     assert.strictEqual(updatedMeeting.recording_metadata.google_drive_folder_id, 'folder_tenant_a_root');

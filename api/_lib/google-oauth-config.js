@@ -2149,8 +2149,6 @@ module.exports = {
   findExistingDriveFile,
   resolveDriveMetadataField,
   isCandidateDriveFileValid,
-  seedTestMeeting: (m) => require('../../legacy/meetings/upload-recording').seedTestMeeting(m),
-  getTestMeeting: (id) => require('../../legacy/meetings/upload-recording').getTestMeeting(id),
   isPreviewEnvironment,
   assertOAuthInitiationAllowed,
   assertDriveDestinationAllowed,
