@@ -804,6 +804,405 @@ async function runAllC240ATests() {
         oauthConfig.setTestHttpsInterceptor(null);
       }
     });
+
+    // --- SUITE 6: Central and Personal Connection Persistence & Conflict-Target Handling ---
+    console.log('\n--- SUITE 6: Central & Personal Connection Persistence & Conflict Handling ---');
+
+    await runAsyncTest('6.1: Central connection insert when none exists (GET 200 empty -> POST 201)', async () => {
+      let getCalled = false;
+      let postCalled = false;
+      let capturedPayload = null;
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (options.method === 'GET' && url.includes('google_drive_connections?tenant_id=eq.tenant-c61&connection_type=eq.TENANT_CENTRAL')) {
+          getCalled = true;
+          return Promise.resolve({ status: 200, body: [] });
+        }
+        if (options.method === 'POST' && url.endsWith('/rest/v1/google_drive_connections')) {
+          postCalled = true;
+          capturedPayload = payload;
+          assert(!url.includes('on_conflict'), 'Central POST insert must not use on_conflict parameter');
+          return Promise.resolve({ status: 201, body: [{ id: 'conn-c61' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-c61',
+          userId: 'user-c61',
+          connectionType: 'TENANT_CENTRAL',
+          googleUserId: 'g-user-c61',
+          googleEmail: 'central@tenant-c61.org',
+          accessToken: 'mock_at_c61',
+          refreshToken: 'mock_rt_c61',
+          rootFolderId: 'root_c61',
+          rootFolderName: 'Clasptek Meeting Recordings'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert(getCalled, 'Must query for existing central connection');
+        assert(postCalled, 'Must execute POST insert when no existing row found');
+        assert.strictEqual(capturedPayload.connection_type, 'TENANT_CENTRAL');
+        assert.strictEqual(capturedPayload.tenant_id, 'tenant-c61');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.2: Central connection update when one exists (GET 200 with record -> PATCH 200)', async () => {
+      let getCalled = false;
+      let patchCalled = false;
+      let capturedPatchPayload = null;
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (options.method === 'GET' && url.includes('google_drive_connections?tenant_id=eq.tenant-c62&connection_type=eq.TENANT_CENTRAL')) {
+          getCalled = true;
+          return Promise.resolve({
+            status: 200,
+            body: [{
+              id: 'conn-c62-existing',
+              refresh_token: 'existing_rt_c62',
+              root_folder_id: 'existing_folder_c62',
+              root_folder_name: 'Existing Folder Name'
+            }]
+          });
+        }
+        if (options.method === 'PATCH' && url.includes('google_drive_connections?tenant_id=eq.tenant-c62&connection_type=eq.TENANT_CENTRAL')) {
+          patchCalled = true;
+          capturedPatchPayload = payload;
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-c62-existing' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        // Authorize with null refresh token -> should preserve existing_rt_c62
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-c62',
+          userId: 'user-c62',
+          connectionType: 'TENANT_CENTRAL',
+          googleUserId: 'g-user-c62',
+          googleEmail: 'central@tenant-c62.org',
+          accessToken: 'new_access_token_c62',
+          refreshToken: null
+        });
+
+        assert.strictEqual(res.success, true);
+        assert(getCalled, 'Must query for existing central connection');
+        assert(patchCalled, 'Must execute scoped PATCH update when existing row found');
+        assert.strictEqual(capturedPatchPayload.refresh_token, 'existing_rt_c62', 'Must preserve existing refresh token');
+        assert.strictEqual(capturedPatchPayload.root_folder_id, 'existing_folder_c62', 'Must preserve existing root folder ID');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.3: Concurrent central inserts and unique-conflict handling (GET empty -> POST 409 -> re-read GET -> PATCH 200)', async () => {
+      let getCallCount = 0;
+      let postAttempted = false;
+      let patchAttempted = false;
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (options.method === 'GET' && url.includes('tenant_id=eq.tenant-c63')) {
+          getCallCount++;
+          if (getCallCount === 1) {
+            // First call before insert: no record exists
+            return Promise.resolve({ status: 200, body: [] });
+          }
+          // Second call after 409 conflict: concurrent request successfully inserted record
+          return Promise.resolve({
+            status: 200,
+            body: [{
+              id: 'conn-c63-concurrent',
+              refresh_token: 'concurrent_rt_c63',
+              root_folder_id: 'concurrent_folder_c63',
+              root_folder_name: 'Concurrent Folder'
+            }]
+          });
+        }
+        if (options.method === 'POST' && url.endsWith('/rest/v1/google_drive_connections')) {
+          postAttempted = true;
+          // Simulate concurrent winner race triggering unique constraint uq_tenant_central_gdrive
+          return Promise.resolve({
+            status: 409,
+            body: { message: 'duplicate key value violates unique constraint "uq_tenant_central_gdrive"' }
+          });
+        }
+        if (options.method === 'PATCH' && url.includes('tenant_id=eq.tenant-c63&connection_type=eq.TENANT_CENTRAL')) {
+          patchAttempted = true;
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-c63-concurrent' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-c63',
+          userId: 'user-c63',
+          connectionType: 'TENANT_CENTRAL',
+          googleUserId: 'g-user-c63',
+          googleEmail: 'central@tenant-c63.org',
+          accessToken: 'at_c63',
+          refreshToken: 'rt_c63'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert.strictEqual(getCallCount, 2, 'Must query before insert, then re-read after 409 conflict');
+        assert(postAttempted, 'Must attempt POST insert first');
+        assert(patchAttempted, 'Must re-read and safely fall back to scoped PATCH');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.4: Non-2xx GET, POST, and PATCH responses surface controlled errors', async () => {
+      // 1. GET non-2xx failure
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 500, body: { error: 'Database timeout' } });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c64',
+            userId: 'user-c64',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c64.org',
+            accessToken: 'at_c64'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+
+      // 2. POST non-2xx (and not 409) failure
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 200, body: [] });
+        if (options.method === 'POST') return Promise.resolve({ status: 503, body: { error: 'Service Unavailable' } });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c64',
+            userId: 'user-c64',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c64.org',
+            accessToken: 'at_c64'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+
+      // 3. PATCH non-2xx failure
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 200, body: [{ id: 'conn-c64' }] });
+        if (options.method === 'PATCH') return Promise.resolve({ status: 500, body: { error: 'Disk full' } });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c64',
+            userId: 'user-c64',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c64.org',
+            accessToken: 'at_c64'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+
+      // 4. PATCH 200 with 0 returned rows (e.g. concurrent disconnect/revocation race)
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 200, body: [{ id: 'conn-c64' }] });
+        // PostgREST returns 200 with [] when no rows matched the PATCH filter
+        if (options.method === 'PATCH') return Promise.resolve({ status: 200, body: [] });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c64',
+            userId: 'user-c64',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c64.org',
+            accessToken: 'at_c64'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+
+      // 5. POST 409 conflict but re-read GET returns empty (unrelated conflict or row deleted)
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 200, body: [] }); // Always empty
+        if (options.method === 'POST') return Promise.resolve({ status: 409, body: { message: 'conflict' } });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c64',
+            userId: 'user-c64',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c64.org',
+            accessToken: 'at_c64'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.5: Network failures in GET, POST, and PATCH surface controlled errors', async () => {
+      // 1. GET network rejection
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.reject(new Error('ETIMEDOUT: Connection timed out'));
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c65',
+            userId: 'user-c65',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c65.org',
+            accessToken: 'at_c65'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+
+      // 2. POST network rejection
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET') return Promise.resolve({ status: 200, body: [] });
+        if (options.method === 'POST') return Promise.reject(new Error('ECONNRESET: Connection reset'));
+        return Promise.resolve({ status: 200, body: [] });
+      });
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c65',
+            userId: 'user-c65',
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central@tenant-c65.org',
+            accessToken: 'at_c65'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.6: Personal connection upsert remains on valid conflict target (on_conflict=tenant_id,user_id)', async () => {
+      let personalPostCalled = false;
+      let capturedPersonalUrl = null;
+      let capturedPersonalPayload = null;
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (options.method === 'POST' && url.includes('google_drive_connections?on_conflict=tenant_id,user_id')) {
+          personalPostCalled = true;
+          capturedPersonalUrl = url;
+          capturedPersonalPayload = payload;
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-personal-c66' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-c66',
+          userId: 'user-c66',
+          connectionType: 'USER_PERSONAL',
+          googleUserId: 'g-user-c66',
+          googleEmail: 'user@tenant-c66.org',
+          accessToken: 'at_personal_c66',
+          refreshToken: 'rt_personal_c66'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert(personalPostCalled, 'Personal connection must use on_conflict=tenant_id,user_id');
+        assert(capturedPersonalUrl.includes('on_conflict=tenant_id,user_id'));
+        assert.strictEqual(capturedPersonalPayload.connection_type, 'USER_PERSONAL');
+        assert.strictEqual(capturedPersonalPayload.user_id, 'user-c66');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.7: No false success or durable-state claims when persistence fails', async () => {
+      // Simulate failure on personal connection
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'POST') return Promise.resolve({ status: 500, body: { error: 'Database unavailable' } });
+        return Promise.resolve({ status: 200, body: [] });
+      });
+
+      try {
+        await assert.rejects(
+          () => oauthConfig.upsertGoogleDriveConnection({
+            tenantId: 'tenant-c67-fail',
+            userId: 'user-c67-fail',
+            connectionType: 'USER_PERSONAL',
+            googleEmail: 'fail@tenant-c67.org',
+            accessToken: 'at_fail'
+          }),
+          /GOOGLE_CONNECTION_PERSISTENCE_FAILED/
+        );
+
+        // Verify that memoryConnectionStore does NOT contain the failed connection
+        const cached = oauthConfig._memoryConnectionStore.get('user:tenant-c67-fail:user-c67-fail');
+        assert(!cached, 'memoryConnectionStore must NOT claim connection is active when DB persistence fails');
+        const status = await oauthConfig.getGoogleDriveConnectionStatus('tenant-c67-fail', 'user-c67-fail', 'USER_PERSONAL');
+        assert.strictEqual(status.connected, false, 'Status must report connected: false when DB persistence fails');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.8: Tenant isolation: central connection queries and updates are strictly partitioned by tenant_id', async () => {
+      const interceptedUrls = [];
+
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        interceptedUrls.push(url);
+        if (options.method === 'GET') {
+          assert(url.includes('tenant_id=eq.tenant-A'), 'Query must strictly filter by target tenant_id');
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-tenant-A' }] });
+        }
+        if (options.method === 'PATCH') {
+          assert(url.includes('tenant_id=eq.tenant-A'), 'Patch must strictly filter by target tenant_id');
+          assert(!url.includes('tenant-B'), 'Patch must never target a foreign tenant');
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-tenant-A' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-A',
+          userId: 'user-A',
+          connectionType: 'TENANT_CENTRAL',
+          googleEmail: 'central@tenant-A.org',
+          accessToken: 'at_A'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert(interceptedUrls.length >= 2);
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
   } finally {
     if (prevSupabaseUrl) process.env.SUPABASE_URL = prevSupabaseUrl; else delete process.env.SUPABASE_URL;
     if (prevServiceKey) process.env.SUPABASE_SERVICE_ROLE_KEY = prevServiceKey; else delete process.env.SUPABASE_SERVICE_ROLE_KEY;

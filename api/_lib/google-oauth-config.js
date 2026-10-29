@@ -2242,56 +2242,220 @@ async function upsertGoogleDriveConnection({
   }
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
+  const isOfflineTest = (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') && !_testHttpsInterceptor;
 
-  // If refresh_token is missing, query database to preserve existing token from prior authorization
-  if (!connectionRecord.refresh_token && secretKey && supabaseUrl) {
-    try {
-      const filter = connectionType === 'TENANT_CENTRAL'
-        ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
-        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
-      const existingRes = await httpsRequest(
-        `${supabaseUrl}/rest/v1/google_drive_connections?${filter}&select=refresh_token,root_folder_id,root_folder_name,scope`,
-        {
-          method: 'GET',
-          headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
-        }
-      );
-      if (existingRes && existingRes.status === 200 && Array.isArray(existingRes.body) && existingRes.body.length > 0) {
-        const existingDb = existingRes.body[0];
-        if (existingDb.refresh_token) {
-          connectionRecord.refresh_token = existingDb.refresh_token;
-        }
-        if (!connectionRecord.root_folder_id && existingDb.root_folder_id) {
-          connectionRecord.root_folder_id = existingDb.root_folder_id;
-          connectionRecord.root_folder_name = existingDb.root_folder_name;
-        }
-        if (!connectionRecord.scope && existingDb.scope) {
-          connectionRecord.scope = existingDb.scope;
-        }
-      }
-    } catch (_) {}
-  }
-
-  memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
-
-  if (secretKey && supabaseUrl) {
-    try {
-      if (connectionType === 'TENANT_CENTRAL') {
-        // Upsert by tenant_id + connection_type
-        await httpsRequest(
-          `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,connection_type`,
+  if (secretKey && supabaseUrl && !isOfflineTest) {
+    if (connectionType === 'TENANT_CENTRAL') {
+      // 1. Query for existing central connection for this tenant
+      let existingRecord = null;
+      try {
+        const getRes = await httpsRequest(
+          `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL&select=id,refresh_token,root_folder_id,root_folder_name,scope`,
           {
-            method: 'POST',
+            method: 'GET',
             headers: {
               'apikey': secretKey,
-              'Authorization': `Bearer ${secretKey}`,
-              'Prefer': 'resolution=merge-duplicates,return=representation'
+              'Authorization': `Bearer ${secretKey}`
             }
-          },
-          connectionRecord
+          }
         );
+
+        if (getRes && getRes.status >= 200 && getRes.status < 300 && Array.isArray(getRes.body) && getRes.body.length > 0) {
+          existingRecord = getRes.body[0];
+        } else if (getRes && (getRes.status < 200 || getRes.status >= 300)) {
+          console.error('[Google Drive Connection] Failed to query existing central connection. Status:', getRes.status);
+          const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+          err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+          err.statusCode = 500;
+          throw err;
+        }
+      } catch (getErr) {
+        if (getErr.code === 'GOOGLE_CONNECTION_PERSISTENCE_FAILED') throw getErr;
+        console.error('[Google Drive Connection] Network error querying central connection:', getErr.message);
+        const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+        err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        err.statusCode = 500;
+        throw err;
+      }
+
+      // Preserve existing refresh token / folder ID if not provided in new authorization
+      if (existingRecord) {
+        if (!connectionRecord.refresh_token && existingRecord.refresh_token) {
+          connectionRecord.refresh_token = existingRecord.refresh_token;
+        }
+        if (!connectionRecord.root_folder_id && existingRecord.root_folder_id) {
+          connectionRecord.root_folder_id = existingRecord.root_folder_id;
+          connectionRecord.root_folder_name = existingRecord.root_folder_name;
+        }
+        if (!connectionRecord.scope && existingRecord.scope) {
+          connectionRecord.scope = existingRecord.scope;
+        }
+
+        // Existing central connection found -> PATCH scoped to tenant_id + connection_type
+        try {
+          const patchRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL`,
+            {
+              method: 'PATCH',
+              headers: {
+                'apikey': secretKey,
+                'Authorization': `Bearer ${secretKey}`,
+                'Prefer': 'return=representation'
+              }
+            },
+            connectionRecord
+          );
+
+          if (!patchRes || patchRes.status < 200 || patchRes.status >= 300 || !Array.isArray(patchRes.body) || patchRes.body.length === 0) {
+            console.error('[Google Drive Connection] Failed to patch central connection (status or no rows updated). Status:', patchRes ? patchRes.status : 'no_response');
+            const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+            err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+            err.statusCode = 500;
+            throw err;
+          }
+        } catch (patchErr) {
+          if (patchErr.code === 'GOOGLE_CONNECTION_PERSISTENCE_FAILED') throw patchErr;
+          console.error('[Google Drive Connection] Network error patching central connection:', patchErr.message);
+          const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+          err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+          err.statusCode = 500;
+          throw err;
+        }
       } else {
-        await httpsRequest(
+        // No existing central connection -> POST insert without on_conflict
+        let postRes;
+        try {
+          postRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/google_drive_connections`,
+            {
+              method: 'POST',
+              headers: {
+                'apikey': secretKey,
+                'Authorization': `Bearer ${secretKey}`,
+                'Prefer': 'return=representation'
+              }
+            },
+            connectionRecord
+          );
+        } catch (postErr) {
+          console.error('[Google Drive Connection] Network error inserting central connection:', postErr.message);
+          const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+          err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+          err.statusCode = 500;
+          throw err;
+        }
+
+        // Handle unique-conflict race condition (409) if concurrent request inserted between GET and POST
+        if (postRes && postRes.status === 409) {
+          console.warn('[Google Drive Connection] Concurrent central connection conflict (409); verifying central record before fallback PATCH.');
+          let reReadRecord = null;
+          try {
+            const reReadRes = await httpsRequest(
+              `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL&select=id,refresh_token,root_folder_id,root_folder_name,scope`,
+              {
+                method: 'GET',
+                headers: {
+                  'apikey': secretKey,
+                  'Authorization': `Bearer ${secretKey}`
+                }
+              }
+            );
+
+            if (reReadRes && reReadRes.status >= 200 && reReadRes.status < 300 && Array.isArray(reReadRes.body) && reReadRes.body.length > 0) {
+              reReadRecord = reReadRes.body[0];
+            } else {
+              console.error('[Google Drive Connection] Central connection 409 conflict but tenant record not found or query failed. Status:', reReadRes ? reReadRes.status : 'no_response');
+              const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+              err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+              err.statusCode = 500;
+              throw err;
+            }
+          } catch (reReadErr) {
+            if (reReadErr.code === 'GOOGLE_CONNECTION_PERSISTENCE_FAILED') throw reReadErr;
+            console.error('[Google Drive Connection] Network error re-reading central connection after 409:', reReadErr.message);
+            const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+            err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+            err.statusCode = 500;
+            throw err;
+          }
+
+          if (reReadRecord) {
+            if (!connectionRecord.refresh_token && reReadRecord.refresh_token) {
+              connectionRecord.refresh_token = reReadRecord.refresh_token;
+            }
+            if (!connectionRecord.root_folder_id && reReadRecord.root_folder_id) {
+              connectionRecord.root_folder_id = reReadRecord.root_folder_id;
+              connectionRecord.root_folder_name = reReadRecord.root_folder_name;
+            }
+            if (!connectionRecord.scope && reReadRecord.scope) {
+              connectionRecord.scope = reReadRecord.scope;
+            }
+          }
+
+          try {
+            const patchRes = await httpsRequest(
+              `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&connection_type=eq.TENANT_CENTRAL`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'apikey': secretKey,
+                  'Authorization': `Bearer ${secretKey}`,
+                  'Prefer': 'return=representation'
+                }
+              },
+              connectionRecord
+            );
+
+            if (!patchRes || patchRes.status < 200 || patchRes.status >= 300 || !Array.isArray(patchRes.body) || patchRes.body.length === 0) {
+              console.error('[Google Drive Connection] Failed to patch central connection after 409 (status or no rows updated). Status:', patchRes ? patchRes.status : 'no_response');
+              const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+              err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+              err.statusCode = 500;
+              throw err;
+            }
+          } catch (patchErr) {
+            if (patchErr.code === 'GOOGLE_CONNECTION_PERSISTENCE_FAILED') throw patchErr;
+            console.error('[Google Drive Connection] Network error patching central connection after 409:', patchErr.message);
+            const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+            err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+            err.statusCode = 500;
+            throw err;
+          }
+        } else if (!postRes || postRes.status < 200 || postRes.status >= 300 || !Array.isArray(postRes.body) || postRes.body.length === 0) {
+          console.error('[Google Drive Connection] Failed to insert central connection. Status:', postRes ? postRes.status : 'no_response');
+          const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+          err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+          err.statusCode = 500;
+          throw err;
+        }
+      }
+    } else {
+      // USER_PERSONAL: preserve existing refresh token if missing
+      if (!connectionRecord.refresh_token) {
+        try {
+          const existingRes = await httpsRequest(
+            `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}&select=refresh_token,root_folder_id,root_folder_name,scope`,
+            {
+              method: 'GET',
+              headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
+            }
+          );
+          if (existingRes && existingRes.status === 200 && Array.isArray(existingRes.body) && existingRes.body.length > 0) {
+            const existingDb = existingRes.body[0];
+            if (existingDb.refresh_token) connectionRecord.refresh_token = existingDb.refresh_token;
+            if (!connectionRecord.root_folder_id && existingDb.root_folder_id) {
+              connectionRecord.root_folder_id = existingDb.root_folder_id;
+              connectionRecord.root_folder_name = existingDb.root_folder_name;
+            }
+            if (!connectionRecord.scope && existingDb.scope) connectionRecord.scope = existingDb.scope;
+          }
+        } catch (_) {}
+      }
+
+      // Upsert by tenant_id + user_id matching uq_google_drive_tenant_user
+      let postRes;
+      try {
+        postRes = await httpsRequest(
           `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,user_id`,
           {
             method: 'POST',
@@ -2303,10 +2467,32 @@ async function upsertGoogleDriveConnection({
           },
           connectionRecord
         );
+      } catch (postErr) {
+        console.error('[Google Drive Connection] Network error persisting personal connection:', postErr.message);
+        const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+        err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        err.statusCode = 500;
+        throw err;
       }
-    } catch (_) {}
+
+      if (!postRes || postRes.status < 200 || postRes.status >= 300 || !Array.isArray(postRes.body) || postRes.body.length === 0) {
+        console.error('[Google Drive Connection] Failed to persist personal connection. Status:', postRes ? postRes.status : 'no_response');
+        const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+        err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+        err.statusCode = 500;
+        throw err;
+      }
+    }
+  } else if (process.env.NODE_ENV === 'production' && process.env.CLASPTEK_TEST_MODE !== 'true') {
+    // Fail closed in production if Supabase credentials are missing
+    console.error('[Google Drive Connection] Missing Supabase configuration in production environment.');
+    const err = new Error('GOOGLE_CONNECTION_PERSISTENCE_FAILED');
+    err.code = 'GOOGLE_CONNECTION_PERSISTENCE_FAILED';
+    err.statusCode = 500;
+    throw err;
   }
 
+  memoryConnectionStore.set(cacheKey, { ...existingCached, ...connectionRecord });
   return { success: true };
 }
 
