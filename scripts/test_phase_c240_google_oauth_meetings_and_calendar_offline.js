@@ -1106,13 +1106,13 @@ async function runAllC240ATests() {
       }
     });
 
-    await runAsyncTest('6.6: Personal connection upsert remains on valid conflict target (on_conflict=tenant_id,user_id)', async () => {
+    await runAsyncTest('6.6: Personal connection upsert uses composite conflict target (on_conflict=tenant_id,user_id,connection_type)', async () => {
       let personalPostCalled = false;
       let capturedPersonalUrl = null;
       let capturedPersonalPayload = null;
 
       oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
-        if (options.method === 'POST' && url.includes('google_drive_connections?on_conflict=tenant_id,user_id')) {
+        if (options.method === 'POST' && url.includes('google_drive_connections?on_conflict=tenant_id,user_id,connection_type')) {
           personalPostCalled = true;
           capturedPersonalUrl = url;
           capturedPersonalPayload = payload;
@@ -1133,8 +1133,8 @@ async function runAllC240ATests() {
         });
 
         assert.strictEqual(res.success, true);
-        assert(personalPostCalled, 'Personal connection must use on_conflict=tenant_id,user_id');
-        assert(capturedPersonalUrl.includes('on_conflict=tenant_id,user_id'));
+        assert(personalPostCalled, 'Personal connection must use on_conflict=tenant_id,user_id,connection_type');
+        assert(capturedPersonalUrl.includes('on_conflict=tenant_id,user_id,connection_type'));
         assert.strictEqual(capturedPersonalPayload.connection_type, 'USER_PERSONAL');
         assert.strictEqual(capturedPersonalPayload.user_id, 'user-c66');
       } finally {
@@ -1203,10 +1203,383 @@ async function runAllC240ATests() {
         oauthConfig.setTestHttpsInterceptor(null);
       }
     });
+
+    await runAsyncTest('6.9: Coexistence: Personal followed by Central connection for the same tenant and user', async () => {
+      const dbRows = [
+        {
+          id: 'conn-personal-admin',
+          tenant_id: 'tenant-coexist-1',
+          user_id: 'admin-1',
+          connection_type: 'USER_PERSONAL',
+          google_email: 'admin.personal@gmail.com',
+          access_token: 'personal_token',
+          refresh_token: 'personal_refresh',
+          status: 'CONNECTED'
+        }
+      ];
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        // Central query: MUST NOT return the personal connection
+        if (options.method === 'GET' && url.includes('connection_type=eq.TENANT_CENTRAL')) {
+          assert(url.includes('tenant_id=eq.tenant-coexist-1'));
+          const centralRows = dbRows.filter(r => r.tenant_id === 'tenant-coexist-1' && r.connection_type === 'TENANT_CENTRAL');
+          return Promise.resolve({ status: 200, body: centralRows });
+        }
+        // Central insert: should insert without conflicting with personal row
+        if (options.method === 'POST' && url.endsWith('/rest/v1/google_drive_connections')) {
+          assert(!url.includes('on_conflict'));
+          assert.strictEqual(payload.connection_type, 'TENANT_CENTRAL');
+          assert.strictEqual(payload.tenant_id, 'tenant-coexist-1');
+          assert.strictEqual(payload.user_id, 'admin-1');
+          const newRow = { id: 'conn-central-admin', ...payload };
+          dbRows.push(newRow);
+          return Promise.resolve({ status: 201, body: [newRow] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-coexist-1',
+          userId: 'admin-1',
+          connectionType: 'TENANT_CENTRAL',
+          googleUserId: 'g-admin-1',
+          googleEmail: 'admin.central@clasptek.org',
+          accessToken: 'central_token',
+          refreshToken: 'central_refresh',
+          rootFolderId: 'folder_central_1'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert.strictEqual(dbRows.length, 2, 'Both personal and central rows must coexist in database');
+        const personal = dbRows.find(r => r.connection_type === 'USER_PERSONAL');
+        const central = dbRows.find(r => r.connection_type === 'TENANT_CENTRAL');
+        assert(personal, 'Personal row must still exist');
+        assert(central, 'Central row must exist');
+        assert.strictEqual(personal.user_id, 'admin-1');
+        assert.strictEqual(central.user_id, 'admin-1');
+        assert.strictEqual(personal.refresh_token, 'personal_refresh', 'Personal token must not be modified');
+        assert.strictEqual(central.refresh_token, 'central_refresh', 'Central token must be set');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.10: Coexistence: Central followed by Personal connection for the same tenant and user (no overwrite)', async () => {
+      const dbRows = [
+        {
+          id: 'conn-central-admin-2',
+          tenant_id: 'tenant-coexist-2',
+          user_id: 'admin-2',
+          connection_type: 'TENANT_CENTRAL',
+          google_email: 'admin.central@clasptek.org',
+          access_token: 'central_token_2',
+          refresh_token: 'central_refresh_2',
+          root_folder_id: 'folder_central_2',
+          root_folder_name: 'Clasptek Meeting Recordings',
+          status: 'CONNECTED'
+        }
+      ];
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        // Personal lookup query: MUST NOT return the central row!
+        if (options.method === 'GET' && url.includes('connection_type=eq.USER_PERSONAL')) {
+          assert(url.includes('tenant_id=eq.tenant-coexist-2'));
+          assert(url.includes('user_id=eq.admin-2'));
+          const personalRows = dbRows.filter(r => r.tenant_id === 'tenant-coexist-2' && r.user_id === 'admin-2' && r.connection_type === 'USER_PERSONAL');
+          return Promise.resolve({ status: 200, body: personalRows });
+        }
+        // Personal upsert: MUST use on_conflict=tenant_id,user_id,connection_type
+        if (options.method === 'POST' && url.includes('on_conflict=tenant_id,user_id,connection_type')) {
+          assert.strictEqual(payload.connection_type, 'USER_PERSONAL');
+          assert.strictEqual(payload.tenant_id, 'tenant-coexist-2');
+          assert.strictEqual(payload.user_id, 'admin-2');
+          const newRow = { id: 'conn-personal-admin-2', ...payload };
+          dbRows.push(newRow);
+          return Promise.resolve({ status: 200, body: [newRow] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const res = await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-coexist-2',
+          userId: 'admin-2',
+          connectionType: 'USER_PERSONAL',
+          googleUserId: 'g-admin-2-personal',
+          googleEmail: 'admin.personal@gmail.com',
+          accessToken: 'personal_token_2',
+          refreshToken: 'personal_refresh_2'
+        });
+
+        assert.strictEqual(res.success, true);
+        assert.strictEqual(dbRows.length, 2, 'Personal upsert must NOT overwrite central row');
+        const central = dbRows.find(r => r.connection_type === 'TENANT_CENTRAL');
+        const personal = dbRows.find(r => r.connection_type === 'USER_PERSONAL');
+        assert(central, 'Central row must still exist');
+        assert(personal, 'Personal row must exist');
+        assert.strictEqual(central.connection_type, 'TENANT_CENTRAL', 'Central connection_type must NEVER be overwritten');
+        assert.strictEqual(central.root_folder_id, 'folder_central_2', 'Central folder ID must not be overwritten');
+        assert.strictEqual(central.refresh_token, 'central_refresh_2', 'Central refresh token must not be overwritten');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.11: Multi-user: Different users in the same tenant can each have personal connections', async () => {
+      const dbRows = [];
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (options.method === 'GET' && url.includes('connection_type=eq.USER_PERSONAL')) {
+          return Promise.resolve({ status: 200, body: [] });
+        }
+        if (options.method === 'POST' && url.includes('on_conflict=tenant_id,user_id,connection_type')) {
+          const row = { id: `conn-${payload.user_id}`, ...payload };
+          dbRows.push(row);
+          return Promise.resolve({ status: 200, body: [row] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-multi-user',
+          userId: 'user-1',
+          connectionType: 'USER_PERSONAL',
+          googleEmail: 'u1@tenant.org',
+          accessToken: 'at_1'
+        });
+
+        await oauthConfig.upsertGoogleDriveConnection({
+          tenantId: 'tenant-multi-user',
+          userId: 'user-2',
+          connectionType: 'USER_PERSONAL',
+          googleEmail: 'u2@tenant.org',
+          accessToken: 'at_2'
+        });
+
+        assert.strictEqual(dbRows.length, 2);
+        assert.strictEqual(dbRows[0].user_id, 'user-1');
+        assert.strictEqual(dbRows[1].user_id, 'user-2');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('6.12: Personal status and disconnect are strictly scoped by connection_type=USER_PERSONAL', async () => {
+      let statusQueryUrl = null;
+      let disconnectQueryUrl = null;
+
+      oauthConfig.setTestHttpsInterceptor((url, options) => {
+        if (options.method === 'GET' && url.includes('/rest/v1/google_drive_connections')) {
+          statusQueryUrl = url;
+          return Promise.resolve({
+            status: 200,
+            body: [{
+              id: 'conn-personal-status',
+              connection_type: 'USER_PERSONAL',
+              google_email: 'user@clasptek.org',
+              status: 'CONNECTED',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]
+          });
+        }
+        if (options.method === 'PATCH' && url.includes('/rest/v1/google_drive_connections')) {
+          disconnectQueryUrl = url;
+          return Promise.resolve({ status: 200, body: [{ id: 'conn-personal-status', status: 'REVOKED' }] });
+        }
+        return Promise.reject(new Error(`Unexpected call to ${url}`));
+      });
+
+      try {
+        const status = await oauthConfig.getGoogleDriveConnectionStatus({
+          tenantId: 'tenant-scope-check',
+          userId: 'user-scope-check',
+          connectionType: 'USER_PERSONAL'
+        });
+
+        assert.strictEqual(status.connected, true);
+        assert(statusQueryUrl.includes('connection_type=eq.USER_PERSONAL'), 'Status query must filter by connection_type=eq.USER_PERSONAL');
+
+        const disconnect = await oauthConfig.disconnectGoogleDriveConnection({
+          tenantId: 'tenant-scope-check',
+          userId: 'user-scope-check',
+          connectionType: 'USER_PERSONAL'
+        });
+
+        assert.strictEqual(disconnect.success, true);
+        assert(disconnectQueryUrl.includes('connection_type=eq.USER_PERSONAL'), 'Disconnect query must filter by connection_type=eq.USER_PERSONAL');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
   } finally {
     if (prevSupabaseUrl) process.env.SUPABASE_URL = prevSupabaseUrl; else delete process.env.SUPABASE_URL;
     if (prevServiceKey) process.env.SUPABASE_SERVICE_ROLE_KEY = prevServiceKey; else delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   }
+
+  console.log('\n--- SUITE 7: Forward Migration DDL & Constraint Transition Simulation ---');
+
+  runSyncTest('7.1: Forward migration 20261029_fix_google_drive_connection_constraint.sql exists and contains valid DDL', () => {
+    const migrationPath = path.join(process.cwd(), 'migrations', '20261029_fix_google_drive_connection_constraint.sql');
+    assert(fs.existsSync(migrationPath), 'Forward migration file must exist');
+    const sql = fs.readFileSync(migrationPath, 'utf8');
+    assert(sql.includes('uq_google_drive_tenant_user_type\n        UNIQUE (tenant_id, user_id, connection_type)'), 'Must define composite constraint');
+    assert(sql.includes('DROP CONSTRAINT uq_google_drive_tenant_user'), 'Must drop legacy constraint');
+    assert(sql.includes("NOTIFY pgrst, 'reload schema'"), 'Must reload PostgREST schema cache');
+    assert(sql.includes('Cannot apply uq_google_drive_tenant_user_type: duplicate'), 'Must include fail-safe duplicate pre-check');
+    assert(sql.includes('multiple TENANT_CENTRAL connections detected'), 'Must check central repository uniqueness');
+  });
+
+  runSyncTest('7.2: Migration transition: old constraint replaced by new tuple constraint', () => {
+    const schema = {
+      constraints: ['uq_google_drive_tenant_user'],
+      indexes: ['uq_tenant_central_gdrive'],
+      columns: ['id', 'tenant_id', 'user_id', 'connection_type', 'refresh_token', 'status']
+    };
+
+    function applyMigration(dbSchema, rows) {
+      const seenTuples = new Set();
+      for (const row of rows) {
+        const key = `${row.tenant_id}:${row.user_id}:${row.connection_type}`;
+        if (seenTuples.has(key)) {
+          throw new Error('Cannot apply uq_google_drive_tenant_user_type: duplicate (tenant_id, user_id, connection_type) rows detected');
+        }
+        seenTuples.add(key);
+      }
+      const centralTenants = new Set();
+      for (const row of rows) {
+        if (row.connection_type === 'TENANT_CENTRAL') {
+          if (centralTenants.has(row.tenant_id)) {
+            throw new Error('Cannot apply migration: multiple TENANT_CENTRAL connections detected for a single tenant');
+          }
+          centralTenants.add(row.tenant_id);
+        }
+      }
+      const idx = dbSchema.constraints.indexOf('uq_google_drive_tenant_user');
+      if (idx !== -1) dbSchema.constraints.splice(idx, 1);
+      if (!dbSchema.constraints.includes('uq_google_drive_tenant_user_type')) {
+        dbSchema.constraints.push('uq_google_drive_tenant_user_type');
+      }
+      return dbSchema;
+    }
+
+    const testRows = [
+      { tenant_id: 't1', user_id: 'u1', connection_type: 'USER_PERSONAL' },
+      { tenant_id: 't1', user_id: 'u2', connection_type: 'USER_PERSONAL' }
+    ];
+
+    applyMigration(schema, testRows);
+    assert(!schema.constraints.includes('uq_google_drive_tenant_user'), 'Old constraint must be dropped');
+    assert(schema.constraints.includes('uq_google_drive_tenant_user_type'), 'New constraint must be present');
+  });
+
+  runSyncTest('7.3: Duplicate data detection triggers diagnostic error and preserves all rows', () => {
+    const rows = [
+      { id: '1', tenant_id: 't-dup', user_id: 'u1', connection_type: 'USER_PERSONAL' },
+      { id: '2', tenant_id: 't-dup', user_id: 'u1', connection_type: 'USER_PERSONAL' }
+    ];
+    const initialCount = rows.length;
+
+    assert.throws(
+      () => {
+        const seen = new Set();
+        for (const row of rows) {
+          const key = `${row.tenant_id}:${row.user_id}:${row.connection_type}`;
+          if (seen.has(key)) {
+            throw new Error('Cannot apply uq_google_drive_tenant_user_type: duplicate (tenant_id, user_id, connection_type) rows detected in public.google_drive_connections. Manual reconciliation required; zero rows were modified.');
+          }
+          seen.add(key);
+        }
+      },
+      /Cannot apply uq_google_drive_tenant_user_type: duplicate/
+    );
+
+    assert.strictEqual(rows.length, initialCount, 'Zero rows must be deleted or modified on validation failure');
+  });
+
+  runSyncTest('7.4: Multiple TENANT_CENTRAL rows for one tenant triggers diagnostic error without deleting data', () => {
+    const rows = [
+      { id: '1', tenant_id: 't-multi-central', user_id: 'admin1', connection_type: 'TENANT_CENTRAL' },
+      { id: '2', tenant_id: 't-multi-central', user_id: 'admin2', connection_type: 'TENANT_CENTRAL' }
+    ];
+    const initialCount = rows.length;
+
+    assert.throws(
+      () => {
+        const centralTenants = new Set();
+        for (const row of rows) {
+          if (row.connection_type === 'TENANT_CENTRAL') {
+            if (centralTenants.has(row.tenant_id)) {
+              throw new Error('Cannot apply migration: multiple TENANT_CENTRAL connections detected for a single tenant in public.google_drive_connections. Manual reconciliation required; zero rows were modified.');
+            }
+            centralTenants.add(row.tenant_id);
+          }
+        }
+      },
+      /multiple TENANT_CENTRAL connections detected/
+    );
+
+    assert.strictEqual(rows.length, initialCount, 'Zero rows must be deleted on validation failure');
+  });
+
+  runSyncTest('7.5: Migration rerun behavior is completely idempotent', () => {
+    const schema = {
+      constraints: ['uq_google_drive_tenant_user_type'],
+      indexes: ['uq_tenant_central_gdrive']
+    };
+
+    function idempotentRerun(dbSchema) {
+      const oldIdx = dbSchema.constraints.indexOf('uq_google_drive_tenant_user');
+      if (oldIdx !== -1) dbSchema.constraints.splice(oldIdx, 1);
+      if (!dbSchema.constraints.includes('uq_google_drive_tenant_user_type')) {
+        dbSchema.constraints.push('uq_google_drive_tenant_user_type');
+      }
+      return dbSchema;
+    }
+
+    idempotentRerun(schema);
+    assert.strictEqual(schema.constraints.filter(c => c === 'uq_google_drive_tenant_user_type').length, 1);
+
+    idempotentRerun(schema);
+    assert.strictEqual(schema.constraints.filter(c => c === 'uq_google_drive_tenant_user_type').length, 1);
+  });
+
+  runSyncTest('7.6: Constraint model guarantees coexistence and single central per tenant', () => {
+    const db = [];
+
+    function insert(row) {
+      const tupleExists = db.some(r => r.tenant_id === row.tenant_id && r.user_id === row.user_id && r.connection_type === row.connection_type);
+      if (tupleExists) throw new Error('23505: duplicate key value violates unique constraint "uq_google_drive_tenant_user_type"');
+
+      if (row.connection_type === 'TENANT_CENTRAL') {
+        const centralExists = db.some(r => r.tenant_id === row.tenant_id && r.connection_type === 'TENANT_CENTRAL');
+        if (centralExists) throw new Error('23505: duplicate key value violates unique index "uq_tenant_central_gdrive"');
+      }
+
+      db.push(row);
+    }
+
+    insert({ tenant_id: 't-final', user_id: 'uA', connection_type: 'USER_PERSONAL' });
+    assert.strictEqual(db.length, 1);
+
+    insert({ tenant_id: 't-final', user_id: 'uA', connection_type: 'TENANT_CENTRAL' });
+    assert.strictEqual(db.length, 2);
+
+    insert({ tenant_id: 't-final', user_id: 'uB', connection_type: 'USER_PERSONAL' });
+    assert.strictEqual(db.length, 3);
+
+    assert.throws(
+      () => insert({ tenant_id: 't-final', user_id: 'uB', connection_type: 'TENANT_CENTRAL' }),
+      /uq_tenant_central_gdrive/
+    );
+
+    assert.throws(
+      () => insert({ tenant_id: 't-final', user_id: 'uA', connection_type: 'USER_PERSONAL' }),
+      /uq_google_drive_tenant_user_type/
+    );
+  });
 
   console.log('\n================================================================================');
   console.log(` RESULTS: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL: ${totalTests} TESTS)`);

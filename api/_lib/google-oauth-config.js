@@ -2434,7 +2434,7 @@ async function upsertGoogleDriveConnection({
       if (!connectionRecord.refresh_token) {
         try {
           const existingRes = await httpsRequest(
-            `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}&select=refresh_token,root_folder_id,root_folder_name,scope`,
+            `${supabaseUrl}/rest/v1/google_drive_connections?tenant_id=eq.${encodeURIComponent(tenantId)}&user_id=eq.${encodeURIComponent(userId)}&connection_type=eq.USER_PERSONAL&select=refresh_token,root_folder_id,root_folder_name,scope`,
             {
               method: 'GET',
               headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` }
@@ -2452,11 +2452,11 @@ async function upsertGoogleDriveConnection({
         } catch (_) {}
       }
 
-      // Upsert by tenant_id + user_id matching uq_google_drive_tenant_user
+      // Upsert by tenant_id + user_id + connection_type matching uq_google_drive_tenant_user_type
       let postRes;
       try {
         postRes = await httpsRequest(
-          `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,user_id`,
+          `${supabaseUrl}/rest/v1/google_drive_connections?on_conflict=tenant_id,user_id,connection_type`,
           {
             method: 'POST',
             headers: {
@@ -2563,7 +2563,7 @@ async function getGoogleDriveConnectionStatus({ tenantId, userId = null, connect
     try {
       const query = connectionType === 'TENANT_CENTRAL'
         ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
-        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
+        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}&connection_type=eq.USER_PERSONAL`;
 
       const res = await httpsRequest(
         `${supabaseUrl}/rest/v1/google_drive_connections?${query}&select=id,connection_type,google_email,root_folder_id,root_folder_name,last_verified_at,status,created_at,updated_at,refresh_token,scope`,
@@ -2653,7 +2653,7 @@ async function disconnectGoogleDriveConnection({ tenantId, userId = null, connec
     try {
       const query = connectionType === 'TENANT_CENTRAL'
         ? `tenant_id=eq.${tenantId}&connection_type=eq.TENANT_CENTRAL`
-        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}`;
+        : `tenant_id=eq.${tenantId}&user_id=eq.${userId}&connection_type=eq.USER_PERSONAL`;
 
       await httpsRequest(
         `${supabaseUrl}/rest/v1/google_drive_connections?${query}`,
