@@ -55,14 +55,25 @@ export function MeetingsPageClient({
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleModalError, setScheduleModalError] = useState<string | null>(null);
 
-  // Google Calendar Connection Status for Schedule Modal (Phase C124)
+  // Google Calendar Connection Status for Schedule Modal (Phase C124, C240A)
   const [calendarStatus, setCalendarStatus] = useState<{
     isLoading: boolean;
     connected: boolean;
     hasCalendarScope: boolean;
-    status: 'IDLE' | 'LOADING' | 'CONNECTED' | 'NOT_CONNECTED' | 'PERMISSION_REQUIRED' | 'FAILED' | 'PREVIEW_DISABLED';
-    googleEmail?: string;
-    errorMessage?: string;
+    status:
+      | 'IDLE'
+      | 'LOADING'
+      | 'CONNECTED'
+      | 'NOT_CONNECTED'
+      | 'PERMISSION_REQUIRED'
+      | 'CALENDAR_DISABLED'
+      | 'RECONNECT_REQUIRED'
+      | 'VERIFICATION_FAILED'
+      | 'FAILED'
+      | 'PREVIEW_DISABLED';
+    googleEmail?: string | null;
+    errorMessage?: string | null;
+    calendarReady?: boolean;
   }>({
     isLoading: false,
     connected: false,
@@ -85,8 +96,9 @@ export function MeetingsPageClient({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isScheduleModalOpen]);
 
-  // Restore meeting form draft after OAuth redirect and check URL triggers (Phase C124)
+  // Restore meeting form draft after OAuth redirect and check URL triggers (Phase C124, C240A)
   useEffect(() => {
+    let hadSavedDraft = false;
     try {
       const savedDraft = sessionStorage.getItem('clasptek_meeting_form_draft');
       if (savedDraft) {
@@ -96,21 +108,89 @@ export function MeetingsPageClient({
             ...prev,
             ...parsed,
           }));
+          hadSavedDraft = true;
         }
         sessionStorage.removeItem('clasptek_meeting_form_draft');
         setIsScheduleModalOpen(true);
       }
     } catch (_) {}
 
-    // Check if query param indicates schedule modal or google connect return
+    // Process return from Google OAuth callback
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'schedule' || params.get('schedule') === 'true') {
+      const isScheduleTab = params.get('tab') === 'schedule' || params.get('schedule') === 'true';
+      if (isScheduleTab && !hadSavedDraft) {
         setIsScheduleModalOpen(true);
       }
-      if (params.get('google_drive') === 'connected') {
-        setFeedbackMsg({ type: 'success', text: 'Google account connected successfully.' });
-        setTimeout(() => setFeedbackMsg(null), 4000);
+
+      const googleConnect = params.get('google_connect');
+      const googleDrive = params.get('google_drive');
+      const calScope = params.get('calendar_scope');
+      const reason = params.get('reason');
+
+      let hasHandledStatus = false;
+
+      if (googleConnect === 'connected' || googleDrive === 'connected') {
+        hasHandledStatus = true;
+        if (calScope === 'missing') {
+          setFeedbackMsg({
+            type: 'info',
+            text: 'Google account connected, but Calendar permission was not granted. Please grant Calendar access.',
+          });
+        } else {
+          setFeedbackMsg({
+            type: 'success',
+            text: 'Google account and Calendar connected successfully.',
+          });
+        }
+        setTimeout(() => setFeedbackMsg(null), 5000);
+        fetchCalendarStatus();
+      } else if (googleConnect === 'denied' || googleDrive === 'access_denied') {
+        hasHandledStatus = true;
+        setFeedbackMsg({ type: 'error', text: 'Google authorization was cancelled or denied.' });
+        if (isScheduleTab || hadSavedDraft) {
+          setScheduleModalError('Google connection was cancelled or denied.');
+        }
+        setTimeout(() => setFeedbackMsg(null), 5000);
+      } else if (googleConnect === 'invalid_state' || googleDrive === 'invalid_state') {
+        hasHandledStatus = true;
+        setFeedbackMsg({
+          type: 'error',
+          text: 'Google authorization could not be verified (session expired or invalid state). Please try again.',
+        });
+        if (isScheduleTab || hadSavedDraft) {
+          setScheduleModalError('Authorization state was invalid or expired. Please retry connecting.');
+        }
+        setTimeout(() => setFeedbackMsg(null), 5000);
+      } else if (googleConnect === 'error' || googleDrive === 'error') {
+        hasHandledStatus = true;
+        let errText = 'Failed to connect Google account. Please try again.';
+        if (reason === 'token_exchange_failed') {
+          errText = 'Failed to exchange authorization code with Google. Please try again.';
+        } else if (reason === 'userinfo_failed') {
+          errText = 'Connected to Google, but failed to retrieve account details.';
+        } else if (reason === 'persistence_failed') {
+          errText = 'Google connection could not be saved. Please reconnect.';
+        }
+        setFeedbackMsg({ type: 'error', text: errText });
+        if (isScheduleTab || hadSavedDraft) {
+          setScheduleModalError(errText);
+        }
+        setTimeout(() => setFeedbackMsg(null), 5000);
+      }
+
+      // Safe parameter sanitization: remove transient callback parameters from browser history
+      // to prevent duplicate notifications on subsequent page refreshes
+      if (hasHandledStatus) {
+        const cleanParams = new URLSearchParams(window.location.search);
+        cleanParams.delete('google_connect');
+        cleanParams.delete('google_drive');
+        cleanParams.delete('type');
+        cleanParams.delete('calendar_scope');
+        cleanParams.delete('reason');
+        const remainingQuery = cleanParams.toString();
+        const cleanUrl = `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', cleanUrl);
       }
     }
   }, []);
@@ -349,6 +429,8 @@ export function MeetingsPageClient({
           hasCalendarScope: Boolean(data.hasCalendarScope),
           status: data.status || (data.connected ? 'CONNECTED' : 'NOT_CONNECTED'),
           googleEmail: data.googleEmail,
+          errorMessage: data.message || data.error,
+          calendarReady: Boolean(data.calendarReady),
         });
       } else if (res.status === 401) {
         setCalendarStatus({
@@ -1711,18 +1793,24 @@ export function MeetingsPageClient({
                       </span>
                     </div>
 
-                    {/* Google Calendar Connection Status Card (Phase C124) */}
+                    {/* Google Calendar Connection Status Card (Phase C124, C240A) */}
                     <div
                       id="googleCalendarStatusCard"
                       style={{
                         padding: '12px 14px',
                         borderRadius: 8,
-                        border: calendarStatus.connected && calendarStatus.hasCalendarScope
-                          ? '1px solid #BBF7D0'
-                          : '1px solid #FED7AA',
-                        background: calendarStatus.connected && calendarStatus.hasCalendarScope
-                          ? '#F0FDF4'
-                          : '#FFFBEB',
+                        border:
+                          calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope
+                            ? '1px solid #BBF7D0'
+                            : calendarStatus.status === 'RECONNECT_REQUIRED'
+                            ? '1px solid #FECACA'
+                            : '1px solid #FED7AA',
+                        background:
+                          calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope
+                            ? '#F0FDF4'
+                            : calendarStatus.status === 'RECONNECT_REQUIRED'
+                            ? '#FEF2F2'
+                            : '#FFFBEB',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 8,
@@ -1731,41 +1819,79 @@ export function MeetingsPageClient({
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 14 }}>
-                            {calendarStatus.connected && calendarStatus.hasCalendarScope ? '📅' : '⚠️'}
+                            {calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? '📅' : '⚠️'}
                           </span>
-                          <span style={{ fontWeight: 600, fontSize: 12.5, color: calendarStatus.connected && calendarStatus.hasCalendarScope ? '#166534' : '#9A3412' }}>
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              fontSize: 12.5,
+                              color:
+                                calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope
+                                  ? '#166534'
+                                  : calendarStatus.status === 'RECONNECT_REQUIRED'
+                                  ? '#991B1B'
+                                  : '#9A3412',
+                            }}
+                          >
                             {calendarStatus.isLoading
                               ? 'Checking Google Calendar Connection...'
-                              : calendarStatus.connected && calendarStatus.hasCalendarScope
+                              : calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope
                               ? `Google Calendar Connected (${calendarStatus.googleEmail || 'Organization Account'})`
+                              : calendarStatus.status === 'CALENDAR_DISABLED'
+                              ? 'Calendar Integration Disabled'
                               : calendarStatus.status === 'PERMISSION_REQUIRED'
                               ? 'Calendar Permission Required'
+                              : calendarStatus.status === 'RECONNECT_REQUIRED'
+                              ? 'Reconnection Required'
+                              : calendarStatus.status === 'VERIFICATION_FAILED'
+                              ? 'Calendar Verification Failed'
                               : 'Google Calendar Not Connected'}
                           </span>
                         </div>
-                        {(!calendarStatus.connected || !calendarStatus.hasCalendarScope) && (
-                          <button
-                            type="button"
-                            className="cp-btn primary sm"
-                            id="btnConnectCalendar"
-                            onClick={handleConnectCalendar}
-                            disabled={isConnectingCalendar || calendarStatus.isLoading}
-                            style={{ fontSize: 11.5, padding: '4px 10px', height: 'auto' }}
-                          >
-                            {isConnectingCalendar
-                              ? 'Connecting...'
-                              : calendarStatus.status === 'PERMISSION_REQUIRED'
-                              ? 'Grant Calendar Permission'
-                              : 'Connect Google Calendar'}
-                          </button>
+                        {calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? null : (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {calendarStatus.status === 'VERIFICATION_FAILED' && (
+                              <button
+                                type="button"
+                                className="cp-btn secondary sm"
+                                onClick={fetchCalendarStatus}
+                                disabled={calendarStatus.isLoading}
+                                style={{ fontSize: 11.5, padding: '4px 10px', height: 'auto' }}
+                              >
+                                Retry Check
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="cp-btn primary sm"
+                              id="btnConnectCalendar"
+                              onClick={handleConnectCalendar}
+                              disabled={isConnectingCalendar || calendarStatus.isLoading}
+                              style={{ fontSize: 11.5, padding: '4px 10px', height: 'auto' }}
+                            >
+                              {isConnectingCalendar
+                                ? 'Connecting...'
+                                : calendarStatus.status === 'PERMISSION_REQUIRED'
+                                ? 'Grant Calendar Permission'
+                                : calendarStatus.status === 'RECONNECT_REQUIRED'
+                                ? 'Reconnect Google Calendar'
+                                : 'Connect Google Calendar'}
+                            </button>
+                          </div>
                         )}
                       </div>
 
                       <div style={{ fontSize: 11.5, color: '#4B5563', lineHeight: 1.4 }}>
-                        {calendarStatus.connected && calendarStatus.hasCalendarScope ? (
+                        {calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? (
                           'Your organization is authorized. New Google Meet conferences will be scheduled automatically via Google Calendar.'
+                        ) : calendarStatus.status === 'CALENDAR_DISABLED' ? (
+                          'Google account is connected, but automated Calendar scheduling is disabled for this deployment.'
                         ) : calendarStatus.status === 'PERMISSION_REQUIRED' ? (
                           'The connected Google account has Drive permissions but has not granted Google Calendar permission. Please re-authorize to grant Calendar access.'
+                        ) : calendarStatus.status === 'RECONNECT_REQUIRED' ? (
+                          'Google Calendar authorization has expired or credentials were revoked. Please reconnect.'
+                        ) : calendarStatus.status === 'VERIFICATION_FAILED' ? (
+                          calendarStatus.errorMessage || 'Connected to Google, but Google Calendar API verification check failed. Please retry.'
                         ) : (
                           'Google Calendar must be connected for this organization before automatic Google Meet conference scheduling. Connect above, or enter an existing Google Meet link below.'
                         )}

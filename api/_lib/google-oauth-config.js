@@ -992,6 +992,87 @@ async function authenticateCaller(req) {
 }
 
 /**
+ * Server-side Return URL Validation & Sanitization (Open-Redirect Prevention)
+ * Only approved same-origin application paths (e.g. /meetings, /dashboard) are permitted.
+ * External protocols, protocol-relative prefixes, and malformed characters are strictly rejected.
+ */
+function validateReturnUrl(rawTarget, defaultTarget = '/meetings') {
+  if (!rawTarget || typeof rawTarget !== 'string') {
+    return defaultTarget;
+  }
+
+  const trimmed = rawTarget.trim();
+
+  // Reject protocol-relative prefixes (//, /\, \\, \/)
+  if (/^[/|\\]{2,}/.test(trimmed)) {
+    return defaultTarget;
+  }
+
+  // Reject external protocols (http:, https:, javascript:, data:, etc.)
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return defaultTarget;
+  }
+
+  // Reject control characters or newlines
+  if (/[\r\n\t\x00-\x1F\x7F]/.test(trimmed)) {
+    return defaultTarget;
+  }
+
+  // Legacy root hash normalization: /#meetings -> /meetings
+  if (trimmed === '/#meetings' || trimmed === '#meetings' || trimmed === '/' || trimmed === '/#') {
+    return '/meetings';
+  }
+
+  // Must begin with a single slash
+  if (!trimmed.startsWith('/')) {
+    return defaultTarget;
+  }
+
+  try {
+    const parsed = new URL(trimmed, 'https://app.clasptek.org');
+    if (parsed.origin !== 'https://app.clasptek.org') {
+      return defaultTarget;
+    }
+
+    // Normalization of legacy /?something#meetings
+    if (parsed.pathname === '/' && parsed.hash === '#meetings') {
+      parsed.pathname = '/meetings';
+      parsed.hash = '';
+    }
+
+    const allowedPrefixes = ['/meetings', '/dashboard'];
+    const isAllowed = allowedPrefixes.some(
+      (prefix) => parsed.pathname === prefix || parsed.pathname.startsWith(prefix + '/')
+    );
+
+    if (!isAllowed) {
+      return defaultTarget;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch (_) {
+    return defaultTarget;
+  }
+}
+
+/**
+ * Appends query parameters to a validated return URL preserving any existing search params or hash.
+ */
+function appendQueryParams(baseUrl, paramsObj = {}) {
+  try {
+    const url = new URL(baseUrl, 'https://app.clasptek.org');
+    for (const [key, value] of Object.entries(paramsObj)) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
+      }
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch (_) {
+    return '/meetings';
+  }
+}
+
+/**
  * Generate and Save OAuth State (Anti-Replay / CSRF Protection)
  * Default TTL: 10 minutes (600 seconds)
  * Supports connectionType: 'TENANT_CENTRAL' or 'USER_PERSONAL'
@@ -999,19 +1080,20 @@ async function authenticateCaller(req) {
 async function createOAuthState({
   tenantId,
   userId,
-  redirectTarget = '/#meetings',
+  redirectTarget = '/meetings',
   connectionType = 'USER_PERSONAL',
   ttlSeconds = 600
 }) {
   const state = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const safeRedirectTarget = validateReturnUrl(redirectTarget, '/meetings');
 
   const record = {
     state,
     tenant_id: tenantId,
     user_id: userId,
     provider: 'google',
-    redirect_target: redirectTarget,
+    redirect_target: safeRedirectTarget,
     connection_type: connectionType,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
@@ -1132,7 +1214,9 @@ async function exchangeAuthorizationCode({ code, redirectUri }) {
           refresh_token: 'mock_google_refresh_token_' + crypto.randomBytes(8).toString('hex'),
           expires_in: 3600,
           token_type: 'Bearer',
-          scope: config.scopes
+          scope: code && code.includes('no_cal')
+            ? config.scopes
+            : `${config.scopes} https://www.googleapis.com/auth/calendar.events`
         }
       };
     }
@@ -1952,6 +2036,11 @@ async function uploadFileToGoogleDrive({
   };
 }
 
+let _testPersistFailure = false;
+function setTestPersistFailure(val) {
+  _testPersistFailure = Boolean(val);
+}
+
 /**
  * Securely Persist or Update Google Drive Connection in Supabase
  * Distinguishes TENANT_CENTRAL from USER_PERSONAL
@@ -1970,6 +2059,9 @@ async function upsertGoogleDriveConnection({
   expiresIn,
   tokens
 }) {
+  if (_testPersistFailure) {
+    throw new Error('Database disk full / connection timeout (test simulated failure)');
+  }
   const now = new Date();
   const effectiveAccessToken = accessToken || (tokens && (tokens.access_token || tokens.accessToken));
   const effectiveRefreshToken = refreshToken || (tokens && (tokens.refresh_token || tokens.refreshToken));
@@ -2287,6 +2379,7 @@ module.exports = {
   setTestUploadTimeoutAfterCreate,
   setTestDriveSearchPages,
   setTestDriveSearchFailure,
+  setTestPersistFailure,
   findExistingDriveFile,
   resolveDriveMetadataField,
   isCandidateDriveFileValid,
@@ -2299,6 +2392,8 @@ module.exports = {
   resetStagingCreatedFolders,
   _stagingCreatedFolders,
   extractSupabaseTokenFromCookies,
+  validateReturnUrl,
+  appendQueryParams,
   PRODUCTION_PROJECT_REF,
   STAGING_PROJECT_REF,
   validateSupabaseUrlGuard,

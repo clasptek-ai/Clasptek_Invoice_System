@@ -26,7 +26,9 @@ const {
   fetchGoogleUserInfo,
   resolveAuthoritativeRootFolder,
   upsertGoogleDriveConnection,
-  getTenantCentralDriveConnection
+  getTenantCentralDriveConnection,
+  validateReturnUrl,
+  appendQueryParams
 } = require('../../_lib/google-oauth-config');
 
 module.exports = async function handler(req, res) {
@@ -67,18 +69,31 @@ module.exports = async function handler(req, res) {
 </html>`);
   };
 
+  let returnUrl = '/meetings';
+
   try {
     // 2. Handle Google-returned errors (e.g. user denied permission)
     if (error) {
-      if (error === 'access_denied') {
-        return safeRedirect('/?google_drive=access_denied#meetings', 'Google Drive connection was cancelled.');
+      if (state) {
+        try {
+          const stateCheck = await validateAndConsumeOAuthState(state);
+          if (stateCheck && stateCheck.stateRecord) {
+            returnUrl = validateReturnUrl(stateCheck.stateRecord.redirect_target, '/meetings');
+          }
+        } catch (_) {}
       }
-      return safeRedirect('/?google_drive=error&reason=denied#meetings', 'Google authorization was cancelled or denied.');
+      const isDenied = error === 'access_denied';
+      const destination = appendQueryParams(returnUrl, {
+        google_connect: isDenied ? 'denied' : 'error',
+        google_drive: isDenied ? 'access_denied' : 'error',
+        reason: isDenied ? 'access_denied' : 'denied'
+      });
+      return safeRedirect(destination, isDenied ? 'Google connection was cancelled.' : 'Google authorization was cancelled or denied.');
     }
 
     // 3. Reject missing code or state parameters
     if (!code || !state) {
-      return safeRedirect('/?google_drive=invalid_state#meetings', 'Google authorization could not be verified. Missing required OAuth parameters.');
+      return safeRedirect('/meetings?google_connect=invalid_state&google_drive=invalid_state', 'Google authorization could not be verified. Missing required OAuth parameters.');
     }
 
     // 4. Validate and atomically consume OAuth state
@@ -86,13 +101,14 @@ module.exports = async function handler(req, res) {
     const stateCheck = await validateAndConsumeOAuthState(state);
     if (!stateCheck.valid) {
       // Rejects invalid, expired, or replayed state
-      return safeRedirect('/?google_drive=invalid_state#meetings', 'Google authorization could not be verified. State token is invalid, expired, or has already been used.');
+      return safeRedirect('/meetings?google_connect=invalid_state&google_drive=invalid_state', 'Google authorization could not be verified. State token is invalid, expired, or has already been used.');
     }
 
     const { stateRecord } = stateCheck;
     const tenantId = stateRecord.tenant_id;
     const userId = stateRecord.user_id;
     const connectionType = stateRecord.connection_type || 'USER_PERSONAL';
+    returnUrl = validateReturnUrl(stateRecord.redirect_target, '/meetings');
 
     // 5. Resolve canonical redirect URI (must match exact URI sent in start request)
     const config = resolveGoogleOAuthConfig(req);
@@ -105,7 +121,12 @@ module.exports = async function handler(req, res) {
         redirectUri: config.redirectUri
       });
     } catch (tokenErr) {
-      return safeRedirect('/?google_drive=error&reason=token_exchange_failed#meetings', 'Failed to exchange authorization code with Google. Please try again.');
+      const destination = appendQueryParams(returnUrl, {
+        google_connect: 'error',
+        google_drive: 'error',
+        reason: 'token_exchange_failed'
+      });
+      return safeRedirect(destination, 'Failed to exchange authorization code with Google. Please try again.');
     }
 
     const tokens = tokenResult.tokens;
@@ -119,7 +140,12 @@ module.exports = async function handler(req, res) {
     try {
       userInfo = await fetchGoogleUserInfo(accessToken);
     } catch (userErr) {
-      return safeRedirect('/?google_drive=error&reason=userinfo_failed#meetings', 'Connected to Google Drive, but failed to retrieve account email.');
+      const destination = appendQueryParams(returnUrl, {
+        google_connect: 'error',
+        google_drive: 'error',
+        reason: 'userinfo_failed'
+      });
+      return safeRedirect(destination, 'Connected to Google Drive, but failed to retrieve account email.');
     }
 
     const googleEmail = userInfo.email || 'unknown@gmail.com';
@@ -159,26 +185,55 @@ module.exports = async function handler(req, res) {
     }
 
     // 9. Upsert connection into public.google_drive_connections associated with tenant_id & connection_type
-    await upsertGoogleDriveConnection({
-      tenantId,
-      userId,
-      connectionType,
-      googleUserId,
-      googleEmail,
-      accessToken,
-      refreshToken: effectiveRefreshToken,
-      rootFolderId: rootFolderId || (existingConnection && existingConnection.root_folder_id),
-      rootFolderName: rootFolderName || (existingConnection && existingConnection.root_folder_name),
-      scope: grantedScope,
-      expiresIn
+    try {
+      await upsertGoogleDriveConnection({
+        tenantId,
+        userId,
+        connectionType,
+        googleUserId,
+        googleEmail,
+        accessToken,
+        refreshToken: effectiveRefreshToken,
+        rootFolderId: rootFolderId || (existingConnection && existingConnection.root_folder_id),
+        rootFolderName: rootFolderName || (existingConnection && existingConnection.root_folder_name),
+        scope: grantedScope,
+        expiresIn
+      });
+    } catch (persistErr) {
+      console.error('[OAuth Callback] Connection persistence failure:', persistErr.message);
+      const destination = appendQueryParams(returnUrl, {
+        google_connect: 'error',
+        google_drive: 'error',
+        reason: 'persistence_failed'
+      });
+      return safeRedirect(destination, 'Google authorization succeeded, but failed to save connection.');
+    }
+
+    // 10. On success, determine granted Calendar scope and redirect to Meetings view preserving context
+    const grantedScopesStr = String(grantedScope || '');
+    const hasCalScope =
+      grantedScopesStr.includes('calendar.events') ||
+      grantedScopesStr.includes('calendar');
+
+    const destination = appendQueryParams(returnUrl, {
+      google_connect: 'connected',
+      google_drive: 'connected',
+      type: connectionType === 'TENANT_CENTRAL' ? 'central' : 'personal',
+      calendar_scope: hasCalScope ? 'granted' : 'missing'
     });
 
-    // 10. On success, redirect to appropriate portal view
-    if (connectionType === 'TENANT_CENTRAL') {
-      return safeRedirect('/?google_drive=connected&type=central#meetings', 'Central Google Drive repository connected successfully!');
-    }
-    return safeRedirect('/?google_drive=connected#meetings', 'Personal Google Drive connected successfully!');
+    return safeRedirect(
+      destination,
+      connectionType === 'TENANT_CENTRAL'
+        ? 'Central Google organization account connected successfully!'
+        : 'Personal Google Drive connected successfully!'
+    );
   } catch (err) {
-    return safeRedirect('/?google_drive=error&reason=internal_error#meetings', 'An unexpected error occurred while connecting Google Drive.');
+    const destination = appendQueryParams(returnUrl || '/meetings', {
+      google_connect: 'error',
+      google_drive: 'error',
+      reason: 'internal_error'
+    });
+    return safeRedirect(destination, 'An unexpected error occurred while connecting Google.');
   }
 };

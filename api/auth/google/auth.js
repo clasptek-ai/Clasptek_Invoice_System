@@ -27,7 +27,8 @@ const {
   resolveAuthoritativeRootFolder,
   verifyGoogleDriveFolder,
   updateCentralRootFolder,
-  assertOAuthInitiationAllowed
+  assertOAuthInitiationAllowed,
+  validateReturnUrl
 } = require('../../_lib/google-oauth-config');
 
 /**
@@ -64,7 +65,8 @@ async function handleStart(req, res, reqUrl, body) {
     }));
   }
 
-  const redirectTarget = body.redirectTarget || reqUrl.searchParams.get('redirect_target') || '/#meetings';
+  const rawRedirect = body.redirectTarget || body.redirect_target || reqUrl.searchParams.get('redirect_target') || reqUrl.searchParams.get('redirectTarget') || '/meetings';
+  const redirectTarget = validateReturnUrl(rawRedirect, '/meetings');
 
   const rawConnectionType = (
     body.connection_type ||

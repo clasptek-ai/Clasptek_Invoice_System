@@ -304,7 +304,8 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(res.headers.location, '/?google_drive=access_denied#meetings');
+    assert(res.headers.location.startsWith('/meetings?'), 'Callback denial must redirect to /meetings');
+    assert(res.headers.location.includes('google_connect=denied') || res.headers.location.includes('google_drive=access_denied'));
   });
 
   await runAsyncTest('4.2: Callback rejects missing state or code parameters', async () => {
@@ -313,7 +314,8 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
+    assert(res.headers.location.startsWith('/meetings?'));
+    assert(res.headers.location.includes('google_connect=invalid_state') || res.headers.location.includes('google_drive=invalid_state'));
   });
 
   await runAsyncTest('4.3: Callback rejects untracked/tampered state token', async () => {
@@ -322,7 +324,8 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
+    assert(res.headers.location.startsWith('/meetings?'));
+    assert(res.headers.location.includes('google_connect=invalid_state') || res.headers.location.includes('google_drive=invalid_state'));
   });
 
   await runAsyncTest('4.4: Callback rejects expired state token', async () => {
@@ -338,10 +341,11 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
+    assert(res.headers.location.startsWith('/meetings?'));
+    assert(res.headers.location.includes('google_connect=invalid_state') || res.headers.location.includes('google_drive=invalid_state'));
   });
 
-  await runAsyncTest('4.5: Successful callback exchange redirects to /?google_drive=connected#meetings', async () => {
+  await runAsyncTest('4.5: Successful callback exchange redirects to /meetings preserving context', async () => {
     // Use the valid state generated in 3.2
     assert(generatedState, 'Generated state must exist');
 
@@ -350,7 +354,8 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(res.headers.location, '/?google_drive=connected#meetings');
+    assert(res.headers.location.startsWith('/meetings?'), 'Callback must redirect to /meetings');
+    assert(res.headers.location.includes('google_connect=connected') && res.headers.location.includes('google_drive=connected'));
   });
 
   await runAsyncTest('4.6: Anti-Replay: Repeating the exact same callback request fails', async () => {
@@ -360,9 +365,9 @@ async function runAllOAuthTests() {
     await callbackHandler(req, res);
 
     assert.strictEqual(res.statusCode, 302);
-    assert.strictEqual(
-      res.headers.location,
-      '/?google_drive=invalid_state#meetings',
+    assert(res.headers.location.startsWith('/meetings?'), 'Replayed callback must redirect to /meetings');
+    assert(
+      res.headers.location.includes('google_connect=invalid_state') || res.headers.location.includes('google_drive=invalid_state'),
       'Replayed callback must be rejected with invalid_state'
     );
   });
@@ -450,7 +455,7 @@ async function runAllOAuthTests() {
         http.get(`http://127.0.0.1:${boundPort}/api/auth/google/callback?error=access_denied`, res => {
           try {
             assert.strictEqual(res.statusCode, 302);
-            assert.strictEqual(res.headers.location, '/?google_drive=access_denied#meetings');
+            assert.strictEqual(res.headers.location, '/meetings?google_connect=denied&google_drive=access_denied&reason=access_denied');
             res.on('data', () => {});
             res.on('end', resolve);
           } catch (e) { reject(e); }
@@ -463,7 +468,7 @@ async function runAllOAuthTests() {
         http.get(`http://127.0.0.1:${boundPort}/api/auth/google/callback?code=bad&state=bad`, res => {
           try {
             assert.strictEqual(res.statusCode, 302);
-            assert.strictEqual(res.headers.location, '/?google_drive=invalid_state#meetings');
+            assert.strictEqual(res.headers.location, '/meetings?google_connect=invalid_state&google_drive=invalid_state');
             res.on('data', () => {});
             res.on('end', resolve);
           } catch (e) { reject(e); }
