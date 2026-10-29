@@ -42,7 +42,7 @@ export default async function MeetingsPage({ searchParams }: PageProps) {
 
   const [meetingsRes, driveStatus, cohortsRes, personnelRes, progRes] = await Promise.all([
     getMeetings({ subTab, search: searchQuery }),
-    getGoogleDriveStatus(),
+    getGoogleDriveStatus(session.tenantId),
     getTrainingCohorts(),
     supabase.from('personnel').select('id, name, first_name, last_name, role'),
     supabase.from('programmes').select('id, name'),

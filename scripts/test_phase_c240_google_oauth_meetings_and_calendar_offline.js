@@ -1581,6 +1581,211 @@ async function runAllC240ATests() {
     );
   });
 
+  // --- REQUIREMENT: Phase C240AK Drive Status Remediation & Invariants ---
+  console.log('\n--- SUITE 8: Google Drive Central Status Remediation & Invariants (C240AK) ---');
+
+  const googleDriveModule = loadTs('lib/meetings/google-drive.ts');
+  const driveStatusRoute = loadTs('app/api/meetings/drive-status/route.ts');
+
+  await runAsyncTest('8.1: Connected central row is reflected consistently in getGoogleDriveStatus and reports CONNECTED', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    try {
+      oauthConfig.getGoogleDriveConnectionStatus = async ({ tenantId, connectionType }) => {
+        if (tenantId === 'tenant-c240ak' && connectionType === 'TENANT_CENTRAL') {
+          return {
+            connected: true,
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central-org@clasptek.org',
+            rootFolderId: 'folder-c240ak-123',
+            rootFolderName: 'Clasptek Meeting Recordings',
+            lastVerifiedAt: '2026-10-29T18:00:00.000Z',
+            status: 'CONNECTED',
+          };
+        }
+        return { connected: false, status: 'NOT_CONNECTED' };
+      };
+
+      const status = await googleDriveModule.getGoogleDriveStatus('tenant-c240ak');
+      assert.strictEqual(status.connected, true);
+      assert.strictEqual(status.status, 'CONNECTED');
+      assert.strictEqual(status.email, 'central-org@clasptek.org');
+      assert.strictEqual(status.rootFolderId, 'folder-c240ak-123');
+      assert.strictEqual(status.rootFolderName, 'Clasptek Meeting Recordings');
+      assert.strictEqual(status.lastVerified, '2026-10-29T18:00:00.000Z');
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+    }
+  });
+
+  await runAsyncTest('8.2: Status route returns CONNECTED when tenant has central connection in database', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    const oldSession = authMockSession;
+    try {
+      authMockSession = { user: { id: 'usr-admin' }, role: 'Super Admin', tenantId: 'tenant-c240ak' };
+      oauthConfig.getGoogleDriveConnectionStatus = async ({ tenantId, connectionType }) => {
+        if (tenantId === 'tenant-c240ak' && connectionType === 'TENANT_CENTRAL') {
+          return {
+            connected: true,
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'central-org@clasptek.org',
+            rootFolderId: 'folder-c240ak-123',
+            rootFolderName: 'Clasptek Meeting Recordings',
+            lastVerifiedAt: '2026-10-29T18:00:00.000Z',
+            status: 'CONNECTED',
+          };
+        }
+        return { connected: false, status: 'NOT_CONNECTED' };
+      };
+
+      const res = await driveStatusRoute.GET({});
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.connected, true);
+      assert.strictEqual(res.body.status, 'CONNECTED');
+      assert.strictEqual(res.body.email, 'central-org@clasptek.org');
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+      authMockSession = oldSession;
+    }
+  });
+
+  await runAsyncTest('8.3: Missing central row does not become connected because environment variables are present', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    const oldClientId = process.env.GOOGLE_CLIENT_ID;
+    const oldClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const oldFolder = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    try {
+      process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+      process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
+      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder-env-test';
+
+      oauthConfig.getGoogleDriveConnectionStatus = async () => ({
+        connected: false,
+        status: 'NOT_CONNECTED',
+      });
+
+      const status = await googleDriveModule.getGoogleDriveStatus('tenant-c240ak-empty');
+      assert.strictEqual(status.connected, false);
+      assert.strictEqual(status.status, 'CONFIGURED_UNVERIFIED');
+      assert.strictEqual(status.email, undefined);
+      assert.strictEqual(status.lastVerified, undefined);
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+      process.env.GOOGLE_CLIENT_ID = oldClientId;
+      process.env.GOOGLE_CLIENT_SECRET = oldClientSecret;
+      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = oldFolder;
+    }
+  });
+
+  await runAsyncTest('8.4: Personal connection cannot satisfy central repository status', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    try {
+      let queriedType = null;
+      oauthConfig.getGoogleDriveConnectionStatus = async ({ tenantId, connectionType }) => {
+        queriedType = connectionType;
+        if (connectionType === 'USER_PERSONAL') {
+          return { connected: true, status: 'CONNECTED', googleEmail: 'personal@gmail.com' };
+        }
+        return { connected: false, status: 'NOT_CONNECTED' };
+      };
+
+      const status = await googleDriveModule.getGoogleDriveStatus('tenant-c240ak-personal-only');
+      assert.strictEqual(queriedType, 'TENANT_CENTRAL');
+      assert.strictEqual(status.connected, false);
+      assert.notStrictEqual(status.email, 'personal@gmail.com');
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+    }
+  });
+
+  await runAsyncTest('8.5: Tenant isolation is preserved across central status lookups', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    try {
+      oauthConfig.getGoogleDriveConnectionStatus = async ({ tenantId, connectionType }) => {
+        if (tenantId === 'tenant-alpha' && connectionType === 'TENANT_CENTRAL') {
+          return { connected: true, status: 'CONNECTED', googleEmail: 'alpha@clasptek.org' };
+        }
+        return { connected: false, status: 'NOT_CONNECTED' };
+      };
+
+      const statusAlpha = await googleDriveModule.getGoogleDriveStatus('tenant-alpha');
+      assert.strictEqual(statusAlpha.connected, true);
+      assert.strictEqual(statusAlpha.email, 'alpha@clasptek.org');
+
+      const statusBeta = await googleDriveModule.getGoogleDriveStatus('tenant-beta');
+      assert.strictEqual(statusBeta.connected, false);
+      assert.notStrictEqual(statusBeta.email, 'alpha@clasptek.org');
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+    }
+  });
+
+  await runAsyncTest('8.6: Configuration-only status remains distinct from persisted connection status', async () => {
+    const oldClientId = process.env.GOOGLE_CLIENT_ID;
+    const oldClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const oldFolder = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    try {
+      delete process.env.GOOGLE_CLIENT_ID;
+      delete process.env.GOOGLE_CLIENT_SECRET;
+      delete process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+      delete process.env.GOOGLE_DRIVE_MEETINGS_FOLDER_ID;
+
+      const unconfigured = await googleDriveModule.getGoogleDriveStatus(null);
+      assert.strictEqual(unconfigured.connected, false);
+      assert.strictEqual(unconfigured.status, 'DISCONNECTED');
+
+      process.env.GOOGLE_CLIENT_ID = 'test-id';
+      process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
+      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = 'folder-configured';
+
+      const configuredUnverified = await googleDriveModule.getGoogleDriveStatus(null);
+      assert.strictEqual(configuredUnverified.connected, false);
+      assert.strictEqual(configuredUnverified.status, 'CONFIGURED_UNVERIFIED');
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = oldClientId;
+      process.env.GOOGLE_CLIENT_SECRET = oldClientSecret;
+      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID = oldFolder;
+    }
+  });
+
+  await runAsyncTest('8.7: Connected does not automatically mean independently verified', async () => {
+    const origGet = oauthConfig.getGoogleDriveConnectionStatus;
+    try {
+      oauthConfig.getGoogleDriveConnectionStatus = async ({ tenantId, connectionType }) => {
+        if (tenantId === 'tenant-unverified-connected' && connectionType === 'TENANT_CENTRAL') {
+          return {
+            connected: true,
+            connectionType: 'TENANT_CENTRAL',
+            googleEmail: 'unverified-connected@clasptek.org',
+            rootFolderId: 'folder-123',
+            rootFolderName: 'Clasptek Meeting Recordings',
+            lastVerifiedAt: null,
+            status: 'CONNECTED',
+          };
+        }
+        return { connected: false, status: 'NOT_CONNECTED' };
+      };
+
+      const status = await googleDriveModule.getGoogleDriveStatus('tenant-unverified-connected');
+      assert.strictEqual(status.connected, true);
+      assert.strictEqual(status.status, 'CONNECTED');
+      assert.strictEqual(status.lastVerified, undefined);
+    } finally {
+      oauthConfig.getGoogleDriveConnectionStatus = origGet;
+    }
+  });
+
+  await runAsyncTest('8.8: MeetingsPageClient displays Unverified when lastVerified is null instead of claiming verified', () => {
+    const clientContent = fs.readFileSync(path.join(repoRoot, 'app/meetings/MeetingsPageClient.tsx'), 'utf8');
+    assert.ok(
+      !clientContent.includes("'Verified on Connect'"),
+      'MeetingsPageClient must NOT claim "Verified on Connect" when lastVerified is null/unverified'
+    );
+    assert.ok(
+      clientContent.includes("'Unverified'"),
+      'MeetingsPageClient must render "Unverified" when lastVerified is falsy'
+    );
+  });
+
   console.log('\n================================================================================');
   console.log(` RESULTS: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL: ${totalTests} TESTS)`);
   console.log('================================================================================\n');

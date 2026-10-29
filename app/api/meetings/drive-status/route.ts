@@ -10,7 +10,7 @@ import { requireAuth } from '@/lib/auth/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const { errorResponse } = await requireAuth(request, {
+    const { session, errorResponse } = await requireAuth(request, {
       allowedRoles: ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff', 'Facilitator'],
     });
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return errorResponse;
     }
 
-    const status = await getGoogleDriveStatus();
+    const status = await getGoogleDriveStatus(session.tenantId);
     return NextResponse.json(status);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal Server Error';

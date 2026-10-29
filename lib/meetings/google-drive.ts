@@ -89,29 +89,75 @@ export function generateRecordingFileName(params: {
 }
 
 /**
- * Environment-only configuration status.
+ * Resolves Google Drive Central Repository status for a tenant.
  *
- * This function reads environment variables only. It does NOT contact Google and does NOT consult
- * the stored OAuth connection, so it can never prove that Drive authorization is valid. It therefore
- * never reports `connected: true`; a complete configuration is reported as CONFIGURED_UNVERIFIED.
- * No account e-mail or verification timestamp is fabricated.
+ * Prioritizes the persisted central connection in public.google_drive_connections
+ * (scoped strictly to connection_type=TENANT_CENTRAL and the authenticated tenant).
+ *
+ * - When a persisted central connection is CONNECTED, reports connected: true, the
+ *   authenticated account email, folder details, and genuine lastVerified timestamp.
+ * - When no connected row exists in database, falls back to inspecting environment
+ *   configuration without claiming connection or verification (CONFIGURED_UNVERIFIED or DISCONNECTED).
+ * - Never fabricates connected status or verification dates from environment alone.
+ * - Never permits personal connections (USER_PERSONAL) or other tenants to satisfy central status.
  */
-export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
-  let rootFolderId = '';
+export async function getGoogleDriveStatus(tenantId?: string | null): Promise<GoogleDriveStatus> {
+  let fallbackFolderId = '';
   try {
-    rootFolderId = getMeetingsFolderId();
+    fallbackFolderId = getMeetingsFolderId();
   } catch {
-    rootFolderId = '';
+    fallbackFolderId = '';
   }
+
+  const cleanTenantId = typeof tenantId === 'string' ? tenantId.trim() : '';
+
+  if (cleanTenantId) {
+    let googleConfig: any = null;
+    try {
+      googleConfig = require('@/api/_lib/google-oauth-config');
+    } catch {
+      try {
+        googleConfig = require('../../../api/_lib/google-oauth-config');
+      } catch {
+        try {
+          googleConfig = require('../../api/_lib/google-oauth-config');
+        } catch (_) {}
+      }
+    }
+
+    if (googleConfig && typeof googleConfig.getGoogleDriveConnectionStatus === 'function') {
+      try {
+        const centralStatus = await googleConfig.getGoogleDriveConnectionStatus({
+          tenantId: cleanTenantId,
+          connectionType: 'TENANT_CENTRAL',
+        });
+
+        if (centralStatus && centralStatus.connected && centralStatus.status === 'CONNECTED') {
+          return {
+            connected: true,
+            connectionType: 'TENANT_CENTRAL',
+            email: centralStatus.googleEmail || undefined,
+            rootFolderId: centralStatus.rootFolderId || fallbackFolderId || undefined,
+            rootFolderName: centralStatus.rootFolderName || DEFAULT_ROOT_FOLDER_NAME,
+            lastVerified: centralStatus.lastVerifiedAt || undefined,
+            status: 'CONNECTED',
+          };
+        }
+      } catch (_) {
+        // Fall through to unverified/disconnected configuration evaluation
+      }
+    }
+  }
+
+  // Fallback: evaluate deployment configuration when no active central connection exists
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-  const isConfigured = Boolean(clientId && clientSecret && rootFolderId);
+  const isConfigured = Boolean(clientId && clientSecret && fallbackFolderId);
 
   return {
     connected: false,
     connectionType: 'TENANT_CENTRAL',
-    rootFolderId,
+    rootFolderId: fallbackFolderId || undefined,
     rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
     status: isConfigured ? 'CONFIGURED_UNVERIFIED' : 'DISCONNECTED',
   };

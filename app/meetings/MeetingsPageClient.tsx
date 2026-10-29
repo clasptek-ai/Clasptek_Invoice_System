@@ -1070,7 +1070,7 @@ export function MeetingsPageClient({
                     <span style={{ color: 'var(--text-muted)' }}>Last Verified:</span>
                     <br />
                     <span style={{ color: 'var(--text)' }}>
-                      {driveStatus.lastVerified?.split('T')[0] || 'Verified on Connect'}
+                      {driveStatus.lastVerified ? driveStatus.lastVerified.split('T')[0] : 'Unverified'}
                     </span>
                   </div>
                 </div>
