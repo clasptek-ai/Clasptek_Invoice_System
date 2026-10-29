@@ -3,11 +3,21 @@
  * Universal safe lifecycle confirmation dialog for data tables.
  * Supports: Delete, Archive, Deactivate, Void, Cancel with referential dependency guards
  * and mandatory/optional audit reason tracking.
+ *
+ * Certified Clasptek Improvements:
+ * - Keyboard accessibility: Escape key listener dismisses dialog when not loading.
+ * - Semantic dialog attributes: role="dialog", aria-modal="true", aria-labelledby, aria-describedby.
+ * - Synchronous ref lock (isExecutingRef) preventing duplicate / concurrent submissions.
+ * - Accessible SVG icons conforming to Clasptek design standards (replaces raw emoji glyphs).
+ * - Phase C6G Accessible Focus Management:
+ *   - Initial focus directed safely to non-destructive escape hatch (Cancel) or required reason input.
+ *   - Focus restoration to invoking element on close / unmount.
+ *   - Tab & Shift+Tab focus containment (focus trap) preventing focus escape to background.
  */
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export type LifecycleActionType = 'DELETE' | 'ARCHIVE' | 'DEACTIVATE' | 'VOID' | 'CANCEL';
 
@@ -31,6 +41,9 @@ export interface RecordLifecycleModalProps {
   onConfirm: (reason: string) => Promise<void> | void;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function RecordLifecycleModal({
   isOpen,
   actionType,
@@ -47,13 +60,98 @@ export function RecordLifecycleModal({
 }: RecordLifecycleModalProps) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const isExecutingRef = useRef(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setReason('');
       setError(null);
+      isExecutingRef.current = false;
     }
   }, [isOpen]);
+
+  // Focus lifecycle: capture activeElement on open, set initial focus, restore on close
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
+
+      const timer = setTimeout(() => {
+        if (modalRef.current) {
+          const reasonInput = modalRef.current.querySelector<HTMLElement>('#record-lifecycle-reason');
+          const cancelButton = modalRef.current.querySelector<HTMLElement>('#record-lifecycle-cancel-btn');
+          const focusable = Array.from(
+            modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+          ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0);
+
+          const target =
+            requireReason && reasonInput && !reasonInput.hasAttribute('disabled')
+              ? reasonInput
+              : cancelButton && !cancelButton.hasAttribute('disabled')
+              ? cancelButton
+              : focusable[0];
+
+          target?.focus();
+        }
+      }, 30);
+
+      return () => {
+        clearTimeout(timer);
+        if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+          try {
+            previousActiveElementRef.current.focus();
+          } catch {
+            // Safe fallback if invoking element was unmounted
+          }
+        }
+      };
+    }
+  }, [isOpen, requireReason]);
+
+  // Handle Escape key closure consistently with Clasptek modal conventions and Tab focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape key dismissal
+      if (e.key === 'Escape' && !isLoading && !isExecutingRef.current) {
+        onClose();
+        return;
+      }
+
+      // Tab key focus containment
+      if (e.key === 'Tab') {
+        if (!modalRef.current) return;
+        const focusableElements = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+        ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0);
+
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isLoading, onClose]);
 
   if (!isOpen) return null;
 
@@ -129,21 +227,28 @@ export function RecordLifecycleModal({
   const config = getActionConfig();
 
   const handleExecute = async () => {
-    if (isBlocked) return;
+    if (isBlocked || isLoading || isExecutingRef.current) return;
     if (requireReason && !reason.trim()) {
       setError('A reason or justification is required for this action.');
       return;
     }
     setError(null);
+    isExecutingRef.current = true;
     try {
       await onConfirm(reason.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during execution.');
+    } finally {
+      isExecutingRef.current = false;
     }
   };
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="record-lifecycle-title"
+      aria-describedby="record-lifecycle-consequence"
       style={{
         position: 'fixed',
         top: 0,
@@ -159,14 +264,16 @@ export function RecordLifecycleModal({
         padding: '16px',
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isLoading) onClose();
+        if (e.target === e.currentTarget && !isLoading && !isExecutingRef.current) onClose();
       }}
     >
       <div
+        ref={modalRef}
         className="cp-card"
         style={{
           width: '100%',
           maxWidth: '520px',
+          maxHeight: '90vh',
           backgroundColor: 'var(--surface-0, #FFFFFF)',
           borderRadius: '12px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -185,6 +292,7 @@ export function RecordLifecycleModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             background: 'var(--surface-1, #F8FAFC)',
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -201,7 +309,10 @@ export function RecordLifecycleModal({
             >
               {config.badgeText}
             </span>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--primary, #0F172A)' }}>
+            <h3
+              id="record-lifecycle-title"
+              style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--primary, #0F172A)' }}
+            >
               {config.title}
             </h3>
           </div>
@@ -209,22 +320,47 @@ export function RecordLifecycleModal({
             type="button"
             onClick={onClose}
             disabled={isLoading}
+            aria-label="Close modal"
             style={{
               background: 'none',
               border: 'none',
-              fontSize: '18px',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               color: 'var(--text-muted, #94A3B8)',
               padding: '4px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               lineHeight: 1,
             }}
           >
-            &times;
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
         {/* Content Body */}
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          style={{
+            padding: '20px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            overflowY: 'auto',
+            flex: 1,
+          }}
+        >
           {/* Target Identifier */}
           {recordIdentifier && (
             <div
@@ -243,10 +379,58 @@ export function RecordLifecycleModal({
           )}
 
           {/* Consequence Statement */}
-          <div style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
-            {config.consequence}
-            <div style={{ marginTop: '4px', fontWeight: 600, color: config.isReversible ? '#059669' : '#DC2626' }}>
-              {config.isReversible ? '✔ This action is reversible.' : '⚠️ This action CANNOT be undone.'}
+          <div
+            id="record-lifecycle-consequence"
+            style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5 }}
+          >
+            <div>{config.consequence}</div>
+            <div
+              style={{
+                marginTop: '6px',
+                fontWeight: 600,
+                color: config.isReversible ? '#059669' : '#DC2626',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              {config.isReversible ? (
+                <>
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>This action is reversible.</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span>This action CANNOT be undone.</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -260,8 +444,31 @@ export function RecordLifecycleModal({
                 padding: '14px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#991B1B', fontWeight: 700, fontSize: '13.5px' }}>
-                <span>🛑</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#991B1B',
+                  fontWeight: 700,
+                  fontSize: '13.5px',
+                }}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0 }}
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                </svg>
                 <span>Action Blocked: Referential Dependencies Exist</span>
               </div>
               <div style={{ fontSize: '12.5px', color: '#7F1D1D', marginTop: '6px' }}>
@@ -300,6 +507,7 @@ export function RecordLifecycleModal({
           {!isBlocked && (
             <div>
               <label
+                htmlFor="record-lifecycle-reason"
                 style={{
                   display: 'block',
                   fontSize: '12.5px',
@@ -311,6 +519,7 @@ export function RecordLifecycleModal({
                 Audit Remarks {requireReason ? <span style={{ color: '#DC2626' }}>*</span> : '(Optional)'}
               </label>
               <textarea
+                id="record-lifecycle-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={reasonPlaceholder}
@@ -356,10 +565,12 @@ export function RecordLifecycleModal({
             justifyContent: 'flex-end',
             gap: '10px',
             background: 'var(--surface-1, #F8FAFC)',
+            flexShrink: 0,
           }}
         >
           <button
             type="button"
+            id="record-lifecycle-cancel-btn"
             onClick={onClose}
             disabled={isLoading}
             className="cp-btn sm secondary"
@@ -383,7 +594,28 @@ export function RecordLifecycleModal({
                 ...config.confirmBtnStyle,
               }}
             >
-              {isLoading ? 'Processing...' : config.confirmLabel}
+              {isLoading ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <svg
+                    className="cp-spinner"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ animation: 'spin 1s linear infinite' }}
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  <span>Processing...</span>
+                </span>
+              ) : (
+                config.confirmLabel
+              )}
             </button>
           )}
         </div>

@@ -9,7 +9,7 @@
  * - 4. LINE ITEMS: Repeater with Description, Qty, Unit Price, Discount, Calculated Total, Add/Remove line
  * - 5. NOTES & COMMENTS: Customer-Facing Notes (cyan NOTES box), Contextual/Internal Comments (purple COMMENT box)
  * - 6. TERMS: Standard Terms & Conditions
- * - 7. ACTIONS: Cancel, 👁️ Preview Invoice (Canonical Document), ✔ Issue Official Invoice
+ * - 7. ACTIONS: Cancel, Preview Invoice (Canonical Document), Issue Official Invoice
  */
 
 'use client';
@@ -51,6 +51,7 @@ export interface CreateProfessionalTuitionInvoiceModalProps {
   paymentAccounts?: PaymentAccountData[];
   financeSettings?: FinanceSettingsData | null;
   onInvoiceCreated: (invoice: Invoice) => void;
+  customSubmitHandler?: (payload: any) => Promise<{ success: boolean; invoice: Invoice; error?: string }>;
 }
 
 export interface LineItemFormState {
@@ -103,6 +104,7 @@ export function CreateProfessionalTuitionInvoiceModal({
   paymentAccounts,
   financeSettings,
   onInvoiceCreated,
+  customSubmitHandler,
 }: CreateProfessionalTuitionInvoiceModalProps) {
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const defaultDue = useMemo(
@@ -158,6 +160,7 @@ export function CreateProfessionalTuitionInvoiceModal({
 
   // UI State
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewInvoiceData, setPreviewInvoiceData] = useState<Invoice | null>(null);
 
@@ -377,6 +380,7 @@ export function CreateProfessionalTuitionInvoiceModal({
   };
 
   // Handle Preview
+  // Handle Preview
   const handlePreview = () => {
     if (!clientName.trim()) {
       setErrorMessage('Student / Client Name is required.');
@@ -385,6 +389,31 @@ export function CreateProfessionalTuitionInvoiceModal({
     if (lineItems.length === 0) {
       setErrorMessage('Please add at least one line item.');
       return;
+    }
+
+    // Line-item validations
+    for (let i = 0; i < lineItems.length; i++) {
+      const it = lineItems[i];
+      const itemNum = i + 1;
+      if (!it.description || !it.description.trim()) {
+        setErrorMessage(`Line item #${itemNum} requires a description.`);
+        return;
+      }
+      const qty = Number(it.quantity);
+      if (!Number.isFinite(qty) || isNaN(qty) || qty <= 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid quantity. Quantity must be a finite number greater than zero.`);
+        return;
+      }
+      const unitPrice = Number(it.unitPrice);
+      if (!Number.isFinite(unitPrice) || isNaN(unitPrice) || unitPrice < 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid unit price.`);
+        return;
+      }
+      const discount = Number(it.discount || 0);
+      if (!Number.isFinite(discount) || isNaN(discount) || discount < 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid discount amount.`);
+        return;
+      }
     }
 
     setErrorMessage(null);
@@ -439,6 +468,7 @@ export function CreateProfessionalTuitionInvoiceModal({
   // Handle Submit / Issue Official Invoice
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmittingRef.current) return;
 
     if (!clientName.trim()) {
       setErrorMessage('Student / Client Name is required.');
@@ -453,20 +483,53 @@ export function CreateProfessionalTuitionInvoiceModal({
       return;
     }
 
+    // Line-item validations
+    for (let i = 0; i < lineItems.length; i++) {
+      const it = lineItems[i];
+      const itemNum = i + 1;
+      if (!it.description || !it.description.trim()) {
+        setErrorMessage(`Line item #${itemNum} requires a description.`);
+        return;
+      }
+      const qty = Number(it.quantity);
+      if (!Number.isFinite(qty) || isNaN(qty) || qty <= 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid quantity. Quantity must be a finite number greater than zero.`);
+        return;
+      }
+      const unitPrice = Number(it.unitPrice);
+      if (!Number.isFinite(unitPrice) || isNaN(unitPrice) || unitPrice < 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid unit price.`);
+        return;
+      }
+      const discount = Number(it.discount || 0);
+      if (!Number.isFinite(discount) || isNaN(discount) || discount < 0) {
+        setErrorMessage(`Line item #${itemNum} has an invalid discount amount.`);
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
       const payload = buildInvoicePayload();
-      const res = await fetch('/api/finance/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let data: { success: boolean; invoice: Invoice; error?: string };
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to issue official invoice');
+      if (customSubmitHandler) {
+        data = await customSubmitHandler(payload);
+      } else {
+        const res = await fetch('/api/finance/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        data = await res.json();
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Failed to issue official invoice');
       }
 
       onInvoiceCreated(data.invoice);
@@ -474,6 +537,7 @@ export function CreateProfessionalTuitionInvoiceModal({
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Error issuing invoice');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -559,8 +623,12 @@ export function CreateProfessionalTuitionInvoiceModal({
                 alignItems: 'center',
               }}
             >
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#166534' }}>
-                👁️ Invoice Document Preview — Authoritative Screen & Print Layout
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="cp-svg-icon">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Invoice Document Preview — Authoritative Screen &amp; Print Layout
               </div>
               <button
                 type="button"
@@ -601,7 +669,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 disabled={isSubmitting}
                 style={{ fontWeight: 700 }}
               >
-                {isSubmitting ? 'Issuing Official Invoice…' : '✔ Issue Official Invoice'}
+                {isSubmitting ? 'Issuing Official Invoice…' : 'Issue Official Invoice'}
               </button>
             </div>
           </div>
@@ -681,7 +749,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 </div>
               )}
 
-              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', marginBottom: '10px' }}>
+              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '10px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11.5px', fontWeight: 700 }}>
                     Student / Client Name *
@@ -708,7 +776,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 </div>
               </div>
 
-              <div className="cp-row3" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: '12px' }}>
+              <div className="cp-row3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11.5px', fontWeight: 700 }}>
                     Phone Number *
@@ -770,7 +838,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 <span>🎓</span> 2. Programme & Training Specifications
               </div>
 
-              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px', marginBottom: '10px' }}>
+              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '10px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11.5px', fontWeight: 700 }}>
                     Target Programme / Curriculum *
@@ -807,7 +875,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 </div>
               </div>
 
-              <div className="cp-row3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '12px', marginBottom: '10px' }}>
+              <div className="cp-row3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '10px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11.5px', fontWeight: 700 }}>
                     Invoice Date *
@@ -850,7 +918,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 </div>
               </div>
 
-              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '12px' }}>
+              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11.5px', fontWeight: 600 }}>
                     Course Duration
@@ -900,7 +968,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 <span>🏦</span> 3. Designated Settlement Account & Payment Instructions
               </div>
 
-              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11px', fontWeight: 700 }}>
                     Designated Payment Account *
@@ -963,66 +1031,68 @@ export function CreateProfessionalTuitionInvoiceModal({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {lineItems.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '24px 2fr 70px 1.2fr 1fr 34px',
-                      gap: '8px',
-                      alignItems: 'center',
-                      background: '#FFFFFF',
-                      padding: '4px 0',
-                    }}
-                  >
-                    <span style={{ fontSize: '11.5px', color: '#94A3B8', textAlign: 'center', fontWeight: 700 }}>
-                      {idx + 1}
-                    </span>
-                    <input
-                      required
-                      placeholder="Programme / Service Description"
-                      value={item.description}
-                      onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                      style={{ padding: '6px 8px', fontSize: '12.5px', boxSizing: 'border-box' }}
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={item.quantity}
-                      onChange={(e) => updateLineItem(item.id, 'quantity', Math.max(1, parseInt(e.target.value || '1', 10)))}
-                      style={{ padding: '6px 6px', fontSize: '12.5px', textAlign: 'center', boxSizing: 'border-box' }}
-                      title="Quantity"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      required
-                      value={item.unitPrice}
-                      onChange={(e) => updateLineItem(item.id, 'unitPrice', Math.max(0, parseFloat(e.target.value || '0')))}
-                      style={{ padding: '6px 8px', fontSize: '12.5px', textAlign: 'right', boxSizing: 'border-box', fontWeight: 600 }}
-                      title="Unit Price"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      value={item.discount}
-                      onChange={(e) => updateLineItem(item.id, 'discount', Math.max(0, parseFloat(e.target.value || '0')))}
-                      style={{ padding: '6px 8px', fontSize: '12.5px', textAlign: 'right', boxSizing: 'border-box' }}
-                      title="Discount"
-                    />
-                    <button
-                      type="button"
-                      className="cp-btn danger sm"
-                      onClick={() => removeLineItem(item.id)}
-                      style={{ height: '34px', width: '34px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title="Remove Item"
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '500px' }}>
+                  {lineItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '24px 2fr 70px 1.2fr 1fr 34px',
+                        gap: '8px',
+                        alignItems: 'center',
+                        background: '#FFFFFF',
+                        padding: '4px 0',
+                      }}
                     >
-                      &times;
-                    </button>
-                  </div>
-                ))}
+                      <span style={{ fontSize: '11.5px', color: '#94A3B8', textAlign: 'center', fontWeight: 700 }}>
+                        {idx + 1}
+                      </span>
+                      <input
+                        required
+                        placeholder="Programme / Service Description"
+                        value={item.description}
+                        onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                        style={{ padding: '6px 8px', fontSize: '12.5px', boxSizing: 'border-box' }}
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        value={item.quantity}
+                        onChange={(e) => updateLineItem(item.id, 'quantity', Math.max(1, parseInt(e.target.value || '1', 10)))}
+                        style={{ padding: '6px 6px', fontSize: '12.5px', textAlign: 'center', boxSizing: 'border-box' }}
+                        title="Quantity"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={item.unitPrice}
+                        onChange={(e) => updateLineItem(item.id, 'unitPrice', Math.max(0, parseFloat(e.target.value || '0')))}
+                        style={{ padding: '6px 8px', fontSize: '12.5px', textAlign: 'right', boxSizing: 'border-box', fontWeight: 600 }}
+                        title="Unit Price"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={item.discount}
+                        onChange={(e) => updateLineItem(item.id, 'discount', Math.max(0, parseFloat(e.target.value || '0')))}
+                        style={{ padding: '6px 8px', fontSize: '12.5px', textAlign: 'right', boxSizing: 'border-box' }}
+                        title="Discount"
+                      />
+                      <button
+                        type="button"
+                        className="cp-btn danger sm"
+                        onClick={() => removeLineItem(item.id)}
+                        style={{ height: '34px', width: '34px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Remove Item"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Calculated Total Bar */}
@@ -1069,7 +1139,7 @@ export function CreateProfessionalTuitionInvoiceModal({
                 <span>📝</span> 5. Notes, Comments & Terms
               </div>
 
-              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+              <div className="cp-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '10px' }}>
                 <div className="cp-field" style={{ margin: 0 }}>
                   <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--info, #0284C7)' }}>
                     Customer-Facing Notes (Appears under NOTES on Invoice)
@@ -1137,7 +1207,11 @@ export function CreateProfessionalTuitionInvoiceModal({
                 disabled={isSubmitting}
                 style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                <span>👁️</span> Preview Invoice
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="cp-svg-icon">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Preview Invoice
               </button>
               <button
                 type="submit"
@@ -1145,7 +1219,10 @@ export function CreateProfessionalTuitionInvoiceModal({
                 disabled={isSubmitting}
                 style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                <span>✔</span> {isSubmitting ? 'Issuing Official Invoice…' : 'Issue Official Invoice'}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="cp-svg-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {isSubmitting ? 'Issuing Official Invoice…' : 'Issue Official Invoice'}
               </button>
             </div>
           </form>

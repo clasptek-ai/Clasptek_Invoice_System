@@ -4,9 +4,19 @@
  * components/cohorts/AddCohortModal.tsx
  * Internal Cohort Creation Modal.
  * Replaces obsolete public /apply link with an internal, authoritative academic workflow.
+ *
+ * Certified Clasptek Improvements:
+ * - Keyboard accessibility: Escape key listener dismisses dialog when not submitting.
+ * - Accessible Focus Management:
+ *   - Initial focus directed to primary input on open (Academic Programme selector).
+ *   - Focus restoration to invoking element on close.
+ *   - Tab & Shift+Tab focus containment (focus trap) preventing focus escape to background.
+ * - Semantic dialog attributes: role="dialog", aria-modal="true", aria-labelledby.
+ * - Synchronous ref lock (isSubmittingRef) preventing duplicate / concurrent submissions.
+ * - Accessible SVG icons conforming to Clasptek design standards (replaces raw emoji glyphs).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Cohort, Programme, CohortStatus, DeliveryMode } from '@/types/academics';
 
 interface FacilitatorOption {
@@ -23,7 +33,21 @@ interface AddCohortModalProps {
   facilitators?: FacilitatorOption[];
   onClose: () => void;
   onCohortCreated: (newCohort: Cohort) => void;
+  customSubmitHandler?: (payload: {
+    programme_id: string;
+    cohort_code: string;
+    name: string;
+    start_date: string;
+    end_date: string | null;
+    capacity: number;
+    delivery_mode: DeliveryMode;
+    lead_facilitator_id: string | null;
+    status: CohortStatus;
+  }) => Promise<{ success: boolean; cohort?: Cohort; error?: string }>;
 }
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function AddCohortModal({
   isOpen,
@@ -31,6 +55,7 @@ export function AddCohortModal({
   facilitators = [],
   onClose,
   onCohortCreated,
+  customSubmitHandler,
 }: AddCohortModalProps) {
   const [programmeId, setProgrammeId] = useState<string>('');
   const [cohortCode, setCohortCode] = useState<string>('');
@@ -45,11 +70,16 @@ export function AddCohortModal({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const isSubmittingRef = useRef<boolean>(false);
+
   // Initialize or reset form fields
   useEffect(() => {
     if (isOpen) {
       setErrorMessage(null);
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
 
       const firstProg = programmes[0];
       const initialProgId = firstProg?.id || '';
@@ -86,6 +116,76 @@ export function AddCohortModal({
     }
   }, [isOpen, programmes]);
 
+  // Initial focus and focus restoration
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
+
+      const timer = setTimeout(() => {
+        if (modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+          const firstField =
+            modalRef.current.querySelector<HTMLElement>('#add-cohort-programme-select') || focusable[0];
+          firstField?.focus();
+        }
+      }, 30);
+
+      return () => {
+        clearTimeout(timer);
+        if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+          previousActiveElementRef.current.focus();
+        }
+      };
+    }
+  }, [isOpen]);
+
+  // Keyboard navigation: Escape key dismissal and Tab / Shift+Tab focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape key dismissal
+      if (e.key === 'Escape') {
+        if (!isSubmitting && !isSubmittingRef.current) {
+          e.preventDefault();
+          onClose();
+        }
+        return;
+      }
+
+      // Tab key focus containment
+      if (e.key === 'Tab') {
+        if (!modalRef.current) return;
+        const focusableElements = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+        ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0);
+
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
+
   if (!isOpen) return null;
 
   const handleProgrammeChange = (newProgId: string) => {
@@ -105,6 +205,8 @@ export function AddCohortModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isSubmittingRef.current) return;
+
     setErrorMessage(null);
 
     if (!programmeId) {
@@ -124,7 +226,38 @@ export function AddCohortModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
+
+    if (customSubmitHandler) {
+      try {
+        const result = await customSubmitHandler({
+          programme_id: programmeId,
+          cohort_code: cohortCode.trim().toUpperCase(),
+          name: name.trim(),
+          start_date: startDate,
+          end_date: endDate || null,
+          capacity: Number(capacity) || 25,
+          delivery_mode: deliveryMode,
+          lead_facilitator_id: leadFacilitatorId || null,
+          status,
+        });
+
+        if (!result.success || !result.cohort) {
+          throw new Error(result.error || 'Failed to create cohort record.');
+        }
+
+        onCohortCreated(result.cohort);
+        onClose();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to create cohort.';
+        setErrorMessage(msg);
+      } finally {
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+      }
+      return;
+    }
 
     try {
       const res = await fetch('/api/admissions/cohorts', {
@@ -155,20 +288,67 @@ export function AddCohortModal({
       setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
   return (
-    <div className="cp-modal-overlay" style={{ zIndex: 1000 }} onClick={onClose}>
+    <div
+      className="cp-modal-overlay"
+      style={{ zIndex: 1000 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting && !isSubmittingRef.current) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-cohort-modal-title"
+    >
       <div
+        ref={modalRef}
         className="cp-modal"
         style={{ maxWidth: '640px', width: '95%', maxHeight: '92vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="cp-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+        <div
+          className="cp-modal-header"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
           <div>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>
-              📅 Create Training Cohort
+            <h3
+              id="add-cohort-modal-title"
+              style={{
+                margin: 0,
+                fontSize: '17px',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ color: 'var(--primary, #0284C7)' }}
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>Create Training Cohort</span>
             </h3>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Schedule a new academic intake cohort with seat capacity and facilitator assignment.
@@ -178,15 +358,38 @@ export function AddCohortModal({
             type="button"
             className="cp-btn ghost sm"
             onClick={onClose}
+            disabled={isSubmitting}
             aria-label="Close modal"
-            style={{ fontSize: '18px', padding: '4px 8px' }}
+            style={{
+              padding: '6px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            }}
           >
-            ✕
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="cp-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div
+            className="cp-modal-body"
+            style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}
+          >
             {errorMessage && (
               <div role="alert" className="cp-alert error" style={{ margin: 0, fontSize: '13px' }}>
                 {errorMessage}
@@ -195,17 +398,24 @@ export function AddCohortModal({
 
             {/* Programme Selection */}
             <div>
-              <label style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '5px' }}>
+              <label
+                htmlFor="add-cohort-programme-select"
+                style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '5px' }}
+              >
                 Academic Programme <span style={{ color: 'var(--danger, #DC2626)' }}>*</span>
               </label>
               <select
+                id="add-cohort-programme-select"
                 className="cp-input"
                 value={programmeId}
                 onChange={(e) => handleProgrammeChange(e.target.value)}
                 required
+                disabled={isSubmitting}
                 style={{ width: '100%', fontSize: '13.5px' }}
               >
-                <option value="" disabled>Select Programme...</option>
+                <option value="" disabled>
+                  Select Programme...
+                </option>
                 {programmes.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.code || 'Code N/A'})
@@ -227,6 +437,7 @@ export function AddCohortModal({
                   onChange={(e) => setCohortCode(e.target.value.toUpperCase())}
                   placeholder="e.g. GVD-OCT26"
                   required
+                  disabled={isSubmitting}
                   style={{ width: '100%', fontFamily: 'var(--font-mono)', fontWeight: 600 }}
                 />
               </div>
@@ -241,6 +452,7 @@ export function AddCohortModal({
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Grammar & Vocabulary Development — Oct-26"
                   required
+                  disabled={isSubmitting}
                   style={{ width: '100%', fontWeight: 600 }}
                 />
               </div>
@@ -258,6 +470,7 @@ export function AddCohortModal({
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   required
+                  disabled={isSubmitting}
                   style={{ width: '100%' }}
                 />
               </div>
@@ -270,6 +483,7 @@ export function AddCohortModal({
                   className="cp-input"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
+                  disabled={isSubmitting}
                   style={{ width: '100%' }}
                 />
               </div>
@@ -285,6 +499,7 @@ export function AddCohortModal({
                   className="cp-input"
                   value={deliveryMode}
                   onChange={(e) => setDeliveryMode(e.target.value as DeliveryMode)}
+                  disabled={isSubmitting}
                   style={{ width: '100%' }}
                 >
                   <option value="IN_PERSON">In-Person (Campus / Lab)</option>
@@ -304,6 +519,7 @@ export function AddCohortModal({
                   value={capacity}
                   onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value, 10) || 1))}
                   required
+                  disabled={isSubmitting}
                   style={{ width: '100%' }}
                 />
               </div>
@@ -315,6 +531,7 @@ export function AddCohortModal({
                   className="cp-input"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as CohortStatus)}
+                  disabled={isSubmitting}
                   style={{ width: '100%' }}
                 >
                   <option value="PLANNING">Planning</option>
@@ -333,6 +550,7 @@ export function AddCohortModal({
                 className="cp-input"
                 value={leadFacilitatorId}
                 onChange={(e) => setLeadFacilitatorId(e.target.value)}
+                disabled={isSubmitting}
                 style={{ width: '100%' }}
               >
                 <option value="">Unassigned / TBD</option>
@@ -345,7 +563,16 @@ export function AddCohortModal({
             </div>
           </div>
 
-          <div className="cp-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '14px 20px', borderTop: '1px solid var(--border)' }}>
+          <div
+            className="cp-modal-footer"
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px',
+              padding: '14px 20px',
+              borderTop: '1px solid var(--border)',
+            }}
+          >
             <button
               type="button"
               className="cp-btn secondary"
@@ -361,7 +588,28 @@ export function AddCohortModal({
               disabled={isSubmitting}
               style={{ fontWeight: 700 }}
             >
-              {isSubmitting ? 'Creating Cohort...' : 'Create Cohort'}
+              {isSubmitting ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <svg
+                    className="cp-spinner"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ animation: 'spin 1s linear infinite' }}
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  <span>Creating Cohort...</span>
+                </span>
+              ) : (
+                'Create Cohort'
+              )}
             </button>
           </div>
         </form>

@@ -38,6 +38,14 @@ interface PaymentsPageClientProps {
   allInvoices?: Invoice[];
   financeSettings?: FinanceSettingsData | null;
   metrics: FinancialMetrics;
+  customSubmitHandler?: (payload: {
+    invoiceId: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+    paymentDate: string;
+    reference?: string;
+    notes?: string;
+  }) => Promise<{ success: boolean; payment: Payment; error?: string }>;
 }
 
 
@@ -70,6 +78,7 @@ export function PaymentsPageClient({
   allInvoices,
   financeSettings,
   metrics,
+  customSubmitHandler,
 }: PaymentsPageClientProps) {
   const [payments, setPayments] = useState<Payment[]>(initialPayments);
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +102,7 @@ export function PaymentsPageClient({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // When selected invoice changes, update suggested amount to outstanding balance
   const handleInvoiceSelect = (invId: string) => {
@@ -106,31 +116,54 @@ export function PaymentsPageClient({
   // Submit payment
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInvoiceId || paymentAmount <= 0) {
-      setFeedbackMsg({ type: 'error', text: 'Please select an invoice and enter a valid positive payment amount.' });
+    if (isSubmittingRef.current) return;
+
+    if (!selectedInvoiceId) {
+      setFeedbackMsg({ type: 'error', text: 'Please select a target invoice to credit.' });
       return;
     }
 
+    const numericAmount = Number(paymentAmount);
+    if (!Number.isFinite(numericAmount) || isNaN(numericAmount) || numericAmount <= 0) {
+      setFeedbackMsg({ type: 'error', text: 'Please enter a valid positive payment amount (greater than zero).' });
+      return;
+    }
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setFeedbackMsg(null);
 
     try {
-      const res = await fetch('/api/finance/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let data: { success: boolean; payment: Payment; error?: string };
+
+      if (customSubmitHandler) {
+        data = await customSubmitHandler({
           invoiceId: selectedInvoiceId,
-          amount: paymentAmount,
+          amount: numericAmount,
           paymentMethod,
           paymentDate,
-          reference: reference || undefined,
-          notes: notes || undefined,
-        }),
-      });
+          reference: reference?.trim() || undefined,
+          notes: notes?.trim() || undefined,
+        });
+      } else {
+        const res = await fetch('/api/finance/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceId: selectedInvoiceId,
+            amount: numericAmount,
+            paymentMethod,
+            paymentDate,
+            reference: reference?.trim() || undefined,
+            notes: notes?.trim() || undefined,
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to record payment');
+        data = await res.json();
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Failed to record payment');
       }
 
       setPayments((prev) => {
@@ -147,12 +180,13 @@ export function PaymentsPageClient({
       setNotes('');
       setFeedbackMsg({
         type: 'success',
-        text: `Payment of ${fmtMoney(paymentAmount)} recorded successfully! (Receipt ${data.payment.receiptDisplayNo})`,
+        text: `Payment of ${fmtMoney(numericAmount)} recorded successfully! (Receipt ${data.payment.receiptDisplayNo})`,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setFeedbackMsg({ type: 'error', text: msg });
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -397,7 +431,7 @@ export function PaymentsPageClient({
       {/* Main Ledger Card */}
       <div className="cp-card">
         {/* Header */}
-        <div className="cp-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
+        <div className="cp-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', padding: '16px 20px', borderBottom: '1px solid var(--border, #e2e8f0)' }}>
           <div>
             <div className="cp-section-title" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
               🧾 Tuition Payments &amp; Receipts Ledger
@@ -840,7 +874,7 @@ export function PaymentsPageClient({
               )}
 
               {/* Payment Amount & Method */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
                     Amount Paid (₦) *
@@ -873,8 +907,54 @@ export function PaymentsPageClient({
                 </div>
               </div>
 
+              {/* Overpayment Warning Banner */}
+              {selectedInvDetail && Number.isFinite(Number(paymentAmount)) && Number(paymentAmount) > selectedInvDetail.balanceAmount && selectedInvDetail.balanceAmount > 0 && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    marginBottom: '14px',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--warning-bg, #FFFBEB)',
+                    border: '1px solid var(--warning-border, #FDE68A)',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    fontSize: '12px',
+                    color: 'var(--warning-dark, #B45309)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <span style={{ flexShrink: 0, marginTop: '1px' }}>
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                      className="cp-svg-icon"
+                    >
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </span>
+                  <div>
+                    <strong>Overpayment Notice:</strong> Entered amount (<strong>{fmtMoney(Number(paymentAmount))}</strong>) exceeds displayed balance (<strong>{fmtMoney(selectedInvDetail.balanceAmount)}</strong>) by <strong>{fmtMoney(Number(paymentAmount) - selectedInvDetail.balanceAmount)}</strong>.
+                    <div style={{ marginTop: '2px', fontSize: '11px', color: '#78350F' }}>
+                      Note: Displayed balance reflects cached client records and may differ from authoritative server state. Any confirmed surplus will be credited to the student&apos;s account. Authoritative verification occurs server-side.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Payment Date & Reference */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
                     Payment Date *

@@ -19,7 +19,7 @@
  * - Fully responsive across Laptop, Tablet, and Mobile
  */
 
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useRef } from 'react';
 import type { Student } from '@/types/students';
 
 interface StudentRegistrationModalProps {
@@ -33,6 +33,7 @@ interface StudentRegistrationModalProps {
     phone?: string;
     programmeId?: string;
   };
+  customSubmitHandler?: (payload: any) => Promise<{ success: boolean; student?: Student; error?: string }>;
 }
 
 export function StudentRegistrationModal({
@@ -40,6 +41,7 @@ export function StudentRegistrationModal({
   onClose,
   onSaved,
   prefill,
+  customSubmitHandler,
 }: StudentRegistrationModalProps) {
   const formId = useId();
 
@@ -78,6 +80,7 @@ export function StudentRegistrationModal({
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -89,6 +92,8 @@ export function StudentRegistrationModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+
     setErrorMessage(null);
 
     // Client-side validations
@@ -100,6 +105,20 @@ export function StudentRegistrationModal({
       setErrorMessage('Last Name is required.');
       return;
     }
+    if (email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        setErrorMessage('Please enter a valid email address format (e.g. student@example.com).');
+        return;
+      }
+    }
+    if (phone.trim()) {
+      const cleanDigits = phone.replace(/\D/g, '');
+      if (cleanDigits.length < 7 || cleanDigits.length > 15) {
+        setErrorMessage('Please enter a valid phone number (between 7 and 15 digits).');
+        return;
+      }
+    }
     if (hasSponsor === 'Yes') {
       if (!sponsorName.trim()) {
         setErrorMessage('Sponsor Name is required when student has a sponsor.');
@@ -109,8 +128,23 @@ export function StudentRegistrationModal({
         setErrorMessage('Please provide at least a Sponsor Phone Number or Sponsor Email Address.');
         return;
       }
+      if (sponsorEmail.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(sponsorEmail.trim())) {
+          setErrorMessage('Please enter a valid Sponsor Email Address format (e.g. sponsor@example.com).');
+          return;
+        }
+      }
+      if (sponsorPhone.trim()) {
+        const cleanSponsorDigits = sponsorPhone.replace(/\D/g, '');
+        if (cleanSponsorDigits.length < 7 || cleanSponsorDigits.length > 15) {
+          setErrorMessage('Please enter a valid Sponsor Phone Number (between 7 and 15 digits).');
+          return;
+        }
+      }
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -144,17 +178,26 @@ export function StudentRegistrationModal({
         sponsorEmail: hasSponsor === 'Yes' ? sponsorEmail.trim() : null,
       };
 
-      const res = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let json: { success?: boolean; student?: Student; error?: string };
 
-      const json = await res.json();
+      if (customSubmitHandler) {
+        json = await customSubmitHandler(payload);
+      } else {
+        const res = await fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (!res.ok) {
+        json = await res.json();
+        if (!res.ok) {
+          setErrorMessage(json.error || 'Failed to complete student registration.');
+          return;
+        }
+      }
+
+      if (json.error || !json.student) {
         setErrorMessage(json.error || 'Failed to complete student registration.');
-        setIsSubmitting(false);
         return;
       }
 
@@ -162,6 +205,8 @@ export function StudentRegistrationModal({
       onClose();
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Network error during student registration.');
+    } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -539,7 +584,7 @@ export function StudentRegistrationModal({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                 <div className="cp-field">
                   <label htmlFor={`${formId}-address`} style={{ fontSize: '12px', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>
                     Address
@@ -795,7 +840,19 @@ export function StudentRegistrationModal({
                 gap: '6px',
               }}
             >
-              {isSubmitting ? '⏳ Registering Student...' : '✔ Save Student'}
+              {isSubmitting ? (
+                <>
+                  <span className="cp-spinner" style={{ width: '14px', height: '14px' }} aria-hidden="true" />
+                  Registering Student...
+                </>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="cp-svg-icon">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Save Student
+                </>
+              )}
             </button>
           </div>
         </form>
