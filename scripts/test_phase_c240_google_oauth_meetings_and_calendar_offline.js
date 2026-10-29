@@ -471,6 +471,344 @@ async function runAllC240ATests() {
     assert(meetingsContent.includes('Retry Check'), 'UI should include Retry Check action');
   });
 
+  // --- REQUIREMENT C240F: OAuth State Schema Invariance, Serverless Persistence & Fail-Closed Protection ---
+  console.log('\n--- SUITE 5: OAuth State Schema Invariance, Serverless Persistence & Fail-Closed Protection ---');
+
+  const prevSupabaseUrl = process.env.SUPABASE_URL;
+  const prevServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'https://dwhjoiebzwnjdpcvcwvs.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test_service_role_secret_key_123';
+
+  try {
+    await runAsyncTest('5.1: The OAuth state insertion payload contains only schema-supported columns from migrations/20260917_google_drive_oauth.sql', async () => {
+      const migrationPath = path.join(repoRoot, 'migrations/20260917_google_drive_oauth.sql');
+      const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+      const canonicalColumns = ['state', 'tenant_id', 'user_id', 'provider', 'redirect_target', 'created_at', 'expires_at', 'used_at'];
+
+      assert(!migrationSql.includes('connection_type TEXT'), 'canonical migration must not have connection_type column on oauth_states');
+
+      let interceptedPayload = null;
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (url.includes('/rest/v1/oauth_states') && options.method === 'POST') {
+          interceptedPayload = payload;
+          return { status: 201, headers: {}, body: [payload] };
+        }
+        return { status: 200, headers: {}, body: [] };
+      });
+
+      try {
+        const { state } = await oauthConfig.createOAuthState({
+          tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+          userId: 'usr-test-123',
+          redirectTarget: '/meetings?tab=schedule',
+          connectionType: 'TENANT_CENTRAL'
+        });
+
+        assert(interceptedPayload, 'POST to /rest/v1/oauth_states must have been dispatched');
+        assert.strictEqual(interceptedPayload.state, state);
+        assert.strictEqual(interceptedPayload.tenant_id, 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6');
+        assert.strictEqual(interceptedPayload.user_id, 'usr-test-123');
+        assert.strictEqual(interceptedPayload.provider, 'google');
+        assert.strictEqual(interceptedPayload.used_at, null);
+        assert(interceptedPayload.redirect_target.includes('__clasptek_ct=TENANT_CENTRAL'));
+
+        // CRITICAL INVARIANT: Every key in interceptedPayload must be in canonicalColumns
+        for (const key of Object.keys(interceptedPayload)) {
+          assert(canonicalColumns.includes(key), `Key '${key}' in OAuth state payload is NOT in canonical oauth_states schema!`);
+        }
+        assert(!('connection_type' in interceptedPayload), 'connection_type must strictly NOT be sent in dbPayload');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('5.2: Simulated PostgREST 400, 404, and 500 responses cause controlled initiation failure with OAUTH_STATE_PERSISTENCE_FAILED', async () => {
+      for (const statusCode of [400, 404, 500]) {
+        oauthConfig.setTestHttpsInterceptor((url) => {
+          if (url.includes('/rest/v1/oauth_states')) {
+            return {
+              status: statusCode,
+              headers: {},
+              body: { message: `Simulated PostgREST error ${statusCode}`, code: `PGRST_${statusCode}` }
+            };
+          }
+          return { status: 200, headers: {}, body: [] };
+        });
+
+        try {
+          const req = {
+            method: 'POST',
+            url: '/api/auth/google/start?action=start',
+            headers: { authorization: 'Bearer test_valid_jwt' },
+            body: JSON.stringify({
+              connectionType: 'TENANT_CENTRAL',
+              redirectTarget: '/meetings?tab=schedule',
+              includeCalendar: true
+            })
+          };
+          const res = createMockResponse();
+          await authHandler(req, res);
+
+          assert.strictEqual(res.statusCode, 500, `PostgREST ${statusCode} must result in HTTP 500 initiation failure`);
+          const parsed = JSON.parse(res.body);
+          assert.strictEqual(parsed.success, false);
+          assert.strictEqual(parsed.error, 'OAUTH_STATE_PERSISTENCE_FAILED');
+          assert.strictEqual(parsed.message, 'Unable to initialize secure authorization session. Please try again later.');
+          assert(!parsed.authUrl, 'Must not return authUrl when persistence fails');
+        } finally {
+          oauthConfig.setTestHttpsInterceptor(null);
+        }
+      }
+    });
+
+    await runAsyncTest('5.3: Network-level persistence failure (rejection/timeout) also fails closed', async () => {
+      oauthConfig.setTestHttpsInterceptor((url) => {
+        if (url.includes('/rest/v1/oauth_states')) {
+          return Promise.reject(new Error('ETIMEDOUT: Connection to database timed out'));
+        }
+        return { status: 200, headers: {}, body: [] };
+      });
+
+      try {
+        const req = {
+          method: 'POST',
+          url: '/api/auth/google/start?action=start',
+          headers: { authorization: 'Bearer test_valid_jwt' },
+          body: JSON.stringify({ connectionType: 'TENANT_CENTRAL' })
+        };
+        const res = createMockResponse();
+        await authHandler(req, res);
+
+        assert.strictEqual(res.statusCode, 500);
+        const parsed = JSON.parse(res.body);
+        assert.strictEqual(parsed.success, false);
+        assert.strictEqual(parsed.error, 'OAUTH_STATE_PERSISTENCE_FAILED');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+
+    await runAsyncTest('5.4: State creation and callback validation work across simulated independent serverless instances via mocked persistent store', async () => {
+      const mockDb = new Map();
+
+      oauthConfig.setTestHttpsInterceptor(async (url, options, payload) => {
+        const u = new URL(url);
+        if (u.pathname.includes('/rest/v1/oauth_states')) {
+          if (options.method === 'POST') {
+            mockDb.set(payload.state, { ...payload });
+            return { status: 201, headers: {}, body: [payload] };
+          }
+          if (options.method === 'PATCH') {
+            const matchState = u.searchParams.get('state')?.replace('eq.', '');
+            const row = mockDb.get(matchState);
+            if (row && !row.used_at && new Date(row.expires_at) > new Date()) {
+              row.used_at = payload.used_at;
+              mockDb.set(matchState, row);
+              return { status: 200, headers: {}, body: [row] };
+            }
+            return { status: 200, headers: {}, body: [] };
+          }
+          if (options.method === 'GET') {
+            const matchState = u.searchParams.get('state')?.replace('eq.', '');
+            const row = mockDb.get(matchState);
+            return { status: 200, headers: {}, body: row ? [row] : [] };
+          }
+        }
+        if (u.pathname.includes('/rest/v1/google_drive_connections')) {
+          return { status: 200, headers: {}, body: [{ id: 'mock_conn_1' }] };
+        }
+        return { status: 200, headers: {}, body: [] };
+      });
+
+      try {
+        // 1. Instance A: Create OAuth State (e.g. Schedule tab Calendar connection)
+        const { state } = await oauthConfig.createOAuthState({
+          tenantId: 'tenant-test-123',
+          userId: 'usr-123',
+          redirectTarget: '/meetings?tab=schedule',
+          connectionType: 'TENANT_CENTRAL'
+        });
+
+        // 2. Simulate Serverless Instance Isolation: Wipe in-memory state store completely!
+        oauthConfig._memoryStateStore.clear();
+        assert.strictEqual(oauthConfig._memoryStateStore.size, 0, 'Memory store must be completely empty in Instance B');
+
+        // 3. Instance B: Receive Google OAuth callback with valid code and state
+        const cbReq = { method: 'GET', url: `/api/auth/google/callback?code=4/valid_exchange_code&state=${state}` };
+        const cbRes = createMockResponse();
+        await callbackHandler(cbReq, cbRes);
+
+        assert.strictEqual(cbRes.statusCode, 302, 'Instance B must succeed and redirect');
+        const loc = cbRes.headers.location;
+        assert(loc.startsWith('/meetings?'), 'Must redirect to /meetings');
+        assert(loc.includes('tab=schedule'), 'Must preserve tab=schedule navigation context');
+        assert(loc.includes('google_connect=connected'), 'Must report connected status');
+        assert(loc.includes('type=central'), 'Must recover TENANT_CENTRAL connection type without DB column');
+        assert(!loc.includes('__clasptek_ct'), '__clasptek_ct internal parameter must be cleanly purged from URL');
+
+        // 4. Instance C: Immediate replay of the exact same callback in another instance with empty memory
+        oauthConfig._memoryStateStore.clear();
+        const replayReq = { method: 'GET', url: `/api/auth/google/callback?code=4/valid_exchange_code&state=${state}` };
+        const replayRes = createMockResponse();
+        await callbackHandler(replayReq, replayRes);
+
+        assert.strictEqual(replayRes.statusCode, 302);
+        assert(replayRes.headers.location.includes('google_connect=invalid_state'), 'Replayed state must fail with invalid_state');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+        oauthConfig._memoryStateStore.clear();
+      }
+    });
+
+    await runAsyncTest('5.5: Missing, expired, and invalid state tokens remain rejected', async () => {
+      // Missing state
+      const reqNoState = { method: 'GET', url: '/api/auth/google/callback?code=4/valid_code' };
+      const resNoState = createMockResponse();
+      await callbackHandler(reqNoState, resNoState);
+      assert(resNoState.headers.location.includes('google_connect=invalid_state'));
+
+      // Tampered / nonexistent state
+      const reqBad = { method: 'GET', url: '/api/auth/google/callback?code=4/valid_code&state=non_existent_token_123' };
+      const resBad = createMockResponse();
+      await callbackHandler(reqBad, resBad);
+      assert(resBad.headers.location.includes('google_connect=invalid_state'));
+    });
+
+    await runAsyncTest('5.6: Concurrent callback attempts cannot consume the same state twice', async () => {
+      const mockDb = new Map();
+      const testState = 'concurrent_test_state_nonce_xyz';
+      mockDb.set(testState, {
+        state: testState,
+        tenant_id: 'tenant-test-123',
+        user_id: 'usr-123',
+        redirect_target: oauthConfig.encodeRedirectTarget('/meetings', 'TENANT_CENTRAL'),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        used_at: null
+      });
+
+      oauthConfig.setTestHttpsInterceptor(async (url, options, payload) => {
+        const u = new URL(url);
+        if (u.pathname.includes('/rest/v1/oauth_states')) {
+          if (options.method === 'PATCH') {
+            const matchState = u.searchParams.get('state')?.replace('eq.', '');
+            const row = mockDb.get(matchState);
+            // Atomic update simulation: only succeeds if used_at is currently null
+            if (row && !row.used_at) {
+              row.used_at = payload.used_at;
+              mockDb.set(matchState, row);
+              return { status: 200, headers: {}, body: [row] };
+            }
+            return { status: 200, headers: {}, body: [] };
+          }
+          if (options.method === 'GET') {
+            const matchState = u.searchParams.get('state')?.replace('eq.', '');
+            const row = mockDb.get(matchState);
+            return { status: 200, headers: {}, body: row ? [row] : [] };
+          }
+        }
+        return { status: 200, headers: {}, body: [] };
+      });
+
+      try {
+        oauthConfig._memoryStateStore.clear();
+        // Execute two concurrent validations
+        const [res1, res2] = await Promise.all([
+          oauthConfig.validateAndConsumeOAuthState(testState),
+          oauthConfig.validateAndConsumeOAuthState(testState)
+        ]);
+
+        const validCount = (res1.valid ? 1 : 0) + (res2.valid ? 1 : 0);
+        assert.strictEqual(validCount, 1, 'Exactly one concurrent consumption attempt must succeed');
+        const failedRes = res1.valid ? res2 : res1;
+        assert.strictEqual(failedRes.valid, false);
+        assert.strictEqual(failedRes.reason, 'STATE_ALREADY_USED');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+        oauthConfig._memoryStateStore.clear();
+      }
+    });
+
+    await runSyncTest('5.7: Connection type and return target survive round-trip without confusion or open redirects', () => {
+      // 1. Central connection with tab
+      const enc1 = oauthConfig.encodeRedirectTarget('/meetings?tab=schedule', 'TENANT_CENTRAL');
+      const dec1 = oauthConfig.decodeRedirectTarget(enc1);
+      assert.strictEqual(dec1.connectionType, 'TENANT_CENTRAL');
+      assert.strictEqual(dec1.redirectTarget, '/meetings?tab=schedule');
+      assert(!dec1.redirectTarget.includes('__clasptek_ct'));
+
+      // 2. Personal connection with query params
+      const enc2 = oauthConfig.encodeRedirectTarget('/meetings?view=history', 'USER_PERSONAL');
+      const dec2 = oauthConfig.decodeRedirectTarget(enc2);
+      assert.strictEqual(dec2.connectionType, 'USER_PERSONAL');
+      assert.strictEqual(dec2.redirectTarget, '/meetings?view=history');
+
+      // 3. Open redirect attack payload normalized to /meetings
+      const encMalicious = oauthConfig.encodeRedirectTarget('https://evil.com/phish', 'TENANT_CENTRAL');
+      const decMalicious = oauthConfig.decodeRedirectTarget(encMalicious);
+      assert.strictEqual(decMalicious.connectionType, 'TENANT_CENTRAL');
+      assert.strictEqual(decMalicious.redirectTarget, '/meetings', 'Malicious open-redirect target must be normalized to /meetings');
+
+      // 4. Tampered connection type normalizes to USER_PERSONAL
+      const decTampered = oauthConfig.decodeRedirectTarget('/meetings?__clasptek_ct=ADMIN_HACK');
+      assert.strictEqual(decTampered.connectionType, 'USER_PERSONAL');
+      assert.strictEqual(decTampered.redirectTarget, '/meetings');
+    });
+
+    await runAsyncTest('5.8: Both Drive and Calendar initiation use the corrected shared state lifecycle', async () => {
+      let capturedDrivePayload = null;
+      let capturedCalPayload = null;
+
+      oauthConfig.setTestHttpsInterceptor((url, options, payload) => {
+        if (url.includes('/rest/v1/oauth_states') && options.method === 'POST') {
+          if (payload.redirect_target.includes('tab=schedule')) {
+            capturedCalPayload = payload;
+          } else {
+            capturedDrivePayload = payload;
+          }
+          return { status: 201, headers: {}, body: [payload] };
+        }
+        return { status: 200, headers: {}, body: [] };
+      });
+
+      try {
+        // 1. Initiate Drive connection
+        const driveReq = {
+          method: 'POST',
+          url: '/api/auth/google/start?action=start',
+          headers: { authorization: 'Bearer test_valid_jwt' },
+          body: JSON.stringify({ connectionType: 'TENANT_CENTRAL', redirectTarget: '/meetings' })
+        };
+        const driveRes = createMockResponse();
+        await authHandler(driveReq, driveRes);
+        assert.strictEqual(driveRes.statusCode, 200);
+        assert(capturedDrivePayload);
+        assert(!('connection_type' in capturedDrivePayload));
+
+        // 2. Initiate Calendar connection
+        const calReq = {
+          method: 'POST',
+          url: '/api/auth/google/start?action=start',
+          headers: { authorization: 'Bearer test_valid_jwt' },
+          body: JSON.stringify({ connectionType: 'TENANT_CENTRAL', redirectTarget: '/meetings?tab=schedule', includeCalendar: true })
+        };
+        const calRes = createMockResponse();
+        await authHandler(calReq, calRes);
+        assert.strictEqual(calRes.statusCode, 200);
+        assert(capturedCalPayload);
+        assert(!('connection_type' in capturedCalPayload));
+        assert(capturedCalPayload.redirect_target.includes('tab=schedule'));
+
+        const calAuthUrl = new URL(JSON.parse(calRes.body).authUrl);
+        assert(calAuthUrl.searchParams.get('scope').includes('calendar.events'), 'Calendar authUrl must contain calendar.events scope');
+      } finally {
+        oauthConfig.setTestHttpsInterceptor(null);
+      }
+    });
+  } finally {
+    if (prevSupabaseUrl) process.env.SUPABASE_URL = prevSupabaseUrl; else delete process.env.SUPABASE_URL;
+    if (prevServiceKey) process.env.SUPABASE_SERVICE_ROLE_KEY = prevServiceKey; else delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  }
+
   console.log('\n================================================================================');
   console.log(` RESULTS: ${passedTests} PASSED / ${failedTests} FAILED (TOTAL: ${totalTests} TESTS)`);
   console.log('================================================================================\n');

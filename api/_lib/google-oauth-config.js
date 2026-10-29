@@ -750,10 +750,19 @@ function resolveSupabaseConfig() {
   return { supabaseUrl, secretKey, anonKey };
 }
 
+let _testHttpsInterceptor = null;
+
+function setTestHttpsInterceptor(fn) {
+  _testHttpsInterceptor = fn;
+}
+
 /**
  * Universal HTTPS Request Client
  */
 function httpsRequest(url, options = {}, payload = null) {
+  if (typeof _testHttpsInterceptor === 'function') {
+    return _testHttpsInterceptor(url, options, payload);
+  }
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const resolvedPayload = payload !== null ? payload : (options.body || null);
@@ -1073,6 +1082,62 @@ function appendQueryParams(baseUrl, paramsObj = {}) {
 }
 
 /**
+ * Safely encode connectionType within redirectTarget to ensure persistence
+ * across serverless instances even when public.oauth_states table schema does not
+ * have a connection_type column.
+ */
+function encodeRedirectTarget(target = '/meetings', connectionType = 'USER_PERSONAL') {
+  const normType = connectionType === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
+  const validated = validateReturnUrl(target, '/meetings');
+  try {
+    const u = new URL(validated, 'https://app.clasptek.org');
+    u.searchParams.set('__clasptek_ct', normType);
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch (_) {
+    const sep = validated.includes('?') ? '&' : '?';
+    return `${validated}${sep}__clasptek_ct=${encodeURIComponent(normType)}`;
+  }
+}
+
+/**
+ * Decode connectionType from encoded redirectTarget and return sanitized target.
+ */
+function decodeRedirectTarget(encoded) {
+  if (!encoded || typeof encoded !== 'string') {
+    return { redirectTarget: '/meetings', connectionType: 'USER_PERSONAL' };
+  }
+  try {
+    let ct = null;
+    const u = new URL(encoded, 'https://app.clasptek.org');
+    ct = u.searchParams.get('__clasptek_ct');
+    u.searchParams.delete('__clasptek_ct');
+    if (!ct && u.hash && u.hash.includes('__clasptek_ct=')) {
+      const match = u.hash.match(/[?&]?__clasptek_ct=([A-Z_]+)/);
+      if (match) {
+        ct = match[1];
+        u.hash = u.hash.replace(match[0], '');
+      }
+    }
+    const cleanRelative = `${u.pathname}${u.search}${u.hash}`;
+    const redirectTarget = validateReturnUrl(cleanRelative, '/meetings');
+    const connectionType = ct === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
+    return {
+      redirectTarget,
+      connectionType
+    };
+  } catch (_) {
+    const match = encoded.match(/[?&]?__clasptek_ct=([A-Z_]+)/);
+    const ct = match ? match[1] : null;
+    const cleaned = encoded.replace(/[?&]?__clasptek_ct=[A-Z_]+/, '');
+    const redirectTarget = validateReturnUrl(cleaned, '/meetings');
+    return {
+      redirectTarget,
+      connectionType: ct === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL'
+    };
+  }
+}
+
+/**
  * Generate and Save OAuth State (Anti-Replay / CSRF Protection)
  * Default TTL: 10 minutes (600 seconds)
  * Supports connectionType: 'TENANT_CENTRAL' or 'USER_PERSONAL'
@@ -1086,37 +1151,76 @@ async function createOAuthState({
 }) {
   const state = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+  const normalizedConnectionType = connectionType === 'TENANT_CENTRAL' ? 'TENANT_CENTRAL' : 'USER_PERSONAL';
   const safeRedirectTarget = validateReturnUrl(redirectTarget, '/meetings');
+  const encodedRedirect = encodeRedirectTarget(safeRedirectTarget, normalizedConnectionType);
 
-  const record = {
+  const inMemoryRecord = {
     state,
     tenant_id: tenantId,
     user_id: userId,
     provider: 'google',
     redirect_target: safeRedirectTarget,
-    connection_type: connectionType,
+    connection_type: normalizedConnectionType,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
     used_at: null
   };
 
-  memoryStateStore.set(state, record);
+  memoryStateStore.set(state, inMemoryRecord);
 
   const { supabaseUrl, secretKey } = resolveSupabaseConfig();
   if (secretKey && supabaseUrl) {
+    const isOfflineTest = (process.env.NODE_ENV === 'test' || process.env.CLASPTEK_TEST_MODE === 'true') && !_testHttpsInterceptor;
+    if (!isOfflineTest) {
+      // Database payload strictly omits unsupported connection_type column to preserve compatibility
+      // with canonical public.oauth_states table.
+      const dbPayload = {
+        state,
+        tenant_id: tenantId,
+        user_id: userId,
+        provider: 'google',
+      redirect_target: encodedRedirect,
+      created_at: inMemoryRecord.created_at,
+      expires_at: expiresAt,
+      used_at: null
+    };
+
+    let postRes;
     try {
-      await httpsRequest(`${supabaseUrl}/rest/v1/oauth_states`, {
+      postRes = await httpsRequest(`${supabaseUrl}/rest/v1/oauth_states`, {
         method: 'POST',
         headers: {
           'apikey': secretKey,
           'Authorization': `Bearer ${secretKey}`,
           'Prefer': 'return=representation'
         }
-      }, record);
-    } catch (_) {}
+      }, dbPayload);
+    } catch (dbErr) {
+      console.error('[OAuth State] Database network error persisting OAuth state:', dbErr.message);
+      const err = new Error('OAUTH_STATE_PERSISTENCE_FAILED');
+      err.code = 'OAUTH_STATE_PERSISTENCE_FAILED';
+      err.statusCode = 500;
+      throw err;
+    }
+
+    if (!postRes || postRes.status < 200 || postRes.status >= 300) {
+      console.error('[OAuth State] Failed to persist OAuth state in database. Status:', postRes ? postRes.status : 'no_response');
+      const err = new Error('OAUTH_STATE_PERSISTENCE_FAILED');
+      err.code = 'OAUTH_STATE_PERSISTENCE_FAILED';
+      err.statusCode = 500;
+      throw err;
+    }
+  }
+} else if (process.env.NODE_ENV === 'production' && process.env.CLASPTEK_TEST_MODE !== 'true') {
+    // Fail closed in production if Supabase configuration is missing
+    const err = new Error('OAUTH_STATE_PERSISTENCE_FAILED');
+    err.code = 'OAUTH_STATE_PERSISTENCE_FAILED';
+    err.statusCode = 500;
+    throw err;
   }
 
-  return { state, expiresAt, connectionType };
+  return { state, expiresAt, connectionType: normalizedConnectionType };
 }
 
 /**
@@ -1137,7 +1241,15 @@ async function validateAndConsumeOAuthState(state) {
     if (new Date(cached.expires_at) <= now) return { valid: false, reason: 'STATE_EXPIRED' };
     cached.used_at = now.toISOString();
     memoryStateStore.set(state, cached);
-    return { valid: true, stateRecord: cached };
+    const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(cached.redirect_target);
+    return {
+      valid: true,
+      stateRecord: {
+        ...cached,
+        connection_type: cached.connection_type || decodedType || 'USER_PERSONAL',
+        redirect_target: decodedTarget || cached.redirect_target
+      }
+    };
   }
 
   // Check Supabase DB in production
@@ -1157,8 +1269,15 @@ async function validateAndConsumeOAuthState(state) {
       );
 
       if (patchRes.status >= 200 && patchRes.status < 300 && Array.isArray(patchRes.body) && patchRes.body.length > 0) {
-        const stateRecord = patchRes.body[0];
-        memoryStateStore.set(state, { ...stateRecord, used_at: now.toISOString() });
+        const rawRecord = patchRes.body[0];
+        const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(rawRecord.redirect_target);
+        const stateRecord = {
+          ...rawRecord,
+          connection_type: rawRecord.connection_type || decodedType || 'USER_PERSONAL',
+          redirect_target: decodedTarget || rawRecord.redirect_target,
+          used_at: now.toISOString()
+        };
+        memoryStateStore.set(state, stateRecord);
         return { valid: true, stateRecord };
       }
 
@@ -1177,7 +1296,15 @@ async function validateAndConsumeOAuthState(state) {
       }
 
       return { valid: false, reason: 'STATE_NOT_FOUND' };
-    } catch (_) {}
+    } catch (err) {
+      console.error('[OAuth State] Database error verifying OAuth state:', err.message);
+      return { valid: false, reason: 'STATE_STORAGE_ERROR' };
+    }
+  }
+
+  // Fail closed in production if database is not configured
+  if (process.env.NODE_ENV === 'production' && process.env.CLASPTEK_TEST_MODE !== 'true') {
+    return { valid: false, reason: 'STATE_NOT_FOUND' };
   }
 
   const fallbackCached = memoryStateStore.get(state);
@@ -1195,8 +1322,16 @@ async function validateAndConsumeOAuthState(state) {
 
   fallbackCached.used_at = now.toISOString();
   memoryStateStore.set(state, fallbackCached);
+  const { connectionType: decodedType, redirectTarget: decodedTarget } = decodeRedirectTarget(fallbackCached.redirect_target);
 
-  return { valid: true, stateRecord: fallbackCached };
+  return {
+    valid: true,
+    stateRecord: {
+      ...fallbackCached,
+      connection_type: fallbackCached.connection_type || decodedType || 'USER_PERSONAL',
+      redirect_target: decodedTarget || fallbackCached.redirect_target
+    }
+  };
 }
 
 /**
@@ -2363,6 +2498,9 @@ module.exports = {
   authenticateCaller,
   createOAuthState,
   validateAndConsumeOAuthState,
+  encodeRedirectTarget,
+  decodeRedirectTarget,
+  setTestHttpsInterceptor,
   exchangeAuthorizationCode,
   refreshAccessToken,
   fetchGoogleUserInfo,

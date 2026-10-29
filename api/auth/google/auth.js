@@ -92,12 +92,29 @@ async function handleStart(req, res, reqUrl, body) {
   }
 
   // 1. Generate and persist single-use OAuth state with authoritative connectionType
-  const { state, expiresAt } = await createOAuthState({
-    tenantId: authResult.tenantId,
-    userId: authResult.user.id,
-    redirectTarget,
-    connectionType
-  });
+  let stateResult;
+  try {
+    stateResult = await createOAuthState({
+      tenantId: authResult.tenantId,
+      userId: authResult.user.id,
+      redirectTarget,
+      connectionType
+    });
+  } catch (stateErr) {
+    if (stateErr.code === 'OAUTH_STATE_PERSISTENCE_FAILED') {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.end(JSON.stringify({
+        success: false,
+        error: 'OAUTH_STATE_PERSISTENCE_FAILED',
+        message: 'Unable to initialize secure authorization session. Please try again later.'
+      }));
+    }
+    throw stateErr;
+  }
+
+  const { state, expiresAt } = stateResult;
 
   // 2. Resolve Google OAuth configuration & canonical redirect URI
   const config = resolveGoogleOAuthConfig(req);
