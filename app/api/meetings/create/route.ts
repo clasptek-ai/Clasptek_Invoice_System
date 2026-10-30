@@ -55,16 +55,26 @@ export async function POST(req: NextRequest) {
       scheduledEnd,
       participantAccess = 'COHORT_ONLY',
       settings = {},
-      provider = 'livekit',
+      provider,
       customGoogleMeetUrl,
       googleMeetUrl,
     } = body;
 
-    // Validate provider against explicit allowlist
+    // Validate provider against explicit allowlist - neither provider may be default
     const ALLOWED_PROVIDERS = ['livekit', 'google_meet'];
     const rawProvider = body.provider !== undefined && body.provider !== null
       ? String(body.provider).trim().toLowerCase()
-      : 'livekit';
+      : '';
+
+    if (!rawProvider) {
+      return NextResponse.json(
+        {
+          error: 'PROVIDER_REQUIRED',
+          message: 'A meeting platform (livekit or google_meet) must be explicitly selected.',
+        },
+        { status: 400 }
+      );
+    }
 
     if (!ALLOWED_PROVIDERS.includes(rawProvider)) {
       return NextResponse.json(

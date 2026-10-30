@@ -218,7 +218,7 @@ export function MeetingsPageClient({
     scheduledStart: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
     scheduledEnd: new Date(Date.now() + 3600000 * 3).toISOString().slice(0, 16),
     participantAccess: 'COHORT_ONLY',
-    provider: 'livekit' as 'livekit' | 'google_meet',
+    provider: '' as '' | 'livekit' | 'google_meet', /* Former default: provider: 'livekit' as 'livekit' | 'google_meet' */
     customGoogleMeetUrl: '',
     allowChat: true,
     allowScreenShare: true,
@@ -566,6 +566,11 @@ export function MeetingsPageClient({
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
     if (durationMinutes < 5) {
       setScheduleModalError('Meeting duration must be at least 5 minutes.');
+      return;
+    }
+
+    if (!meetingForm.provider) {
+      setScheduleModalError('Please select a meeting platform (Clasptek Live Meeting or Google Meet).');
       return;
     }
 
@@ -1673,14 +1678,7 @@ export function MeetingsPageClient({
                           </div>
                         </div>
                       </div>
-                      <div style={{ flexShrink: 0 }}>
-                        <span
-                          className="cp-pill active"
-                          style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px' }}
-                        >
-                          Default Provider
-                        </span>
-                      </div>
+                      {/* Removed Default Provider badge per Phase C240AQ: explicit provider selection required */}
                     </div>
 
                     {/* Google Meet Provider Card */}
@@ -1772,7 +1770,7 @@ export function MeetingsPageClient({
                       Enable Screen Share
                     </label>
                   </div>
-                ) : (
+                ) : meetingForm.provider === 'google_meet' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div
                       style={{
@@ -1916,7 +1914,7 @@ export function MeetingsPageClient({
                       </div>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 {/* 4. Start and End Date / Time */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>

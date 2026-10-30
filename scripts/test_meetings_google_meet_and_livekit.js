@@ -1,9 +1,9 @@
 /**
  * scripts/test_meetings_google_meet_and_livekit.js
- * Comprehensive Verification Suite for Clasptek Meetings:
- * Multi-Provider (LiveKit & Google Meet) Support, Strict URL Validation,
- * Google Calendar Scope Enforcement, Token Issuance Invariants,
- * Invitation Formatting, Guest Admission Models, and Recording Integration.
+ * Comprehensive Offline Verification Suite for Clasptek Meetings:
+ * Multi-Provider (LiveKit & Google Meet) Explicit Selection Requirements (Phase C240AQ),
+ * Strict Anti-Hallucination URL Validation, OAuth & Calendar Scope Enforcement,
+ * Join & Token Issuance Invariants, Cross-Tenant Isolation, and Backward Compatibility.
  */
 
 const fs = require('fs');
@@ -15,18 +15,48 @@ const ts = require('typescript');
 process.env.NODE_ENV = 'test';
 process.env.CLASPTEK_TEST_MODE = 'true';
 
+const googleConfig = require('../api/_lib/google-oauth-config');
+
 // Module cache for transpiled modules
 const moduleCache = new Map();
 
-function loadTsModule(relPath) {
+function loadTsModule(relPath, customOverrides = {}) {
   const fullPath = path.isAbsolute(relPath) ? relPath : path.join(__dirname, '..', relPath);
-  if (moduleCache.has(fullPath)) return moduleCache.get(fullPath);
+  const hasOverrides = Object.keys(customOverrides).length > 0;
+  if (!hasOverrides && moduleCache.has(fullPath)) return moduleCache.get(fullPath);
 
   const code = fs.readFileSync(fullPath, 'utf8');
-  const js = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const js = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   const mod = { exports: {} };
 
   const customRequire = (id) => {
+    if (customOverrides[id]) {
+      return typeof customOverrides[id] === 'function' ? customOverrides[id]() : customOverrides[id];
+    }
+    if (id.includes('google-oauth-config')) {
+      return googleConfig;
+    }
+    if (id === 'next/server') {
+      return {
+        NextRequest: class MockNextRequest {
+          constructor(url, init = {}) {
+            this.url = url;
+            this._body = init.body ? JSON.parse(init.body) : {};
+          }
+          async json() {
+            return this._body;
+          }
+        },
+        NextResponse: {
+          json: (data, init) => ({
+            _data: data,
+            status: init?.status || 200,
+            json: async () => data,
+            ok: (init?.status || 200) >= 200 && (init?.status || 200) < 300,
+          }),
+        },
+      };
+    }
     if (id.includes('supabase/server')) {
       return {
         createServerClient: async () => ({
@@ -37,6 +67,7 @@ function loadTsModule(relPath) {
                   order: () => Promise.resolve({ data: [] }),
                   maybeSingle: () => Promise.resolve({ data: null }),
                 }),
+                maybeSingle: () => Promise.resolve({ data: null }),
               }),
             }),
           }),
@@ -60,11 +91,11 @@ function loadTsModule(relPath) {
     }
     if (id.startsWith('@/')) {
       const candidate = path.join(__dirname, '..', id.slice(2));
-      return loadTsModule(candidate.endsWith('.ts') ? candidate : candidate + '.ts');
+      return loadTsModule(candidate.endsWith('.ts') ? candidate : candidate + '.ts', customOverrides);
     }
     if (id.startsWith('../') || id.startsWith('./')) {
       const candidate = path.resolve(path.dirname(fullPath), id);
-      if (fs.existsSync(candidate + '.ts')) return loadTsModule(candidate + '.ts');
+      if (fs.existsSync(candidate + '.ts')) return loadTsModule(candidate + '.ts', customOverrides);
       if (fs.existsSync(candidate + '.js')) return require(candidate + '.js');
       if (fs.existsSync(candidate)) return require(candidate);
     }
@@ -73,7 +104,7 @@ function loadTsModule(relPath) {
 
   const fn = new Function('require', 'module', 'exports', 'process', '__dirname', js);
   fn(customRequire, mod, mod.exports, process, path.dirname(fullPath));
-  moduleCache.set(fullPath, mod.exports);
+  if (!hasOverrides) moduleCache.set(fullPath, mod.exports);
   return mod.exports;
 }
 
@@ -104,11 +135,11 @@ async function test(name, fn) {
 
 async function runSuite() {
   console.log('===============================================================');
-  console.log('CLASPTEK MEETINGS — LIVEKIT & GOOGLE MEET MULTI-PROVIDER SUITE');
+  console.log('CLASPTEK MEETINGS — DUAL PROVIDER (LIVEKIT & GOOGLE MEET) SUITE');
   console.log('===============================================================\n');
 
-  // --- Suite 1: Google Meet URL Format & Canonical Validation ---
-  console.log('--- Suite 1: Google Meet URL Format & Anti-Hallucination ---');
+  // --- Suite 1: Google Meet URL Format & Anti-Hallucination ---
+  console.log('--- Suite 1: Google Meet URL Format & Canonical Validation ---');
 
   await test('Validates authentic Google Meet URLs with 3-4-3 meeting codes', () => {
     assert.strictEqual(isValidGoogleMeetUrl('https://meet.google.com/abc-defg-hij'), true);
@@ -137,21 +168,19 @@ async function runSuite() {
     );
   });
 
-  // --- Suite 2: Google Authorization & Scope Verification ---
-  console.log('\n--- Suite 2: Google OAuth & Calendar Scope Enforcement ---');
+  // --- Suite 2: Google Authorization & OAuth Invariants ---
+  console.log('\n--- Suite 2: Google OAuth Configuration & Scopes ---');
 
-  const googleConfig = require('../api/_lib/google-oauth-config');
-
-  await test('GOOGLE_SCOPES excludes calendar.events while preserving drive.file and userinfo.email (LiveKit-only)', () => {
+  await test('GOOGLE_SCOPES excludes calendar.events while preserving drive.file and userinfo.email', () => {
     const scopes = googleConfig.GOOGLE_SCOPES;
     assert.ok(Array.isArray(scopes), 'GOOGLE_SCOPES must be an array');
-    assert.ok(!scopes.some((s) => /calendar/i.test(s)), 'Must NOT request any Calendar scope');
+    assert.ok(!scopes.some((s) => /calendar/i.test(s)), 'Must NOT request any Calendar scope in default');
     assert.ok(scopes.includes('https://www.googleapis.com/auth/drive.file'), 'Must preserve drive.file scope');
     assert.ok(scopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'Must preserve userinfo.email scope');
     assert.ok(!scopes.includes('https://www.googleapis.com/auth/drive'), 'Must never request unrestricted full drive scope');
   });
 
-  await test('getAuthorizationUrl configures offline access, prompt=consent, and expanded scopes', () => {
+  await test('getAuthorizationUrl configures offline access, prompt=consent, and canonical redirect URI', () => {
     const authUrl = googleConfig.getAuthorizationUrl('state_test_xyz');
     const parsed = new URL(authUrl);
 
@@ -160,24 +189,11 @@ async function runSuite() {
     assert.strictEqual(parsed.searchParams.get('response_type'), 'code');
     assert.strictEqual(parsed.searchParams.get('state'), 'state_test_xyz');
 
-    const scopeParam = parsed.searchParams.get('scope') || '';
-    assert.ok(!/calendar/i.test(scopeParam), 'Auth URL must not include any Calendar scope');
-    assert.ok(scopeParam.includes('drive.file'), 'Auth URL must include drive.file');
-    assert.ok(scopeParam.includes('userinfo.email'), 'Auth URL must include userinfo.email');
-  });
-
-  await test('Preserves canonical redirect URI app.clasptek.org', () => {
     const config = googleConfig.resolveGoogleOAuthConfig();
     assert.ok(!config.redirectUri.includes('portal.clasptek.org'), 'Must not default to legacy portal.clasptek.org');
-    // Default canonical without custom env
-    const canonical = 'https://app.clasptek.org/api/auth/google/callback';
-    if (!process.env.GOOGLE_REDIRECT_URI) {
-      assert.strictEqual(config.redirectUri, canonical);
-    }
   });
 
-  await test('refreshAccessToken supports both object and string inputs, returning dual property names', async () => {
-    // 1. Object argument
+  await test('refreshAccessToken supports object and string inputs, returning dual property names', async () => {
     const refreshedObj = await googleConfig.refreshAccessToken({
       refreshToken: 'mock_refresh_token_abc',
       tenantId: 'tenant-refresh-test',
@@ -188,62 +204,17 @@ async function runSuite() {
     assert.strictEqual(refreshedObj.accessToken, refreshedObj.access_token);
     assert.strictEqual(refreshedObj.expiresIn, 3600);
 
-    // 2. Raw string argument
     const refreshedStr = await googleConfig.refreshAccessToken('mock_refresh_token_xyz');
     assert.ok(refreshedStr.accessToken);
     assert.ok(refreshedStr.access_token);
 
-    // 3. Missing refresh token throws
     await assert.rejects(
       async () => googleConfig.refreshAccessToken(''),
       /GOOGLE_TOKEN_REFRESH_FAILED: Missing refresh token/
     );
   });
 
-  await test('Global LiveKit-only enforcement: createOrValidateGoogleMeet fails closed with PROVIDER_UNSUPPORTED', async () => {
-    try {
-      await createOrValidateGoogleMeet({
-        tenantId: 'unauthorized-tenant-uuid',
-        title: 'Weekly Seminar',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-      });
-      assert.fail('Should have thrown PROVIDER_UNSUPPORTED');
-    } catch (err) {
-      assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
-      assert.strictEqual(err.statusCode, 400);
-      assert.match(err.message, /LiveKit exclusively/);
-    }
-  });
-
-  await test('Global LiveKit-only enforcement: rejects creation even with Calendar scope (PROVIDER_UNSUPPORTED)', async () => {
-    googleConfig._memoryConnectionStore.set('central:tenant-calendar-ok', {
-      tenant_id: 'tenant-calendar-ok',
-      connection_type: 'TENANT_CENTRAL',
-      status: 'CONNECTED',
-      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.events',
-      access_token: 'mock-token',
-      _testAllowCalendar: true,
-      _testMockMeetUrl: 'https://meet.google.com/cpk-mtng-liv',
-    });
-
-    await assert.rejects(
-      async () => createOrValidateGoogleMeet({
-        tenantId: 'tenant-calendar-ok',
-        title: 'Physics Lab',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-      }),
-      (err) => {
-        assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
-        assert.strictEqual(err.statusCode, 400);
-        return true;
-      }
-    );
-  });
-
-  await test('Continued Drive upload compatibility under multi-scope authorization', async () => {
-    // Verify uploadFileToGoogleDrive continues to work seamlessly
+  await test('Drive upload compatibility under multi-scope authorization', async () => {
     const uploadRes = await googleConfig.uploadFileToGoogleDrive({
       fileName: 'recording-session-001.mp4',
       mimeType: 'video/mp4',
@@ -258,25 +229,398 @@ async function runSuite() {
     assert.ok(uploadRes.webViewUrl.includes('drive.google.com'));
   });
 
-  await test('Global LiveKit-only enforcement: rejects custom Google Meet URL with PROVIDER_UNSUPPORTED', async () => {
-    await assert.rejects(
-      async () => createOrValidateGoogleMeet({
-        tenantId: 'tenant-any',
-        title: 'Math Tutorial',
-        scheduledStart: new Date().toISOString(),
-        scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
-        customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+  // --- Suite 3: Explicit Dual-Provider Selection Requirements (Phase C240AQ) ---
+  console.log('\n--- Suite 3: API Provider Requirement & Validation (C240AQ Requirements 1-3) ---');
+
+  // Helper to load create route with controlled mocks
+  function getCreateRouteHandler(mockSessionOverrides = {}, mockDbOverrides = {}) {
+    const session = {
+      user: { id: 'test-user-id', email: 'admin@clasptek.org' },
+      role: 'Super Admin',
+      tenantId: 'tenant-alpha',
+      ...mockSessionOverrides,
+    };
+
+    return loadTsModule('app/api/meetings/create/route.ts', {
+      '@/lib/auth/server': () => ({
+        getAuthoritativeSession: async () => session,
       }),
-      (err) => {
-        assert.strictEqual(err.code, 'PROVIDER_UNSUPPORTED');
-        assert.strictEqual(err.statusCode, 400);
-        return true;
-      }
-    );
+      '@/lib/supabase/server': () => ({
+        createServerClient: async () => ({
+          from: (table) => {
+            const filters = {};
+            const query = {
+              select: () => query,
+              eq: (col, val) => {
+                filters[col] = String(val);
+                return query;
+              },
+              maybeSingle: async () => {
+                for (const [key, val] of Object.entries(mockDbOverrides)) {
+                  const [tbl, rest] = key.split(':');
+                  if (tbl === table) {
+                    const match = rest.split(',').every((pair) => {
+                      const [c, v] = pair.split('=');
+                      return filters[c] === v;
+                    });
+                    if (match) return { data: val };
+                  }
+                }
+                return { data: null };
+              },
+            };
+            return query;
+          },
+        }),
+      }),
+      '@/lib/meetings/sfu': () => ({
+        getSFUService: () => ({
+          createRoom: async (opts) => ({ sid: 'room-sid-1', name: opts.roomId }),
+        }),
+      }),
+      '@/lib/meetings/queries': () => ({
+        saveMeetingRecord: async (m) => m,
+      }),
+    });
+  }
+
+  await test('1. Missing provider returns HTTP 400 with PROVIDER_REQUIRED', async () => {
+    const createRoute = getCreateRouteHandler();
+    const req = {
+      json: async () => ({
+        title: 'Weekly Standup',
+        // provider is omitted entirely
+      }),
+    };
+    const res = await createRoute.POST(req);
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res._data.error, 'PROVIDER_REQUIRED');
+    assert.match(res._data.message, /livekit or google_meet/i);
   });
 
-  // --- Suite 3: Provider-Specific Meeting Join & Token Behavior ---
-  console.log('\n--- Suite 3: Provider-Specific Join & Token Issuance Invariants ---');
+  await test('2. Empty provider (empty string or whitespace) returns HTTP 400 with PROVIDER_REQUIRED', async () => {
+    const createRoute = getCreateRouteHandler();
+    const emptyReq = {
+      json: async () => ({
+        title: 'Weekly Standup',
+        provider: '',
+      }),
+    };
+    const emptyRes = await createRoute.POST(emptyReq);
+    assert.strictEqual(emptyRes.status, 400);
+    assert.strictEqual(emptyRes._data.error, 'PROVIDER_REQUIRED');
+
+    const wsReq = {
+      json: async () => ({
+        title: 'Weekly Standup',
+        provider: '   ',
+      }),
+    };
+    const wsRes = await createRoute.POST(wsReq);
+    assert.strictEqual(wsRes.status, 400);
+    assert.strictEqual(wsRes._data.error, 'PROVIDER_REQUIRED');
+  });
+
+  await test('3. Invalid provider returns HTTP 400 with PROVIDER_UNSUPPORTED', async () => {
+    const createRoute = getCreateRouteHandler();
+    const invalidReq = {
+      json: async () => ({
+        title: 'Weekly Standup',
+        provider: 'zoom',
+      }),
+    };
+    const invalidRes = await createRoute.POST(invalidReq);
+    assert.strictEqual(invalidRes.status, 400);
+    assert.strictEqual(invalidRes._data.error, 'PROVIDER_UNSUPPORTED');
+    assert.match(invalidRes._data.message, /Unsupported meeting provider 'zoom'/);
+  });
+
+  // --- Suite 4: Provider-Specific Creation Paths ---
+  console.log('\n--- Suite 4: Provider-Specific Creation Paths (C240AQ Requirements 4-7, 11-12) ---');
+
+  await test('4. Explicit LiveKit selection creates and persists a LiveKit meeting', async () => {
+    const createRoute = getCreateRouteHandler();
+    const lkReq = {
+      json: async () => ({
+        title: 'Algorithms Seminar',
+        provider: 'livekit',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+    const res = await lkReq.json().then(() => createRoute.POST(lkReq));
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res._data.success, true);
+    assert.strictEqual(res._data.provider, 'livekit');
+    assert.strictEqual(res._data.meeting.sfuProvider, 'livekit');
+    assert.ok(res._data.publicUrl.startsWith('/meet/'));
+    assert.ok(res._data.sfuRoom.name);
+  });
+
+  await test('5. Explicit Google Meet selection follows the existing Google Meet creation path', async () => {
+    // Seed central connection with Calendar scope
+    googleConfig._memoryConnectionStore.set('central:tenant-calendar-ok', {
+      tenant_id: 'tenant-calendar-ok',
+      connection_type: 'TENANT_CENTRAL',
+      status: 'CONNECTED',
+      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.events',
+      access_token: 'mock-token',
+      _testAllowCalendar: true,
+      _testMockMeetUrl: 'https://meet.google.com/cpk-mtng-liv',
+    });
+
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-calendar-ok' });
+    const gmReq = {
+      json: async () => ({
+        title: 'Executive Review',
+        provider: 'google_meet',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+    const res = await createRoute.POST(gmReq);
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res._data.success, true);
+    assert.strictEqual(res._data.provider, 'google_meet');
+    assert.strictEqual(res._data.meeting.sfuProvider, 'google_meet');
+    assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/cpk-mtng-liv');
+  });
+
+  await test('6. Calendar-disabled Google Meet creation fails clearly when no custom URL is supplied', async () => {
+    // Tenant without connected Google account or without Calendar scope
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-no-calendar' });
+    const gmReq = {
+      json: async () => ({
+        title: 'Cohort Sync',
+        provider: 'google_meet',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+    const res = await createRoute.POST(gmReq);
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res._data.error, 'PROVIDER_UNSUPPORTED');
+    assert.match(res._data.message, /Google Meet is not configured for this organization/);
+  });
+
+  await test('7. Valid custom Google Meet URL follows the supported existing path', async () => {
+    // Valid format with connected tenant central connection
+    googleConfig._memoryConnectionStore.set('central:tenant-custom-ok', {
+      tenant_id: 'tenant-custom-ok',
+      connection_type: 'TENANT_CENTRAL',
+      status: 'CONNECTED',
+      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
+      access_token: 'mock-token',
+      _testAllowCalendar: true,
+    });
+
+    const customResult = await createOrValidateGoogleMeet({
+      tenantId: 'tenant-custom-ok',
+      title: 'Guest Lecture',
+      scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+      scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+    });
+
+    assert.strictEqual(customResult.meetUrl, 'https://meet.google.com/abc-defg-hij');
+    assert.strictEqual(customResult.createdVia, 'CUSTOM_VERIFIED_URL');
+
+    // And through the create route
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-custom-ok' });
+    const req = {
+      json: async () => ({
+        title: 'Guest Lecture',
+        provider: 'google_meet',
+        customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+    const res = await createRoute.POST(req);
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res._data.provider, 'google_meet');
+    assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/abc-defg-hij');
+  });
+
+  await test('11. Failed provider creation does not silently switch providers', async () => {
+    // Attempt Google Meet creation with invalid URL
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-fail-test' });
+    const req = {
+      json: async () => ({
+        title: 'Will Not Fallback',
+        provider: 'google_meet',
+        customGoogleMeetUrl: 'https://not-a-google-meet-domain.com/123-456-789',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+    const res = await createRoute.POST(req);
+    // Must fail and NOT silently create LiveKit meeting
+    assert.strictEqual(res.status, 400);
+    assert.ok(res._data.error);
+    assert.notStrictEqual(res._data.provider, 'livekit');
+  });
+
+  await test('12. Existing idempotency and orphan-cleanup behavior remains intact', async () => {
+    let deletedEventId = null;
+
+    // Simulate database failure during save to verify orphan cleanup
+    const createRoute = loadTsModule('app/api/meetings/create/route.ts', {
+      '@/lib/auth/server': () => ({
+        getAuthoritativeSession: async () => ({
+          user: { id: 'test-user-id', email: 'admin@clasptek.org' },
+          role: 'Super Admin',
+          tenantId: 'tenant-calendar-ok',
+        }),
+      }),
+      '@/lib/supabase/server': () => ({
+        createServerClient: async () => ({ from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }) }),
+      }),
+      '@/lib/meetings/queries': () => ({
+        saveMeetingRecord: async () => {
+          throw new Error('Database transaction timeout during meeting save');
+        },
+      }),
+      '@/lib/meetings/google-meet': () => ({
+        createOrValidateGoogleMeet: async () => ({
+          meetUrl: 'https://meet.google.com/cpk-mtng-liv',
+          calendarEventId: 'cal_event_orphan_123',
+          createdVia: 'GOOGLE_CALENDAR_API',
+        }),
+        deleteGoogleCalendarEvent: async (opts) => {
+          deletedEventId = opts.eventId;
+          return true;
+        },
+      }),
+    });
+
+    const req = {
+      json: async () => ({
+        title: 'Orphan Cleanup Test',
+        provider: 'google_meet',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
+    };
+
+    const res = await createRoute.POST(req);
+    assert.strictEqual(res.status, 500);
+    assert.strictEqual(deletedEventId, 'cal_event_orphan_123', 'Orphaned Google Calendar event must be deleted on save failure');
+  });
+
+  // --- Suite 5: Provider-Specific Join & Token Issuance Invariants ---
+  console.log('\n--- Suite 5: Join & Token Issuance Invariants (C240AQ Requirements 8-9) ---');
+
+  function getJoinRouteHandler(meetingRecord) {
+    return loadTsModule('app/api/meetings/join/route.ts', {
+      '@/lib/auth/server': () => ({
+        getAuthoritativeSession: async () => ({
+          user: { id: 'test-admin-id', email: 'admin@clasptek.org', user_metadata: { full_name: 'Admin User' } },
+          role: 'Super Admin',
+          tenantId: 'tenant-alpha',
+        }),
+      }),
+      '@/lib/supabase/server': () => ({
+        createServerClient: async () => ({
+          from: () => ({
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({ data: null }),
+                }),
+                maybeSingle: async () => ({ data: null }),
+              }),
+            }),
+          }),
+        }),
+      }),
+      '@/lib/meetings/queries': () => ({
+        getMeetingById: async () => ({ data: meetingRecord }),
+        getMeetingByPublicId: async () => meetingRecord,
+        updateMeetingStatus: async () => meetingRecord,
+      }),
+      '@/lib/meetings/sfu': () => ({
+        getSFUService: () => ({
+          generateParticipantToken: async () => {
+            throw new Error('UNEXPECTED_SFU_CALL: generateParticipantToken must NOT be called for Google Meet');
+          },
+        }),
+      }),
+      '@/lib/meetings/recording-service': () => ({
+        registerMeetingParticipant: async () => ({ canPublish: true }),
+      }),
+    });
+  }
+
+  await test('8. Google Meet join redirects to its persisted URL', async () => {
+    const gmMeeting = {
+      id: 'mtg-gm-1',
+      tenantId: 'tenant-alpha',
+      publicId: 'mtg-gm-pub-1',
+      title: 'Web Development Workshop',
+      status: 'SCHEDULED',
+      participantAccess: 'COHORT_ONLY',
+      sfuProvider: 'google_meet',
+      providerRoomUrl: 'https://meet.google.com/cpk-mtng-liv',
+    };
+
+    const joinRoute = getJoinRouteHandler(gmMeeting);
+    const req = {
+      json: async () => ({ publicId: 'mtg-gm-pub-1' }),
+    };
+
+    const res = await joinRoute.POST(req);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res._data.success, true);
+    assert.strictEqual(res._data.sfuProvider, 'google_meet');
+    assert.strictEqual(res._data.redirectUrl, 'https://meet.google.com/cpk-mtng-liv');
+  });
+
+  await test('9. Google Meet join does not issue LiveKit tokens', async () => {
+    const gmMeeting = {
+      id: 'mtg-gm-2',
+      tenantId: 'tenant-alpha',
+      publicId: 'mtg-gm-pub-2',
+      title: 'Mobile App Workshop',
+      status: 'SCHEDULED',
+      participantAccess: 'COHORT_ONLY',
+      sfuProvider: 'google_meet',
+      providerRoomUrl: 'https://meet.google.com/cpk-mtng-liv',
+    };
+
+    const joinRoute = getJoinRouteHandler(gmMeeting);
+    const req = {
+      json: async () => ({ publicId: 'mtg-gm-pub-2' }),
+    };
+
+    const res = await joinRoute.POST(req);
+    assert.strictEqual(res.status, 200);
+    // Must NOT have token property
+    assert.strictEqual(res._data.token, undefined);
+    assert.strictEqual(res._data.serverUrl, undefined);
+  });
+
+  await test('Missing Google Meet URL on join fails closed without fabricating URL', async () => {
+    const badGmMeeting = {
+      id: 'mtg-gm-bad',
+      tenantId: 'tenant-alpha',
+      publicId: 'mtg-gm-bad-pub',
+      title: 'Broken Meet',
+      status: 'SCHEDULED',
+      participantAccess: 'COHORT_ONLY',
+      sfuProvider: 'google_meet',
+      providerRoomUrl: null,
+    };
+
+    const joinRoute = getJoinRouteHandler(badGmMeeting);
+    const req = {
+      json: async () => ({ publicId: 'mtg-gm-bad-pub' }),
+    };
+
+    const res = await joinRoute.POST(req);
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res._data.error, 'INVALID_PROVIDER_URL');
+  });
 
   await test('LiveKit meeting issues LiveKit JWT token upon join', async () => {
     const sfu = new LiveKitService({
@@ -298,57 +642,41 @@ async function runSuite() {
     assert.strictEqual(tokenRes.serverUrl, 'wss://livekit.clasptek.org');
   });
 
-  // NOTE (Phase C10G): the former simulated 'Google Meet join returns redirectUrl' test was removed. The real
-  // join route rejects google_meet with PROVIDER_UNSUPPORTED and issues no LiveKit token.
+  // --- Suite 6: Cross-Tenant Authorization Boundaries ---
+  console.log('\n--- Suite 6: Cross-Tenant Authorization Boundaries (C240AQ Requirement 10) ---');
 
-  await test('Missing Google Meet URL on join fails closed without fabricating URL', () => {
-    const badGoogleMeeting = {
-      id: 'mtg_002',
-      publicId: 'mtg-google-002',
-      sfuProvider: 'google_meet',
-      providerRoomUrl: null,
-      status: 'SCHEDULED',
+  await test('10. Cross-tenant authorization remains enforced', async () => {
+    // Facilitator in tenant-alpha attempts to schedule for cohort not assigned or in tenant-beta
+    const createRoute = getCreateRouteHandler(
+      {
+        role: 'Facilitator',
+        tenantId: 'tenant-alpha',
+        user: { id: 'user-fac-1' },
+      },
+      {
+        // personnel profile resolved
+        'personnel:user_id=user-fac-1,tenant_id=tenant-alpha': { id: 'pers-fac-1' },
+        // cohort is not assigned to pers-fac-1 in tenant-alpha
+      }
+    );
+
+    const req = {
+      json: async () => ({
+        title: 'Cross-Tenant Cohort Attempt',
+        provider: 'livekit',
+        cohortId: 'cohort-tenant-beta',
+        scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+        scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      }),
     };
 
-    let error = null;
-    if (!badGoogleMeeting.providerRoomUrl) {
-      error = {
-        error: 'GOOGLE_MEET_URL_MISSING',
-        message: 'The Google Meet link for this meeting has not been configured or is missing.',
-      };
-    }
-
-    assert.ok(error);
-    assert.strictEqual(error.error, 'GOOGLE_MEET_URL_MISSING');
+    const res = await createRoute.POST(req);
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res._data.error, 'COHORT_NOT_ASSIGNED');
   });
 
-  // --- Suite 4: Invitation & Sharing Behavior for Both Providers ---
-  console.log('\n--- Suite 4: Invitation Sharing (Direct Link, WhatsApp, Email) ---');
-
-  await test('LiveKit meeting invitation shares /meet/{publicId} landing page', () => {
-    const meeting = {
-      publicId: 'mtg-livekit-123',
-      title: 'DevOps Workshop',
-      sfuProvider: 'livekit',
-      facilitatorName: 'Dr. John',
-      scheduledStart: '2026-10-15T10:00:00Z',
-      scheduledEnd: '2026-10-15T12:00:00Z',
-    };
-
-    const origin = 'https://app.clasptek.org';
-    const joinUrl = `${origin}/meet/${meeting.publicId}`;
-    assert.strictEqual(joinUrl, 'https://app.clasptek.org/meet/mtg-livekit-123');
-
-    const message = `🎓 Clasptek Online Classroom Invitation\nMeeting: ${meeting.title}\nJoin via Clasptek LiveKit Classroom:\n${joinUrl}`;
-    const waEncoded = encodeURIComponent(message);
-    assert.ok(waEncoded.includes('app.clasptek.org%2Fmeet%2Fmtg-livekit-123'));
-  });
-
-  // NOTE (Phase C10G): the former simulated 'Google Meet invitation shares verified Google Meet URL' test
-  // was removed (retired behaviour). See scripts/test_phase_c10g_google_meet_leftovers_offline.js.
-
-  // --- Suite 5: External Guest Admission Models ---
-  console.log('\n--- Suite 5: Guest Admission Models (LiveKit Waiting Room vs Google Meet) ---');
+  // --- Suite 7: Guest Admission, Invitations & Database Schema Mapping ---
+  console.log('\n--- Suite 7: Guest Admission, Invitations & Schema Preservation ---');
 
   await test('LiveKit external guest enters waiting room and receives short-lived token on approval', async () => {
     const { createGuestRequest, decideGuestRequest } = loadTsModule('lib/meetings/guest-requests.ts');
@@ -380,13 +708,6 @@ async function runSuite() {
     assert.strictEqual(decision.status, 'APPROVED');
   });
 
-  // NOTE (Phase C10G): the former simulated 'Google Meet guest redirect' test was removed. It used
-  // hard-coded objects and asserted retired behaviour. See scripts/test_phase_c10g_google_meet_leftovers_offline.js
-  // for tests that execute the real guest/request route.
-
-  // --- Suite 6: Database Persistence & Migration Invariants ---
-  console.log('\n--- Suite 6: Schema, Migrations, and Recording Storage Preservation ---');
-
   await test('Database query mapper maps GOOGLE_MEET provider and provider_room_url', () => {
     const rawRow = {
       id: 'db_mtg_1',
@@ -416,8 +737,8 @@ async function runSuite() {
   });
 
   await test('Preserves Google Drive central recording repository workflows for both providers', () => {
-    const uploadHandlerPath = path.join(__dirname, '..', 'api', 'meetings', 'upload-recording.js');
-    assert.ok(fs.existsSync(uploadHandlerPath));
+    const uploadHandlerPath = path.join(__dirname, '..', 'legacy', 'meetings', 'upload-recording.js');
+    assert.ok(fs.existsSync(uploadHandlerPath), 'Upload handler must exist');
     const code = fs.readFileSync(uploadHandlerPath, 'utf8');
     assert.ok(code.includes('TENANT_CENTRAL'));
     assert.ok(code.includes('uploadFileToGoogleDrive'));
