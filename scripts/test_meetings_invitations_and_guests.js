@@ -360,8 +360,11 @@ async function runSuite() {
     const migrationPath = path.join(process.cwd(), 'migrations', '20260917_google_drive_central_repository.sql');
     assert(fs.existsSync(migrationPath), 'Google Drive central repository migration must remain intact');
 
-    const uploadHandler = path.join(process.cwd(), 'api', 'meetings', 'upload-recording.js');
-    assert(fs.existsSync(uploadHandler), 'Upload recording handler must remain intact');
+    const appRouteHandler = path.resolve(__dirname, '..', 'app', 'api', 'meetings', 'upload-recording', 'route.ts');
+    const legacyHandler = path.resolve(__dirname, '..', 'legacy', 'meetings', 'upload-recording.js');
+    const apiHandler = path.resolve(__dirname, '..', 'api', 'meetings', 'upload-recording.js');
+    const handlerExists = fs.existsSync(appRouteHandler) || fs.existsSync(legacyHandler) || fs.existsSync(apiHandler);
+    assert(handlerExists, 'Upload recording handler must remain intact');
   });
 
   console.log('\n===============================================================');

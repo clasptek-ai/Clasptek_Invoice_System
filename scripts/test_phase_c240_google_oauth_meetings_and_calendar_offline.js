@@ -1426,7 +1426,9 @@ async function runAllC240ATests() {
   console.log('\n--- SUITE 7: Forward Migration DDL & Constraint Transition Simulation ---');
 
   runSyncTest('7.1: Forward migration 20261029_fix_google_drive_connection_constraint.sql exists and contains valid DDL', () => {
-    const migrationPath = path.join(process.cwd(), 'migrations', '20261029_fix_google_drive_connection_constraint.sql');
+    const migrationPath = fs.existsSync(path.join(process.cwd(), 'migrations', '20261029_fix_google_drive_connection_constraint.sql'))
+      ? path.join(process.cwd(), 'migrations', '20261029_fix_google_drive_connection_constraint.sql')
+      : path.resolve(__dirname, '..', 'migrations', '20261029_fix_google_drive_connection_constraint.sql');
     assert(fs.existsSync(migrationPath), 'Forward migration file must exist');
     const sql = fs.readFileSync(migrationPath, 'utf8');
     assert(sql.includes('uq_google_drive_tenant_user_type\n        UNIQUE (tenant_id, user_id, connection_type)'), 'Must define composite constraint');
