@@ -66,6 +66,135 @@ export const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/' + 'calen
 export const GOOGLE_CALENDAR_EVENTS_ENDPOINT = 'https://www.googleapis.com/' + 'calendar/v3/calendars/primary/events';
 
 /**
+ * Authoritative check for whether Google Calendar integration is enabled
+ * for automated conference creation on this deployment.
+ *
+ * Enforces fail-closed canonical environment classification (Phase C240AY / C240BA):
+ * 1. Requires a complete, trustworthy set of all 3 canonical environment guards:
+ *    - hasConflictingEnvironmentMarkers
+ *    - isVerifiedProductionEnvironment
+ *    - isPreviewOrStagingEnvironment
+ * 2. If any canonical guard is missing, incomplete, or throws -> fails closed (false).
+ * 3. Conflicting environment markers -> fails closed (false).
+ * 4. Request-host preview detection cannot override conflicting or unverified classifications.
+ * 5. Positively identified Preview / Staging: requires STAGING_GOOGLE_CALENDAR_ENABLED === 'true'.
+ * 6. Positively verified Production: requires GOOGLE_CALENDAR_INTEGRATION_ENABLED === 'true'.
+ * 7. Unknown, local, ambiguous, or unverified environment -> fails closed (false).
+ */
+export function isGoogleCalendarIntegrationEnabled(req?: any): boolean {
+  try {
+    let projectGuard: any = null;
+    try {
+      projectGuard = require('@/lib/supabase/project-guard');
+    } catch {
+      try {
+        projectGuard = require('../supabase/project-guard');
+      } catch {
+        try {
+          projectGuard = require('../../lib/supabase/project-guard');
+        } catch (_) {}
+      }
+    }
+
+    let googleConfig: any = null;
+    try {
+      googleConfig = require('../../api/_lib/google-oauth-config');
+    } catch {
+      try {
+        googleConfig = require('../api/_lib/google-oauth-config');
+      } catch (_) {}
+    }
+
+    // 1. Resolve canonical environment guard set
+    // A source is acceptable only when all three required guards are available functions
+    let checkConflicts: any = null;
+    let checkProduction: any = null;
+    let checkPreviewOrStaging: any = null;
+
+    if (
+      projectGuard &&
+      typeof projectGuard.hasConflictingEnvironmentMarkers === 'function' &&
+      typeof projectGuard.isVerifiedProductionEnvironment === 'function' &&
+      typeof projectGuard.isPreviewOrStagingEnvironment === 'function'
+    ) {
+      checkConflicts = projectGuard.hasConflictingEnvironmentMarkers;
+      checkProduction = projectGuard.isVerifiedProductionEnvironment;
+      checkPreviewOrStaging = projectGuard.isPreviewOrStagingEnvironment;
+    } else if (
+      googleConfig &&
+      typeof (googleConfig.hasConflictingEnvironmentMarkers || googleConfig.hasConflictingEnvironmentMarkersCommon) === 'function' &&
+      typeof (googleConfig.isVerifiedProductionEnvironment || googleConfig.isVerifiedProductionEnvironmentCommon) === 'function' &&
+      typeof (googleConfig.isPreviewOrStagingEnvironment || googleConfig.isPreviewOrStagingEnvironmentCommon) === 'function'
+    ) {
+      checkConflicts = googleConfig.hasConflictingEnvironmentMarkers || googleConfig.hasConflictingEnvironmentMarkersCommon;
+      checkProduction = googleConfig.isVerifiedProductionEnvironment || googleConfig.isVerifiedProductionEnvironmentCommon;
+      checkPreviewOrStaging = googleConfig.isPreviewOrStagingEnvironment || googleConfig.isPreviewOrStagingEnvironmentCommon;
+    }
+
+    // 2. Require complete canonical guard set: all three must be available functions
+    if (
+      typeof checkConflicts !== 'function' ||
+      typeof checkProduction !== 'function' ||
+      typeof checkPreviewOrStaging !== 'function'
+    ) {
+      return false;
+    }
+
+    // 3. Evaluate conflict guard before environment classification or feature-flag evaluation
+    // If conflicting markers are detected, fail closed immediately
+    if (checkConflicts()) {
+      return false;
+    }
+
+    // Check host-derived preview indicator if request is provided
+    let isHostPreview = false;
+    if (googleConfig && typeof googleConfig.isPreviewEnvironment === 'function' && req) {
+      isHostPreview = Boolean(googleConfig.isPreviewEnvironment(req));
+    }
+
+    const hasProdMarker =
+      process.env.VERCEL_ENV === 'production' ||
+      process.env.CLASPTEK_ENV === 'production' ||
+      process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' ||
+      process.env.NEXT_PUBLIC_CLASPTEK_ENV === 'production';
+
+    // Request-host preview combined with production markers is a conflict
+    if (isHostPreview && hasProdMarker) {
+      return false;
+    }
+
+    // 4. Evaluate positive preview/staging classification and its staging-specific feature flag
+    // Request-host preview detection cannot override an unverified environment:
+    // positive preview/staging classification requires canonical environment guards.
+    const isPreviewOrStaging = checkPreviewOrStaging();
+    if (isPreviewOrStaging) {
+      // Must not have contradictory production markers
+      if (hasProdMarker) {
+        return false;
+      }
+      return (process.env.STAGING_GOOGLE_CALENDAR_ENABLED || '').trim().toLowerCase() === 'true';
+    }
+
+    // If request host indicates preview but canonical guards do not verify preview/staging,
+    // request host cannot override unverified environment classification: fail closed.
+    if (isHostPreview) {
+      return false;
+    }
+
+    // 5. Otherwise evaluate positive production classification and its production-specific feature flag
+    const isProduction = checkProduction();
+    if (isProduction) {
+      return (process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED || '').trim().toLowerCase() === 'true';
+    }
+
+    // 6. Unknown, local, ambiguous, or unverified environments must return false
+    return false;
+  } catch {
+    // Fail closed on any exception
+    return false;
+  }
+}
+/**
  * Creates or retrieves a Google Meet conference URL.
  * Either validates a facilitator-provided Google Meet URL or creates one
  * via Google Calendar API with conferenceDataVersion=1.
@@ -113,7 +242,45 @@ export async function createOrValidateGoogleMeet({
     throw new GoogleMeetError('INVALID_TIME_RANGE', 'Scheduled end time must be after scheduled start time', 400);
   }
 
-  // Load Google OAuth configuration safely
+  // --- PATH A: Facilitator-supplied custom Google Meet URL ---
+  const trimmedCustomUrl = (customGoogleMeetUrl || '').trim();
+  if (trimmedCustomUrl) {
+    if (!isValidGoogleMeetUrl(trimmedCustomUrl)) {
+      throw new GoogleMeetError(
+        'INVALID_GOOGLE_MEET_URL',
+        'The provided URL is not a valid Google Meet link. Format must match https://meet.google.com/xxx-yyyy-zzz',
+        400
+      );
+    }
+    return {
+      meetUrl: normalizeGoogleMeetUrl(trimmedCustomUrl),
+      createdVia: 'CUSTOM_VERIFIED_URL',
+    };
+  }
+
+  // --- PATH B: Calendar-generated Google Meet conference ---
+  // 1. Authoritative Deployment Feature Flag Gate
+  if (!isGoogleCalendarIntegrationEnabled()) {
+    let googleConfig: any = null;
+    try {
+      googleConfig = require('../../api/_lib/google-oauth-config');
+    } catch {
+      try {
+        googleConfig = require('../api/_lib/google-oauth-config');
+      } catch (_) {}
+    }
+    const isPreview = googleConfig && typeof googleConfig.isPreviewEnvironment === 'function'
+      ? googleConfig.isPreviewEnvironment()
+      : (process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview');
+
+    const msg = isPreview
+      ? 'Google Meet automated conference creation is not enabled in this preview environment. STAGING_GOOGLE_CALENDAR_ENABLED=true is required.'
+      : 'Google Meet automated conference creation is not enabled for this deployment. Please enter an existing Google Meet link.';
+
+    throw new GoogleMeetError('PROVIDER_UNSUPPORTED', msg, 400);
+  }
+
+  // 2. Load Google OAuth configuration safely
   let googleConfig: any = null;
   try {
     googleConfig = require('../../api/_lib/google-oauth-config');
@@ -123,19 +290,7 @@ export async function createOrValidateGoogleMeet({
     } catch (_) {}
   }
 
-  // Preview Isolation: Automated conference creation in Preview requires staging approval
-  if (googleConfig && typeof googleConfig.isPreviewEnvironment === 'function' && googleConfig.isPreviewEnvironment()) {
-    const isStagingApproved = process.env.STAGING_GOOGLE_CALENDAR_ENABLED === 'true';
-    if (!isStagingApproved) {
-      throw new GoogleMeetError(
-        'PROVIDER_UNSUPPORTED',
-        'Google Meet automated conference creation is not enabled in this preview environment. STAGING_GOOGLE_CALENDAR_ENABLED=true is required.',
-        400
-      );
-    }
-  }
-
-  // Check tenant-central connection
+  // 3. Check tenant-central connection
   let connection: any = null;
   let connectionError: any = null;
   if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
@@ -165,7 +320,7 @@ export async function createOrValidateGoogleMeet({
     );
   }
 
-  // Check if connection has granted Calendar permission
+  // 4. Check if connection has granted Calendar permission
   const grantedScopes = String(connection.scope || '');
   const hasCalendarScope =
     grantedScopes.includes('calendar.events') ||
@@ -178,21 +333,6 @@ export async function createOrValidateGoogleMeet({
       'The connected Google organization account has not granted Google Calendar permission (calendar.events). Please re-authorize with Calendar access.',
       400
     );
-  }
-
-  // If facilitator provided a custom Google Meet URL:
-  if (customGoogleMeetUrl) {
-    if (!isValidGoogleMeetUrl(customGoogleMeetUrl)) {
-      throw new GoogleMeetError(
-        'INVALID_GOOGLE_MEET_URL',
-        'The provided URL is not a valid Google Meet link. Format must match https://meet.google.com/xxx-yyyy-zzz',
-        400
-      );
-    }
-    return {
-      meetUrl: normalizeGoogleMeetUrl(customGoogleMeetUrl),
-      createdVia: 'CUSTOM_VERIFIED_URL',
-    };
   }
   // Idempotency: deterministic requestId derived from meeting identity/time
   const idKey = idempotencyKey || publicId || meetingId;

@@ -113,6 +113,7 @@ const {
   normalizeGoogleMeetUrl,
   createOrValidateGoogleMeet,
   GoogleMeetError,
+  isGoogleCalendarIntegrationEnabled,
 } = loadTsModule('lib/meetings/google-meet.ts');
 
 const { LiveKitService } = loadTsModule('lib/meetings/sfu.ts');
@@ -357,50 +358,186 @@ async function runSuite() {
     assert.ok(res._data.sfuRoom.name);
   });
 
-  await test('5. Explicit Google Meet selection follows the existing Google Meet creation path', async () => {
-    // Seed central connection with Calendar scope
-    googleConfig._memoryConnectionStore.set('central:tenant-calendar-ok', {
-      tenant_id: 'tenant-calendar-ok',
-      connection_type: 'TENANT_CENTRAL',
-      status: 'CONNECTED',
-      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.events',
-      access_token: 'mock-token',
-      _testAllowCalendar: true,
-      _testMockMeetUrl: 'https://meet.google.com/cpk-mtng-liv',
-    });
+  await test('5. Explicit Google Meet selection follows the existing Google Meet creation path when enabled', async () => {
+    const prevFlag = process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED;
+    const prevVercelEnv = process.env.VERCEL_ENV;
+    try {
+      process.env.VERCEL_ENV = 'production';
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = 'true';
+      // Seed central connection with Calendar scope
+      googleConfig._memoryConnectionStore.set('central:tenant-calendar-ok', {
+        tenant_id: 'tenant-calendar-ok',
+        connection_type: 'TENANT_CENTRAL',
+        status: 'CONNECTED',
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.events',
+        access_token: 'mock-token',
+        _testAllowCalendar: true,
+        _testMockMeetUrl: 'https://meet.google.com/cpk-mtng-liv',
+      });
 
-    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-calendar-ok' });
-    const gmReq = {
+      const createRoute = getCreateRouteHandler({ tenantId: 'tenant-calendar-ok' });
+      const gmReq = {
+        json: async () => ({
+          title: 'Executive Review',
+          provider: 'google_meet',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+        }),
+      };
+      const res = await createRoute.POST(gmReq);
+      assert.strictEqual(res.status, 201);
+      assert.strictEqual(res._data.success, true);
+      assert.strictEqual(res._data.provider, 'google_meet');
+      assert.strictEqual(res._data.meeting.sfuProvider, 'google_meet');
+      assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/cpk-mtng-liv');
+    } finally {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = prevFlag;
+      if (prevVercelEnv) process.env.VERCEL_ENV = prevVercelEnv; else delete process.env.VERCEL_ENV;
+    }
+  });
+
+  await test('6. Calendar-disabled Google Meet creation fails clearly when no custom URL is supplied (unconnected tenant)', async () => {
+    const prevFlag = process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED;
+    const prevVercelEnv = process.env.VERCEL_ENV;
+    try {
+      process.env.VERCEL_ENV = 'production';
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = 'true';
+      // Tenant without connected Google account or without Calendar scope
+      const createRoute = getCreateRouteHandler({ tenantId: 'tenant-no-calendar' });
+      const gmReq = {
+        json: async () => ({
+          title: 'Cohort Sync',
+          provider: 'google_meet',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+        }),
+      };
+      const res = await createRoute.POST(gmReq);
+      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res._data.error, 'PROVIDER_UNSUPPORTED');
+      assert.match(res._data.message, /Google Meet is not configured for this organization/);
+    } finally {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = prevFlag;
+      if (prevVercelEnv) process.env.VERCEL_ENV = prevVercelEnv; else delete process.env.VERCEL_ENV;
+    }
+  });
+
+  await test('6a. Disabled Calendar integration rejects blank-URL creation even when connection and scope exist (C240AW)', async () => {
+    const prevFlag = process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED;
+    try {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = 'false';
+      googleConfig._memoryConnectionStore.set('central:tenant-disabled-cal', {
+        tenant_id: 'tenant-disabled-cal',
+        connection_type: 'TENANT_CENTRAL',
+        status: 'CONNECTED',
+        scope: 'https://www.googleapis.com/auth/calendar.events',
+        access_token: 'mock-token',
+        _testAllowCalendar: true,
+      });
+      let apiCalled = false;
+      const dummyTransport = async () => { apiCalled = true; return { status: 200, body: {} }; };
+      let errCaught = null;
+      try {
+        await createOrValidateGoogleMeet({
+          tenantId: 'tenant-disabled-cal',
+          title: 'Disabled Cal Meeting',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+          transport: dummyTransport,
+        });
+      } catch (err) {
+        errCaught = err;
+      }
+      assert.ok(errCaught, 'Must throw error when Calendar integration is disabled');
+      assert.strictEqual(errCaught.code, 'PROVIDER_UNSUPPORTED');
+      assert.match(errCaught.message, /automated conference creation is not enabled/);
+      assert.strictEqual(apiCalled, false, 'Calendar API must NOT be called when flag is disabled');
+
+      // Direct HTTP route bypass verification
+      const createRoute = getCreateRouteHandler({ tenantId: 'tenant-disabled-cal' });
+      const httpReq = {
+        json: async () => ({
+          title: 'Disabled Cal Meeting HTTP',
+          provider: 'google_meet',
+          customGoogleMeetUrl: '',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+        }),
+      };
+      const res = await createRoute.POST(httpReq);
+      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res._data.error, 'PROVIDER_UNSUPPORTED');
+      assert.match(res._data.message, /automated conference creation is not enabled/);
+    } finally {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = prevFlag;
+    }
+  });
+
+  await test('6b. Existing valid custom Meet URL succeeds without Google connection (C240AW)', async () => {
+    // Completely disconnected tenant
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-unconnected-custom' });
+    const req = {
       json: async () => ({
-        title: 'Executive Review',
+        title: 'Unconnected External Meet',
         provider: 'google_meet',
+        customGoogleMeetUrl: 'https://meet.google.com/xyz-uvwx-rst',
         scheduledStart: new Date(Date.now() + 3600000).toISOString(),
         scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
       }),
     };
-    const res = await createRoute.POST(gmReq);
+    const res = await createRoute.POST(req);
     assert.strictEqual(res.status, 201);
     assert.strictEqual(res._data.success, true);
     assert.strictEqual(res._data.provider, 'google_meet');
-    assert.strictEqual(res._data.meeting.sfuProvider, 'google_meet');
-    assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/cpk-mtng-liv');
+    assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/xyz-uvwx-rst');
   });
 
-  await test('6. Calendar-disabled Google Meet creation fails clearly when no custom URL is supplied', async () => {
-    // Tenant without connected Google account or without Calendar scope
-    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-no-calendar' });
-    const gmReq = {
+  await test('6c. Existing valid custom Meet URL succeeds without Calendar scope (C240AW)', async () => {
+    // Connection exists with Drive scope only (no calendar.events scope)
+    googleConfig._memoryConnectionStore.set('central:tenant-drive-only', {
+      tenant_id: 'tenant-drive-only',
+      connection_type: 'TENANT_CENTRAL',
+      status: 'CONNECTED',
+      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
+      access_token: 'mock-token',
+    });
+    const createRoute = getCreateRouteHandler({ tenantId: 'tenant-drive-only' });
+    const req = {
       json: async () => ({
-        title: 'Cohort Sync',
+        title: 'Drive-Only External Meet',
         provider: 'google_meet',
+        customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
         scheduledStart: new Date(Date.now() + 3600000).toISOString(),
         scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
       }),
     };
-    const res = await createRoute.POST(gmReq);
-    assert.strictEqual(res.status, 400);
-    assert.strictEqual(res._data.error, 'PROVIDER_UNSUPPORTED');
-    assert.match(res._data.message, /Google Meet is not configured for this organization/);
+    const res = await createRoute.POST(req);
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res._data.provider, 'google_meet');
+    assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/abc-defg-hij');
+  });
+
+  await test('6d. Existing valid custom Meet URL succeeds while Calendar integration is disabled (C240AW)', async () => {
+    const prevFlag = process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED;
+    try {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = 'false';
+      const createRoute = getCreateRouteHandler({ tenantId: 'tenant-disabled-custom' });
+      const req = {
+        json: async () => ({
+          title: 'Disabled Cal External Meet',
+          provider: 'google_meet',
+          customGoogleMeetUrl: 'https://meet.google.com/cal-dsbl-url',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+        }),
+      };
+      const res = await createRoute.POST(req);
+      assert.strictEqual(res.status, 201);
+      assert.strictEqual(res._data.provider, 'google_meet');
+      assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/cal-dsbl-url');
+    } finally {
+      process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = prevFlag;
+    }
   });
 
   await test('7. Valid custom Google Meet URL follows the supported existing path', async () => {
@@ -462,6 +599,10 @@ async function runSuite() {
   });
 
   await test('12. Existing idempotency and orphan-cleanup behavior remains intact', async () => {
+    const prevFlag = process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED;
+    const prevVercelEnv = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = 'production';
+    process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = 'true';
     let deletedEventId = null;
 
     // Simulate database failure during save to verify orphan cleanup
@@ -506,6 +647,8 @@ async function runSuite() {
     const res = await createRoute.POST(req);
     assert.strictEqual(res.status, 500);
     assert.strictEqual(deletedEventId, 'cal_event_orphan_123', 'Orphaned Google Calendar event must be deleted on save failure');
+    if (prevVercelEnv) process.env.VERCEL_ENV = prevVercelEnv; else delete process.env.VERCEL_ENV;
+    process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED = prevFlag;
   });
 
   // --- Suite 5: Provider-Specific Join & Token Issuance Invariants ---
@@ -742,6 +885,413 @@ async function runSuite() {
     const code = fs.readFileSync(uploadHandlerPath, 'utf8');
     assert.ok(code.includes('TENANT_CENTRAL'));
     assert.ok(code.includes('uploadFileToGoogleDrive'));
+  });
+
+  console.log('\n--- Suite 8: Fail-Closed Calendar Environment Classification (C240AY Requirements 1-13) ---');
+
+  async function withEnv(envVars, fn) {
+    const backup = {};
+    for (const k of Object.keys(envVars)) {
+      backup[k] = process.env[k];
+      if (envVars[k] === undefined) {
+        delete process.env[k];
+      } else {
+        process.env[k] = envVars[k];
+      }
+    }
+    try {
+      await fn();
+    } finally {
+      for (const k of Object.keys(backup)) {
+        if (backup[k] === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = backup[k];
+        }
+      }
+    }
+  }
+
+  await test('1. Verified production + production flag true enables Calendar-generated creation', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      CLASPTEK_ENV: undefined,
+      NEXT_PUBLIC_VERCEL_ENV: undefined,
+      NEXT_PUBLIC_CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'false',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), true);
+    });
+  });
+
+  await test('2. Verified production + production flag false disables Calendar-generated creation', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      CLASPTEK_ENV: undefined,
+      NEXT_PUBLIC_VERCEL_ENV: undefined,
+      NEXT_PUBLIC_CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'false',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('3. Verified preview + staging flag true enables Calendar-generated creation', async () => {
+    await withEnv({
+      VERCEL_ENV: 'preview',
+      CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), true);
+    });
+  });
+
+  await test('4. Verified preview + production flag true but staging flag false remains disabled', async () => {
+    await withEnv({
+      VERCEL_ENV: 'preview',
+      CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'false',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('5. Verified production + staging flag true but production flag false remains disabled', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('6. CLASPTEK_ENV=staging cannot fall through to the production flag', async () => {
+    await withEnv({
+      VERCEL_ENV: undefined,
+      CLASPTEK_ENV: 'staging',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'false',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('7. Conflicting markers fail closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      CLASPTEK_ENV: 'preview',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('8. Missing deployment identity fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: undefined,
+      CLASPTEK_ENV: undefined,
+      NEXT_PUBLIC_VERCEL_ENV: undefined,
+      NEXT_PUBLIC_CLASPTEK_ENV: undefined,
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('9. Canonical guard module load failure fails closed', async () => {
+    assert.doesNotThrow(() => {
+      isGoogleCalendarIntegrationEnabled({ bad: true });
+    });
+  });
+
+  await test('10. Canonical guard exception fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const throwingReq = {
+        get headers() {
+          throw new Error('Host access violation');
+        }
+      };
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(throwingReq), false);
+    });
+  });
+
+  await test('11. Existing valid custom Meet URL remains usable without OAuth in all states', async () => {
+    const states = [
+      { VERCEL_ENV: undefined, CLASPTEK_ENV: undefined },
+      { VERCEL_ENV: 'production', CLASPTEK_ENV: 'preview' },
+      { CLASPTEK_ENV: 'staging', STAGING_GOOGLE_CALENDAR_ENABLED: 'false' },
+      { VERCEL_ENV: 'production', GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false' },
+    ];
+
+    for (const st of states) {
+      await withEnv(st, async () => {
+        const createRoute = getCreateRouteHandler({ tenantId: 'tenant-multi-env-custom' });
+        const req = {
+          json: async () => ({
+            title: 'Resilient Custom Meet',
+            provider: 'google_meet',
+            customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+            scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+            scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+          }),
+        };
+        const res = await createRoute.POST(req);
+        assert.strictEqual(res.status, 201, `Custom URL must succeed in state ${JSON.stringify(st)}`);
+        assert.strictEqual(res._data.meetUrl, 'https://meet.google.com/abc-defg-hij');
+      });
+    }
+  });
+
+  await test('12. Disabled Calendar creation with existing connection and scope is rejected before database/API activity', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false',
+    }, async () => {
+      googleConfig._memoryConnectionStore.set('central:tenant-disabled-gate', {
+        tenant_id: 'tenant-disabled-gate',
+        connection_type: 'TENANT_CENTRAL',
+        status: 'CONNECTED',
+        scope: 'https://www.googleapis.com/auth/calendar.events',
+        access_token: 'mock-token',
+        _testAllowCalendar: true,
+      });
+
+      let transportCalled = false;
+      const spyTransport = async () => { transportCalled = true; return { status: 200, body: {} }; };
+
+      let error = null;
+      try {
+        await createOrValidateGoogleMeet({
+          tenantId: 'tenant-disabled-gate',
+          title: 'Should Gate Before API',
+          scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+          scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+          transport: spyTransport,
+        });
+      } catch (err) {
+        error = err;
+      }
+
+      assert.ok(error);
+      assert.strictEqual(error.code, 'PROVIDER_UNSUPPORTED');
+      assert.strictEqual(transportCalled, false, 'Transport must not be invoked');
+    });
+  });
+
+  await test('13. LiveKit remains independent of Calendar configuration in all states', async () => {
+    const states = [
+      { VERCEL_ENV: undefined, CLASPTEK_ENV: undefined },
+      { VERCEL_ENV: 'production', CLASPTEK_ENV: 'preview' },
+      { CLASPTEK_ENV: 'staging', STAGING_GOOGLE_CALENDAR_ENABLED: 'false' },
+      { VERCEL_ENV: 'production', GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'false' },
+    ];
+
+    for (const st of states) {
+      await withEnv(st, async () => {
+        const createRoute = getCreateRouteHandler({ tenantId: 'tenant-livekit-gate-free' });
+        const req = {
+          json: async () => ({
+            title: 'Independent LiveKit',
+            provider: 'livekit',
+            scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+            scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+          }),
+        };
+        const res = await createRoute.POST(req);
+        assert.strictEqual(res.status, 201, `LiveKit must succeed in state ${JSON.stringify(st)}`);
+        assert.strictEqual(res._data.provider, 'livekit');
+      });
+    }
+  });
+
+  const projectGuard = loadTsModule('lib/supabase/project-guard.ts');
+
+  await test('14. Conflict guard unavailable while production and preview guards are available fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.hasConflictingEnvironmentMarkers;
+      try {
+        projectGuard.hasConflictingEnvironmentMarkers = undefined;
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.hasConflictingEnvironmentMarkers = orig;
+      }
+    });
+  });
+
+  await test('15. Production guard unavailable fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.isVerifiedProductionEnvironment;
+      try {
+        projectGuard.isVerifiedProductionEnvironment = undefined;
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.isVerifiedProductionEnvironment = orig;
+      }
+    });
+  });
+
+  await test('16. Preview/staging guard unavailable fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'preview',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.isPreviewOrStagingEnvironment;
+      try {
+        projectGuard.isPreviewOrStagingEnvironment = undefined;
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.isPreviewOrStagingEnvironment = orig;
+      }
+    });
+  });
+
+  await test('17. Conflict guard throws fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.hasConflictingEnvironmentMarkers;
+      try {
+        projectGuard.hasConflictingEnvironmentMarkers = () => {
+          throw new Error('Simulated conflict guard fault');
+        };
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.hasConflictingEnvironmentMarkers = orig;
+      }
+    });
+  });
+
+  await test('18. Production guard throws fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.isVerifiedProductionEnvironment;
+      try {
+        projectGuard.isVerifiedProductionEnvironment = () => {
+          throw new Error('Simulated production guard fault');
+        };
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.isVerifiedProductionEnvironment = orig;
+      }
+    });
+  });
+
+  await test('19. Preview/staging guard throws fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: 'preview',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      const orig = projectGuard.isPreviewOrStagingEnvironment;
+      try {
+        projectGuard.isPreviewOrStagingEnvironment = () => {
+          throw new Error('Simulated preview guard fault');
+        };
+        assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+      } finally {
+        projectGuard.isPreviewOrStagingEnvironment = orig;
+      }
+    });
+  });
+
+  await test('20. Conflicting NEXT_PUBLIC_* and server-side markers fail closed', async () => {
+    // 20a: VERCEL_ENV=production + NEXT_PUBLIC_VERCEL_ENV=preview
+    await withEnv({
+      VERCEL_ENV: 'production',
+      NEXT_PUBLIC_VERCEL_ENV: 'preview',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+
+    // 20b: VERCEL_ENV=preview + NEXT_PUBLIC_VERCEL_ENV=production
+    await withEnv({
+      VERCEL_ENV: 'preview',
+      NEXT_PUBLIC_VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+
+    // 20c: CLASPTEK_ENV=production + NEXT_PUBLIC_CLASPTEK_ENV=staging
+    await withEnv({
+      CLASPTEK_ENV: 'production',
+      NEXT_PUBLIC_CLASPTEK_ENV: 'staging',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(), false);
+    });
+  });
+
+  await test('21. Preview hostname combined with conflicting environment markers fails closed', async () => {
+    // 21a: Conflicting production and preview env markers with preview host header
+    await withEnv({
+      VERCEL_ENV: 'production',
+      CLASPTEK_ENV: 'preview',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      const previewReq = {
+        headers: {
+          host: 'clasptek-git-branch-preview.vercel.app',
+        },
+      };
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(previewReq), false);
+    });
+
+    // 21b: Production server marker with preview host header
+    await withEnv({
+      VERCEL_ENV: 'production',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+    }, async () => {
+      const previewReq = {
+        headers: {
+          host: 'clasptek-git-branch-preview.vercel.app',
+        },
+      };
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(previewReq), false);
+    });
+  });
+
+  await test('22. Unknown identity combined with preview hostname fails closed', async () => {
+    await withEnv({
+      VERCEL_ENV: undefined,
+      CLASPTEK_ENV: undefined,
+      NEXT_PUBLIC_VERCEL_ENV: undefined,
+      NEXT_PUBLIC_CLASPTEK_ENV: undefined,
+      STAGING_GOOGLE_CALENDAR_ENABLED: 'true',
+      GOOGLE_CALENDAR_INTEGRATION_ENABLED: 'true',
+    }, async () => {
+      const previewReq = {
+        headers: {
+          host: 'clasptek-git-branch-preview.vercel.app',
+        },
+      };
+      assert.strictEqual(isGoogleCalendarIntegrationEnabled(previewReq), false);
+    });
   });
 
   console.log('\n===============================================================');

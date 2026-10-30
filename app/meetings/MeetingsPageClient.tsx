@@ -585,7 +585,25 @@ export function MeetingsPageClient({
 
     // Client-side prevention of guaranteed-invalid automated Google Meet creation
     if (meetingForm.provider === 'google_meet' && !cleanCustomUrl) {
-      if (!calendarStatus.connected || !calendarStatus.hasCalendarScope) {
+      if (calendarStatus.status === 'CALENDAR_DISABLED') {
+        setScheduleModalError(
+          'Automated conference scheduling is disabled on this deployment. Please enter an existing Google Meet link.'
+        );
+        return;
+      }
+      if (calendarStatus.status === 'PERMISSION_REQUIRED') {
+        setScheduleModalError(
+          'Google Calendar permission is required for automated scheduling. Grant Calendar permission above, or enter a Custom Google Meet Link.'
+        );
+        return;
+      }
+      if (calendarStatus.status === 'RECONNECT_REQUIRED') {
+        setScheduleModalError(
+          'Google Calendar authorization has expired. Reconnect Google Calendar above, or enter a Custom Google Meet Link.'
+        );
+        return;
+      }
+      if (!calendarStatus.connected || !calendarStatus.hasCalendarScope || calendarStatus.status !== 'CONNECTED') {
         setScheduleModalError(
           'Google Calendar is not configured for this organization. Connect Google Calendar above before automated scheduling, or enter a Custom Google Meet Link.'
         );
@@ -1846,7 +1864,21 @@ export function MeetingsPageClient({
                               : 'Google Calendar Not Connected'}
                           </span>
                         </div>
-                        {calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? null : (
+                        {calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? null : calendarStatus.status === 'CALENDAR_DISABLED' ? (
+                          <span
+                            className="cp-pill"
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '3px 8px',
+                              background: '#F3F4F6',
+                              color: '#6B7280',
+                              border: '1px solid #E5E7EB',
+                            }}
+                          >
+                            Disabled on Deployment
+                          </span>
+                        ) : (
                           <div style={{ display: 'flex', gap: 6 }}>
                             {calendarStatus.status === 'VERIFICATION_FAILED' && (
                               <button
@@ -1899,7 +1931,14 @@ export function MeetingsPageClient({
                     {/* Custom Google Meet URL Input */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label htmlFor="customGoogleMeetUrl" style={{ fontSize: 12, fontWeight: 600, display: 'block' }}>
-                        Custom Google Meet Link <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
+                        Custom Google Meet Link{' '}
+                        {calendarStatus.status === 'CALENDAR_DISABLED' ? (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#DC2626' }}>(Required)</span>
+                        ) : calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope ? (
+                          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Optional)</span>
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted, #64748b)' }}>(Required without Calendar)</span>
+                        )}
                       </label>
                       <input
                         id="customGoogleMeetUrl"
@@ -1910,7 +1949,11 @@ export function MeetingsPageClient({
                         onChange={(e) => setMeetingForm((p) => ({ ...p, customGoogleMeetUrl: e.target.value }))}
                       />
                       <div style={{ fontSize: 11.5, color: 'var(--text-muted, #64748b)', lineHeight: 1.4 }}>
-                        Paste an existing Google Meet link, or leave blank to automatically create a new Google Meet conference via the organization&apos;s connected Google Calendar.
+                        {calendarStatus.status === 'CALENDAR_DISABLED'
+                          ? 'An existing Google Meet link is required because automated conference scheduling is disabled on this deployment.'
+                          : calendarStatus.status === 'CONNECTED' && calendarStatus.hasCalendarScope
+                          ? 'Paste an existing Google Meet link, or leave blank to automatically create a new Google Meet conference via the organization\'s connected Google Calendar.'
+                          : 'Google Calendar must be connected for automated conference scheduling, or you must enter an existing Google Meet link.'}
                       </div>
                     </div>
                   </div>

@@ -287,6 +287,8 @@ async function runAllC240ATests() {
   console.log('\n--- SUITE 3: Calendar Readiness States & Verification Endpoint ---');
 
   process.env.CLASPTEK_TEST_MODE = 'true';
+  const prevVercelEnv = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = 'production';
   const calendarStatusRoute = loadTs('app/api/meetings/calendar-status/route.ts');
 
   await runAsyncTest('3.1: Calendar status returns 401 when unauthenticated', async () => {
@@ -439,6 +441,8 @@ async function runAllC240ATests() {
       oauthConfig.getTenantCentralDriveConnection = origGet;
     }
   });
+
+  if (prevVercelEnv) process.env.VERCEL_ENV = prevVercelEnv; else delete process.env.VERCEL_ENV;
 
   // --- REQUIREMENT 10, 11: Meetings Page Behavior & LiveKit Independence ---
   console.log('\n--- SUITE 4: Meetings Page UI Behavior & LiveKit Independence ---');

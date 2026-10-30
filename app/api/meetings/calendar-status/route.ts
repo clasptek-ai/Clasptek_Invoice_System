@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
+import { isGoogleCalendarIntegrationEnabled } from '@/lib/meetings/google-meet';
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
         connected: true,
         hasCalendarScope: false,
         calendarReady: false,
-        featureFlagEnabled: (process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED || '').trim().toLowerCase() === 'true',
+        featureFlagEnabled: isGoogleCalendarIntegrationEnabled(request),
         reconnectRequired: true,
         missingScope: 'https://www.googleapis.com/auth/calendar.events',
         status: 'PERMISSION_REQUIRED',
@@ -101,8 +102,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 2. Feature Flag Check: GOOGLE_CALENDAR_INTEGRATION_ENABLED
-    const isCalendarEnabled = (process.env.GOOGLE_CALENDAR_INTEGRATION_ENABLED || '').trim().toLowerCase() === 'true';
+    // 2. Feature Flag Check: Authoritative Shared Rule
+    const isCalendarEnabled = isGoogleCalendarIntegrationEnabled(request);
     if (!isCalendarEnabled) {
       return NextResponse.json({
         connected: true,
