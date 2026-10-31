@@ -137,8 +137,8 @@ async function runSuite() {
     assert.strictEqual(docCode.includes('fontSize="24px"'), true);
   });
 
-  it('Recipient surname is noticeably bolder with fontWeight="800" while remaining parts use fontWeight="500"', () => {
-    assert.strictEqual(docCode.includes("fontWeight={seg.isSurname ? '800' : '500'}"), true);
+  it('Recipient complete name is rendered bold with fontWeight="700"', () => {
+    assert.strictEqual(docCode.includes('fontWeight="700"'), true);
   });
 
   it('format-name.ts exports parseRecipientNameParts and computeCertificateNameLayout', () => {
@@ -323,9 +323,9 @@ async function runSuite() {
     assert.strictEqual(/barcode/i.test(printCode), false);
   });
 
-  it('QR Code verification element, certificate ID, and verification links remain strictly preserved', () => {
-    assert.strictEqual(docCode.includes('cert-qr-svg'), true);
-    assert.strictEqual(docCode.includes('Scan to Verify'), true);
+  it('QR Code element is removed while certificate ID and verification reference remain strictly preserved', () => {
+    assert.strictEqual(docCode.includes('cert-qr-svg'), false);
+    assert.strictEqual(docCode.includes('Scan to Verify'), false);
     assert.strictEqual(docCode.includes('Certificate/Candidate No:'), true);
     assert.strictEqual(docCode.includes('{certNumber}'), true);
   });
@@ -681,7 +681,7 @@ async function runSuite() {
     });
   });
 
-  it('14. CertificateDocument.tsx renders Student ID via certNumber in Certificate/Candidate No header area and token in QR', () => {
+  it('14. CertificateDocument.tsx renders Student ID via certNumber in Certificate/Candidate No header area and verification token preserved', () => {
     assert.strictEqual(docCode.includes('Certificate/Candidate No:'), true);
     assert.strictEqual(docCode.includes('{certNumber}'), true);
     assert.strictEqual(docCode.includes('student_number_snapshot'), true);

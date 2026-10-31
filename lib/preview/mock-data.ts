@@ -1,0 +1,507 @@
+/**
+ * lib/preview/mock-data.ts — Synthetic Fixtures for Isolated Local UI Preview
+ *
+ * SAFETY INVARIANTS:
+ * - Pure static data only: zero network transport, zero database connections.
+ * - Used exclusively by the /preview route tree for offline visual verification.
+ * - Realistic figures matching Clasptek currency and tuition structures.
+ */
+
+import type {
+  Invoice,
+  Payment,
+  FinancialMetrics,
+  PaymentAccountData,
+  FinanceSettingsData,
+} from '@/types/finance';
+import type { ProgrammeOptionItem } from '@/components/finance/CreateProfessionalTuitionInvoiceModal';
+import type { CustomerOptionItem } from '@/components/finance/CreateProfessionalTuitionInvoiceModal';
+import type { Student } from '@/types/students';
+import type { Programme } from '@/types/academics';
+import type { ProgrammeOption, CohortOption } from '@/types/admissions';
+
+export const MOCK_PREVIEW_USER = {
+  id: 'usr_preview_mock_001',
+  email: 'finance.lead@clasptek.org',
+  full_name: 'Dr. Sarah Adebayo',
+  role: 'Finance Manager' as const,
+  tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+  tenant_name: 'Clasptek Enterprise Academy',
+  is_active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-10-19T00:00:00Z',
+  avatar_url: null,
+};
+
+export const MOCK_PREVIEW_SETTINGS: FinanceSettingsData = {
+  companyName: 'Clasptek Coaching Limited',
+  tradingName: 'Clasptek Enterprise Academy',
+  address: '14 Admiralty Way, Lekki Phase 1, Lagos, Nigeria',
+  phone: '+234 802 345 6789',
+  email: 'finance@clasptek.org',
+  website: 'https://clasptek.org',
+  taxId: 'TIN-9842104-001',
+  registrationNumber: 'RC-1492041',
+  invoiceFooter: 'Official invoice issued by Clasptek Enterprise Finance.',
+  defaultTerms: 'Tuition fees must be paid within 14 banking days. Overpayments will be credited toward subsequent modules or refunded upon written authorization.',
+  defaultInstructions: 'Please quote your Invoice Display Number as the bank transaction reference.',
+};
+
+export const MOCK_PREVIEW_PAYMENT_ACCOUNTS: PaymentAccountData[] = [
+  {
+    id: 'pa_preview_01',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    bankName: 'Standard Chartered Bank',
+    accountName: 'Clasptek Coaching Limited - Operations',
+    accountNumber: '0123456789',
+    accountType: 'Corporate Current',
+    currency: 'GBP',
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    id: 'pa_preview_02',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    bankName: 'Guaranty Trust Bank (UK)',
+    accountName: 'Clasptek Tuition Collections',
+    accountNumber: '9876543210',
+    accountType: 'Tuition Domiciliary',
+    currency: 'GBP',
+    isDefault: false,
+    isActive: true,
+  },
+];
+
+export const MOCK_PREVIEW_PROGRAMMES: ProgrammeOptionItem[] = [
+  {
+    id: 'prog_001',
+    name: 'Executive Data Analysis & Business Intelligence',
+    price: 1800,
+  },
+  {
+    id: 'prog_002',
+    name: 'Full-Stack Software Engineering (Enterprise Track)',
+    price: 2500,
+  },
+  {
+    id: 'prog_003',
+    name: 'Cybersecurity Governance & Defense Operations',
+    price: 1500,
+  },
+  {
+    id: 'prog_004',
+    name: 'Cloud Architecture & DevOps Systems',
+    price: 1200,
+  },
+];
+
+export const MOCK_PREVIEW_CUSTOMERS: CustomerOptionItem[] = [
+  {
+    id: 'cust_001',
+    name: 'Chioma Okonkwo',
+    phone: '+234 801 111 2233',
+    email: 'chioma.okonkwo@example.com',
+  },
+  {
+    id: 'cust_002',
+    name: 'Oluwaseun Balogun',
+    phone: '+234 802 222 3344',
+    email: 'seun.balogun@example.com',
+  },
+  {
+    id: 'cust_003',
+    name: 'Amina Yusuf',
+    phone: '+234 803 333 4455',
+    email: 'amina.yusuf@example.com',
+  },
+];
+
+export const MOCK_PREVIEW_INVOICES: Invoice[] = [
+  {
+    id: 'inv_preview_001',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    invoiceNo: 1042,
+    invoiceDisplayNo: 'INV-2026-1042',
+    programmeId: 'prog_001',
+    programmeName: 'Executive Data Analysis & Business Intelligence',
+    customerId: 'cust_001',
+    studentName: 'Chioma Okonkwo',
+    studentEmail: 'chioma.okonkwo@example.com',
+    studentPhone: '+234 801 111 2233',
+    invoiceDate: '2026-10-10',
+    dueDate: '2026-10-24',
+    paymentPlan: 'installment',
+    installmentsCount: 2,
+    basePrice: 1800,
+    discountPct: 0,
+    discountAmount: 0,
+    totalAmount: 1800,
+    incomeCategory: 'Tuition Fee',
+    status: 'partial',
+    paidAmount: 600,
+    balanceAmount: 1200,
+    source: 'APP',
+    createdAt: '2026-10-10T10:00:00Z',
+    updatedAt: '2026-10-12T14:30:00Z',
+    items: [
+      {
+        id: 'item_001_1',
+        itemDescription: 'Module 1 & 2: Advanced SQL & Data Modelling',
+        quantity: 1,
+        unitPrice: 1000,
+        discountAmount: 0,
+        lineTotal: 1000,
+      },
+      {
+        id: 'item_001_2',
+        itemDescription: 'Module 3 & 4: PowerBI & Executive Dashboards',
+        quantity: 1,
+        unitPrice: 800,
+        discountAmount: 0,
+        lineTotal: 800,
+      },
+    ],
+  },
+  {
+    id: 'inv_preview_002',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    invoiceNo: 1043,
+    invoiceDisplayNo: 'INV-2026-1043',
+    programmeId: 'prog_002',
+    programmeName: 'Full-Stack Software Engineering (Enterprise Track)',
+    customerId: 'cust_002',
+    studentName: 'Oluwaseun Balogun',
+    studentEmail: 'seun.balogun@example.com',
+    studentPhone: '+234 802 222 3344',
+    invoiceDate: '2026-10-14',
+    dueDate: '2026-10-28',
+    paymentPlan: 'full',
+    installmentsCount: 1,
+    basePrice: 2500,
+    discountPct: 0,
+    discountAmount: 0,
+    totalAmount: 2500,
+    incomeCategory: 'Tuition Fee',
+    status: 'unpaid',
+    paidAmount: 0,
+    balanceAmount: 2500,
+    source: 'APP',
+    createdAt: '2026-10-14T09:15:00Z',
+    updatedAt: '2026-10-14T09:15:00Z',
+    items: [
+      {
+        id: 'item_002_1',
+        itemDescription: 'Comprehensive Full-Stack Engineering Curriculum (16 Weeks)',
+        quantity: 1,
+        unitPrice: 2500,
+        discountAmount: 0,
+        lineTotal: 2500,
+      },
+    ],
+  },
+  {
+    id: 'inv_preview_003',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    invoiceNo: 1044,
+    invoiceDisplayNo: 'INV-2026-1044',
+    programmeId: 'prog_003',
+    programmeName: 'Cybersecurity Governance & Defense Operations',
+    customerId: 'cust_003',
+    studentName: 'Amina Yusuf',
+    studentEmail: 'amina.yusuf@example.com',
+    studentPhone: '+234 803 333 4455',
+    invoiceDate: '2026-09-28',
+    dueDate: '2026-10-12',
+    paymentPlan: 'full',
+    installmentsCount: 1,
+    basePrice: 1500,
+    discountPct: 0,
+    discountAmount: 0,
+    totalAmount: 1500,
+    incomeCategory: 'Tuition Fee',
+    status: 'paid',
+    paidAmount: 1500,
+    balanceAmount: 0,
+    source: 'APP',
+    createdAt: '2026-09-28T11:00:00Z',
+    updatedAt: '2026-10-02T16:20:00Z',
+    items: [
+      {
+        id: 'item_003_1',
+        itemDescription: 'Cybersecurity Analyst & Threat Hunting Certification Track',
+        quantity: 1,
+        unitPrice: 1500,
+        discountAmount: 0,
+        lineTotal: 1500,
+      },
+    ],
+  },
+];
+
+export const MOCK_PREVIEW_PAYMENTS: Payment[] = [
+  {
+    id: 'pay_preview_001',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    receiptNo: 41,
+    receiptDisplayNo: 'REC-2026-0041',
+    invoiceId: 'inv_preview_001',
+    invoiceDisplayNo: 'INV-2026-1042',
+    studentName: 'Chioma Okonkwo',
+    amount: 600,
+    paymentMethod: 'Bank Transfer',
+    reference: 'STANBIC/TRX-948102',
+    paymentDate: '2026-10-12',
+    notes: 'First installment deposit paid via bank mobile app.',
+    reconciliationStatus: 'reconciled',
+    source: 'APP',
+    createdAt: '2026-10-12T14:30:00Z',
+    createdBy: 'Dr. Sarah Adebayo',
+  },
+  {
+    id: 'pay_preview_002',
+    tenantId: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    receiptNo: 38,
+    receiptDisplayNo: 'REC-2026-0038',
+    invoiceId: 'inv_preview_003',
+    invoiceDisplayNo: 'INV-2026-1044',
+    studentName: 'Amina Yusuf',
+    amount: 1500,
+    paymentMethod: 'POS',
+    reference: 'POS-LEKKI-00214',
+    paymentDate: '2026-10-02',
+    notes: 'Full tuition settled via campus front-desk terminal.',
+    reconciliationStatus: 'reconciled',
+    source: 'APP',
+    createdAt: '2026-10-02T16:20:00Z',
+    createdBy: 'Dr. Sarah Adebayo',
+  },
+];
+
+export const MOCK_PREVIEW_TARGET_INVOICES = MOCK_PREVIEW_INVOICES
+  .filter((inv) => inv.status !== 'paid' && inv.status !== 'voided' && inv.status !== 'cancelled')
+  .map((inv) => ({
+    id: inv.id,
+    invoiceDisplayNo: inv.invoiceDisplayNo,
+    studentName: inv.studentName,
+    totalAmount: inv.totalAmount,
+    balanceAmount: inv.balanceAmount ?? Math.max(0, inv.totalAmount - (inv.paidAmount ?? 0)),
+    status: inv.status,
+  }));
+
+export const MOCK_PREVIEW_METRICS: FinancialMetrics = {
+  totalInvoiced: 5800,
+  totalCollected: 2100,
+  outstandingBalance: 3700,
+  overdueAmount: 0,
+  invoiceCounts: {
+    total: 3,
+    unpaid: 1,
+    partial: 1,
+    paid: 1,
+    overdue: 0,
+    cancelled: 0,
+  },
+  paymentCounts: {
+    total: 2,
+    reconciled: 2,
+    unreconciled: 0,
+  },
+  payroll: {
+    draftPayroll: 0,
+    pendingAcknowledgement: 0,
+    pendingApproval: 0,
+    approvedReady: 0,
+    paidTotal: 0,
+    draftCount: 0,
+    issuedCount: 0,
+    acknowledgedCount: 0,
+    approvedCount: 0,
+    paidCount: 0,
+  },
+};
+
+export const MOCK_PREVIEW_STUDENT: Student = {
+  id: 'stu_preview_001',
+  tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+  customer_id: 'cust_001',
+  user_id: null,
+  student_number: 'STU-2026-0881',
+  first_name: 'Chioma',
+  last_name: 'Okonkwo',
+  email: 'chioma.okonkwo@example.com',
+  phone: '+234 801 111 2233',
+  gender: 'Female',
+  address: '14 Lekki Phase 1, Lagos',
+  emergency_contact_name: 'Emeka Okonkwo',
+  emergency_contact_phone: '+234 809 999 8877',
+  status: 'ACTIVE',
+  metadata: {
+    source: 'LOCAL_PREVIEW',
+  },
+  created_at: '2026-09-01T10:00:00Z',
+  updated_at: '2026-10-15T12:00:00Z',
+};
+
+export const MOCK_PREVIEW_ADMISSIONS_PROGRAMMES: ProgrammeOption[] = [
+  {
+    id: 'prog_001',
+    code: 'DATA',
+    name: 'Executive Data Analysis & Business Intelligence',
+    tuition_fee: 1800,
+    status: 'active',
+  },
+  {
+    id: 'prog_002',
+    code: 'FSE',
+    name: 'Full-Stack Software Engineering (Enterprise Track)',
+    tuition_fee: 2500,
+    status: 'active',
+  },
+  {
+    id: 'prog_003',
+    code: 'CYB',
+    name: 'Cybersecurity Governance & Defense Operations',
+    tuition_fee: 1500,
+    status: 'active',
+  },
+  {
+    id: 'prog_004',
+    code: 'CLD',
+    name: 'Cloud Architecture & DevOps Systems',
+    tuition_fee: 1200,
+    status: 'active',
+  },
+];
+
+export const MOCK_PREVIEW_ACADEMIC_PROGRAMMES: Programme[] = [
+  {
+    id: 'prog_001',
+    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    code: 'DATA',
+    name: 'Executive Data Analysis & Business Intelligence',
+    tuition_fee: 1800,
+    max_discount_pct: 15,
+    allow_installments: true,
+    installment_first_pct: 60,
+    installment_second_pct: 40,
+    status: 'active',
+    duration_weeks: 12,
+    session_count: 24,
+    description: 'Comprehensive data analytics with SQL, PowerBI, and Python.',
+    metadata: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-10-10T00:00:00Z',
+  },
+  {
+    id: 'prog_002',
+    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    code: 'FSE',
+    name: 'Full-Stack Software Engineering (Enterprise Track)',
+    tuition_fee: 2500,
+    max_discount_pct: 10,
+    allow_installments: true,
+    installment_first_pct: 50,
+    installment_second_pct: 50,
+    status: 'active',
+    duration_weeks: 16,
+    session_count: 32,
+    description: 'Full-stack enterprise application engineering with Next.js and Postgres.',
+    metadata: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-10-10T00:00:00Z',
+  },
+  {
+    id: 'prog_003',
+    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    code: 'CYB',
+    name: 'Cybersecurity Governance & Defense Operations',
+    tuition_fee: 1500,
+    max_discount_pct: 10,
+    allow_installments: false,
+    installment_first_pct: 100,
+    installment_second_pct: 0,
+    status: 'active',
+    duration_weeks: 10,
+    session_count: 20,
+    description: 'Information security management and offensive defense.',
+    metadata: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-10-10T00:00:00Z',
+  },
+  {
+    id: 'prog_004',
+    tenant_id: 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6',
+    code: 'CLD',
+    name: 'Cloud Architecture & DevOps Systems',
+    tuition_fee: 1200,
+    max_discount_pct: 10,
+    allow_installments: false,
+    installment_first_pct: 100,
+    installment_second_pct: 0,
+    status: 'active',
+    duration_weeks: 8,
+    session_count: 16,
+    description: 'Cloud infrastructure deployment and continuous delivery.',
+    metadata: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-10-10T00:00:00Z',
+  },
+];
+
+export const MOCK_PREVIEW_COHORTS: CohortOption[] = [
+  {
+    id: 'coh_001_a',
+    cohort_code: 'DATA-NOV26',
+    name: 'Executive Data Analysis — Nov 2026',
+    programme_id: 'prog_001',
+    start_date: '2026-11-02',
+    status: 'UPCOMING',
+  },
+  {
+    id: 'coh_001_b',
+    cohort_code: 'DATA-JAN27',
+    name: 'Executive Data Analysis — Jan 2027',
+    programme_id: 'prog_001',
+    start_date: '2027-01-15',
+    status: 'PLANNING',
+  },
+  {
+    id: 'coh_002_a',
+    cohort_code: 'FSE-NOV26',
+    name: 'Full-Stack Software Engineering — Nov 2026',
+    programme_id: 'prog_002',
+    start_date: '2026-11-09',
+    status: 'UPCOMING',
+  },
+  {
+    id: 'coh_003_a',
+    cohort_code: 'CYB-DEC26',
+    name: 'Cybersecurity Governance — Dec 2026',
+    programme_id: 'prog_003',
+    start_date: '2026-12-01',
+    status: 'UPCOMING',
+  },
+  {
+    id: 'coh_004_a',
+    cohort_code: 'CLD-JAN27',
+    name: 'Cloud Architecture & DevOps — Jan 2027',
+    programme_id: 'prog_004',
+    start_date: '2027-01-18',
+    status: 'PLANNING',
+  },
+];
+
+export const MOCK_PREVIEW_FACILITATORS = [
+  {
+    id: 'fac_001',
+    fullName: 'Engr. Babatunde Fashola',
+    name: 'Engr. Babatunde Fashola',
+    jobTitle: 'Principal Cloud Architect',
+  },
+  {
+    id: 'fac_002',
+    fullName: 'Dr. Ngozi Eze',
+    name: 'Dr. Ngozi Eze',
+    jobTitle: 'Lead Data Scientist',
+  },
+];

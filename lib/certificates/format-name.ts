@@ -124,7 +124,7 @@ export function computeCertificateNameLayout(
   const singleLineSizes = [24, 22, 20, 18, 16];
   for (const size of singleLineSizes) {
     const sWidth = estimateRecipientTextWidth(surname, size, true, letterSpacing);
-    const oWidth = otherNames ? estimateRecipientTextWidth(' ' + otherNames, size, false, letterSpacing) : 0;
+    const oWidth = otherNames ? estimateRecipientTextWidth(' ' + otherNames, size, true, letterSpacing) : 0;
     const totalWidth = sWidth + oWidth;
     if (totalWidth <= maxContainerWidth && cleanName.length <= 42) {
       return {
@@ -169,11 +169,11 @@ export function computeCertificateNameLayout(
     const line1OtherPart = line1Tokens.slice(surnameTokenCount).join(' ');
 
     const line1SWidth = estimateRecipientTextWidth(line1SurnamePart, size, true, letterSpacing);
-    const line1OWidth = line1OtherPart ? estimateRecipientTextWidth(' ' + line1OtherPart, size, false, letterSpacing) : 0;
+    const line1OWidth = line1OtherPart ? estimateRecipientTextWidth(' ' + line1OtherPart, size, true, letterSpacing) : 0;
     const line1Width = line1SWidth + line1OWidth;
 
     const line2Str = line2Tokens.join(' ');
-    const line2Width = estimateRecipientTextWidth(line2Str, size, false, letterSpacing);
+    const line2Width = estimateRecipientTextWidth(line2Str, size, true, letterSpacing);
 
     if (line1Width <= maxContainerWidth && line2Width <= maxContainerWidth) {
       chosenFontSize = size;

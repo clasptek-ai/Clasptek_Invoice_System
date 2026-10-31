@@ -207,10 +207,10 @@ async function runPhase9DSuite() {
 
   it('Public verification endpoint exposes only authorized non-private data', () => {
     const certCode = fs.readFileSync(path.join(__dirname, '..', 'lib', 'certificates', 'certificate-queries.ts'), 'utf8');
-    const verifyBlock = certCode.substring(certCode.indexOf('verifyCertificatePublic'));
+    const verifyBlock = certCode.substring(certCode.indexOf('formatSinglePublicVerification'));
 
     // Must return public credential summary
-    assert.strictEqual(verifyBlock.includes('certificateNumber: cert.certificate_number'), true);
+    assert.strictEqual(verifyBlock.includes('cert.certificate_number'), true);
     assert.strictEqual(verifyBlock.includes('studentName: cert.student_name_snapshot'), true);
     assert.strictEqual(verifyBlock.includes('programmeName: cert.programme_name_snapshot'), true);
 

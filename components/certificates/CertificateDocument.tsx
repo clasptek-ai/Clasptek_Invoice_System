@@ -12,14 +12,14 @@
  * - Clasptek official academy crest logo & director signature
  * - Dynamic student profile name (never hardcoded)
  * - Programme-dependent competency statements & professional roles
- * - Pure vector QR code verification link
+ * - Authoritative certificate verification link and candidate reference
  * - Single-page print styling: @page { size: A4 landscape; margin: 0; }
  */
 
 import React from 'react';
 import type { Certificate } from '@/types/certificates';
 import { formatCertificateOrdinalDate } from '@/lib/certificates/constants';
-import { generateCertificateQrSvg } from '@/lib/certificates/qr-svg';
+
 import { computeCertificateNameLayout } from '@/lib/certificates/format-name';
 
 /**
@@ -82,16 +82,16 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
     (progName.toLowerCase().includes('cyber')
       ? 'Threat Detection, Network Security, Risk Mitigation, and use of industry-standard tools.'
       : progName.toLowerCase().includes('data')
-      ? 'Data Analysis, Data Cleaning and Data Visualization'
-      : `${progName} Core Vocational Competencies`);
+        ? 'Data Analysis, Data Cleaning and Data Visualization'
+        : `${progName} Core Vocational Competencies`);
 
   const certRole =
     certificate.certificateRoleSnapshot ||
     (progName.toLowerCase().includes('cyber')
       ? 'CyberSecurity Professional'
       : progName.toLowerCase().includes('data')
-      ? 'Data Analyst Professional'
-      : `${progName} Professional`);
+        ? 'Data Analyst Professional'
+        : `${progName} Professional`);
 
   const signatoryTitle = certificate.signatoryTitle || 'Academy Director Signature';
   const displayDate = formatCertificateOrdinalDate(issueDate);
@@ -104,8 +104,8 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
       ? `${baseUrl}/verify-certificate/${encodeURIComponent(certificate.verificationToken)}`
       : `${baseUrl}/verify-certificate/${encodeURIComponent(certificate.certificateNumber || certNumber)}`);
 
-  // Vector QR SVG
-  const qrSvgMarkup = generateCertificateQrSvg(verificationUrl, { cellSize: 1.1, margin: 0 });
+
+
 
   // Dynamic Recipient Name Layout (Bolder Surname & Adaptive Sizing)
   const nameLayout = computeCertificateNameLayout(studentName);
@@ -123,6 +123,7 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
       className={`certificate-print-page clasptek-cert-a4-landscape clasptek-cert-print-container clasptek-cert-frame ${className}`}
       data-credential-type="Certificate of Completion"
       data-programme-snapshot={progName}
+      data-verification-url={verificationUrl}
       style={{
         boxSizing: 'border-box',
         width: '100%',
@@ -351,7 +352,7 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
             {line.segments.map((seg, segIdx) => (
               <tspan
                 key={segIdx}
-                fontWeight={seg.isSurname ? '800' : '500'}
+                fontWeight="700"
               >
                 {seg.text}
               </tspan>
@@ -453,31 +454,7 @@ export const CertificateDocument: React.FC<CertificateDocumentProps> = ({
           Date
         </text>
 
-        {/* SUBORDINATE QR VERIFICATION CODE (Bottom-Right) */}
-        <g className="cert-qr-svg" transform="translate(686, 440)">
-          <g dangerouslySetInnerHTML={{ __html: qrSvgMarkup }} />
-          <text
-            x="16"
-            y="38"
-            textAnchor="middle"
-            fontFamily="'Montserrat', Arial, sans-serif"
-            fontSize="5.5"
-            fontWeight="700"
-            fill="#080B78"
-          >
-            Scan to Verify
-          </text>
-          <text
-            x="16"
-            y="46"
-            textAnchor="middle"
-            fontFamily="'Montserrat', Arial, sans-serif"
-            fontSize="4.5"
-            fill="#4B5563"
-          >
-            Certificate
-          </text>
-        </g>
+
       </svg>
     </div>
   );
