@@ -16,9 +16,42 @@ import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/
 import { getAuthoritativeSession } from '@/lib/auth/server';
 import type { Meeting, MeetingStatus, RecordingStatus, RecordingMetadata } from '@/types/meetings';
 
-function mapDbRowToMeeting(r: Record<string, unknown>): Meeting {
-  const rawProvider = String(r.provider || 'LIVEKIT').toLowerCase();
-  const sfuProvider = (['livekit', 'daily', 'mock', 'google_meet'].includes(rawProvider) ? rawProvider : 'livekit') as Meeting['sfuProvider'];
+function isGoogleMeetUrl(url: unknown): boolean {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  try {
+    const parsed = new URL(url.trim());
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === 'meet.google.com' &&
+      /^\/[a-z0-9\-]+$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function mapDbRowToMeeting(r: Record<string, unknown>): Meeting {
+  const providerCol = r.provider !== null && r.provider !== undefined && String(r.provider).trim() ? String(r.provider).trim() : null;
+  const roomUrl = (r.provider_room_url as string | null) || null;
+
+  // Precedence:
+  // 1. Explicit provider column if present
+  // 2. If provider is NULL/empty, infer 'google_meet' ONLY if provider_room_url is a verified https://meet.google.com URL
+  // 3. Legacy sfu_provider column if present
+  // 4. Otherwise 'unknown' (missing provider never blindly coerced to LiveKit)
+  let rawProvider: string;
+  if (providerCol) {
+    rawProvider = providerCol.toLowerCase();
+  } else if (isGoogleMeetUrl(roomUrl)) {
+    rawProvider = 'google_meet';
+  } else if (r.sfu_provider !== null && r.sfu_provider !== undefined && String(r.sfu_provider).trim()) {
+    rawProvider = String(r.sfu_provider).trim().toLowerCase();
+  } else {
+    rawProvider = 'unknown';
+  }
+
+  // Unrecognised values are surfaced as 'unknown' (never coerced to LiveKit) so they cannot be joined or recorded.
+  const sfuProvider = (['livekit', 'daily', 'mock', 'google_meet'].includes(rawProvider) ? rawProvider : 'unknown') as Meeting['sfuProvider'];
   
   let rawStatus = String(r.status || 'SCHEDULED');
   if (rawStatus === 'ENDED') rawStatus = 'COMPLETED';

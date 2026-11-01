@@ -187,34 +187,55 @@ export async function POST(req: NextRequest) {
       await updateMeetingStatus(meeting.id, 'LIVE');
     }
 
-    // Reject unsupported providers
-    if (meeting.sfuProvider && !['livekit', 'google_meet'].includes(meeting.sfuProvider.toLowerCase())) {
+    // Reject unrecognised or legacy unsupported providers
+    if (meeting.sfuProvider !== 'livekit' && meeting.sfuProvider !== 'google_meet') {
       return NextResponse.json(
         {
           error: 'PROVIDER_UNSUPPORTED',
-          message: `Meeting provider '${meeting.sfuProvider}' is not supported.`,
+          message: `The meeting provider '${meeting.sfuProvider}' is not supported.`,
         },
         { status: 400 }
       );
     }
 
-    // Google Meet Provider join: validate canonical URL and redirect; zero LiveKit token issuance
-    if (meeting.sfuProvider === 'google_meet' || (meeting.sfuProvider as string) === 'GOOGLE_MEET') {
-      const { isValidGoogleMeetUrl } = await import('@/lib/meetings/google-meet');
-      if (!meeting.providerRoomUrl || !isValidGoogleMeetUrl(meeting.providerRoomUrl)) {
+    // Google Meet Provider handling: redirect directly without issuing LiveKit tokens
+    if (meeting.sfuProvider === 'google_meet') {
+      if (!meeting.providerRoomUrl || !meeting.providerRoomUrl.trim()) {
         return NextResponse.json(
           {
             error: 'INVALID_PROVIDER_URL',
-            message: 'This Google Meet meeting does not have a valid conference URL.',
+            message: 'Google Meet conference URL is missing for this meeting.',
           },
           { status: 400 }
         );
       }
+
+      try {
+        const parsed = new URL(meeting.providerRoomUrl.trim());
+        if (parsed.protocol !== 'https:' || parsed.hostname !== 'meet.google.com' || !/^\/[a-z0-9\-]+$/i.test(parsed.pathname)) {
+          return NextResponse.json(
+            {
+              error: 'INVALID_MEETING_URL',
+              message: 'Google Meet conference URL is invalid or malformed.',
+            },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          {
+            error: 'INVALID_MEETING_URL',
+            message: 'Google Meet conference URL is invalid or malformed.',
+          },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
+        provider: 'google_meet',
         sfuProvider: 'google_meet',
-        redirectUrl: meeting.providerRoomUrl,
-        meeting,
+        redirectUrl: meeting.providerRoomUrl.trim(),
       });
     }
 

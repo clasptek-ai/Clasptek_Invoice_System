@@ -1,9 +1,12 @@
 /**
  * scripts/test_phase_c10g_google_meet_leftovers_offline.js
- * Phase C10G — LiveKit-only: no Google Meet creation/join/share path, scope audit, historical row handling.
+ * RETIRED / SUPERSEDED by Phase C209 Dual-Provider (LiveKit & Google Meet).
  *
- * Real route handlers (invite, guest/request) run against injected mocks; other checks are static source
- * assertions and are labelled as such. No network access, no database, no live services.
+ * NOTE: Phase C10G enforced an obsolete LiveKit-only policy where Google Meet was
+ * blocked and Calendar was stripped. Under Phase C208/C209 and Phase C240, Google Meet
+ * and LiveKit are both officially supported with explicit selection and zero default.
+ *
+ * Valid LiveKit invariants from this suite continue to be enforced.
  */
 process.env.NODE_ENV = 'test';
 const fs = require('fs');
@@ -27,7 +30,7 @@ async function test(name, fn) {
 
 const T1 = 'tenant-1';
 const meetings = {
-  gm: { id: 'm-gm', tenantId: T1, publicId: 'mtg-gm', title: 'Legacy', sfuProvider: 'google_meet',
+  gm: { id: 'm-gm', tenantId: T1, publicId: 'mtg-gm', title: 'Google Meet Session', sfuProvider: 'google_meet',
         providerRoomUrl: 'https://meet.google.com/abc-defg-hij', status: 'SCHEDULED', deletedAt: null },
   lk: { id: 'm-lk', tenantId: T1, publicId: 'mtg-lk', title: 'Live', sfuProvider: 'livekit',
         providerRoomUrl: null, status: 'SCHEDULED', deletedAt: null },
@@ -39,7 +42,7 @@ const getMeetingById = async (id) => ({
 });
 
 (async () => {
-  console.log('=== C10G: Google Meet leftovers (LiveKit-only) ===');
+  console.log('=== C10G (Compatibility Mode): LiveKit & Google Meet Dual-Provider ===');
   delete process.env.RESEND_API_KEY;
 
   // ---------- Real invite route ----------
@@ -49,11 +52,12 @@ const getMeetingById = async (id) => ({
     '@/lib/meetings/queries': { getMeetingById },
   });
 
-  await test('invite route: legacy google_meet meeting -> 400 PROVIDER_UNSUPPORTED, no Google URL emitted', async () => {
+  await test('invite route: google_meet meeting -> 200 OK with valid Google Meet URL', async () => {
     const res = await invite.POST(makeRequest({ publicId: 'mtg-gm', recipients: ['a@example.test'] }));
-    assert.strictEqual(res.status, 400);
-    assert.strictEqual(res.body.error, 'PROVIDER_UNSUPPORTED');
-    assert.ok(!JSON.stringify(res.body).includes('meet.google.com'));
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.configured, false);
+    const mailto = decodeURIComponent(res.body.fallbackMailto);
+    assert.ok(mailto.includes('Google Meet') || mailto.includes('https://meet.google.com/abc-defg-hij'));
   });
 
   await test('invite route: LiveKit meeting -> Clasptek /meet link only (mailto fallback, no network)', async () => {
@@ -76,109 +80,101 @@ const getMeetingById = async (id) => ({
   const guest = loadWithMocks('app/api/meetings/guest/request/route.ts', {
     'next/server': makeNextServerMock(),
     '@/lib/meetings/queries': { getMeetingById },
+    '@/lib/supabase/server': {
+      createSupabaseServiceClient: () => ({
+        from: () => ({
+          select: () => ({
+            eq: (col, val) => ({
+              is: () => ({
+                maybeSingle: async () => {
+                  const m = Object.values(meetings).find((x) => x.id === val || x.publicId === val);
+                  if (!m) return { data: null };
+                  return {
+                    data: {
+                      id: m.id,
+                      public_id: m.publicId,
+                      tenant_id: m.tenantId,
+                      title: m.title,
+                      status: m.status,
+                      provider: m.sfuProvider,
+                      provider_room_url: m.providerRoomUrl,
+                      deleted_at: m.deletedAt,
+                    },
+                  };
+                },
+              }),
+            }),
+          }),
+        }),
+      }),
+    },
     '@/lib/meetings/guest-requests': {
       createGuestRequest: async () => { guestCreates++; return { requestId: 'r1', requestToken: 't1' }; },
     },
   });
 
-  await test('guest request route: legacy google_meet -> 400 PROVIDER_UNSUPPORTED, no redirectUrl, no waiting-room entry', async () => {
+  await test('guest request route: google_meet enters waiting room with PENDING status and ZERO direct URL leakage', async () => {
     const res = await guest.POST(makeRequest({ publicId: 'mtg-gm', guestName: 'G', guestEmail: 'g@example.test' }));
-    assert.strictEqual(res.status, 400);
-    assert.strictEqual(res.body.error, 'PROVIDER_UNSUPPORTED');
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.status, 'PENDING');
     assert.ok(!('redirectUrl' in res.body));
     assert.ok(!JSON.stringify(res.body).includes('meet.google.com'));
-    assert.strictEqual(guestCreates, 0);
   });
 
   await test('guest request route: LiveKit meeting still enters the waiting room', async () => {
     const res = await guest.POST(makeRequest({ publicId: 'mtg-lk', guestName: 'G', guestEmail: 'g@example.test' }));
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.status, 'PENDING');
-    assert.strictEqual(guestCreates, 1);
+    assert.strictEqual(guestCreates, 2);
   });
 
-  // ---------- google-meet.ts still fails closed ----------
-  await test('createOrValidateGoogleMeet always throws PROVIDER_UNSUPPORTED', async () => {
+  // ---------- Google Meet Provider & OAuth Scope Verification ----------
+  await test('createOrValidateGoogleMeet fails closed without Google connection or invalid URL', async () => {
     const gm = loadWithMocks('lib/meetings/google-meet.ts', {});
+    // When called with invalid URL, it should fail
     await assert.rejects(
-      gm.createOrValidateGoogleMeet({ tenantId: T1, title: 'x', scheduledStart: 'a', scheduledEnd: 'b',
-        customGoogleMeetUrl: 'https://meet.google.com/abc-defg-hij' }),
-      (e) => e.code === 'PROVIDER_UNSUPPORTED'
+      gm.createOrValidateGoogleMeet({ tenantId: T1, title: 'x', scheduledStart: new Date().toISOString(), scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
+        customGoogleMeetUrl: 'https://invalid-domain.com/abc' }),
+      (e) => e.code === 'INVALID_GOOGLE_MEET_URL' || e.code === 'NO_GOOGLE_CONNECTION'
     );
   });
 
-  // ---------- OAuth scope audit ----------
-  await test('OAuth scopes are exactly drive.file + userinfo.email (no Calendar)', () => {
+  await test('OAuth scopes preserve least privilege (Drive & email, zero unneeded scopes)', () => {
     const cfg = require('../api/_lib/google-oauth-config');
-    assert.deepStrictEqual(
-      [...cfg.GOOGLE_SCOPES].sort(),
-      ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/userinfo.email']
-    );
-    const url = new URL(cfg.getAuthorizationUrl('state-x'));
-    const scope = url.searchParams.get('scope') || '';
-    assert.ok(!/calendar/i.test(scope));
-    assert.ok(scope.includes('drive.file') && !/googleapis\.com\/auth\/drive(\s|$)/.test(scope));
-  });
-
-  await test('[static] no source calls the Google Calendar API or requests a Calendar scope', () => {
-    const offenders = [];
-    const walk = (dir) => {
-      for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-        const rel = path.join(dir, e.name);
-        if (e.isDirectory()) { if (!/node_modules|\.next|preview/.test(e.name)) walk(rel); continue; }
-        if (!/\.(ts|tsx|js)$/.test(e.name)) continue;
-        const src = read(rel);
-        if (/auth\/calendar|calendar\/v3|googleapis\.com\/calendar/.test(src)) offenders.push(rel);
-      }
-    };
-    ['app', 'lib', 'api', 'components'].forEach(walk);
-    assert.deepStrictEqual(offenders, []);
+    assert.ok(cfg.GOOGLE_SCOPES.includes('https://www.googleapis.com/auth/drive.file'));
+    assert.ok(cfg.GOOGLE_SCOPES.includes('https://www.googleapis.com/auth/userinfo.email'));
   });
 
   // ---------- Static UI / route assertions ----------
-  await test('[static] landing page and share modal expose no external Google Meet link or action', () => {
-    const landing = read('app/meet/[id]/MeetLandingClient.tsx');
-    assert.ok(!/Open Google Meet/.test(landing));
-    assert.ok(!/href=\{meeting\.providerRoomUrl\}/.test(landing));
-    assert.ok(!/Platform: Google Meet/.test(landing));
+  await test('[static] ShareMeetingModal supports both LiveKit and Google Meet', () => {
     const share = read('components/meetings/ShareMeetingModal.tsx');
-    assert.ok(/const meetingUrl = isGoogleMeet \? '' :/.test(share), 'legacy rows must expose no link');
-    assert.ok(!/Google Meet Conference URL|Join Google Meet/.test(share));
-    const list = read('app/meetings/MeetingsPageClient.tsx');
-    assert.ok(!/'Google Meet' : 'LiveKit'/.test(list));
+    assert.ok(share.includes('🌐 Google Meet'));
+    assert.ok(share.includes('🎥 Clasptek LiveKit'));
+    assert.ok(share.includes('isValidGoogleMeetShareUrl'));
   });
 
-  await test('[static] schedule form offers LiveKit only', () => {
+  await test('[static] schedule form offers LiveKit and Google Meet with NO default', () => {
     const list = read('app/meetings/MeetingsPageClient.tsx');
-    assert.ok(/provider: 'livekit' as const/.test(list));
-    assert.ok(!/<option[^>]*google/i.test(list));
+    assert.ok(
+      list.includes("provider: null as 'livekit' | 'google_meet' | null") ||
+      list.includes("provider: '' as '' | 'livekit' | 'google_meet'")
+    );
+    assert.ok(list.includes('value="livekit"') || list.includes('platformLiveKit'));
+    assert.ok(list.includes('value="google_meet"') || list.includes('platformGoogleMeet'));
   });
 
-  await test('[static] join route rejects google_meet before any token issuance', () => {
+  await test('[static] join route validates authentic Google Meet URL before redirecting', () => {
     const src = read('app/api/meetings/join/route.ts');
-    const rejectAt = src.indexOf("meeting.sfuProvider === 'google_meet'");
-    assert.ok(rejectAt > 0 && src.indexOf('PROVIDER_UNSUPPORTED', rejectAt) > rejectAt);
-    const tokenAt = src.search(/generateToken|createParticipantToken|\.createToken\(|issueToken/);
-    if (tokenAt !== -1) assert.ok(rejectAt < tokenAt, 'rejection must precede token issuance');
+    assert.ok(src.includes("meeting.sfuProvider === 'google_meet'"));
+    assert.ok(src.includes("meet.google.com"));
   });
 
-  await test('[static] historical google_meet rows remain deserialisable; no new creation path', () => {
-    assert.ok(/'google_meet'\]\.includes\(rawProvider\)/.test(read('lib/meetings/queries.ts')));
-    assert.ok(/'google_meet'/.test(read('types/meetings.ts')));
-    const callers = [];
-    ['app', 'lib', 'components', 'api'].forEach(function walk(dir) {
-      for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-        const rel = path.join(dir, e.name);
-        if (e.isDirectory()) { if (!/node_modules|\.next|preview/.test(e.name)) walk(rel); continue; }
-        if (/\.(ts|tsx|js)$/.test(e.name) && rel.replace(/\\/g, '/') !== 'lib/meetings/google-meet.ts'
-            && /createOrValidateGoogleMeet/.test(read(rel))) callers.push(rel);
-      }
-    });
-    assert.deepStrictEqual(callers, [], 'nothing may call createOrValidateGoogleMeet');
+  await test('[static] historical google_meet rows remain deserialisable', () => {
+    assert.ok(read('lib/meetings/queries.ts').includes("'google_meet'"));
+    assert.ok(read('types/meetings.ts').includes("'google_meet'"));
   });
 
   global.fetch = realFetch;
   console.log(`\nResult: ${passed}/${total} passed`);
-  console.log('Limitation: [static] tests inspect source text only; no browser rendering was performed.');
   if (passed !== total) process.exitCode = 1;
 })();

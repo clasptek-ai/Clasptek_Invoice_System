@@ -643,6 +643,13 @@ export function MeetingsPageClient({
       }
 
       setIsScheduleModalOpen(false);
+      setMeetingForm((prev) => ({
+        ...prev,
+        title: '',
+        description: '',
+        provider: '' as '' | 'livekit' | 'google_meet',
+        customGoogleMeetUrl: '',
+      }));
       setMeetings((prev) => [data.meeting, ...prev]);
       setFeedbackMsg({ type: 'success', text: `Meeting scheduled: ${data.meeting.title}` });
       setTimeout(() => setFeedbackMsg(null), 3000);
@@ -1297,12 +1304,12 @@ export function MeetingsPageClient({
                               fontWeight: 700,
                               padding: '1px 6px',
                               borderRadius: 10,
-                              background: m.sfuProvider === 'google_meet' ? '#fef3c7' : '#dbeafe',
-                              color: m.sfuProvider === 'google_meet' ? '#b45309' : '#1d4ed8',
-                              border: `1px solid ${m.sfuProvider === 'google_meet' ? '#fcd34d' : '#bfdbfe'}`,
+                              background: m.sfuProvider === 'google_meet' ? '#ecfdf5' : m.sfuProvider === 'livekit' ? '#dbeafe' : '#fef2f2',
+                              color: m.sfuProvider === 'google_meet' ? '#047857' : m.sfuProvider === 'livekit' ? '#1d4ed8' : '#b91c1c',
+                              border: `1px solid ${m.sfuProvider === 'google_meet' ? '#a7f3d0' : m.sfuProvider === 'livekit' ? '#bfdbfe' : '#fecaca'}`,
                             }}
                           >
-                            {m.sfuProvider === 'google_meet' ? 'Legacy (unsupported)' : 'LiveKit'}
+                            {m.sfuProvider === 'google_meet' ? 'Google Meet' : m.sfuProvider === 'livekit' ? 'LiveKit' : 'Unsupported'}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -1444,11 +1451,11 @@ export function MeetingsPageClient({
                                 fontWeight: 700,
                                 padding: '1px 5px',
                                 borderRadius: 8,
-                                background: m.sfuProvider === 'google_meet' ? '#fef3c7' : '#dbeafe',
-                                color: m.sfuProvider === 'google_meet' ? '#b45309' : '#1d4ed8',
+                                background: m.sfuProvider === 'google_meet' ? '#ecfdf5' : m.sfuProvider === 'livekit' ? '#dbeafe' : '#fef2f2',
+                                color: m.sfuProvider === 'google_meet' ? '#047857' : m.sfuProvider === 'livekit' ? '#1d4ed8' : '#b91c1c',
                               }}
                             >
-                              {m.sfuProvider === 'google_meet' ? 'Legacy' : 'LiveKit'}
+                              {m.sfuProvider === 'google_meet' ? 'Google Meet' : m.sfuProvider === 'livekit' ? 'LiveKit' : 'Unsupported'}
                             </span>
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>

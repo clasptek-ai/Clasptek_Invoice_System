@@ -16,6 +16,20 @@ interface ShareMeetingModalProps {
   onClose: () => void;
 }
 
+function isValidGoogleMeetShareUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const u = new URL(url.trim());
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'meet.google.com' &&
+      /^\/[a-z0-9\-]+$/i.test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) {
   const [activeTab, setActiveTab] = useState<'link' | 'whatsapp' | 'email'>('link');
   const [copied, setCopied] = useState<boolean>(false);
@@ -37,9 +51,10 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
   if (!meeting) return null;
 
   const isGoogleMeet = meeting.sfuProvider === 'google_meet' || (meeting.sfuProvider as string) === 'GOOGLE_MEET';
+  const hasValidMeetUrl = isGoogleMeet && isValidGoogleMeetShareUrl(meeting.providerRoomUrl);
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.clasptek.org';
-  const meetingUrl = isGoogleMeet && meeting.providerRoomUrl
-    ? meeting.providerRoomUrl
+  const meetingUrl = isGoogleMeet
+    ? (hasValidMeetUrl ? meeting.providerRoomUrl!.trim() : '')
     : `${origin}/meet/${meeting.publicId}`;
 
   // Formatted date and time
@@ -110,8 +125,8 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
 
   const handleSendEmailServer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isGoogleMeet && !meetingUrl) {
-      setEmailFeedback({ type: 'error', message: 'This Google Meet meeting does not have a valid conference URL.' });
+    if (!meetingUrl) {
+      setEmailFeedback({ type: 'error', message: 'No valid meeting URL is available to share.' });
       return;
     }
 
@@ -233,12 +248,12 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
                   fontWeight: 700,
                   padding: '2px 8px',
                   borderRadius: 12,
-                  background: isGoogleMeet ? '#fef3c7' : '#dbeafe',
-                  color: isGoogleMeet ? '#b45309' : '#1d4ed8',
-                  border: `1px solid ${isGoogleMeet ? '#fcd34d' : '#bfdbfe'}`,
+                  background: isGoogleMeet ? '#ecfdf5' : meeting.sfuProvider === 'livekit' ? '#dbeafe' : '#fef2f2',
+                  color: isGoogleMeet ? '#047857' : meeting.sfuProvider === 'livekit' ? '#1d4ed8' : '#b91c1c',
+                  border: `1px solid ${isGoogleMeet ? '#a7f3d0' : meeting.sfuProvider === 'livekit' ? '#bfdbfe' : '#fecaca'}`,
                 }}
               >
-                {isGoogleMeet ? '⚠ Legacy provider (unsupported)' : '🎥 Clasptek LiveKit'}
+                {isGoogleMeet ? '🌐 Google Meet' : meeting.sfuProvider === 'livekit' ? '🎥 Clasptek LiveKit' : '⚠️ Unsupported'}
               </span>
             </div>
           </div>
@@ -319,19 +334,34 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
 
         {/* Modal Body */}
         <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-          {isGoogleMeet && meeting.providerRoomUrl && (
+          {isGoogleMeet && !hasValidMeetUrl && (
             <div
               style={{
-                padding: '10px 14px',
+                padding: '12px 16px',
                 borderRadius: 8,
-                background: '#f0fdf4',
-                border: '1px solid #86efac',
-                color: '#166534',
+                background: '#fffbeb',
+                border: '1px solid #fcd34d',
+                color: '#b45309',
                 fontSize: 13,
                 marginBottom: 16,
               }}
             >
-              📅 <strong>Google Meet:</strong> This meeting is hosted externally on Google Meet. The invitation contains the verified meeting link.
+              ⚠️ <strong>Missing Conference Link:</strong> This Google Meet meeting does not have a valid conference URL saved.
+            </div>
+          )}
+          {!isGoogleMeet && meeting.sfuProvider !== 'livekit' && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: 8,
+                background: '#fef2f2',
+                border: '1px solid #f87171',
+                color: '#991b1b',
+                fontSize: 13,
+                marginBottom: 16,
+              }}
+            >
+              ⚠️ <strong>Unsupported provider:</strong> This meeting provider is not supported. Please schedule a new meeting using LiveKit or Google Meet.
             </div>
           )}
 
@@ -347,7 +377,13 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
                     type="text"
                     readOnly
                     value={meetingUrl}
-                    placeholder={isGoogleMeet ? 'No link available for unsupported provider' : ''}
+                    placeholder={
+                      isGoogleMeet
+                        ? (hasValidMeetUrl ? '' : 'No valid Google Meet URL available')
+                        : meeting.sfuProvider !== 'livekit'
+                        ? 'No link available for unsupported provider'
+                        : ''
+                    }
                     style={{
                       flex: 1,
                       padding: '10px 12px',
@@ -370,7 +406,11 @@ export function ShareMeetingModal({ meeting, onClose }: ShareMeetingModalProps) 
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted, #64748b)', marginTop: 6 }}>
                   {isGoogleMeet
-                    ? 'This meeting cannot be shared because its video provider is no longer supported.'
+                    ? (hasValidMeetUrl
+                        ? 'Participants can join this meeting directly using Google Meet.'
+                        : 'This meeting cannot be shared because it lacks a valid Google Meet URL.')
+                    : meeting.sfuProvider !== 'livekit'
+                    ? 'This meeting cannot be shared because its provider is unsupported.'
                     : 'Registered students and facilitators join directly. External guests will be placed in your waiting room.'}
                 </div>
               </div>
