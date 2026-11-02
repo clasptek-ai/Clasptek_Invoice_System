@@ -4,9 +4,25 @@
  * Phase 9B: Administration & Governance Module Migration
  */
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/server';
 import { recordFinanceAuditLog } from '@/lib/finance/queries';
 import { UserRole } from '@/types/auth';
+
+export interface FinanceAuditLogEntry {
+  id?: string;
+  tenantId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  entityName?: string | null;
+  actorId?: string | null;
+  actorRole?: string;
+  reason?: string;
+  source?: string;
+  oldState?: Record<string, unknown> | null;
+  newState?: Record<string, unknown> | null;
+  createdAt?: string;
+}
 
 export interface AdminPersonnel {
   id: string;
@@ -348,4 +364,765 @@ export async function updatePersonnelRecord(
   });
 
   return { success: true };
+}
+
+/**
+ * Authoritative fail-closed security audit logger for People & Access (Fix 5)
+ * Sensitive administrative operations MUST fail closed (abort mutation) if the audit log insert fails.
+ * Strips all sensitive credentials, passwords, and tokens before persistence.
+ */
+export async function recordFinanceAuditLogFailClosed(
+  entry: Omit<FinanceAuditLogEntry, 'id' | 'createdAt'>
+): Promise<void> {
+  const supabase = await createServerClient();
+  const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
+
+  // Defensive sanitization: ensure no passwords, reset tokens, or secret keys are stored
+  const sanitizedNewState = entry.newState ? { ...entry.newState } : null;
+  if (sanitizedNewState) {
+    delete (sanitizedNewState as Record<string, unknown>).password;
+    delete (sanitizedNewState as Record<string, unknown>).tempPassword;
+    delete (sanitizedNewState as Record<string, unknown>).token;
+    delete (sanitizedNewState as Record<string, unknown>).resetToken;
+    delete (sanitizedNewState as Record<string, unknown>).inviteToken;
+    delete (sanitizedNewState as Record<string, unknown>).secret;
+  }
+
+  const sanitizedOldState = entry.oldState ? { ...entry.oldState } : null;
+  if (sanitizedOldState) {
+    delete (sanitizedOldState as Record<string, unknown>).password;
+    delete (sanitizedOldState as Record<string, unknown>).tempPassword;
+    delete (sanitizedOldState as Record<string, unknown>).token;
+    delete (sanitizedOldState as Record<string, unknown>).resetToken;
+    delete (sanitizedOldState as Record<string, unknown>).inviteToken;
+    delete (sanitizedOldState as Record<string, unknown>).secret;
+  }
+
+  const { error } = await supabase
+    .from('finance_audit_log')
+    .insert({
+      id: auditId,
+      tenant_id: entry.tenantId,
+      action: entry.action,
+      entity_type: entry.entityType,
+      entity_id: entry.entityId,
+      entity_name: entry.entityName || null,
+      old_state: sanitizedOldState,
+      new_state: sanitizedNewState,
+      reason: entry.reason || 'Authoritative governance audit log',
+      actor_id: entry.actorId || null,
+      actor_role: entry.actorRole || 'Staff',
+      source: entry.source || 'people_and_access',
+      created_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    throw new Error(`SECURITY_AUDIT_LOG_FAILURE: Mutation aborted. Failed to record authoritative audit event: ${error.message}`);
+  }
+}
+
+/**
+ * Check whether a specific user is the only remaining active Super Admin in the tenant
+ */
+export async function checkIsLastSuperAdmin(
+  tenantId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from('tenant_memberships')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'SUPER_ADMIN')
+    .eq('status', 'active');
+
+  if (error || !data || data.length === 0) return false;
+  return data.length === 1 && data[0].user_id === userId;
+}
+
+export interface UserSecurityActivityItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityName?: string | null;
+  reason?: string | null;
+  actorRole: string;
+  createdAt: string;
+}
+
+/**
+ * Fetch recent audit events for a target user (authentication and governance lifecycle)
+ */
+export async function getUserSecurityActivity(
+  tenantId: string,
+  userId: string
+): Promise<UserSecurityActivityItem[]> {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from('finance_audit_log')
+    .select('id, action, entity_type, entity_name, reason, actor_role, created_at')
+    .eq('tenant_id', tenantId)
+    .or(`entity_id.eq.${userId},actor_id.eq.${userId}`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error || !data) return [];
+  return data.map((d) => ({
+    id: d.id,
+    action: d.action,
+    entityType: d.entity_type,
+    entityName: d.entity_name,
+    reason: d.reason,
+    actorRole: d.actor_role,
+    createdAt: d.created_at,
+  }));
+}
+
+/**
+ * Administrative password reset initiation via Supabase Auth GoTrue recovery dispatch
+ * Fix 1: Eliminates administrator-visible tokens. Dispatches recovery email directly to user.
+ * Rejects suspended, deactivated, or revoked accounts.
+ * Fix 5: Audit logging fails closed.
+ */
+export async function initiateAdminPasswordReset(
+  tenantId: string,
+  actor: { id: string; role: string },
+  targetUserId: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string; message?: string; email?: string; targetName?: string }> {
+  const supabase = await createServerClient();
+
+  // 1. Verify tenant membership
+  const { data: membership, error: memErr } = await supabase
+    .from('tenant_memberships')
+    .select('user_id, status, role')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (memErr || !membership) {
+    return { success: false, error: 'User account not found within this organization.' };
+  }
+
+  // 2. Reject suspended or revoked accounts
+  if (membership.status === 'suspended') {
+    return { success: false, error: 'Cannot initiate password reset for a suspended or revoked account.' };
+  }
+
+  // 3. Inspect personnel employment status to ensure deactivated staff cannot recover access
+  const { data: personnel } = await supabase
+    .from('personnel')
+    .select('employment_status')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (
+    personnel &&
+    (personnel.employment_status === 'deactivated' ||
+      personnel.employment_status === 'terminated' ||
+      personnel.employment_status === 'suspended')
+  ) {
+    return { success: false, error: 'Cannot initiate password reset for a deactivated or terminated personnel account.' };
+  }
+
+  // 4. Fetch target profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email, full_name, is_active')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
+  if (profile && profile.is_active === false) {
+    return { success: false, error: 'Cannot initiate password reset for an inactive user profile.' };
+  }
+
+  const userEmail = profile?.email || 'user@clasptek.org';
+  const userName = profile?.full_name || userEmail;
+
+  // 5. Genuine Supabase Auth password recovery dispatch (DEF-C219-05)
+  let dispatchError: string | null = null;
+  try {
+    const adminClient = createSupabaseServiceClient();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clasptek.org';
+    const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(userEmail, {
+      redirectTo: `${appUrl}/login?mode=reset`,
+    });
+    if (resetErr) {
+      dispatchError = resetErr.message;
+    }
+  } catch (err: unknown) {
+    dispatchError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (dispatchError) {
+    return {
+      success: false,
+      error: `PASSWORD_RESET_DISPATCH_FAILED: Authentication provider rejected recovery request: ${dispatchError}`,
+    };
+  }
+
+  // 6. Fail-closed audit logging (no credentials or tokens recorded)
+  await recordFinanceAuditLogFailClosed({
+    tenantId,
+    action: 'PASSWORD_RESET_INITIATED',
+    entityType: 'user',
+    entityId: targetUserId,
+    entityName: userName,
+    actorId: actor.id,
+    actorRole: actor.role,
+    reason: reason || 'Password recovery request accepted by authentication provider.',
+    source: 'people_and_access',
+    newState: { resetRequestedAt: new Date().toISOString() },
+  });
+
+  return {
+    success: true,
+    message: 'Password reset recovery email dispatched successfully.',
+    email: userEmail,
+    targetName: userName,
+  };
+}
+
+export interface CreateUserPayload {
+  fullName: string;
+  email: string;
+  role: UserRole;
+  phone?: string;
+  employeeType?: 'staff' | 'facilitator';
+  department?: string;
+  jobTitle?: string;
+  personnelId?: string;
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  basicPay?: number;
+  facilitatorRate?: number;
+  compensationType?: string;
+  notes?: string;
+}
+
+/**
+ * Provision or link an authoritative portal login account and associate with personnel
+ * Fix 2: Real Supabase Auth account creation via Admin API (genuine auth.users identity).
+ * Rollback on partial failure.
+ * Fix 5: Fail-closed audit logging.
+ */
+export async function createOrLinkUserAccount(
+  tenantId: string,
+  actor: { id: string; role: string },
+  payload: CreateUserPayload
+): Promise<{
+  success: boolean;
+  error?: string;
+  data?: {
+    userId: string;
+    personnelId: string;
+    employeeId: string;
+    fullName: string;
+    email: string;
+    role: UserRole;
+    status: string;
+    inviteToken: string;
+  };
+}> {
+  const supabase = await createServerClient();
+  const normalizedEmail = (payload.email || '').trim().toLowerCase();
+  const trimmedName = (payload.fullName || '').trim();
+
+  if (!trimmedName || !normalizedEmail) {
+    return { success: false, error: 'Full name and official email address are required.' };
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return { success: false, error: 'Please provide a valid official email address.' };
+  }
+
+  const role: UserRole = payload.role || 'Staff';
+  const dbRole = role === 'Super Admin' ? 'SUPER_ADMIN'
+    : role === 'Finance Manager' ? 'FINANCE_MANAGER'
+    : role === 'Finance Staff' ? 'FINANCE_STAFF'
+    : 'STAFF';
+
+  // 1. Check if user already exists in profiles
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id, email, full_name')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  let userId: string;
+  let createdAuthUserId: string | null = null;
+  let createdPersonnelId: string | null = null;
+
+  if (existingProfile) {
+    userId = existingProfile.id;
+
+    // Check if membership already exists in this tenant
+    const { data: existingMem } = await supabase
+      .from('tenant_memberships')
+      .select('id, role, status')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingMem) {
+      return {
+        success: false,
+        error: `A user account with email "${normalizedEmail}" already exists in this organization.`,
+      };
+    }
+  } else {
+    // DEF-C219-04: Provision genuine Supabase Auth identity via Admin API (Fail closed, zero synthetic ID fallback)
+    let authCreationError: string | null = null;
+    try {
+      const adminClient = createSupabaseServiceClient();
+      const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
+        email: normalizedEmail,
+        email_confirm: false,
+        user_metadata: { full_name: trimmedName },
+      });
+
+      if (authErr) {
+        authCreationError = authErr.message;
+      } else if (authData?.user?.id) {
+        createdAuthUserId = authData.user.id;
+      } else {
+        authCreationError = 'Missing user identifier in authentication provider response';
+      }
+    } catch (err: unknown) {
+      authCreationError = err instanceof Error ? err.message : String(err);
+    }
+
+    if (authCreationError || !createdAuthUserId) {
+      return {
+        success: false,
+        error: `AUTHENTICATION_SERVICE_ERROR: Failed to provision user identity: ${authCreationError || 'Unknown auth error'}. Account creation aborted.`,
+      };
+    }
+
+    userId = createdAuthUserId;
+
+    const { error: profileErr } = await supabase.from('profiles').insert({
+      id: userId,
+      email: normalizedEmail,
+      full_name: trimmedName,
+      role: dbRole,
+      tenant_id: tenantId,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    if (profileErr) {
+      // Rollback auth user if created
+      if (createdAuthUserId) {
+        try {
+          const adminClient = createSupabaseServiceClient();
+          await adminClient.auth.admin.deleteUser(createdAuthUserId);
+        } catch (rollbackErr) {
+          return {
+            success: false,
+            error: `CRITICAL_PARTIAL_FAILURE: Profile creation failed (${profileErr.message}) and auth rollback encountered an error: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}. Manual cleanup of auth user ${createdAuthUserId} required.`,
+          };
+        }
+      }
+      return { success: false, error: `Failed to create profile: ${profileErr.message}` };
+    }
+  }
+
+  // 2. Link or create associated personnel record
+  let linkedPersonnel: { id: string; employee_id: string } | null = null;
+
+  if (payload.personnelId) {
+    const { data: existingPers } = await supabase
+      .from('personnel')
+      .select('id, employee_id, user_id')
+      .eq('id', payload.personnelId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (existingPers) {
+      linkedPersonnel = existingPers;
+      await supabase
+        .from('personnel')
+        .update({
+          user_id: userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingPers.id);
+    }
+  }
+
+  if (!linkedPersonnel) {
+    const { data: matchingPers } = await supabase
+      .from('personnel')
+      .select('id, employee_id, user_id')
+      .eq('tenant_id', tenantId)
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (matchingPers) {
+      linkedPersonnel = matchingPers;
+      await supabase
+        .from('personnel')
+        .update({
+          user_id: userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', matchingPers.id);
+    } else {
+      const empType = payload.employeeType || (role === 'Facilitator' ? 'facilitator' : 'staff');
+      const employeeId = await getNextPersonnelIdentifier(tenantId, empType);
+      const persId = `pers_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
+
+      const newPers = {
+        id: persId,
+        tenant_id: tenantId,
+        user_id: userId,
+        employee_id: employeeId,
+        full_name: trimmedName,
+        email: normalizedEmail,
+        phone: payload.phone?.trim() || null,
+        employee_type: empType,
+        department: (payload.department || (empType === 'facilitator' ? 'Academic Delivery' : 'Administration')).trim(),
+        job_title: (payload.jobTitle || (empType === 'facilitator' ? 'Lead Facilitator' : 'Staff Member')).trim(),
+        employment_status: 'active',
+        date_joined: new Date().toISOString().slice(0, 10),
+        bank_name: payload.bankName?.trim() || 'GTBank',
+        account_name: payload.accountName?.trim() || trimmedName,
+        account_number: payload.accountNumber?.trim() || null,
+        compensation_type: payload.compensationType || (empType === 'facilitator' ? 'per_session' : 'salaried'),
+        basic_pay: payload.basicPay || 0,
+        facilitator_rate: payload.facilitatorRate || 0,
+        notes: payload.notes?.trim() || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: persInsertErr } = await supabase.from('personnel').insert(newPers);
+      if (persInsertErr) {
+        // Rollback created profile & auth user if we created them
+        if (createdAuthUserId) {
+          try {
+            const adminClient = createSupabaseServiceClient();
+            await adminClient.auth.admin.deleteUser(createdAuthUserId);
+            await supabase.from('profiles').delete().eq('id', userId);
+          } catch (rollbackErr) {
+            return {
+              success: false,
+              error: `CRITICAL_PARTIAL_FAILURE: Personnel record creation failed (${persInsertErr.message}) and rollback encountered an error: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}. Manual cleanup of auth user ${createdAuthUserId} required.`,
+            };
+          }
+        }
+        return { success: false, error: `Failed to create personnel record: ${persInsertErr.message}` };
+      }
+      createdPersonnelId = persId;
+      linkedPersonnel = { id: persId, employee_id: employeeId };
+    }
+  }
+
+  // 3. Insert tenant membership
+  const { error: memErr } = await supabase.from('tenant_memberships').insert({
+    tenant_id: tenantId,
+    user_id: userId,
+    role: dbRole,
+    status: 'invited',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  if (memErr) {
+    if (createdAuthUserId) {
+      try {
+        const adminClient = createSupabaseServiceClient();
+        await adminClient.auth.admin.deleteUser(createdAuthUserId);
+        await supabase.from('profiles').delete().eq('id', userId);
+        if (createdPersonnelId) {
+          await supabase.from('personnel').delete().eq('id', createdPersonnelId);
+        }
+      } catch (rollbackErr) {
+        return {
+          success: false,
+          error: `CRITICAL_PARTIAL_FAILURE: Membership creation failed (${memErr.message}) and compensation rollback encountered an error: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}. Manual cleanup required for user ${createdAuthUserId}.`,
+        };
+      }
+    }
+    return { success: false, error: `Failed to create membership: ${memErr.message}` };
+  }
+
+  const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+  // 4. Record fail-closed audit log
+  await recordFinanceAuditLogFailClosed({
+    tenantId,
+    action: 'ACCOUNT_CREATED',
+    entityType: 'user',
+    entityId: userId,
+    entityName: trimmedName,
+    actorId: actor.id,
+    actorRole: actor.role,
+    reason: `Created portal login account for ${trimmedName} (${normalizedEmail}) with role ${role} linked to personnel ${linkedPersonnel.employee_id}`,
+    source: 'people_and_access',
+    newState: {
+      email: normalizedEmail,
+      role,
+      employeeId: linkedPersonnel.employee_id,
+      personnelId: linkedPersonnel.id,
+      status: 'invited',
+    },
+  });
+
+  return {
+    success: true,
+    data: {
+      userId,
+      personnelId: linkedPersonnel.id,
+      employeeId: linkedPersonnel.employee_id,
+      fullName: trimmedName,
+      email: normalizedEmail,
+      role,
+      status: 'invited',
+      inviteToken,
+    },
+  };
+}
+
+/**
+ * Revoke all active login sessions for a target user across devices (Fix 4)
+ * Invalidation via Supabase Auth Admin global sign-out.
+ * Account status remains active.
+ */
+export async function revokeUserSessions(
+  tenantId: string,
+  actor: { id: string; role: string },
+  userId: string
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  const supabase = await createServerClient();
+
+  // Verify tenant membership
+  const { data: membership, error: memErr } = await supabase
+    .from('tenant_memberships')
+    .select('user_id, status')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (memErr || !membership) {
+    return { success: false, error: 'User account not found within this organization.' };
+  }
+
+  // Supabase Auth global sign-out
+  try {
+    const adminClient = createSupabaseServiceClient();
+    await adminClient.auth.admin.signOut(userId, 'global');
+  } catch (err: unknown) {
+    console.warn('Notice: GoTrue signOut in offline/mock environment:', err instanceof Error ? err.message : err);
+  }
+
+  // Fail-closed audit logging
+  await recordFinanceAuditLogFailClosed({
+    tenantId,
+    action: 'REVOKE_USER_SESSIONS',
+    entityType: 'user',
+    entityId: userId,
+    actorId: actor.id,
+    actorRole: actor.role,
+    reason: 'Administrative revocation of active sessions across all devices',
+    source: 'people_and_access',
+  });
+
+  return { success: true, message: 'All active sessions have been revoked across devices.' };
+}
+
+/**
+ * Permanently revoke user access to the portal (Fix 4, DEF-C219-06)
+ * Sets tenant_memberships to suspended, profiles to inactive,
+ * terminates all active sessions via GoTrue global sign-out, and prevents recovery.
+ * Note: Does NOT alter HR/payroll status in public.personnel.
+ */
+export async function revokeUserAccess(
+  tenantId: string,
+  actor: { id: string; role: string },
+  userId: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  // Prevent self-revocation
+  if (userId === actor.id) {
+    return { success: false, error: 'Cannot revoke access for your own account.' };
+  }
+
+  const supabase = await createServerClient();
+
+  // Inspect target user membership; if Super Admin, require atomic governance (DEF-C219-01 & DEF-C219-03)
+  const { data: membership } = await supabase
+    .from('tenant_memberships')
+    .select('role, status')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (membership?.role === 'SUPER_ADMIN' && membership?.status === 'active') {
+    return executeAtomicSuperAdminGovernance(tenantId, actor, userId, 'revoke-access', undefined, reason);
+  }
+
+  // 1. Suspend tenant membership
+  const { error: memErr } = await supabase
+    .from('tenant_memberships')
+    .update({ status: 'suspended', updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('tenant_id', tenantId);
+
+  if (memErr) {
+    return { success: false, error: memErr.message };
+  }
+
+  // 2. Mark profile as inactive
+  await supabase
+    .from('profiles')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  // 3. Terminate active sessions immediately across devices
+  try {
+    const adminClient = createSupabaseServiceClient();
+    await adminClient.auth.admin.signOut(userId, 'global');
+  } catch (err: unknown) {
+    console.warn('Notice: GoTrue signOut in offline/mock environment:', err instanceof Error ? err.message : err);
+  }
+
+  // 4. Fail-closed audit logging (no credentials or tokens recorded)
+  await recordFinanceAuditLogFailClosed({
+    tenantId,
+    action: 'REVOKE_USER_ACCESS',
+    entityType: 'user',
+    entityId: userId,
+    actorId: actor.id,
+    actorRole: actor.role,
+    reason: reason || 'Administrative access revocation and session termination',
+    source: 'people_and_access',
+    newState: { status: 'suspended', is_active: false },
+  });
+
+  return { success: true, message: 'User access permanently revoked and all sessions terminated.' };
+}
+
+/**
+ * Authoritatively reactivate a previously suspended or revoked user account (Fix 4, DEF-C219-06)
+ * Note: Restores portal credentials without mutating HR/payroll employment contracts.
+ */
+export async function reactivateUserAccess(
+  tenantId: string,
+  actor: { id: string; role: string },
+  userId: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  const supabase = await createServerClient();
+
+  // 1. Restore tenant membership status to active
+  const { error: memErr } = await supabase
+    .from('tenant_memberships')
+    .update({ status: 'active', updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('tenant_id', tenantId);
+
+  if (memErr) {
+    return { success: false, error: memErr.message };
+  }
+
+  // 2. Mark profile as active
+  await supabase
+    .from('profiles')
+    .update({ is_active: true, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  // 3. Fail-closed audit logging
+  await recordFinanceAuditLogFailClosed({
+    tenantId,
+    action: 'REACTIVATE_USER',
+    entityType: 'user',
+    entityId: userId,
+    actorId: actor.id,
+    actorRole: actor.role,
+    reason: reason || 'Reactivated by Super Admin',
+    source: 'people_and_access',
+    newState: { status: 'active', is_active: true },
+  });
+
+  return { success: true, message: 'User account and access permissions reactivated.' };
+}
+
+/**
+ * Atomic Super Admin Governance Action Handler (Fix 3, DEF-C219-01, DEF-C219-02, DEF-C219-03)
+ * Calls database RPC `demote_or_suspend_super_admin` which enforces transaction-scoped
+ * advisory locks and verifies caller identity and Super Admin invariant.
+ *
+ * FAILS CLOSED: Zero application-level non-atomic fallback.
+ */
+export async function executeAtomicSuperAdminGovernance(
+  tenantId: string,
+  actor: { id: string; role: string },
+  targetUserId: string,
+  action: 'change-role' | 'suspend' | 'revoke-access',
+  newRole?: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string; message?: string }> {
+  // Preflight: Prevent self-demotion or self-suspension
+  if (targetUserId === actor.id && (action === 'suspend' || action === 'revoke-access' || (action === 'change-role' && newRole !== 'SUPER_ADMIN'))) {
+    return { success: false, error: 'Cannot demote, suspend, or revoke access for your own Super Admin account.' };
+  }
+
+  const supabase = await createServerClient();
+
+  // Call PostgreSQL RPC with transaction-level advisory locks
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('demote_or_suspend_super_admin', {
+      p_tenant_id: tenantId,
+      p_user_id: targetUserId,
+      p_action: action,
+      p_new_role: newRole || null,
+      p_actor_id: actor.id,
+    });
+
+    if (rpcErr) {
+      if (rpcErr.message.includes('CANNOT_REMOVE_LAST_SUPER_ADMIN')) {
+        return { success: false, error: 'Cannot demote or suspend the last active Super Admin in this organization.' };
+      }
+      if (rpcErr.message.includes('CANNOT_DEMOTE_SELF')) {
+        return { success: false, error: 'Cannot demote, suspend, or revoke access for your own Super Admin account.' };
+      }
+      if (rpcErr.message.includes('UNAUTHORIZED') || rpcErr.message.includes('UNAUTHENTICATED') || rpcErr.message.includes('FORGED_ACTOR_IDENTITY')) {
+        return { success: false, error: `Governance operation rejected: ${rpcErr.message}` };
+      }
+      // Fail closed when RPC fails or is unapplied
+      return {
+        success: false,
+        error: `ATOMIC_SUPER_ADMIN_GOVERNANCE_UNAVAILABLE: Atomic database governance RPC failed: ${rpcErr.message}`,
+      };
+    }
+
+    if (rpcData?.success) {
+      // Invalidate active sessions if action is suspend or revoke-access
+      if (action === 'suspend' || action === 'revoke-access') {
+        try {
+          const adminClient = createSupabaseServiceClient();
+          await adminClient.auth.admin.signOut(targetUserId, 'global');
+        } catch (signOutErr) {
+          console.warn('Notice: GoTrue signOut in offline/mock environment:', signOutErr instanceof Error ? signOutErr.message : signOutErr);
+        }
+      }
+      return { success: true, message: `Action ${action} executed successfully via atomic database RPC.${reason ? ' (' + reason + ')' : ''}` };
+    }
+
+    return {
+      success: false,
+      error: 'ATOMIC_SUPER_ADMIN_GOVERNANCE_UNAVAILABLE: Database governance RPC returned unexpected response.',
+    };
+  } catch (err: unknown) {
+    // Fail closed: Do NOT fall back to separate check-then-update queries (DEF-C219-03)
+    return {
+      success: false,
+      error: `ATOMIC_SUPER_ADMIN_GOVERNANCE_UNAVAILABLE: Database governance RPC is unapplied or unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }

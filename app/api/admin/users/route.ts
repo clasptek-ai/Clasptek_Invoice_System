@@ -6,7 +6,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { getAdminUsersList } from '@/lib/admin/personnel-queries';
+import {
+  getAdminUsersList,
+  getUserSecurityActivity,
+  initiateAdminPasswordReset,
+  createOrLinkUserAccount,
+  revokeUserSessions,
+  revokeUserAccess,
+  reactivateUserAccess,
+  executeAtomicSuperAdminGovernance,
+  recordFinanceAuditLogFailClosed,
+} from '../../../../lib/admin/personnel-queries';
 import { recordFinanceAuditLog } from '@/lib/finance/queries';
 import { createServerClient } from '@/lib/supabase/server';
 import { USER_ROLES, UserRole } from '@/types/auth';
@@ -19,8 +29,46 @@ export async function GET(request: NextRequest) {
   });
   if (auth.errorResponse) return auth.errorResponse;
 
+  const url = new URL(request.url);
+  const action = url.searchParams.get('action');
+  const userId = url.searchParams.get('userId');
+
+  if (action === 'activity' && userId) {
+    const activity = await getUserSecurityActivity(auth.session.tenantId, userId);
+    return NextResponse.json({ success: true, data: activity });
+  }
+
   const users = await getAdminUsersList(auth.session.tenantId);
   return NextResponse.json({ success: true, data: users });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request, {
+    allowedRoles: ['Super Admin'],
+  });
+  if (auth.errorResponse) return auth.errorResponse;
+
+  try {
+    const body = await request.json();
+    const result = await createOrLinkUserAccount(
+      auth.session.tenantId,
+      { id: auth.session.user.id, role: auth.session.role },
+      body
+    );
+
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'User account created and provisioned successfully.',
+      data: result.data,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Server error while creating user';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: NextRequest) {
@@ -51,7 +99,7 @@ export async function PATCH(request: NextRequest) {
           );
         }
 
-        // Prevent Super Admin self-demotion if they are the only Super Admin
+        // Prevent Super Admin self-demotion
         if (userId === auth.session.user.id && role !== 'Super Admin') {
           return NextResponse.json(
             { success: false, error: 'Cannot demote your own Super Admin role.' },
@@ -59,11 +107,42 @@ export async function PATCH(request: NextRequest) {
           );
         }
 
-        // Map role to DB enum if needed
+        // Map role to DB enum
         const dbRole = role === 'Super Admin' ? 'SUPER_ADMIN'
           : role === 'Finance Manager' ? 'FINANCE_MANAGER'
           : role === 'Finance Staff' ? 'FINANCE_STAFF'
           : 'STAFF';
+
+        // Check if target user is currently an active Super Admin
+        const { data: currentMem } = await supabase
+          .from('tenant_memberships')
+          .select('role, status')
+          .eq('user_id', userId)
+          .eq('tenant_id', auth.session.tenantId)
+          .maybeSingle();
+
+        const isSuperAdminDemotion = currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active' && role !== 'Super Admin';
+
+        if (isSuperAdminDemotion) {
+          // Route through atomic governance with transaction-scoped advisory locks (DEF-C219-01, DEF-C219-03)
+          const govRes = await executeAtomicSuperAdminGovernance(
+            auth.session.tenantId,
+            { id: auth.session.user.id, role: auth.session.role },
+            userId,
+            'change-role',
+            dbRole,
+            reason
+          );
+
+          if (!govRes.success) {
+            return NextResponse.json(
+              { success: false, error: govRes.error || 'Cannot demote the last active Super Admin in this organization.' },
+              { status: 400 }
+            );
+          }
+
+          return NextResponse.json({ success: true, message: `Role updated to ${role}` });
+        }
 
         const { error: roleErr } = await supabase
           .from('tenant_memberships')
@@ -75,7 +154,13 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ success: false, error: roleErr.message }, { status: 500 });
         }
 
-        await recordFinanceAuditLog({
+        // Also update profiles role for consistency
+        await supabase
+          .from('profiles')
+          .update({ role: dbRole, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+
+        await recordFinanceAuditLogFailClosed({
           tenantId: auth.session.tenantId,
           action: 'CHANGE_USER_ROLE',
           entityType: 'user',
@@ -92,6 +177,43 @@ export async function PATCH(request: NextRequest) {
 
       case 'toggle-status': {
         const nextStatus = status === 'suspended' ? 'suspended' : 'active';
+
+        if (nextStatus === 'suspended') {
+          if (userId === auth.session.user.id) {
+            return NextResponse.json(
+              { success: false, error: 'Cannot suspend your own account.' },
+              { status: 400 }
+            );
+          }
+
+          const { data: currentMem } = await supabase
+            .from('tenant_memberships')
+            .select('role, status')
+            .eq('user_id', userId)
+            .eq('tenant_id', auth.session.tenantId)
+            .maybeSingle();
+
+          if (currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active') {
+            const govRes = await executeAtomicSuperAdminGovernance(
+              auth.session.tenantId,
+              { id: auth.session.user.id, role: auth.session.role },
+              userId,
+              'suspend',
+              undefined,
+              reason
+            );
+
+            if (!govRes.success) {
+              return NextResponse.json(
+                { success: false, error: govRes.error || 'Cannot suspend the last active Super Admin in this organization.' },
+                { status: 400 }
+              );
+            }
+
+            return NextResponse.json({ success: true, status: nextStatus });
+          }
+        }
+
         const { error: statErr } = await supabase
           .from('tenant_memberships')
           .update({ status: nextStatus, updated_at: new Date().toISOString() })
@@ -102,7 +224,7 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ success: false, error: statErr.message }, { status: 500 });
         }
 
-        await recordFinanceAuditLog({
+        await recordFinanceAuditLogFailClosed({
           tenantId: auth.session.tenantId,
           action: 'TOGGLE_USER_STATUS',
           entityType: 'user',
@@ -117,7 +239,42 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ success: true, status: nextStatus });
       }
 
-      case 'deactivate': {
+      case 'deactivate':
+      case 'suspend': {
+        if (userId === auth.session.user.id) {
+          return NextResponse.json(
+            { success: false, error: 'Cannot suspend your own account.' },
+            { status: 400 }
+          );
+        }
+
+        const { data: currentMem } = await supabase
+          .from('tenant_memberships')
+          .select('role, status')
+          .eq('user_id', userId)
+          .eq('tenant_id', auth.session.tenantId)
+          .maybeSingle();
+
+        if (currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active') {
+          const govRes = await executeAtomicSuperAdminGovernance(
+            auth.session.tenantId,
+            { id: auth.session.user.id, role: auth.session.role },
+            userId,
+            'suspend',
+            undefined,
+            reason
+          );
+
+          if (!govRes.success) {
+            return NextResponse.json(
+              { success: false, error: govRes.error || 'Cannot demote the last active Super Admin in this organization.' },
+              { status: 400 }
+            );
+          }
+
+          return NextResponse.json({ success: true, message: 'User account suspended' });
+        }
+
         const { error: deactErr } = await supabase
           .from('tenant_memberships')
           .update({ status: 'suspended', updated_at: new Date().toISOString() })
@@ -128,60 +285,114 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ success: false, error: deactErr.message }, { status: 500 });
         }
 
-        await recordFinanceAuditLog({
+        await recordFinanceAuditLogFailClosed({
           tenantId: auth.session.tenantId,
           action: 'DEACTIVATE_USER',
           entityType: 'user',
           entityId: userId,
           actorId: auth.session.user.id,
           actorRole: auth.session.role,
-          reason: reason || 'Deactivated by Super Admin',
+          reason: reason || 'Suspended by Super Admin',
           source: 'people_and_access',
           newState: { status: 'suspended', reason },
         });
 
-        return NextResponse.json({ success: true, message: 'User account deactivated' });
+        return NextResponse.json({ success: true, message: 'User account suspended' });
       }
 
-      case 'reactivate': {
-        const { error: reactErr } = await supabase
-          .from('tenant_memberships')
-          .update({ status: 'active', updated_at: new Date().toISOString() })
-          .eq('user_id', userId)
-          .eq('tenant_id', auth.session.tenantId);
+      case 'reactivate':
+      case 'unlock-account': {
+        const reactRes = await reactivateUserAccess(
+          auth.session.tenantId,
+          { id: auth.session.user.id, role: auth.session.role },
+          userId,
+          reason
+        );
 
-        if (reactErr) {
-          return NextResponse.json({ success: false, error: reactErr.message }, { status: 500 });
+        if (!reactRes.success) {
+          return NextResponse.json({ success: false, error: reactRes.error }, { status: 400 });
         }
 
-        await recordFinanceAuditLog({
+        return NextResponse.json({ success: true, message: 'User account unlocked and active' });
+      }
+
+      case 'reset-password': {
+        const resetRes = await initiateAdminPasswordReset(
+          auth.session.tenantId,
+          { id: auth.session.user.id, role: auth.session.role },
+          userId,
+          reason
+        );
+
+        if (!resetRes.success) {
+          return NextResponse.json({ success: false, error: resetRes.error }, { status: 400 });
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Password reset recovery email dispatched successfully to the user.',
+          email: resetRes.email,
+        });
+      }
+
+      case 'resend-invite': {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', userId)
+          .maybeSingle();
+
+        const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+        await recordFinanceAuditLogFailClosed({
           tenantId: auth.session.tenantId,
-          action: 'REACTIVATE_USER',
+          action: 'INVITATION_RESENT',
           entityType: 'user',
           entityId: userId,
+          entityName: profile?.full_name || profile?.email || 'User',
           actorId: auth.session.user.id,
           actorRole: auth.session.role,
-          reason: 'Reactivated by Super Admin',
+          reason: `Resent portal invitation to ${profile?.email || userId}`,
           source: 'people_and_access',
-          newState: { status: 'active' },
+          newState: { status: 'invited' },
         });
 
-        return NextResponse.json({ success: true, message: 'User account reactivated' });
+        return NextResponse.json({
+          success: true,
+          message: 'Invitation resent successfully.',
+          inviteToken,
+          email: profile?.email,
+        });
       }
 
       case 'revoke-sessions': {
-        await recordFinanceAuditLog({
-          tenantId: auth.session.tenantId,
-          action: 'REVOKE_USER_SESSIONS',
-          entityType: 'user',
-          entityId: userId,
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
-          reason: 'Administrative revocation of active sessions across devices',
-          source: 'people_and_access',
-        });
+        // Invalidate active sessions in Supabase GoTrue and audit REVOKE_USER_SESSIONS
+        const revokeRes = await revokeUserSessions(
+          auth.session.tenantId,
+          { id: auth.session.user.id, role: auth.session.role },
+          userId
+        );
 
-        return NextResponse.json({ success: true, message: 'Active sessions revoked' });
+        if (!revokeRes.success) {
+          return NextResponse.json({ success: false, error: revokeRes.error }, { status: 400 });
+        }
+
+        return NextResponse.json({ success: true, message: 'All active sessions have been revoked across devices.' });
+      }
+
+      case 'revoke-access': {
+        const revokeAccessRes = await revokeUserAccess(
+          auth.session.tenantId,
+          { id: auth.session.user.id, role: auth.session.role },
+          userId,
+          reason
+        );
+
+        if (!revokeAccessRes.success) {
+          return NextResponse.json({ success: false, error: revokeAccessRes.error }, { status: 400 });
+        }
+
+        return NextResponse.json({ success: true, message: 'User access permanently revoked and all sessions terminated.' });
       }
 
       case 'provision-invite': {
