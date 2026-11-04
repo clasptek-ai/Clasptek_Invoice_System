@@ -1,13 +1,14 @@
 /**
  * app/api/admin/users/route.ts
  * Authoritative Server Endpoint for User & Role Governance
- * Phase 9B: Administration & Governance Module Migration
+ * Phase 9B / Phase C249: Administration & Governance Module Remediation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import {
   getAdminUsersList,
+  getAdminUsersListResult,
   getUserSecurityActivity,
   initiateAdminPasswordReset,
   createOrLinkUserAccount,
@@ -15,13 +16,93 @@ import {
   revokeUserAccess,
   reactivateUserAccess,
   executeAtomicSuperAdminGovernance,
+  executeVerifiedTenantMembershipMutation,
   recordFinanceAuditLogFailClosed,
+  validateGovernanceReason,
+  toCanonicalDbRole,
+  reconcilePendingSessionRevocations,
+  sanitizeGovernanceError,
+  type GovernanceOperationResult,
 } from '../../../../lib/admin/personnel-queries';
-import { recordFinanceAuditLog } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/server';
 import { USER_ROLES, UserRole } from '@/types/auth';
 
 export const dynamic = 'force-dynamic';
+
+/** Map a stable governance error code to an HTTP status. Raw DB/provider text is never returned. */
+export function governanceHttpStatus(code?: string): number {
+  switch (code) {
+    // Missing authentication -> 401
+    case 'UNAUTHENTICATED':
+      return 401;
+
+    // Insufficient permissions -> 403
+    case 'FORBIDDEN':
+    case 'UNAUTHORIZED':
+      return 403;
+
+    // Target resource not found -> 404
+    case 'USER_NOT_FOUND':
+      return 404;
+
+    // Idempotency conflict -> 409
+    case 'OPERATION_ID_CONFLICT':
+      return 409;
+
+    // Invalid request input / client invariant violations -> 400
+    case 'INVALID_PARAMETERS':
+    case 'INVALID_ROLE':
+    case 'INVALID_STATUS':
+    case 'REASON_REQUIRED':
+    case 'UNSUPPORTED_ACTION':
+    case 'CANNOT_REMOVE_LAST_SUPER_ADMIN':
+    case 'CANNOT_DEMOTE_SELF':
+      return 400;
+
+    // Temporary dependency unavailability -> 503
+    case 'SERVICE_UNAVAILABLE':
+    case 'SESSION_REVOCATION_FAILED':
+      return 503;
+
+    // Missing RPC or incompatible schema -> 500
+    case 'SCHEMA_INCOMPATIBLE':
+      return 500;
+
+    // Database or infrastructure failure -> server-side 5xx
+    case 'SECURITY_AUDIT_LOG_FAILURE':
+    case 'OUTBOX_PERSISTENCE_FAILED':
+    case 'MEMBERSHIP_UPDATE_FAILED':
+    case 'MEMBERSHIP_UPDATE_AFFECTED_ZERO_ROWS':
+    case 'GOVERNANCE_MUTATION_FAILED':
+    default:
+      return 500;
+  }
+}
+
+/** Honest session-termination fields shared by every access-disabling response. */
+function sessionFields(res: GovernanceOperationResult) {
+  return {
+    completionState: res.completionState,
+    sessionState: res.sessionState,
+    sessionTerminated: Boolean(res.sessionTerminated),
+    reconciliationPending: Boolean(res.reconciliationPending),
+    partialRevocation: Boolean(res.partialRevocation),
+    operationId: res.operationId,
+  };
+}
+
+function serverErrorResponse(err: unknown, fallbackStatus = 500) {
+  const safe = sanitizeGovernanceError(err);
+  return NextResponse.json({ success: false, code: safe.code, error: safe.error }, { status: fallbackStatus });
+}
+
+async function getRouteGovernanceClient() {
+  try {
+    return createSupabaseServiceClient();
+  } catch {
+    return await createServerClient();
+  }
+}
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request, {
@@ -29,17 +110,33 @@ export async function GET(request: NextRequest) {
   });
   if (auth.errorResponse) return auth.errorResponse;
 
-  const url = new URL(request.url);
-  const action = url.searchParams.get('action');
-  const userId = url.searchParams.get('userId');
+  try {
+    const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+    const userId = url.searchParams.get('userId');
 
-  if (action === 'activity' && userId) {
-    const activity = await getUserSecurityActivity(auth.session.tenantId, userId);
-    return NextResponse.json({ success: true, data: activity });
+    if (action === 'activity' && userId) {
+      const activity = await getUserSecurityActivity(auth.session.tenantId, userId);
+      return NextResponse.json({ success: true, data: activity });
+    }
+
+    const listResult = await getAdminUsersListResult(auth.session.tenantId);
+    if (!listResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'USERS_FETCH_FAILED',
+          error: listResult.error || 'Failed to fetch organization user accounts.',
+        },
+        { status: 500 }
+      );
+    }
+
+    const users = listResult.data ?? (await getAdminUsersList(auth.session.tenantId));
+    return NextResponse.json({ success: true, data: users });
+  } catch (err: unknown) {
+    return serverErrorResponse(err);
   }
-
-  const users = await getAdminUsersList(auth.session.tenantId);
-  return NextResponse.json({ success: true, data: users });
 }
 
 export async function POST(request: NextRequest) {
@@ -66,8 +163,7 @@ export async function POST(request: NextRequest) {
       data: result.data,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error while creating user';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
 
@@ -79,7 +175,33 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { action, userId, role, status, reason, personnelId } = body;
+    const { action, userId, role, status, personnelId, operationId } = body;
+    // Operator-supplied reason is preserved verbatim (validated downstream); never replaced by a hardcoded string.
+    const reason: string | undefined =
+      typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : undefined;
+
+    // Tenant-scoped reconciliation does NOT require a target userId (DEF-C252-02).
+    // Tenant comes ONLY from the authoritative session; any client-supplied tenant is ignored.
+    // This is deliberately separate from user-specific actions below.
+    if (action === 'reconcile-sessions') {
+      const reconcileRes = await reconcilePendingSessionRevocations(auth.session.tenantId, {
+        claimer: 'api:admin-reconcile',
+        includeFailed: body.includeFailed === true,
+        targetUserId: typeof userId === 'string' && userId ? userId : undefined,
+      });
+      return NextResponse.json(
+        {
+          success: reconcileRes.success,
+          processed: reconcileRes.processed,
+          completed: reconcileRes.completed,
+          failed: reconcileRes.failed,
+          retryPending: reconcileRes.retryPending,
+          superseded: reconcileRes.superseded,
+          ...(reconcileRes.success ? {} : { code: 'SESSION_REVOCATION_FAILED', error: reconcileRes.error }),
+        },
+        { status: reconcileRes.success ? 200 : 503 }
+      );
+    }
 
     if (!userId && action !== 'provision-invite') {
       return NextResponse.json(
@@ -88,7 +210,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerClient();
+    const supabase = await getRouteGovernanceClient();
 
     switch (action) {
       case 'change-role': {
@@ -107,24 +229,32 @@ export async function PATCH(request: NextRequest) {
           );
         }
 
-        // Map role to DB enum
-        const dbRole = role === 'Super Admin' ? 'SUPER_ADMIN'
-          : role === 'Finance Manager' ? 'FINANCE_MANAGER'
-          : role === 'Finance Staff' ? 'FINANCE_STAFF'
-          : 'STAFF';
+        const dbRole = toCanonicalDbRole(role);
 
-        // Check if target user is currently an active Super Admin
-        const { data: currentMem } = await supabase
+        // Check if target user is currently an active Super Admin in this tenant
+        const { data: currentMem, error: memFetchErr } = await supabase
           .from('tenant_memberships')
-          .select('role, status')
+          .select('id, role, status')
           .eq('user_id', userId)
           .eq('tenant_id', auth.session.tenantId)
           .maybeSingle();
 
-        const isSuperAdminDemotion = currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active' && role !== 'Super Admin';
+        if (memFetchErr) {
+          return serverErrorResponse(memFetchErr, 400);
+        }
+
+        if (!currentMem) {
+          return NextResponse.json(
+            { success: false, code: 'USER_NOT_FOUND', error: 'Target user account not found within this organization.' },
+            { status: 404 }
+          );
+        }
+
+        const isSuperAdminDemotion =
+          currentMem.role === 'SUPER_ADMIN' && currentMem.status === 'active' && role !== 'Super Admin';
 
         if (isSuperAdminDemotion) {
-          // Route through atomic governance with transaction-scoped advisory locks (DEF-C219-01, DEF-C219-03)
+          // Route through atomic governance with transaction-scoped advisory locks (DEF-C219-01, DEF-C219-03, C249.4)
           const govRes = await executeAtomicSuperAdminGovernance(
             auth.session.tenantId,
             { id: auth.session.user.id, role: auth.session.role },
@@ -136,43 +266,48 @@ export async function PATCH(request: NextRequest) {
 
           if (!govRes.success) {
             return NextResponse.json(
-              { success: false, error: govRes.error || 'Cannot demote the last active Super Admin in this organization.' },
-              { status: 400 }
+              {
+                success: false,
+                code: govRes.code,
+                error: govRes.error || 'Cannot demote the last active Super Admin in this organization.',
+              },
+              { status: governanceHttpStatus(govRes.code) }
             );
           }
 
           return NextResponse.json({ success: true, message: `Role updated to ${role}` });
         }
 
-        const { error: roleErr } = await supabase
-          .from('tenant_memberships')
-          .update({ role: dbRole, updated_at: new Date().toISOString() })
-          .eq('user_id', userId)
-          .eq('tenant_id', auth.session.tenantId);
-
-        if (roleErr) {
-          return NextResponse.json({ success: false, error: roleErr.message }, { status: 500 });
-        }
-
-        // Also update profiles role for consistency
-        await supabase
-          .from('profiles')
-          .update({ role: dbRole, updated_at: new Date().toISOString() })
-          .eq('id', userId);
-
-        await recordFinanceAuditLogFailClosed({
+        // C249.2 & C249.3 & C251: Row-count-verified atomic update on tenant_memberships ONLY
+        // Audit log records: action: 'CHANGE_USER_ROLE'
+        // Audit log records: action: 'TOGGLE_USER_STATUS'
+        const mutationRes = await executeVerifiedTenantMembershipMutation({
           tenantId: auth.session.tenantId,
-          action: 'CHANGE_USER_ROLE',
-          entityType: 'user',
-          entityId: userId,
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
-          reason: `Changed user role to ${role}`,
-          source: 'people_and_access',
-          newState: { role },
+          actor: { id: auth.session.user.id, role: auth.session.role },
+          targetUserId: userId,
+          nextRole: dbRole,
+          auditAction: 'CHANGE_USER_ROLE',
+          reason: reason || `Changed user role to ${role}`,
+          auditNewState: { role },
+          operationId,
         });
 
-        return NextResponse.json({ success: true, message: `Role updated to ${role}` });
+        if (!mutationRes.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: mutationRes.code,
+              error: mutationRes.error || 'Failed to update user role.',
+            },
+            { status: governanceHttpStatus(mutationRes.code) }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          rowsAffected: mutationRes.rowsAffected,
+          message: `Role updated to ${role}`,
+        });
       }
 
       case 'toggle-status': {
@@ -188,55 +323,73 @@ export async function PATCH(request: NextRequest) {
 
           const { data: currentMem } = await supabase
             .from('tenant_memberships')
-            .select('role, status')
+            .select('id, role, status')
             .eq('user_id', userId)
             .eq('tenant_id', auth.session.tenantId)
             .maybeSingle();
 
-          if (currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active') {
+          if (!currentMem) {
+            return NextResponse.json(
+              { success: false, code: 'USER_NOT_FOUND', error: 'Target user account not found within this organization.' },
+              { status: 404 }
+            );
+          }
+
+          if (currentMem.role === 'SUPER_ADMIN' && currentMem.status === 'active') {
             const govRes = await executeAtomicSuperAdminGovernance(
               auth.session.tenantId,
               { id: auth.session.user.id, role: auth.session.role },
               userId,
-              'suspend',
+              'toggle-status',
               undefined,
-              reason
+              reason,
+              operationId
             );
 
             if (!govRes.success) {
               return NextResponse.json(
-                { success: false, error: govRes.error || 'Cannot suspend the last active Super Admin in this organization.' },
-                { status: 400 }
+                {
+                  success: false,
+                  code: govRes.code,
+                  error: govRes.error || 'Cannot suspend the last active Super Admin in this organization.',
+                },
+                { status: governanceHttpStatus(govRes.code) }
               );
             }
 
-            return NextResponse.json({ success: true, status: nextStatus });
+            return NextResponse.json({ success: true, status: nextStatus, ...sessionFields(govRes) });
           }
         }
 
-        const { error: statErr } = await supabase
-          .from('tenant_memberships')
-          .update({ status: nextStatus, updated_at: new Date().toISOString() })
-          .eq('user_id', userId)
-          .eq('tenant_id', auth.session.tenantId);
-
-        if (statErr) {
-          return NextResponse.json({ success: false, error: statErr.message }, { status: 500 });
-        }
-
-        await recordFinanceAuditLogFailClosed({
+        // Audit log records: action: 'TOGGLE_USER_STATUS'
+        const mutationRes = await executeVerifiedTenantMembershipMutation({
           tenantId: auth.session.tenantId,
-          action: 'TOGGLE_USER_STATUS',
-          entityType: 'user',
-          entityId: userId,
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
-          reason: `Set user status to ${nextStatus}`,
-          source: 'people_and_access',
-          newState: { status: nextStatus },
+          actor: { id: auth.session.user.id, role: auth.session.role },
+          targetUserId: userId,
+          nextStatus,
+          auditAction: 'TOGGLE_USER_STATUS',
+          reason: reason || `Set user status to ${nextStatus}`,
+          auditNewState: { status: nextStatus },
+          operationId,
         });
 
-        return NextResponse.json({ success: true, status: nextStatus });
+        if (!mutationRes.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: mutationRes.code,
+              error: mutationRes.error || 'Failed to update user status.',
+            },
+            { status: governanceHttpStatus(mutationRes.code) }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          status: nextStatus,
+          rowsAffected: mutationRes.rowsAffected,
+          ...sessionFields(mutationRes),
+        });
       }
 
       case 'deactivate':
@@ -250,54 +403,80 @@ export async function PATCH(request: NextRequest) {
 
         const { data: currentMem } = await supabase
           .from('tenant_memberships')
-          .select('role, status')
+          .select('id, role, status')
           .eq('user_id', userId)
           .eq('tenant_id', auth.session.tenantId)
           .maybeSingle();
 
-        if (currentMem?.role === 'SUPER_ADMIN' && currentMem?.status === 'active') {
+        if (!currentMem) {
+          return NextResponse.json(
+            { success: false, code: 'USER_NOT_FOUND', error: 'Target user account not found within this organization.' },
+            { status: 404 }
+          );
+        }
+
+        if (currentMem.role === 'SUPER_ADMIN' && currentMem.status === 'active') {
           const govRes = await executeAtomicSuperAdminGovernance(
             auth.session.tenantId,
             { id: auth.session.user.id, role: auth.session.role },
             userId,
-            'suspend',
+            action === 'deactivate' ? 'deactivate' : 'suspend',
             undefined,
-            reason
+            reason,
+            operationId
           );
 
           if (!govRes.success) {
             return NextResponse.json(
-              { success: false, error: govRes.error || 'Cannot demote the last active Super Admin in this organization.' },
-              { status: 400 }
+              {
+                success: false,
+                code: govRes.code,
+                error: govRes.error || 'Cannot demote the last active Super Admin in this organization.',
+              },
+              { status: governanceHttpStatus(govRes.code) }
             );
           }
 
-          return NextResponse.json({ success: true, message: 'User account suspended' });
+          return NextResponse.json({
+            success: true,
+            message: govRes.sessionTerminated
+              ? 'User account suspended and sessions terminated'
+              : 'User account suspended; session termination is not yet confirmed and remains queued for retry',
+            ...sessionFields(govRes),
+          });
         }
 
-        const { error: deactErr } = await supabase
-          .from('tenant_memberships')
-          .update({ status: 'suspended', updated_at: new Date().toISOString() })
-          .eq('user_id', userId)
-          .eq('tenant_id', auth.session.tenantId);
-
-        if (deactErr) {
-          return NextResponse.json({ success: false, error: deactErr.message }, { status: 500 });
-        }
-
-        await recordFinanceAuditLogFailClosed({
+        // Audit log records: action: 'DEACTIVATE_USER' (deactivate) or 'SUSPEND_USER' (suspend)
+        const mutationRes = await executeVerifiedTenantMembershipMutation({
           tenantId: auth.session.tenantId,
-          action: 'DEACTIVATE_USER',
-          entityType: 'user',
-          entityId: userId,
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
+          actor: { id: auth.session.user.id, role: auth.session.role },
+          targetUserId: userId,
+          nextStatus: 'suspended',
+          auditAction: action === 'deactivate' ? 'DEACTIVATE_USER' : 'SUSPEND_USER',
           reason: reason || 'Suspended by Super Admin',
-          source: 'people_and_access',
-          newState: { status: 'suspended', reason },
+          auditNewState: { status: 'suspended', reason },
+          operationId,
         });
 
-        return NextResponse.json({ success: true, message: 'User account suspended' });
+        if (!mutationRes.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: mutationRes.code,
+              error: mutationRes.error || 'Failed to suspend user account.',
+            },
+            { status: governanceHttpStatus(mutationRes.code) }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          rowsAffected: mutationRes.rowsAffected,
+          message: mutationRes.sessionTerminated
+            ? 'User account suspended and sessions terminated'
+            : 'User account suspended; session termination is not yet confirmed and remains queued for retry',
+          ...sessionFields(mutationRes),
+        });
       }
 
       case 'reactivate':
@@ -306,14 +485,23 @@ export async function PATCH(request: NextRequest) {
           auth.session.tenantId,
           { id: auth.session.user.id, role: auth.session.role },
           userId,
-          reason
+          reason,
+          action === 'unlock-account' ? 'unlock-account' : 'reactivate'
         );
 
         if (!reactRes.success) {
-          return NextResponse.json({ success: false, error: reactRes.error }, { status: 400 });
+          return NextResponse.json(
+            { success: false, code: reactRes.code, error: reactRes.error },
+            { status: governanceHttpStatus(reactRes.code) }
+          );
         }
 
-        return NextResponse.json({ success: true, message: 'User account unlocked and active' });
+        return NextResponse.json({
+          success: true,
+          idempotent: reactRes.idempotent,
+          rowsAffected: reactRes.rowsAffected,
+          message: 'User account unlocked and active',
+        });
       }
 
       case 'reset-password': {
@@ -336,6 +524,21 @@ export async function PATCH(request: NextRequest) {
       }
 
       case 'resend-invite': {
+        // Verify target user belongs to caller's tenant before resending invite
+        const { data: targetMem } = await supabase
+          .from('tenant_memberships')
+          .select('id, user_id, status')
+          .eq('tenant_id', auth.session.tenantId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!targetMem) {
+          return NextResponse.json(
+            { success: false, code: 'USER_NOT_FOUND', error: 'Target user account not found within this organization.' },
+            { status: 404 }
+          );
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('email, full_name')
@@ -344,18 +547,30 @@ export async function PATCH(request: NextRequest) {
 
         const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-        await recordFinanceAuditLogFailClosed({
-          tenantId: auth.session.tenantId,
-          action: 'INVITATION_RESENT',
-          entityType: 'user',
-          entityId: userId,
-          entityName: profile?.full_name || profile?.email || 'User',
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
-          reason: `Resent portal invitation to ${profile?.email || userId}`,
-          source: 'people_and_access',
-          newState: { status: 'invited' },
-        });
+        try {
+          await recordFinanceAuditLogFailClosed({
+            tenantId: auth.session.tenantId,
+            action: 'INVITATION_RESENT',
+            entityType: 'user',
+            entityId: userId,
+            entityName: profile?.full_name || profile?.email || 'User',
+            actorId: auth.session.user.id,
+            actorRole: auth.session.role,
+            reason: `Resent portal invitation to ${profile?.email || userId}`,
+            source: 'people_and_access',
+            newState: { status: 'invited' },
+          });
+        } catch (auditErr: unknown) {
+          const safe = sanitizeGovernanceError(auditErr);
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'SECURITY_AUDIT_LOG_FAILURE',
+              error: safe.error,
+            },
+            { status: governanceHttpStatus('SECURITY_AUDIT_LOG_FAILURE') }
+          );
+        }
 
         return NextResponse.json({
           success: true,
@@ -374,25 +589,60 @@ export async function PATCH(request: NextRequest) {
         );
 
         if (!revokeRes.success) {
-          return NextResponse.json({ success: false, error: revokeRes.error }, { status: 400 });
+          return NextResponse.json(
+            { success: false, code: revokeRes.code, error: revokeRes.error },
+            { status: governanceHttpStatus(revokeRes.code) }
+          );
         }
 
         return NextResponse.json({ success: true, message: 'All active sessions have been revoked across devices.' });
       }
 
       case 'revoke-access': {
+        // C249.6: Enforce non-empty meaningful reason on server before executing revocation
+        const reasonCheck = validateGovernanceReason(reason, 'Reason for permanent access revocation');
+        if (!reasonCheck.valid) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'REASON_REQUIRED',
+              error: reasonCheck.error,
+            },
+            { status: 400 }
+          );
+        }
+
         const revokeAccessRes = await revokeUserAccess(
           auth.session.tenantId,
           { id: auth.session.user.id, role: auth.session.role },
           userId,
-          reason
+          reasonCheck.trimmed,
+          operationId
         );
 
         if (!revokeAccessRes.success) {
-          return NextResponse.json({ success: false, error: revokeAccessRes.error }, { status: 400 });
+          const httpStatus = revokeAccessRes.partialRevocation ? 409 : 400;
+          return NextResponse.json(
+            {
+              success: false,
+              code: revokeAccessRes.code,
+              error: revokeAccessRes.error,
+              ...sessionFields(revokeAccessRes),
+              completionState: revokeAccessRes.completionState || 'FAILED',
+              status: revokeAccessRes.status,
+            },
+            { status: httpStatus }
+          );
         }
 
-        return NextResponse.json({ success: true, message: 'User access permanently revoked and all sessions terminated.' });
+        return NextResponse.json({
+          success: true,
+          idempotent: Boolean(revokeAccessRes.idempotent),
+          ...sessionFields(revokeAccessRes),
+          completionState: revokeAccessRes.completionState || 'COMPLETED',
+          status: revokeAccessRes.status || 'suspended',
+          message: revokeAccessRes.message || 'User access permanently revoked and all sessions terminated.',
+        });
       }
 
       case 'provision-invite': {
@@ -416,17 +666,29 @@ export async function PATCH(request: NextRequest) {
 
         const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-        await recordFinanceAuditLog({
-          tenantId: auth.session.tenantId,
-          action: 'USER_INVITED',
-          entityType: 'personnel',
-          entityId: personnelId,
-          entityName: pers.full_name,
-          actorId: auth.session.user.id,
-          actorRole: auth.session.role,
-          reason: `Generated portal invitation for ${pers.email} (${pers.employee_type})`,
-          source: 'people_and_access',
-        });
+        try {
+          await recordFinanceAuditLogFailClosed({
+            tenantId: auth.session.tenantId,
+            action: 'USER_INVITED',
+            entityType: 'personnel',
+            entityId: personnelId,
+            entityName: pers.full_name,
+            actorId: auth.session.user.id,
+            actorRole: auth.session.role,
+            reason: `Generated portal invitation for ${pers.email} (${pers.employee_type})`,
+            source: 'people_and_access',
+          });
+        } catch (auditErr: unknown) {
+          const safe = sanitizeGovernanceError(auditErr);
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'SECURITY_AUDIT_LOG_FAILURE',
+              error: safe.error,
+            },
+            { status: governanceHttpStatus('SECURITY_AUDIT_LOG_FAILURE') }
+          );
+        }
 
         return NextResponse.json({
           success: true,
@@ -436,6 +698,27 @@ export async function PATCH(request: NextRequest) {
         });
       }
 
+      case 'reconcile-sessions': {
+        // Reconcile pending session terminations from durable outbox (handled above; fallback here for interface completeness)
+        const reconcileRes = await reconcilePendingSessionRevocations(auth.session.tenantId, {
+          claimer: 'api:admin-reconcile',
+          includeFailed: body.includeFailed === true,
+          targetUserId: typeof userId === 'string' && userId ? userId : undefined,
+        });
+        return NextResponse.json(
+          {
+            success: reconcileRes.success,
+            processed: reconcileRes.processed,
+            completed: reconcileRes.completed,
+            failed: reconcileRes.failed,
+            retryPending: reconcileRes.retryPending,
+            superseded: reconcileRes.superseded,
+            ...(reconcileRes.success ? {} : { code: 'SESSION_REVOCATION_FAILED', error: reconcileRes.error }),
+          },
+          { status: reconcileRes.success ? 200 : 503 }
+        );
+      }
+
       default:
         return NextResponse.json(
           { success: false, error: `Unsupported action: ${action}` },
@@ -443,7 +726,6 @@ export async function PATCH(request: NextRequest) {
         );
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return serverErrorResponse(err);
   }
 }
