@@ -269,12 +269,13 @@ runTest('Sanitized error messages never leak SQL queries, connection strings, or
 });
 
 // 11. Source code file consistency check
-runTest('route.ts exports governanceHttpStatus and implements hardened status codes', () => {
-  assert(routeContent.includes('export function governanceHttpStatus'), 'route.ts must export governanceHttpStatus');
+runTest('route.ts internally declares governanceHttpStatus and implements hardened status codes', () => {
+  assert(routeContent.includes('function governanceHttpStatus'), 'route.ts must declare governanceHttpStatus');
+  assert(!routeContent.includes('export function governanceHttpStatus'), 'route.ts must not export governanceHttpStatus');
   assert(routeContent.includes('case \'UNAUTHENTICATED\':'), 'route.ts must handle UNAUTHENTICATED');
   assert(routeContent.includes('case \'SCHEMA_INCOMPATIBLE\':'), 'route.ts must handle SCHEMA_INCOMPATIBLE');
   assert(routeContent.includes('case \'SERVICE_UNAVAILABLE\':'), 'route.ts must handle SERVICE_UNAVAILABLE');
-  assert(routeContent.includes('default:\n      return 500;'), 'route.ts default must be 500');
+  assert(/default:\s+return 500;/.test(routeContent), 'route.ts default must be 500');
 });
 
 runTest('personnel-queries.ts includes new codes in GovernanceErrorCode', () => {

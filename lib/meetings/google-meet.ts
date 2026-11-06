@@ -365,7 +365,7 @@ export async function createOrValidateGoogleMeet({
         connectionType: 'TENANT_CENTRAL',
       });
       accessToken = refreshed.accessToken || refreshed.access_token || accessToken;
-    } catch (refErr) {
+    } catch (_refErr) {
       throw new GoogleMeetError(
         'CREDENTIALS_EXPIRED',
         'Google credentials expired and token refresh failed. Please re-authorize Google Calendar.',

@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
       scheduledEnd,
       participantAccess = 'COHORT_ONLY',
       settings = {},
-      provider,
       customGoogleMeetUrl,
       googleMeetUrl,
     } = body;

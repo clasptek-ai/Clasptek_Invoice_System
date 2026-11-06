@@ -42,22 +42,36 @@ async function runSuite() {
   assert(fs.existsSync(vercelJsonPath), 'vercel.json must exist');
   const vercelJson = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf8'));
 
-  await test('vercel.json defines valid crons array', () => {
-    assert(Array.isArray(vercelJson.crons), 'crons must be an array');
-    assert(vercelJson.crons.length > 0, 'crons array must not be empty');
+  await test('vercel.json contains no unsupported Vercel Hobby cron configuration', () => {
+    assert(!vercelJson.crons || vercelJson.crons.length === 0, 'vercel.json must not define crons under Vercel Hobby plan');
   });
 
-  await test('reconcile-session-revocations cron targets correct endpoint', () => {
-    const cron = vercelJson.crons.find(c => c.path === '/api/cron/reconcile-session-revocations');
-    assert(cron, 'cron for /api/cron/reconcile-session-revocations must exist');
-    assert.strictEqual(cron.path, '/api/cron/reconcile-session-revocations');
+  await test('Both reconciliation routes exist and support documented HTTP methods (GET, POST)', () => {
+    const sessionRoutePath = path.join(worktreeRoot, 'app', 'api', 'cron', 'reconcile-session-revocations', 'route.ts');
+    const recordingsRoutePath = path.join(worktreeRoot, 'app', 'api', 'cron', 'reconcile-recordings', 'route.ts');
+    assert(fs.existsSync(sessionRoutePath), 'reconcile-session-revocations route must exist');
+    assert(fs.existsSync(recordingsRoutePath), 'reconcile-recordings route must exist');
+    const sessionContent = fs.readFileSync(sessionRoutePath, 'utf8');
+    const recordingsContent = fs.readFileSync(recordingsRoutePath, 'utf8');
+    assert(sessionContent.includes('export async function GET'), 'session route must export GET');
+    assert(sessionContent.includes('export async function POST'), 'session route must export POST');
+    assert(recordingsContent.includes('export async function GET'), 'recordings route must export GET');
+    assert(recordingsContent.includes('export async function POST'), 'recordings route must export POST');
   });
 
-  await test('reconcile-session-revocations schedule syntax is valid 5-part cron format', () => {
-    const cron = vercelJson.crons.find(c => c.path === '/api/cron/reconcile-session-revocations');
-    const parts = cron.schedule.trim().split(/\s+/);
-    assert.strictEqual(parts.length, 5, 'Cron expression must contain exactly 5 fields');
-    assert(/^((\*(\/[0-9]+)?)|[0-9,\-]+)\s+((\*(\/[0-9]+)?)|[0-9,\-]+)\s+((\*(\/[0-9]+)?)|[0-9,\-]+)\s+((\*(\/[0-9]+)?)|[0-9,\-]+)\s+((\*(\/[0-9]+)?)|[0-9,\-]+)$/.test(cron.schedule), 'Cron schedule expression must be syntactically valid');
+  await test('Both reconciliation routes require bearer secret and reject query credentials', () => {
+    const sessionRoutePath = path.join(worktreeRoot, 'app', 'api', 'cron', 'reconcile-session-revocations', 'route.ts');
+    const recordingsRoutePath = path.join(worktreeRoot, 'app', 'api', 'cron', 'reconcile-recordings', 'route.ts');
+    const sessionContent = fs.readFileSync(sessionRoutePath, 'utf8');
+    const recordingsContent = fs.readFileSync(recordingsRoutePath, 'utf8');
+    assert(sessionContent.includes('crypto.timingSafeEqual'), 'session route must use timingSafeEqual');
+    assert(recordingsContent.includes('crypto.timingSafeEqual'), 'recordings route must use timingSafeEqual');
+    assert(sessionContent.includes('process.env.CRON_SECRET'), 'session route must read CRON_SECRET');
+    assert(recordingsContent.includes('process.env.CRON_SECRET'), 'recordings route must read CRON_SECRET');
+    assert(!sessionContent.includes("searchParams.get('secret')") && !sessionContent.includes("searchParams.get('CRON_SECRET')"), 'session route must not accept secret via query');
+    assert(!recordingsContent.includes("searchParams.get('secret')") && !recordingsContent.includes("searchParams.get('CRON_SECRET')"), 'recordings route must not accept secret via query');
+    assert(sessionContent.includes("req.headers.get('authorization')"), 'session route must require authorization header');
+    assert(recordingsContent.includes("req.headers.get('authorization')"), 'recordings route must require authorization header');
   });
 
   await test('vercel.json preserves all pre-existing rewrites and security headers intact', () => {

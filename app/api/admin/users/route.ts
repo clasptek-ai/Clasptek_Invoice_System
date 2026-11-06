@@ -30,7 +30,7 @@ import { USER_ROLES, UserRole } from '@/types/auth';
 export const dynamic = 'force-dynamic';
 
 /** Map a stable governance error code to an HTTP status. Raw DB/provider text is never returned. */
-export function governanceHttpStatus(code?: string): number {
+function governanceHttpStatus(code?: string): number {
   switch (code) {
     // Missing authentication -> 401
     case 'UNAUTHENTICATED':
