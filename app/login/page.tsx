@@ -24,8 +24,24 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // If already authenticated, redirect immediately
+  // Check for recovery tokens or existing authentication
   useEffect(() => {
+    // If a recovery token or recovery error is present in the hash or search,
+    // route immediately to /reset-password to prevent premature dashboard redirect.
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (
+        hash.includes('type=recovery') ||
+        hash.includes('error_code=') ||
+        search.includes('type=recovery') ||
+        search.includes('error_code=')
+      ) {
+        router.replace('/reset-password' + search + hash);
+        return;
+      }
+    }
+
     if (!isLoading && isAuthenticated) {
       router.replace(nextPath);
     }
@@ -236,7 +252,7 @@ export default function LoginPage() {
             type="button"
             id="forgot-password-btn"
             className="cp-auth-link"
-            onClick={() => alert('Password reset: please contact your system administrator.')}
+            onClick={() => router.push('/reset-password')}
           >
             Forgot Password?
           </button>
