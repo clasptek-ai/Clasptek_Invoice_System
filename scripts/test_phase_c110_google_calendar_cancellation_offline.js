@@ -197,12 +197,21 @@ async function main() {
     ]);
   }
 
-  // Compile deleteGoogleCalendarEvent helper
+  // Compile deleteGoogleCalendarEvent helper with module resolution anchored to lib/meetings/google-meet.ts
+  const { createRequire } = require('module');
+  const gmeetSourcePath = path.join(ROOT, 'lib/meetings/google-meet.ts');
+  const gmeetRequire = createRequire(gmeetSourcePath);
   const gmeetCompiled = ts.transpileModule(googleMeetSrc, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const gmeetMod = { exports: {} };
-  new Function('require', 'module', 'exports', gmeetCompiled)(require, gmeetMod, gmeetMod.exports);
+  new Function('require', 'module', 'exports', '__filename', '__dirname', gmeetCompiled)(
+    gmeetRequire,
+    gmeetMod,
+    gmeetMod.exports,
+    gmeetSourcePath,
+    path.dirname(gmeetSourcePath)
+  );
 
   // Orchestrator function matching deleteMeetingSafe implementation
   async function simulateDeleteMeetingSafe({

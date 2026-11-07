@@ -121,27 +121,43 @@ export async function getGoogleDriveStatus(tenantId?: string | null): Promise<Go
       } catch (_) {}
     }
 
-    if (googleConfig && typeof googleConfig.getGoogleDriveConnectionStatus === 'function') {
-      try {
-        const centralStatus = await googleConfig.getGoogleDriveConnectionStatus({
-          tenantId: cleanTenantId,
-          connectionType: 'TENANT_CENTRAL',
-        });
+    if (!googleConfig || typeof googleConfig.getGoogleDriveConnectionStatus !== 'function') {
+      return {
+        connected: false,
+        connectionType: 'TENANT_CENTRAL',
+        rootFolderId: fallbackFolderId || undefined,
+        rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
+        status: 'CONFIGURATION_UNAVAILABLE',
+        error: 'OAUTH_CONFIGURATION_UNAVAILABLE',
+      };
+    }
 
-        if (centralStatus && centralStatus.connected && centralStatus.status === 'CONNECTED') {
-          return {
-            connected: true,
-            connectionType: 'TENANT_CENTRAL',
-            email: centralStatus.googleEmail || undefined,
-            rootFolderId: centralStatus.rootFolderId || fallbackFolderId || undefined,
-            rootFolderName: centralStatus.rootFolderName || DEFAULT_ROOT_FOLDER_NAME,
-            lastVerified: centralStatus.lastVerifiedAt || undefined,
-            status: 'CONNECTED',
-          };
-        }
-      } catch (_) {
-        // Fall through to unverified/disconnected configuration evaluation
+    try {
+      const centralStatus = await googleConfig.getGoogleDriveConnectionStatus({
+        tenantId: cleanTenantId,
+        connectionType: 'TENANT_CENTRAL',
+      });
+
+      if (centralStatus && centralStatus.connected && centralStatus.status === 'CONNECTED') {
+        return {
+          connected: true,
+          connectionType: 'TENANT_CENTRAL',
+          email: centralStatus.googleEmail || undefined,
+          rootFolderId: centralStatus.rootFolderId || fallbackFolderId || undefined,
+          rootFolderName: centralStatus.rootFolderName || DEFAULT_ROOT_FOLDER_NAME,
+          lastVerified: centralStatus.lastVerifiedAt || undefined,
+          status: 'CONNECTED',
+        };
       }
+    } catch (_) {
+      return {
+        connected: false,
+        connectionType: 'TENANT_CENTRAL',
+        rootFolderId: fallbackFolderId || undefined,
+        rootFolderName: DEFAULT_ROOT_FOLDER_NAME,
+        status: 'CONFIGURATION_UNAVAILABLE',
+        error: 'OAUTH_CONFIGURATION_UNAVAILABLE',
+      };
     }
   }
 

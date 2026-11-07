@@ -31,14 +31,26 @@ export async function GET(request: NextRequest) {
       googleConfig = require('@/api/_lib/google-oauth-config');
     } catch (_) {}
 
+    if (!googleConfig || typeof googleConfig.getTenantCentralDriveConnection !== 'function') {
+      return NextResponse.json(
+        {
+          connected: false,
+          hasCalendarScope: false,
+          calendarReady: false,
+          status: 'CONFIGURATION_UNAVAILABLE',
+          error: 'OAUTH_CONFIGURATION_UNAVAILABLE',
+          message: 'Google OAuth configuration is currently unavailable.',
+        },
+        { status: 500 }
+      );
+    }
+
     let connection: any = null;
     let fetchError: any = null;
-    if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
-      try {
-        connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
-      } catch (err) {
-        fetchError = err;
-      }
+    try {
+      connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
+    } catch (err) {
+      fetchError = err;
     }
 
     if (fetchError) {
