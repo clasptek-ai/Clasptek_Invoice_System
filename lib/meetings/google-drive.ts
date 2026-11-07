@@ -117,12 +117,8 @@ export async function getGoogleDriveStatus(tenantId?: string | null): Promise<Go
       googleConfig = require('@/api/_lib/google-oauth-config');
     } catch {
       try {
-        googleConfig = require('../../../api/_lib/google-oauth-config');
-      } catch {
-        try {
-          googleConfig = require('../../api/_lib/google-oauth-config');
-        } catch (_) {}
-      }
+        googleConfig = require('../../api/_lib/google-oauth-config');
+      } catch (_) {}
     }
 
     if (googleConfig && typeof googleConfig.getGoogleDriveConnectionStatus === 'function') {

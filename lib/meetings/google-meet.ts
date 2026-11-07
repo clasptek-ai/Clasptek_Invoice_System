@@ -99,11 +99,7 @@ export function isGoogleCalendarIntegrationEnabled(req?: any): boolean {
     let googleConfig: any = null;
     try {
       googleConfig = require('../../api/_lib/google-oauth-config');
-    } catch {
-      try {
-        googleConfig = require('../api/_lib/google-oauth-config');
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     // 1. Resolve canonical environment guard set
     // A source is acceptable only when all three required guards are available functions
@@ -264,11 +260,7 @@ export async function createOrValidateGoogleMeet({
     let googleConfig: any = null;
     try {
       googleConfig = require('../../api/_lib/google-oauth-config');
-    } catch {
-      try {
-        googleConfig = require('../api/_lib/google-oauth-config');
-      } catch (_) {}
-    }
+    } catch (_) {}
     const isPreview = googleConfig && typeof googleConfig.isPreviewEnvironment === 'function'
       ? googleConfig.isPreviewEnvironment()
       : (process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview');
@@ -284,11 +276,7 @@ export async function createOrValidateGoogleMeet({
   let googleConfig: any = null;
   try {
     googleConfig = require('../../api/_lib/google-oauth-config');
-  } catch {
-    try {
-      googleConfig = require('../api/_lib/google-oauth-config');
-    } catch (_) {}
-  }
+  } catch (_) {}
 
   // 3. Check tenant-central connection
   let connection: any = null;
@@ -492,11 +480,7 @@ export async function deleteGoogleCalendarEvent({
   let googleConfig: any = null;
   try {
     googleConfig = require('../../api/_lib/google-oauth-config');
-  } catch {
-    try {
-      googleConfig = require('../api/_lib/google-oauth-config');
-    } catch (_) {}
-  }
+  } catch (_) {}
 
   let connection: any = null;
   if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {

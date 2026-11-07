@@ -29,11 +29,7 @@ export async function GET(request: NextRequest) {
     let googleConfig: any = null;
     try {
       googleConfig = require('@/api/_lib/google-oauth-config');
-    } catch {
-      try {
-        googleConfig = require('../../../api/_lib/google-oauth-config');
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     let connection: any = null;
     let fetchError: any = null;
