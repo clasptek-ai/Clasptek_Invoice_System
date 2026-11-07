@@ -1,20 +1,19 @@
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 
 // Opt out of static generation — this page reads cookies at runtime
 export const dynamic = 'force-dynamic';
 
 /**
  * Root entry page.
- * Server Component: reads session and redirects accordingly.
- * - Authenticated users → /dashboard
- * - Unauthenticated users → /login
+ * Server Component: reads authoritative session and redirects accordingly.
+ * - Authenticated users with active tenant membership → /dashboard
+ * - Unauthenticated or suspended/unmapped users → /login
  */
 export default async function RootPage() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getAuthoritativeSession();
 
-  if (user) {
+  if (session) {
     redirect('/dashboard');
   } else {
     redirect('/login');

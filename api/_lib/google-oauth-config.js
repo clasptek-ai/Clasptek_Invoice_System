@@ -973,9 +973,8 @@ async function authenticateCaller(req) {
 
     const callerUser = userRes.body;
 
-    let tenantId = 'f70d5788-b4ae-4425-a5d4-b7b7d0f01ff6'; // Authoritative default tenant
-    let role = 'STAFF';
-
+    // C253 / DEF-C252-04: Fail closed if caller has no active tenant membership.
+    // Never fall back to an arbitrary default tenant ID or default STAFF role for unmapped/suspended users.
     const memberRes = await httpsRequest(
       `${supabaseUrl}/rest/v1/tenant_memberships?user_id=eq.${callerUser.id}&status=eq.active&select=tenant_id,role`,
       {
@@ -984,9 +983,39 @@ async function authenticateCaller(req) {
       }
     );
 
-    if (memberRes.status === 200 && Array.isArray(memberRes.body) && memberRes.body.length > 0) {
-      tenantId = memberRes.body[0].tenant_id || tenantId;
-      role = memberRes.body[0].role || role;
+    if (memberRes.status !== 200 || !Array.isArray(memberRes.body) || memberRes.body.length === 0) {
+      return {
+        authenticated: false,
+        error: 'NO_ACTIVE_MEMBERSHIP',
+        message: 'Forbidden: No active organization membership found for this user account.'
+      };
+    }
+
+    // If a specific tenantId was requested in headers or query, verify user has active membership in it
+    const reqTenantId = req.headers?.['x-tenant-id'] || req.headers?.['X-Tenant-Id'] || req.query?.tenant_id || req.query?.tenantId;
+    let activeMember = memberRes.body[0];
+    if (reqTenantId) {
+      const match = memberRes.body.find(m => m.tenant_id === reqTenantId);
+      if (match) {
+        activeMember = match;
+      } else {
+        return {
+          authenticated: false,
+          error: 'TENANT_MISMATCH',
+          message: 'Forbidden: Caller is not an active member of the requested tenant.'
+        };
+      }
+    }
+
+    const tenantId = activeMember.tenant_id;
+    const role = activeMember.role || 'STAFF';
+
+    if (!tenantId) {
+      return {
+        authenticated: false,
+        error: 'TENANT_NOT_RESOLVED',
+        message: 'Forbidden: Unable to resolve active organization tenant.'
+      };
     }
 
     return {

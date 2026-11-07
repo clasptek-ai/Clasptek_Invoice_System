@@ -179,6 +179,9 @@ export function PeopleAccessPageClient({
   const [revokeModalUser, setRevokeModalUser] = useState<AdminUser | null>(null);
   const [revokeAccessModalUser, setRevokeAccessModalUser] = useState<AdminUser | null>(null);
   const [revokeAccessReason, setRevokeAccessReason] = useState('');
+  const [revokeOperationId, setRevokeOperationId] = useState<string>('');
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [revokeAccessPartialNotice, setRevokeAccessPartialNotice] = useState<string | null>(null);
   const [activityModalUser, setActivityModalUser] = useState<AdminUser | null>(null);
   const [activityList, setActivityList] = useState<UserSecurityActivityItem[]>([]);
   const [isActivityLoading, setIsActivityLoading] = useState(false);
@@ -574,7 +577,11 @@ export function PeopleAccessPageClient({
 
           const uRes = await fetch('/api/admin/users');
           const uData = await uRes.json();
-          if (uData.success) setUserList(uData.data);
+          if (uRes.ok && uData.success && Array.isArray(uData.data)) {
+            setUserList(uData.data);
+          } else {
+            notify('error', uData.error || 'Account provisioned, but refreshing the user list failed.');
+          }
 
           setIsAddModalOpen(false);
           notify('success', `Personnel & Portal Account provisioned for ${formData.fullName}`);
@@ -740,7 +747,9 @@ export function PeopleAccessPageClient({
 
   const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    setModalError(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
@@ -767,16 +776,23 @@ export function PeopleAccessPageClient({
       const result = await res.json();
       if (!result.success) throw new Error(result.error);
 
-      // Refresh both users and personnel lists
+      // Refresh both users and personnel lists safely without wiping state on GET error (C249.8)
       const uRes = await fetch('/api/admin/users');
       const uData = await uRes.json();
-      if (uData.success) setUserList(uData.data);
+      if (uRes.ok && uData.success && Array.isArray(uData.data)) {
+        setUserList(uData.data);
+      } else {
+        notify('error', uData.error || 'Account created, but refreshing the user list failed.');
+      }
 
       const pRes = await fetch('/api/admin/personnel');
       const pData = await pRes.json();
-      if (pData.success) setPersonnelList(pData.data);
+      if (pRes.ok && pData.success && Array.isArray(pData.data)) {
+        setPersonnelList(pData.data);
+      }
 
       setIsCreateUserModalOpen(false);
+      setModalError(null);
       notify('success', `Created login account for ${createUserForm.fullName} (${createUserForm.email})`);
 
       const inviteLink = `${window.location.origin}/login?invite=${result.data.inviteToken}`;
@@ -792,6 +808,7 @@ export function PeopleAccessPageClient({
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create user account';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -799,8 +816,9 @@ export function PeopleAccessPageClient({
   };
 
   const handleChangeRoleSubmit = async () => {
-    if (!roleModalUser) return;
+    if (!roleModalUser || isSubmitting) return;
     setIsSubmitting(true);
+    setModalError(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -819,8 +837,10 @@ export function PeopleAccessPageClient({
       );
       notify('success', `Role for ${roleModalUser.name} updated to ${selectedRole}`);
       setRoleModalUser(null);
+      setModalError(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to change role';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -828,8 +848,9 @@ export function PeopleAccessPageClient({
   };
 
   const handleConfirmResetPassword = async () => {
-    if (!resetPasswordModalUser) return;
+    if (!resetPasswordModalUser || isSubmitting) return;
     setIsSubmitting(true);
+    setModalError(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -857,8 +878,10 @@ export function PeopleAccessPageClient({
       notify('success', `Password recovery request accepted for ${resetPasswordModalUser.email}`);
       setResetPasswordModalUser(null);
       setResetPasswordReason('');
+      setModalError(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to reset password';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -866,6 +889,7 @@ export function PeopleAccessPageClient({
   };
 
   const handleResendInvite = async (u: AdminUser) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/admin/users', {
@@ -901,8 +925,9 @@ export function PeopleAccessPageClient({
   };
 
   const handleConfirmSuspendUser = async () => {
-    if (!suspendModalUser) return;
+    if (!suspendModalUser || isSubmitting) return;
     setIsSubmitting(true);
+    setModalError(null);
     const nextStatus = suspendModalUser.status === 'suspended' ? 'active' : 'suspended';
     try {
       const res = await fetch('/api/admin/users', {
@@ -922,8 +947,10 @@ export function PeopleAccessPageClient({
       );
       notify('success', `User ${suspendModalUser.name} set to ${nextStatus}`);
       setSuspendModalUser(null);
+      setModalError(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update user status';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -931,8 +958,9 @@ export function PeopleAccessPageClient({
   };
 
   const handleConfirmRevokeSession = async () => {
-    if (!revokeModalUser) return;
+    if (!revokeModalUser || isSubmitting) return;
     setIsSubmitting(true);
+    setModalError(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -947,8 +975,10 @@ export function PeopleAccessPageClient({
 
       notify('success', `All active sessions revoked for ${revokeModalUser.name}`);
       setRevokeModalUser(null);
+      setModalError(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke sessions';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -956,8 +986,33 @@ export function PeopleAccessPageClient({
   };
 
   const handleConfirmRevokeAccess = async () => {
-    if (!revokeAccessModalUser) return;
+    if (!revokeAccessModalUser || isSubmitting) return;
+    const trimmedReason = revokeAccessReason.trim();
+    if (!trimmedReason) {
+      const reqMsg = 'A meaningful non-empty reason is required to permanently revoke access.';
+      setModalError(reqMsg);
+      notify('error', reqMsg);
+      return;
+    }
+    if (trimmedReason.length < 3) {
+      const shortMsg = 'Reason for revocation must be at least 3 characters.';
+      setModalError(shortMsg);
+      notify('error', shortMsg);
+      return;
+    }
+    if (trimmedReason.length > 500) {
+      const longMsg = 'Reason for revocation must not exceed 500 characters.';
+      setModalError(longMsg);
+      notify('error', longMsg);
+      return;
+    }
+
     setIsSubmitting(true);
+    setModalError(null);
+    setRevokeAccessPartialNotice(null);
+    const opId = revokeOperationId || `rev_${revokeAccessModalUser.id}_${Date.now()}`;
+    if (!revokeOperationId) setRevokeOperationId(opId);
+
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -965,10 +1020,24 @@ export function PeopleAccessPageClient({
         body: JSON.stringify({
           action: 'revoke-access',
           userId: revokeAccessModalUser.id,
-          reason: revokeAccessReason.trim() || 'Permanent access revocation',
+          reason: trimmedReason,
+          operationId: opId,
         }),
       });
       const result = await res.json();
+
+      if (result.partialRevocation || result.completionState === 'PARTIAL_SESSION_TERMINATION_PENDING') {
+        setUserList((prev) =>
+          prev.map((item) => (item.id === revokeAccessModalUser.id ? { ...item, status: 'suspended' } : item))
+        );
+        const partialMsg =
+          result.error ||
+          'Portal login access has been suspended and audited, but global session termination is pending reconciliation.';
+        setRevokeAccessPartialNotice(partialMsg);
+        notify('error', partialMsg);
+        return;
+      }
+
       if (!result.success) throw new Error(result.error);
 
       setUserList((prev) =>
@@ -977,8 +1046,12 @@ export function PeopleAccessPageClient({
       notify('success', `Access permanently revoked for ${revokeAccessModalUser.name}`);
       setRevokeAccessModalUser(null);
       setRevokeAccessReason('');
+      setRevokeOperationId('');
+      setModalError(null);
+      setRevokeAccessPartialNotice(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke access';
+      setModalError(msg);
       notify('error', msg);
     } finally {
       setIsSubmitting(false);
@@ -1005,10 +1078,13 @@ export function PeopleAccessPageClient({
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto' }}>
-      {/* Feedback Toast */}
+      {/* Feedback Toast (Visible above modal backdrops) */}
       {feedbackMsg && (
         <div
+          role="alert"
           style={{
+            position: 'relative',
+            zIndex: 1200,
             padding: '12px 18px',
             marginBottom: '16px',
             borderRadius: '6px',
@@ -1410,7 +1486,12 @@ export function PeopleAccessPageClient({
                                   className="cp-btn sm secondary"
                                   disabled={isCurrentUser(u.id)}
                                   title={isCurrentUser(u.id) ? 'Cannot revoke own access' : undefined}
-                                  onClick={() => setRevokeAccessModalUser(u)}
+                                  onClick={() => {
+                                    setModalError(null);
+                                    setRevokeAccessPartialNotice(null);
+                                    setRevokeOperationId(`rev_${u.id}_${Date.now()}`);
+                                    setRevokeAccessModalUser(u);
+                                  }}
                                   style={{ padding: '3px 8px', fontSize: '11px', borderRadius: '3px', cursor: isCurrentUser(u.id) ? 'not-allowed' : 'pointer', border: '1px solid #FECACA', background: '#FEF2F2', color: '#B91C1C', opacity: isCurrentUser(u.id) ? 0.5 : 1 }}
                                 >
                                   Revoke Access
@@ -2426,7 +2507,7 @@ export function PeopleAccessPageClient({
         </div>
       )}
 
-      {/* Modal: Permanently Revoke Access Confirmation (Fix 4) */}
+      {/* Modal: Permanently Revoke Access Confirmation (Fix 4 / C249.6 / C249.7) */}
       {revokeAccessModalUser && (
         <div role="dialog" aria-modal="true" aria-labelledby="modal-revoke-access-title" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div style={{ background: '#fff', borderRadius: '8px', width: '100%', maxWidth: '440px', padding: '22px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
@@ -2434,19 +2515,34 @@ export function PeopleAccessPageClient({
               Permanently Revoke Access
             </h3>
             <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
-              Permanently revoke portal access and deactivate all credentials for <strong>{revokeAccessModalUser.name}</strong> (<code>{revokeAccessModalUser.email}</code>)?
+              Permanently revoke portal access and deactivate login credentials for <strong>{revokeAccessModalUser.name}</strong> (<code>{revokeAccessModalUser.email}</code>)?
             </p>
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '10px 12px', marginBottom: '14px', fontSize: '11.5px', color: '#991B1B', lineHeight: 1.5 }}>
-              <strong>Permanent Access Revocation:</strong> This terminates all active sessions, suspends portal login access, deactivates the linked personnel record, and prevents password recovery or invitation reactivation.
+              <strong>Permanent Access Revocation:</strong> This permanently suspends portal login access, terminates all active authentication sessions across devices, and blocks password recovery or invitation reactivation. Linked HR personnel records and historical financial, payroll, attendance, and training records are preserved intact.
             </div>
+            {modalError && (
+              <div role="alert" style={{ background: '#FDE8E8', border: '1px solid #F8B4B4', borderRadius: '4px', padding: '9px 12px', marginBottom: '12px', fontSize: '11.5px', color: '#9B1C1C', fontWeight: 600 }}>
+                {modalError}
+              </div>
+            )}
+            {revokeAccessPartialNotice && (
+              <div role="status" style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '4px', padding: '9px 12px', marginBottom: '12px', fontSize: '11.5px', color: '#92400E', fontWeight: 600 }}>
+                <strong>Partial Completion (Reconciliation Pending):</strong> {revokeAccessPartialNotice}
+              </div>
+            )}
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11.5px', fontWeight: 600, display: 'block', marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                Reason for Revocation:
+                Reason for Revocation (Required):
               </label>
               <input
                 type="text"
+                required
+                maxLength={500}
                 value={revokeAccessReason}
-                onChange={(e) => setRevokeAccessReason(e.target.value)}
+                onChange={(e) => {
+                  setRevokeAccessReason(e.target.value);
+                  if (modalError) setModalError(null);
+                }}
                 placeholder="e.g. Employment offboarding, contractor contract ended"
                 style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '12px' }}
               />
@@ -2454,16 +2550,33 @@ export function PeopleAccessPageClient({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => { setRevokeAccessModalUser(null); setRevokeAccessReason(''); }}
-                style={{ padding: '7px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: 'pointer', fontSize: '12px' }}
+                disabled={isSubmitting}
+                onClick={() => {
+                  setRevokeAccessModalUser(null);
+                  setRevokeAccessReason('');
+                  setRevokeOperationId('');
+                  setModalError(null);
+                  setRevokeAccessPartialNotice(null);
+                }}
+                style={{ padding: '7px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--surface-2)', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '12px' }}
               >
-                Cancel
+                {revokeAccessPartialNotice ? 'Close' : 'Cancel'}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRevokeAccess}
-                disabled={isSubmitting}
-                style={{ padding: '7px 16px', borderRadius: '4px', border: 'none', background: '#B91C1C', color: '#fff', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                disabled={isSubmitting || !revokeAccessReason.trim()}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: '#B91C1C',
+                  color: '#fff',
+                  cursor: isSubmitting || !revokeAccessReason.trim() ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting || !revokeAccessReason.trim() ? 0.65 : 1,
+                  fontSize: '12px',
+                  fontWeight: 700,
+                }}
               >
                 {isSubmitting ? 'Revoking Access...' : 'Revoke Access Permanently'}
               </button>

@@ -49,11 +49,20 @@ export interface AuthoritativeSession {
   tenantId: string;
 }
 
+export interface AuthoritativeSessionOptions {
+  requestedTenantId?: string | null;
+}
+
 /**
  * Resolves the authoritative session, role, and tenant ID server-side.
  * Resolves from PostgreSQL tenant_memberships — never trusts client input.
+ * C253 / DEF-C252-04: Resolves all active tenant memberships for the user.
+ * If user belongs to multiple active tenants, prioritizes explicitly requested tenant
+ * or active SUPER_ADMIN / primary membership without throwing PGRST116.
  */
-export async function getAuthoritativeSession(): Promise<AuthoritativeSession | null> {
+export async function getAuthoritativeSession(
+  options: AuthoritativeSessionOptions = {}
+): Promise<AuthoritativeSession | null> {
   const supabase = await createServerClient();
   const {
     data: { user },
@@ -65,20 +74,35 @@ export async function getAuthoritativeSession(): Promise<AuthoritativeSession | 
   }
 
   try {
-    const { data: membership, error: membershipError } = await supabase
+    let query = supabase
       .from('tenant_memberships')
       .select('role, tenant_id, status')
       .eq('user_id', user.id)
-      .eq('status', 'active')
-      .maybeSingle();
+      .eq('status', 'active');
+
+    if (options.requestedTenantId && options.requestedTenantId.trim()) {
+      query = query.eq('tenant_id', options.requestedTenantId.trim());
+    }
+
+    const { data: memberships, error: membershipError } = await query;
 
     // FAIL CLOSED: Database query error or missing/inactive membership
-    if (membershipError || !membership || !membership.role || !membership.tenant_id) {
+    if (membershipError || !memberships || memberships.length === 0) {
       return null;
     }
 
-    const resolvedRole = normalizeRole(membership.role);
-    const resolvedTenantId = membership.tenant_id;
+    // If multiple active memberships, pick requested tenant, or active SUPER_ADMIN, or first
+    const activeMember =
+      (options.requestedTenantId && memberships.find(m => m.tenant_id === options.requestedTenantId?.trim())) ||
+      memberships.find(m => ['SUPER_ADMIN', 'SUPER ADMIN', 'ADMIN'].includes(String(m.role || '').toUpperCase())) ||
+      memberships[0];
+
+    if (!activeMember || !activeMember.role || !activeMember.tenant_id) {
+      return null;
+    }
+
+    const resolvedRole = normalizeRole(activeMember.role);
+    const resolvedTenantId = activeMember.tenant_id;
 
     return {
       user,
@@ -108,7 +132,9 @@ export async function requireAuth(
   _request?: NextRequest,
   options: AuthGateOptions = {}
 ): Promise<AuthGateResult> {
-  const session = await getAuthoritativeSession();
+  const session = await getAuthoritativeSession({
+    requestedTenantId: options.requestedTenantId,
+  });
 
   if (!session) {
     return {
