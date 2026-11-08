@@ -97,8 +97,8 @@ export default function LoginPage() {
     <div className="cp-auth-wrap">
       <div className="cp-auth-card animate-fade-in">
         {/* Brand Header */}
-        <div className="cp-auth-header">
-          <div className="cp-auth-logo-wrap">
+        <div className="cp-auth-header" style={{ marginBottom: '24px' }}>
+          <div className="cp-auth-logo-wrap" style={{ marginBottom: 0 }}>
             <Image
               src="/assets/clasptek-official-logo.png"
               alt="Clasptek Portal Logo"
@@ -109,8 +109,6 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <h1 className="cp-auth-title">Clasptek Portal</h1>
-          <p className="cp-auth-sub">Sign in to access your secure workspace.</p>
         </div>
 
         {/* Global Error Banner */}
