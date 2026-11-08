@@ -110,7 +110,7 @@ export const CanonicalPayslipDocument: React.FC<CanonicalPayslipDocumentProps> =
       {/* 1. Header: Logo on Left, Company Info on Right */}
       <div className="cp-doc-header">
         <div className="cp-doc-brand">
-          <img src="/assets/clasptek_logo.png" alt="Clasptek" className="cp-doc-logo" />
+          <img src="/assets/clasptek-official-logo.png" alt="Clasptek" className="cp-doc-logo" />
         </div>
         <div className="cp-doc-company-block">
           <div className="cp-doc-company-title">{fsCfg.companyName}</div>

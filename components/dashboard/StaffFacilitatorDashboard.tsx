@@ -74,9 +74,10 @@ export function StaffFacilitatorDashboard({ userName, role }: Props) {
   };
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="cp-dashboard-view cp-staff-dashboard" style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Welcome Header */}
       <div
+        className="cp-card cp-staff-welcome"
         style={{
           background: '#FFFFFF',
           border: '1px solid #E2E8F0',
@@ -188,20 +189,20 @@ export function StaffFacilitatorDashboard({ userName, role }: Props) {
       )}
 
       {/* KPI Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Latest Net Pay</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
+      <div className="cp-kpi-grid cp-staff-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div className="cp-card cp-kpi-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div className="cp-kpi-label" style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Latest Net Pay</div>
+          <div className="cp-kpi-val" style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
             {loading ? '...' : fmtMoney(data?.latestNetPay || 0)}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+          <div className="cp-kpi-sub" style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
             {data?.latestPeriod || 'Current Period'}
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Statement Status</div>
-          <div style={{ fontSize: '18px', fontWeight: 800, marginTop: '6px' }}>
+        <div className="cp-card cp-kpi-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div className="cp-kpi-label" style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Statement Status</div>
+          <div className="cp-kpi-val" style={{ fontSize: '18px', fontWeight: 800, marginTop: '6px' }}>
             <span
               style={{
                 display: 'inline-block',
@@ -216,34 +217,34 @@ export function StaffFacilitatorDashboard({ userName, role }: Props) {
               {data?.latestStatus?.toUpperCase() || 'NO STATEMENTS'}
             </span>
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+          <div className="cp-kpi-sub" style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
             {data?.latestPayslipNo ? `Payslip #${data.latestPayslipNo}` : 'Awaiting Period Run'}
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Pending Acknowledgements</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: (data?.pendingAckCount || 0) > 0 ? '#D97706' : '#16A34A', marginTop: '4px' }}>
+        <div className="cp-card cp-kpi-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div className="cp-kpi-label" style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Pending Acknowledgements</div>
+          <div className="cp-kpi-val" style={{ fontSize: '22px', fontWeight: 800, color: (data?.pendingAckCount || 0) > 0 ? '#D97706' : '#16A34A', marginTop: '4px' }}>
             {loading ? '...' : data?.pendingAckCount || 0}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+          <div className="cp-kpi-sub" style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
             {(data?.pendingAckCount || 0) > 0 ? 'Review Required' : 'All Clear'}
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Compensation Disbursed</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#16A34A', marginTop: '4px' }}>
+        <div className="cp-card cp-kpi-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div className="cp-kpi-label" style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Compensation Disbursed</div>
+          <div className="cp-kpi-val" style={{ fontSize: '22px', fontWeight: 800, color: '#16A34A', marginTop: '4px' }}>
             {loading ? '...' : fmtMoney(data?.totalPaidEarnings || 0)}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>Lifetime Paid History</div>
+          <div className="cp-kpi-sub" style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>Lifetime Paid History</div>
         </div>
       </div>
 
       {/* Recent Payslips & Discrepancies Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
+      <div className="cp-staff-panels-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         {/* Left: Recent Payslips */}
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="cp-card cp-staff-panel" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
             <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -304,7 +305,7 @@ export function StaffFacilitatorDashboard({ userName, role }: Props) {
         </div>
 
         {/* Right: Discrepancy Queries */}
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="cp-card cp-staff-panel" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
             <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
