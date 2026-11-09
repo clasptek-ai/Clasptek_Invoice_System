@@ -33,6 +33,14 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: `Forbidden: Role '${session.role}' is not authorized to inspect Student details.` },
+        { status: 403 }
+      );
+    }
+
     const { id: studentId } = await params;
     if (!studentId) {
       return NextResponse.json({ error: 'Student ID is required.' }, { status: 400 });
@@ -64,7 +72,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    const authorizedRoles = ['Super Admin', 'Finance Manager'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
@@ -142,13 +150,13 @@ export async function PATCH(
     }
 
     // 2. Strict Role Verification
-    // Authorized: Super Admin, Staff (Admissions / Operations)
-    // Strictly Denied: Finance Manager, Finance Staff, Finance Viewer, Facilitator, Student
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    // Authorized: Super Admin, Finance Manager
+    // Strictly Denied: Staff, Facilitator, Student
+    const authorizedRoles = ['Super Admin', 'Finance Manager'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to edit Student profiles. Only Admissions, Operations, and Super Admin can modify personal data.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to edit Student profiles.`,
         },
         { status: 403 }
       );

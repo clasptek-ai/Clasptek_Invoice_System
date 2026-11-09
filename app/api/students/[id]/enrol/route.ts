@@ -32,13 +32,13 @@ export async function POST(
     }
 
     // 2. Strict Role Verification
-    // Authorized: Super Admin, Staff (Admissions / Operations)
-    // Strictly Denied: Finance Manager, Finance Staff, Finance Viewer, Facilitator, Student
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    // Authorized: Super Admin, Finance Manager
+    // Strictly Denied: Staff, Facilitator, Student
+    const authorizedRoles = ['Super Admin', 'Finance Manager'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to enrol students. Only Admissions, Operations, and Super Admin can manage enrolments.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to enrol students.`,
         },
         { status: 403 }
       );

@@ -18,6 +18,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(
+        { error: `Forbidden: Role '${session.role}' is not authorized to inspect student dependencies.` },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { studentIds } = body || {};
 

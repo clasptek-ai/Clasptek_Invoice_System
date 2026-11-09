@@ -61,6 +61,10 @@ export async function getCohorts(
       query = query.eq('status', filters.status);
     }
 
+    if (filters.facilitatorId) {
+      query = query.eq('lead_facilitator_id', filters.facilitatorId);
+    }
+
     const { data: cohorts, error } = await query;
 
     if (error) {

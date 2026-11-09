@@ -27,9 +27,9 @@ export default async function StudentsPage({ searchParams }: PageProps) {
     redirect('/login?next=/students');
   }
 
-  // Facilitators and Students must NOT access the organisation-wide Student Directory.
-  // Super Admin, Finance Manager, and Staff (Admissions/Registrar) retain access.
-  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  // Staff, Facilitators, and Students must NOT access the organisation-wide Student Directory.
+  // Super Admin and Finance Manager (Admissions/Finance Admins) retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
   if (!allowedRoles.includes(session.role)) {
     redirect('/dashboard');
   }

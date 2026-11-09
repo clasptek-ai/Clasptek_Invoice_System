@@ -36,8 +36,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Strict RBAC: Facilitators and Students must NOT access the organization-wide student directory
-    if (session.role === 'Facilitator' || session.role === 'Student' || !['Super Admin', 'Finance Manager', 'Staff'].includes(session.role)) {
+    // Strict RBAC: Staff, Facilitators, and Students must NOT access the organization-wide student directory
+    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         {
           error: `Forbidden: Role '${session.role}' is not authorized to access the student directory.`,
@@ -90,11 +91,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    const authorizedRoles = ['Super Admin', 'Finance Manager'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to register students. Only Admissions, Operations, and Super Admin can execute student registration.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to register students. Only Super Admin and Finance Manager can execute student registration.`,
         },
         { status: 403 }
       );

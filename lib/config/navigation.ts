@@ -11,8 +11,9 @@ const ALL_STAFF: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff'
 const FINANCE: UserRole[] = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Finance Viewer'];
 const ADMIN: UserRole[] = ['Super Admin', 'Finance Manager'];
 const SUPER_ADMIN: UserRole[] = ['Super Admin'];
-const ADMISSIONS_AND_ADMIN: UserRole[] = ['Super Admin', 'Finance Manager', 'Staff'];
+const ADMISSIONS_AND_ADMIN: UserRole[] = ['Super Admin', 'Finance Manager'];
 const TRAINING_DELIVERY: UserRole[] = ['Super Admin', 'Finance Manager', 'Facilitator'];
+const COHORTS_ACCESS: UserRole[] = ['Super Admin', 'Finance Manager', 'Facilitator'];
 const FACILITATOR_SESSIONS: UserRole[] = ['Super Admin', 'Facilitator'];
 
 export const NAVIGATION_REGISTRY: NavigationSection[] = [
@@ -129,7 +130,7 @@ export const NAVIGATION_REGISTRY: NavigationSection[] = [
         label: 'Cohorts & Schedules',
         href: '/cohorts',
         icon: 'cohorts',
-        rolesAllowed: ADMIN,
+        rolesAllowed: COHORTS_ACCESS,
         migrationPhase: 'Phase 4 — ACTIVE',
       },
       {
@@ -337,9 +338,14 @@ export function getNavigationForRole(role: UserRole | string | null | undefined)
 
   return NAVIGATION_REGISTRY.map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) => !item.rolesAllowed || item.rolesAllowed.includes(normalizedRole)
-    ),
+    items: section.items
+      .filter((item) => !item.rolesAllowed || item.rolesAllowed.includes(normalizedRole))
+      .map((item) => {
+        if (normalizedRole === 'Facilitator' && item.id === 'cohorts') {
+          return { ...item, label: 'Cohort Assigned' };
+        }
+        return item;
+      }),
   })).filter((section) => section.items.length > 0);
 }
 

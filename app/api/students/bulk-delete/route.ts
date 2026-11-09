@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    const authorizedRoles = ['Super Admin', 'Finance Manager'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
