@@ -158,9 +158,10 @@ assert(
   'app/api/students/route.ts GET excludes Staff from allowedRoles'
 );
 assert(
-  studentsRoute.includes("const authorizedRoles = ['Super Admin', 'Finance Manager']") &&
-    !studentsRoute.includes("const authorizedRoles = ['Super Admin', 'Staff']"),
-  'app/api/students/route.ts POST excludes Staff from authorizedRoles'
+  studentsRoute.includes("const authorizedRoles = ['Super Admin']") &&
+    !studentsRoute.includes("const authorizedRoles = ['Super Admin', 'Staff']") &&
+    !studentsRoute.includes("const authorizedRoles = ['Super Admin', 'Finance Manager']"),
+  'app/api/students/route.ts POST excludes Staff and Finance Manager from authorizedRoles'
 );
 
 // Students [id] API
@@ -174,8 +175,9 @@ assert(
 const studentEnrolRoute = readFile('app/api/students/[id]/enrol/route.ts');
 assert(
   !studentEnrolRoute.includes("const authorizedRoles = ['Super Admin', 'Staff']") &&
-    studentEnrolRoute.includes("const authorizedRoles = ['Super Admin', 'Finance Manager']"),
-  'app/api/students/[id]/enrol/route.ts excludes Staff'
+    !studentEnrolRoute.includes("const authorizedRoles = ['Super Admin', 'Finance Manager']") &&
+    studentEnrolRoute.includes("const authorizedRoles = ['Super Admin']"),
+  'app/api/students/[id]/enrol/route.ts excludes Staff and Finance Manager'
 );
 
 // Students Dossier API

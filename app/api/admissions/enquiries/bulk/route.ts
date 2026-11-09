@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'DELETE') {
-      // Deletion requires Super Admin or Finance Manager
-      if (!['Super Admin', 'Finance Manager'].includes(session.role)) {
+      // Deletion requires Super Admin
+      if (!['Super Admin'].includes(session.role)) {
         return NextResponse.json(
-          { error: 'Forbidden: Role not authorized to delete enquiries.' },
+          { error: 'Forbidden: Role not authorized to delete enquiries. Only Super Admin can delete enquiries.' },
           { status: 403 }
         );
       }

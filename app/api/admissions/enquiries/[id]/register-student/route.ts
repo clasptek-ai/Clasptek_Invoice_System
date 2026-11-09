@@ -27,11 +27,11 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Finance Manager'];
+    const authorizedRoles = ['Super Admin'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to register Students. Only Super Admin and Finance Manager can execute registration.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to register Students. Only Super Admin can execute registration.`,
         },
         { status: 403 }
       );

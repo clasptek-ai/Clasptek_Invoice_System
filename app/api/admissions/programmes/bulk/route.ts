@@ -17,10 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const allowedRoles = ['Super Admin', 'Finance Manager'];
+    const allowedRoles = ['Super Admin'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
-        { error: 'Forbidden: Insufficient permissions for programme management.' },
+        { error: 'Forbidden: Insufficient permissions for programme management. Only Super Admin can manage academic programmes in bulk.' },
         { status: 403 }
       );
     }

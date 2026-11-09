@@ -4,8 +4,8 @@
  * Enforces:
  * - Session validation
  * - Tenant isolation
- * - Strict RBAC: Super Admin and Staff (Admissions / Operations) only.
- *   Denied for Finance Manager, Finance Staff, Finance Viewer, Facilitator, Student.
+ * - Strict RBAC: Super Admin only.
+ *   Denied for Finance Manager, Finance Staff, Finance Viewer, Staff, Facilitator, Student.
  * - Protection of immutable identifiers (id, student_number, tenant_id, created_at)
  * - Mandatory change reason
  * - Change diffing & audit logging to metadata.audit_trail
@@ -72,11 +72,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Finance Manager'];
+    const authorizedRoles = ['Super Admin'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to delete Student records.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to delete Student records. Only Super Admin can delete student records.`,
         },
         { status: 403 }
       );
@@ -150,13 +150,13 @@ export async function PATCH(
     }
 
     // 2. Strict Role Verification
-    // Authorized: Super Admin, Finance Manager
-    // Strictly Denied: Staff, Facilitator, Student
-    const authorizedRoles = ['Super Admin', 'Finance Manager'];
+    // Authorized: Super Admin
+    // Strictly Denied: Finance Manager, Finance Staff, Finance Viewer, Staff, Facilitator, Student
+    const authorizedRoles = ['Super Admin'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to edit Student profiles.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to edit Student profiles. Only Super Admin can modify personal data.`,
         },
         { status: 403 }
       );
