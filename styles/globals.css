@@ -1786,7 +1786,7 @@ body.cp-modal-open {
   :root {
     --sidebar-width: 230px;
   }
-  .cp-sidebar {
+  .cp-sidebar:not(.collapsed):not(.mobile-open) {
     width: 230px !important;
   }
   .cp-content-view,
@@ -1814,7 +1814,7 @@ body.cp-modal-open {
   :root {
     --sidebar-width: 210px;
   }
-  .cp-sidebar {
+  .cp-sidebar:not(.collapsed):not(.mobile-open) {
     width: 210px !important;
   }
   .cp-content-view,
