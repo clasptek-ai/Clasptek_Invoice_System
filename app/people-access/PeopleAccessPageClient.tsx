@@ -1215,7 +1215,7 @@ export function PeopleAccessPageClient({
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                {canManage && (
+                {isSuperAdmin && (
                   <button
                     className="cp-btn sm primary"
                     onClick={() => openCreateUserModal()}
