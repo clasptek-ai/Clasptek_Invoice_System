@@ -3,7 +3,7 @@
 /**
  * Sidebar.tsx — Authoritative Clasptek White Sidebar
  * Phase 9A: Visual Shell, Branding & Navigation Restoration
- * Restores 260px white sidebar (#FFFFFF), genuine clasptek_logo.png,
+ * Restores 260px white sidebar (#FFFFFF), genuine clasptek-official-logo.png,
  * PostgreSQL active connection indicator, user profile card, and 7-section navigation.
  */
 
@@ -85,7 +85,7 @@ export function Sidebar({
           isMobileOpen && 'mobile-open'
         )}
     >
-      {/* Brand Header */}
+      {/* Brand Header: Phase C326 updated legacy /assets/clasptek_brand_mark.png and /assets/clasptek_logo.png to authoritative /assets/clasptek-official-logo.png */}
       <div className="cp-sidebar-header">
         <Link
           href="/dashboard"
@@ -95,20 +95,20 @@ export function Sidebar({
         >
           {isCollapsed ? (
             <Image
-              src="/assets/clasptek_brand_mark.png"
+              src="/assets/clasptek-official-logo.png"
               alt="Clasptek Logo"
-              width={2610}
-              height={905}
+              width={1024}
+              height={275}
               className="cp-sidebar-logo"
-              style={{ height: '30px', width: 'auto' }}
+              style={{ height: '22px', width: 'auto', maxWidth: '44px', objectFit: 'contain' }}
               priority
             />
           ) : (
             <Image
-              src="/assets/clasptek_logo.png"
+              src="/assets/clasptek-official-logo.png"
               alt="Clasptek Logo"
-              width={977}
-              height={255}
+              width={1024}
+              height={275}
               className="cp-sidebar-logo"
               style={{ height: '34px', width: 'auto' }}
               priority

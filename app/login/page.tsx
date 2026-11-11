@@ -24,8 +24,24 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // If already authenticated, redirect immediately
+  // Check for recovery tokens or existing authentication
   useEffect(() => {
+    // If a recovery token or recovery error is present in the hash or search,
+    // route immediately to /reset-password to prevent premature dashboard redirect.
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (
+        hash.includes('type=recovery') ||
+        hash.includes('error_code=') ||
+        search.includes('type=recovery') ||
+        search.includes('error_code=')
+      ) {
+        router.replace('/reset-password' + search + hash);
+        return;
+      }
+    }
+
     if (!isLoading && isAuthenticated) {
       router.replace(nextPath);
     }
@@ -81,8 +97,8 @@ export default function LoginPage() {
     <div className="cp-auth-wrap">
       <div className="cp-auth-card animate-fade-in">
         {/* Brand Header */}
-        <div className="cp-auth-header">
-          <div className="cp-auth-logo-wrap">
+        <div className="cp-auth-header" style={{ marginBottom: '24px' }}>
+          <div className="cp-auth-logo-wrap" style={{ marginBottom: 0 }}>
             <Image
               src="/assets/clasptek-official-logo.png"
               alt="Clasptek Portal Logo"
@@ -93,8 +109,6 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <h1 className="cp-auth-title">Clasptek Portal</h1>
-          <p className="cp-auth-sub">Sign in to access your secure workspace.</p>
         </div>
 
         {/* Global Error Banner */}
@@ -236,7 +250,7 @@ export default function LoginPage() {
             type="button"
             id="forgot-password-btn"
             className="cp-auth-link"
-            onClick={() => alert('Password reset: please contact your system administrator.')}
+            onClick={() => router.push('/reset-password')}
           >
             Forgot Password?
           </button>

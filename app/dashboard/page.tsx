@@ -6,7 +6,7 @@
 
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { DashboardClient } from './DashboardClient';
 
 // Opt out of static generation — reads auth session from cookies at runtime
@@ -18,11 +18,11 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
-  // Server-side auth guard — middleware also protects this route
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  // Server-side authoritative auth & tenant membership guard (C253 / DEF-C252-04)
+  // Ensures suspended or unmapped users cannot access protected dashboard content
+  const session = await getAuthoritativeSession();
 
-  if (error || !user) {
+  if (!session) {
     redirect('/login');
   }
 

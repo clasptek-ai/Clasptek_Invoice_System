@@ -81,6 +81,25 @@ export const GOOGLE_CALENDAR_EVENTS_ENDPOINT = 'https://www.googleapis.com/' + '
  * 6. Positively verified Production: requires GOOGLE_CALENDAR_INTEGRATION_ENABLED === 'true'.
  * 7. Unknown, local, ambiguous, or unverified environment -> fails closed (false).
  */
+function isRequestHostPreview(req?: any): boolean {
+  if (!req) return false;
+  let rawHost = '';
+  if (req.headers) {
+    if (typeof req.headers.get === 'function') {
+      rawHost = String(req.headers.get('host') || req.headers.get('x-forwarded-host') || '');
+    } else if (req.headers.host || req.headers['x-forwarded-host']) {
+      rawHost = String(req.headers.host || req.headers['x-forwarded-host'] || '');
+    }
+  }
+  if (!rawHost && typeof req.url === 'string') {
+    try {
+      rawHost = new URL(req.url).hostname;
+    } catch (_) {}
+  }
+  const host = rawHost.toLowerCase();
+  return Boolean(host && host.includes('.vercel.app') && !host.includes('app.clasptek.org'));
+}
+
 export function isGoogleCalendarIntegrationEnabled(req?: any): boolean {
   try {
     let projectGuard: any = null;
@@ -99,11 +118,7 @@ export function isGoogleCalendarIntegrationEnabled(req?: any): boolean {
     let googleConfig: any = null;
     try {
       googleConfig = require('../../api/_lib/google-oauth-config');
-    } catch {
-      try {
-        googleConfig = require('../api/_lib/google-oauth-config');
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     // 1. Resolve canonical environment guard set
     // A source is acceptable only when all three required guards are available functions
@@ -146,9 +161,9 @@ export function isGoogleCalendarIntegrationEnabled(req?: any): boolean {
       return false;
     }
 
-    // Check host-derived preview indicator if request is provided
-    let isHostPreview = false;
-    if (googleConfig && typeof googleConfig.isPreviewEnvironment === 'function' && req) {
+    // Check host-derived preview indicator if request is provided (independent of googleConfig load)
+    let isHostPreview = isRequestHostPreview(req);
+    if (!isHostPreview && googleConfig && typeof googleConfig.isPreviewEnvironment === 'function' && req) {
       isHostPreview = Boolean(googleConfig.isPreviewEnvironment(req));
     }
 
@@ -264,14 +279,17 @@ export async function createOrValidateGoogleMeet({
     let googleConfig: any = null;
     try {
       googleConfig = require('../../api/_lib/google-oauth-config');
-    } catch {
-      try {
-        googleConfig = require('../api/_lib/google-oauth-config');
-      } catch (_) {}
-    }
+    } catch (_) {}
     const isPreview = googleConfig && typeof googleConfig.isPreviewEnvironment === 'function'
       ? googleConfig.isPreviewEnvironment()
-      : (process.env.VERCEL_ENV === 'preview' || process.env.CLASPTEK_ENV === 'preview');
+      : (
+          process.env.VERCEL_ENV === 'preview' ||
+          process.env.CLASPTEK_ENV === 'preview' ||
+          process.env.CLASPTEK_ENV === 'staging' ||
+          process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' ||
+          process.env.NEXT_PUBLIC_CLASPTEK_ENV === 'preview' ||
+          process.env.NEXT_PUBLIC_CLASPTEK_ENV === 'staging'
+        );
 
     const msg = isPreview
       ? 'Google Meet automated conference creation is not enabled in this preview environment. STAGING_GOOGLE_CALENDAR_ENABLED=true is required.'
@@ -284,21 +302,23 @@ export async function createOrValidateGoogleMeet({
   let googleConfig: any = null;
   try {
     googleConfig = require('../../api/_lib/google-oauth-config');
-  } catch {
-    try {
-      googleConfig = require('../api/_lib/google-oauth-config');
-    } catch (_) {}
+  } catch (_) {}
+
+  if (!googleConfig || typeof googleConfig.getTenantCentralDriveConnection !== 'function') {
+    throw new GoogleMeetError(
+      'OAUTH_CONFIGURATION_UNAVAILABLE',
+      'Google OAuth configuration is currently unavailable.',
+      500
+    );
   }
 
   // 3. Check tenant-central connection
   let connection: any = null;
   let connectionError: any = null;
-  if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {
-    try {
-      connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
-    } catch (err) {
-      connectionError = err;
-    }
+  try {
+    connection = await googleConfig.getTenantCentralDriveConnection(tenantId);
+  } catch (err) {
+    connectionError = err;
   }
 
   if (connectionError) {
@@ -310,6 +330,11 @@ export async function createOrValidateGoogleMeet({
         500
       );
     }
+    throw new GoogleMeetError(
+      'OAUTH_CONFIGURATION_UNAVAILABLE',
+      'Unable to verify Google OAuth connection status.',
+      500
+    );
   }
 
   if (!connection) {
@@ -365,7 +390,7 @@ export async function createOrValidateGoogleMeet({
         connectionType: 'TENANT_CENTRAL',
       });
       accessToken = refreshed.accessToken || refreshed.access_token || accessToken;
-    } catch (refErr) {
+    } catch (_refErr) {
       throw new GoogleMeetError(
         'CREDENTIALS_EXPIRED',
         'Google credentials expired and token refresh failed. Please re-authorize Google Calendar.',
@@ -492,11 +517,7 @@ export async function deleteGoogleCalendarEvent({
   let googleConfig: any = null;
   try {
     googleConfig = require('../../api/_lib/google-oauth-config');
-  } catch {
-    try {
-      googleConfig = require('../api/_lib/google-oauth-config');
-    } catch (_) {}
-  }
+  } catch (_) {}
 
   let connection: any = null;
   if (googleConfig && typeof googleConfig.getTenantCentralDriveConnection === 'function') {

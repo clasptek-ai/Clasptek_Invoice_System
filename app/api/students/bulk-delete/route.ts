@@ -24,11 +24,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    const authorizedRoles = ['Super Admin'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to delete Student records.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to delete Student records. Only Super Admin can execute bulk student deletion.`,
         },
         { status: 403 }
       );

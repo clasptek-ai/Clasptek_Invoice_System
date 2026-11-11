@@ -25,9 +25,9 @@ export default async function EnrolmentsPage({ searchParams }: PageProps) {
     redirect('/login?next=/enrolments');
   }
 
-  // Facilitators and Students must NOT access the organisation-wide Enrolments administration screen.
-  // Super Admin, Finance Manager, and Staff (Admissions/Registrar) retain access.
-  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  // Facilitators, Students, and Staff must NOT access the organisation-wide Enrolments administration screen.
+  // Super Admin and Finance Manager retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
   if (!allowedRoles.includes(session.role)) {
     redirect('/dashboard');
   }

@@ -269,7 +269,7 @@ function getOperationalAlerts(metrics: ManagementDashboardMetrics | null): Opera
 }
 
 export function DashboardClient() {
-  const { user, role, tenant } = useAuth();
+  const { user, role, tenant, isLoading } = useAuth();
   const [metrics, setMetrics] = useState<ManagementDashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -305,7 +305,24 @@ export function DashboardClient() {
     return 'Good evening';
   })();
 
-  const displayName = user?.full_name ?? user?.email?.split('@')[0] ?? 'Administrator';
+  const displayName = user?.full_name ?? user?.email?.split('@')[0] ?? 'Team Member';
+
+  // Neutral loading gate: strictly gate rendering until user identity and role are resolved.
+  // Never assume a privileged role or render role-specific dashboard during hydration.
+  if (isLoading || !role || !user) {
+    return (
+      <div className="cp-dashboard-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 20px' }}>
+        <div className="cp-card" style={{ padding: '36px', textAlign: 'center', background: 'var(--surface-0)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Loading Workspace...
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Verifying credentials and organizational workspace permissions.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Facilitator & Staff role gets the dedicated delivery & compensation workspace
   if (role === 'Facilitator' || role === 'Staff') {
@@ -474,7 +491,7 @@ export function DashboardClient() {
               fontWeight: 800,
             }}
           >
-            {(role ?? 'SUPER ADMIN').toUpperCase()} PORTAL
+            {(role ? role.toUpperCase() : 'WORKSPACE')} PORTAL
           </span>
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
   type LifecycleActionType,
   type RecordDependencyItem,
 } from '@/components/tables/RecordLifecycleModal';
+import { ClassRosterModal } from '@/components/cohorts/ClassRosterModal';
 
 interface FacilitatorOption {
   id: string;
@@ -35,6 +36,7 @@ interface CohortsPageClientProps {
   currentSearch: string;
   currentProg: string;
   currentStatus: string;
+  isFacilitator?: boolean;
 }
 
 export function CohortsPageClient({
@@ -44,6 +46,7 @@ export function CohortsPageClient({
   currentSearch,
   currentProg,
   currentStatus,
+  isFacilitator = false,
 }: CohortsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,6 +56,15 @@ export function CohortsPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isAddCohortOpen, setIsAddCohortOpen] = useState<boolean>(false);
+  const [rosterModal, setRosterModal] = useState<{
+    isOpen: boolean;
+    cohortId: string | null;
+    cohortCode?: string;
+    cohortName?: string;
+  }>({
+    isOpen: false,
+    cohortId: null,
+  });
 
   // Table sorting state
   const [sortField, setSortField] = useState<string>('start_date');
@@ -300,10 +312,12 @@ export function CohortsPageClient({
               gap: '8px',
             }}
           >
-            <span aria-hidden="true">📅</span> Cohorts &amp; Schedules
+            <span aria-hidden="true">📅</span> {isFacilitator ? 'Cohort Assigned' : 'Cohorts & Schedules'}
           </h1>
           <div style={{ fontSize: '12.5px', color: 'var(--text-secondary, #64748B)', marginTop: '2px' }}>
-            Authoritative cohort scheduling, seat capacity management, assigned lead facilitators, and training progression.
+            {isFacilitator
+              ? 'Review your assigned training cohorts, enrolled student roster, attendance registers, and session schedules.'
+              : 'Authoritative cohort scheduling, seat capacity management, assigned lead facilitators, and training progression.'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -315,15 +329,25 @@ export function CohortsPageClient({
           >
             Attendance &amp; Sessions
           </a>
-          <button
-            type="button"
-            className="cp-btn sm primary"
-            id="btnAddNewCohortBtn"
-            onClick={() => setIsAddCohortOpen(true)}
-            style={{ fontWeight: 700 }}
-          >
-            + Add New Cohort
-          </button>
+          {isFacilitator ? (
+            <a
+              href="/meetings"
+              className="cp-btn sm secondary"
+              style={{ fontWeight: 600, textDecoration: 'none' }}
+            >
+              Scheduled Meetings
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="cp-btn sm primary"
+              id="btnAddNewCohortBtn"
+              onClick={() => setIsAddCohortOpen(true)}
+              style={{ fontWeight: 700 }}
+            >
+              + Add New Cohort
+            </button>
+          )}
         </div>
       </div>
 
@@ -354,61 +378,82 @@ export function CohortsPageClient({
           />
         </div>
 
-        {/* Universal Selection Toolbar */}
-        <div style={{ padding: '0 16px' }}>
-          <TableSelectionBar
-            selectedCount={selectedIds.size}
-            totalVisibleCount={visibleIds.length}
-            entityLabel="cohort"
-            onClearSelection={handleClearSelection}
-            onSelectAllVisible={handleToggleSelectAll}
-            isAllSelected={isAllSelected}
-          >
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleBulkStatusChange(e.target.value);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                className="cp-btn sm secondary"
-                style={{ padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: '#FFFFFF' }}
-              >
-                <option value="" disabled>Set Status...</option>
-                <option value="PLANNING">Mark as PLANNING</option>
-                <option value="UPCOMING">Mark as UPCOMING</option>
-                <option value="IN_PROGRESS">Mark as IN_PROGRESS</option>
-                <option value="COMPLETED">Mark as COMPLETED</option>
-                <option value="CANCELLED">Mark as CANCELLED</option>
-              </select>
+        {/* Universal Selection Toolbar (Admin only) */}
+        {!isFacilitator && (
+          <div style={{ padding: '0 16px' }}>
+            <TableSelectionBar
+              selectedCount={selectedIds.size}
+              totalVisibleCount={visibleIds.length}
+              entityLabel="cohort"
+              onClearSelection={handleClearSelection}
+              onSelectAllVisible={handleToggleSelectAll}
+              isAllSelected={isAllSelected}
+            >
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleBulkStatusChange(e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue=""
+                  className="cp-btn sm secondary"
+                  style={{ padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: '#FFFFFF' }}
+                >
+                  <option value="" disabled>Set Status...</option>
+                  <option value="PLANNING">Mark as PLANNING</option>
+                  <option value="UPCOMING">Mark as UPCOMING</option>
+                  <option value="IN_PROGRESS">Mark as IN_PROGRESS</option>
+                  <option value="COMPLETED">Mark as COMPLETED</option>
+                  <option value="CANCELLED">Mark as CANCELLED</option>
+                </select>
 
-              <button
-                type="button"
-                onClick={() => handleOpenCloseCohort(Array.from(selectedIds))}
-                className="cp-btn sm secondary"
-                style={{ fontSize: '12px', padding: '4px 8px', color: '#DC2626' }}
-              >
-                🛑 Close Selected
-              </button>
-            </div>
-          </TableSelectionBar>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCloseCohort(Array.from(selectedIds))}
+                  className="cp-btn sm secondary"
+                  style={{ fontSize: '12px', padding: '4px 8px', color: '#DC2626' }}
+                >
+                  🛑 Close Selected
+                </button>
+              </div>
+            </TableSelectionBar>
+          </div>
+        )}
 
         {/* Cohort Table */}
         <CohortTable
           cohorts={sortedCohorts}
           selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
-          onToggleSelectAll={handleToggleSelectAll}
+          onToggleSelect={isFacilitator ? undefined : handleToggleSelect}
+          onToggleSelectAll={isFacilitator ? undefined : handleToggleSelectAll}
           isAllSelected={isAllSelected}
-          onCloseCohort={(c) => handleOpenCloseCohort([c.id], `${c.cohort_code} (${c.name})`)}
+          onCloseCohort={isFacilitator ? undefined : (c) => handleOpenCloseCohort([c.id], `${c.cohort_code} (${c.name})`)}
           sortField={sortField}
           sortOrder={sortOrder}
           onSort={handleSort}
+          isFacilitator={isFacilitator}
+          onViewRoster={(c) =>
+            setRosterModal({
+              isOpen: true,
+              cohortId: c.id,
+              cohortCode: c.cohort_code,
+              cohortName: c.name,
+            })
+          }
+          canEdit={!isFacilitator}
         />
       </div>
+
+      {/* Class Roster Modal */}
+      <ClassRosterModal
+        isOpen={rosterModal.isOpen}
+        cohortId={rosterModal.cohortId}
+        cohortCode={rosterModal.cohortCode}
+        cohortName={rosterModal.cohortName}
+        onClose={() => setRosterModal({ isOpen: false, cohortId: null })}
+      />
 
       {/* Safe Closure Dialog */}
       <RecordLifecycleModal

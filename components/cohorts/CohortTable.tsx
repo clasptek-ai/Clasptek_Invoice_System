@@ -27,6 +27,8 @@ interface CohortTableProps {
   sortField?: string;
   sortOrder?: 'asc' | 'desc';
   onSort?: (field: string) => void;
+  isFacilitator?: boolean;
+  onViewRoster?: (cohort: Cohort) => void;
 }
 
 function fmtDate(iso?: string | null): string {
@@ -50,6 +52,8 @@ export function CohortTable({
   sortField,
   sortOrder,
   onSort,
+  isFacilitator = false,
+  onViewRoster,
 }: CohortTableProps) {
   const {
     paginatedItems: paginatedCohorts,
@@ -255,24 +259,53 @@ export function CohortTable({
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <button
-                        type="button"
-                        className="cp-btn sm secondary"
-                        onClick={() => onSelectCohort && onSelectCohort(c)}
-                        style={{ padding: '3px 8px', fontSize: '11px' }}
-                      >
-                        Details
-                      </button>
-                      {canEdit && onCloseCohort && c.status !== 'COMPLETED' && c.status !== 'CANCELLED' && (
-                        <button
-                          type="button"
-                          className="cp-btn sm secondary"
-                          onClick={() => onCloseCohort(c)}
-                          style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
-                          title="Close / Complete Cohort"
-                        >
-                          🛑
-                        </button>
+                      {isFacilitator ? (
+                        <>
+                          <button
+                            type="button"
+                            className="cp-btn sm secondary"
+                            onClick={() => onViewRoster && onViewRoster(c)}
+                            style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600 }}
+                          >
+                            Class Roster
+                          </button>
+                          <a
+                            href={`/attendance?cohortId=${c.id}`}
+                            className="cp-btn sm secondary"
+                            style={{ padding: '3px 8px', fontSize: '11px', textDecoration: 'none' }}
+                          >
+                            Attendance
+                          </a>
+                          <a
+                            href={`/meetings?cohortId=${c.id}`}
+                            className="cp-btn sm secondary"
+                            style={{ padding: '3px 8px', fontSize: '11px', textDecoration: 'none' }}
+                          >
+                            Meetings
+                          </a>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="cp-btn sm secondary"
+                            onClick={() => onSelectCohort && onSelectCohort(c)}
+                            style={{ padding: '3px 8px', fontSize: '11px' }}
+                          >
+                            Details
+                          </button>
+                          {canEdit && onCloseCohort && c.status !== 'COMPLETED' && c.status !== 'CANCELLED' && (
+                            <button
+                              type="button"
+                              className="cp-btn sm secondary"
+                              onClick={() => onCloseCohort(c)}
+                              style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                              title="Close / Complete Cohort"
+                            >
+                              🛑
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
@@ -338,23 +371,52 @@ export function CohortTable({
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
-                <button
-                  type="button"
-                  className="cp-btn sm secondary"
-                  onClick={() => onSelectCohort && onSelectCohort(c)}
-                  style={{ padding: '3px 8px', fontSize: '11px' }}
-                >
-                  Details
-                </button>
-                {canEdit && onCloseCohort && c.status !== 'COMPLETED' && (
-                  <button
-                    type="button"
-                    className="cp-btn sm secondary"
-                    onClick={() => onCloseCohort(c)}
-                    style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
-                  >
-                    🛑 Close
-                  </button>
+                {isFacilitator ? (
+                  <>
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={() => onViewRoster && onViewRoster(c)}
+                      style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 600 }}
+                    >
+                      Class Roster
+                    </button>
+                    <a
+                      href={`/attendance?cohortId=${c.id}`}
+                      className="cp-btn sm secondary"
+                      style={{ padding: '3px 8px', fontSize: '11px', textDecoration: 'none' }}
+                    >
+                      Attendance
+                    </a>
+                    <a
+                      href={`/meetings?cohortId=${c.id}`}
+                      className="cp-btn sm secondary"
+                      style={{ padding: '3px 8px', fontSize: '11px', textDecoration: 'none' }}
+                    >
+                      Meetings
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="cp-btn sm secondary"
+                      onClick={() => onSelectCohort && onSelectCohort(c)}
+                      style={{ padding: '3px 8px', fontSize: '11px' }}
+                    >
+                      Details
+                    </button>
+                    {canEdit && onCloseCohort && c.status !== 'COMPLETED' && (
+                      <button
+                        type="button"
+                        className="cp-btn sm secondary"
+                        onClick={() => onCloseCohort(c)}
+                        style={{ padding: '3px 6px', fontSize: '11px', color: '#DC2626' }}
+                      >
+                        🛑 Close
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

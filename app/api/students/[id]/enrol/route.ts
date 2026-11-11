@@ -4,8 +4,8 @@
  *
  * CRITICAL INVARIANTS:
  * - Session verification & tenant isolation
- * - Strict RBAC: Super Admin and Staff (Admissions / Operations) only.
- *   Denied for Finance Manager, Facilitator, Student.
+ * - Strict RBAC: Super Admin only.
+ *   Denied for Finance Manager, Finance Staff, Finance Viewer, Staff, Facilitator, Student.
  * - Student record is NEVER duplicated. Student ID is immutable.
  * - Enrolment number generated via crm_intake_counters (ENR-YYYY-XXXX).
  * - Enforces uq_enrolments_student_cohort (prevents duplicate enrolment in same cohort).
@@ -32,13 +32,13 @@ export async function POST(
     }
 
     // 2. Strict Role Verification
-    // Authorized: Super Admin, Staff (Admissions / Operations)
-    // Strictly Denied: Finance Manager, Finance Staff, Finance Viewer, Facilitator, Student
-    const authorizedRoles = ['Super Admin', 'Staff'];
+    // Authorized: Super Admin
+    // Strictly Denied: Finance Manager, Finance Staff, Finance Viewer, Staff, Facilitator, Student
+    const authorizedRoles = ['Super Admin'];
     if (!authorizedRoles.includes(session.role)) {
       return NextResponse.json(
         {
-          error: `Forbidden: Role '${session.role}' is not authorized to enrol students. Only Admissions, Operations, and Super Admin can manage enrolments.`,
+          error: `Forbidden: Role '${session.role}' is not authorized to enrol students. Only Super Admin can manage enrolments.`,
         },
         { status: 403 }
       );
