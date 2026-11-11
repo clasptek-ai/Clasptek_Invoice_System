@@ -344,6 +344,18 @@ export async function PATCH(request: NextRequest) {
           .eq('id', userId)
           .maybeSingle();
 
+        let recipientEmail = profile?.email;
+        if (serviceClient.auth?.admin?.getUserById) {
+          try {
+            const { data: authRes } = await serviceClient.auth.admin.getUserById(userId);
+            if (authRes?.user?.email && authRes.user.email.trim() !== '') {
+              recipientEmail = authRes.user.email.trim();
+            }
+          } catch {
+            // Retain profile email fallback
+          }
+        }
+
         const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
         await recordFinanceAuditLogFailClosed({
@@ -351,10 +363,10 @@ export async function PATCH(request: NextRequest) {
           action: 'INVITATION_RESENT',
           entityType: 'user',
           entityId: userId,
-          entityName: profile?.full_name || profile?.email || 'User',
+          entityName: profile?.full_name || recipientEmail || 'User',
           actorId: auth.session.user.id,
           actorRole: auth.session.role,
-          reason: `Resent portal invitation to ${profile?.email || userId}`,
+          reason: `Resent portal invitation to ${recipientEmail || userId}`,
           source: 'people_and_access',
           newState: { status: 'invited' },
         });
@@ -363,7 +375,7 @@ export async function PATCH(request: NextRequest) {
           success: true,
           message: 'Invitation resent successfully.',
           inviteToken,
-          email: profile?.email,
+          email: recipientEmail,
         });
       }
 
