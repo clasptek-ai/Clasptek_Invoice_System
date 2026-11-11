@@ -24,6 +24,30 @@ export interface FinanceAuditLogEntry {
   createdAt?: string;
 }
 
+export interface PersonnelQueriesDeps {
+  createServerClient: typeof createServerClient;
+  createSupabaseServiceClient: typeof createSupabaseServiceClient;
+  recordFinanceAuditLog: typeof recordFinanceAuditLog;
+}
+
+let activeDeps: PersonnelQueriesDeps = {
+  createServerClient,
+  createSupabaseServiceClient,
+  recordFinanceAuditLog,
+};
+
+export function setPersonnelQueriesDepsForTests(deps: Partial<PersonnelQueriesDeps>): void {
+  activeDeps = { ...activeDeps, ...deps };
+}
+
+export function resetPersonnelQueriesDepsForTests(): void {
+  activeDeps = {
+    createServerClient,
+    createSupabaseServiceClient,
+    recordFinanceAuditLog,
+  };
+}
+
 export interface AdminPersonnel {
   id: string;
   tenantId: string;
@@ -69,7 +93,7 @@ export interface AdminUser {
  * Fetch all personnel records for a given tenant
  */
 export async function getAdminPersonnelList(tenantId: string): Promise<AdminPersonnel[]> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
   const { data, error } = await supabase
     .from('personnel')
     .select('*')
@@ -114,7 +138,7 @@ export async function getAdminPersonnelList(tenantId: string): Promise<AdminPers
  * Fetch users and tenant memberships for People & Access
  */
 export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   // Fetch tenant memberships with associated profiles
   const { data: memberships, error } = await supabase
@@ -127,14 +151,18 @@ export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> 
     return [];
   }
 
-  // Fetch profiles for these users
+  // Fetch profiles for these users using service client so RLS (profiles_own_read)
+  // does not hide other users' email and full_name from administrators (C330A)
   const userIds = memberships.map((m) => m.user_id);
+  const serviceClient = activeDeps.createSupabaseServiceClient();
   const { data: profiles } = userIds.length > 0
-    ? await supabase.from('profiles').select('id, email, full_name').in('id', userIds)
+    ? await serviceClient.from('profiles').select('id, email, full_name').in('id', userIds)
     : { data: [] };
 
   const profileMap = new Map<string, { email: string; full_name?: string | null }>();
-  (profiles || []).forEach((p) => profileMap.set(p.id, p));
+  (profiles || []).forEach((p) => {
+    if (p?.id) profileMap.set(p.id, p);
+  });
 
   // Fetch personnel to link
   const { data: personnel } = await supabase
@@ -142,22 +170,34 @@ export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> 
     .select('id, user_id, employee_id, full_name, email')
     .eq('tenant_id', tenantId);
 
-  const personnelByUserId = new Map<string, { id: string; employee_id: string; full_name: string }>();
-  const personnelByEmail = new Map<string, { id: string; employee_id: string; full_name: string }>();
+  const personnelByUserId = new Map<string, { id: string; employee_id: string; full_name: string; email?: string | null }>();
+  const personnelByEmail = new Map<string, { id: string; employee_id: string; full_name: string; email?: string | null }>();
 
   (personnel || []).forEach((p) => {
     if (p.user_id) personnelByUserId.set(p.user_id, p);
-    if (p.email) personnelByEmail.set(p.email.toLowerCase(), p);
+    if (p.email && p.email.trim() !== '') {
+      personnelByEmail.set(p.email.trim().toLowerCase(), p);
+    }
   });
 
   return memberships.map((m) => {
     const prof = profileMap.get(m.user_id);
-    const email = prof?.email || 'user@clasptek.org';
-    const linked = personnelByUserId.get(m.user_id) || personnelByEmail.get(email.toLowerCase());
+    const linkedByUid = personnelByUserId.get(m.user_id);
+    // Authoritative email resolution (C330A):
+    // 1. Genuine profile email (registered user account)
+    // 2. Linked personnel email (if linked by user_id)
+    // 3. Empty string fallback (never synthetic hardcoded 'user@clasptek.org')
+    const rawEmail = prof?.email || linkedByUid?.email || '';
+    const email = rawEmail.trim();
+
+    // Link personnel: user_id match takes priority, then non-empty email match
+    const linked = linkedByUid || (email ? personnelByEmail.get(email.toLowerCase()) : undefined);
+
+    const name = prof?.full_name?.trim() || linked?.full_name?.trim() || (email ? email.split('@')[0] : 'User');
 
     return {
       id: m.user_id,
-      name: prof?.full_name || linked?.full_name || email.split('@')[0],
+      name,
       email,
       role: m.role as UserRole,
       status: m.status as AdminUser['status'],
@@ -177,7 +217,7 @@ export async function getNextPersonnelIdentifier(
   tenantId: string,
   type: 'staff' | 'facilitator'
 ): Promise<string> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
   const prefix = type === 'facilitator' ? 'FAC-' : 'EMP-';
 
   const { data } = await supabase
@@ -223,7 +263,7 @@ export async function createPersonnelRecord(
     notes?: string;
   }
 ): Promise<{ success: boolean; data?: AdminPersonnel; error?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   if (!payload.fullName || !payload.email || !payload.department || !payload.jobTitle) {
     return { success: false, error: 'Full name, email, department, and role are required.' };
@@ -262,7 +302,7 @@ export async function createPersonnelRecord(
   }
 
   // Log authoritative audit event
-  await recordFinanceAuditLog({
+  await activeDeps.recordFinanceAuditLog({
     tenantId,
     action: 'CREATE_PERSONNEL',
     entityType: 'personnel',
@@ -309,7 +349,7 @@ export async function updatePersonnelRecord(
   actor: { id: string; role: string },
   payload: Partial<AdminPersonnel>
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   const { data: existing, error: fetchErr } = await supabase
     .from('personnel')
@@ -349,7 +389,7 @@ export async function updatePersonnelRecord(
     return { success: false, error: updateErr.message };
   }
 
-  await recordFinanceAuditLog({
+  await activeDeps.recordFinanceAuditLog({
     tenantId,
     action: 'UPDATE_PERSONNEL',
     entityType: 'personnel',
@@ -374,7 +414,7 @@ export async function updatePersonnelRecord(
 export async function recordFinanceAuditLogFailClosed(
   entry: Omit<FinanceAuditLogEntry, 'id' | 'createdAt'>
 ): Promise<void> {
-  const supabase = await createServerClient();
+  const supabase = activeDeps.createSupabaseServiceClient();
   const auditId = `aud_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}`;
 
   // Defensive sanitization: ensure no passwords, reset tokens, or secret keys are stored
@@ -428,7 +468,7 @@ export async function checkIsLastSuperAdmin(
   tenantId: string,
   userId: string
 ): Promise<boolean> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
   const { data, error } = await supabase
     .from('tenant_memberships')
     .select('user_id')
@@ -457,7 +497,7 @@ export async function getUserSecurityActivity(
   tenantId: string,
   userId: string
 ): Promise<UserSecurityActivityItem[]> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
   const { data, error } = await supabase
     .from('finance_audit_log')
     .select('id, action, entity_type, entity_name, reason, actor_role, created_at')
@@ -483,6 +523,7 @@ export async function getUserSecurityActivity(
  * Fix 1: Eliminates administrator-visible tokens. Dispatches recovery email directly to user.
  * Rejects suspended, deactivated, or revoked accounts.
  * Fix 5: Audit logging fails closed.
+ * C330A: Targets genuine verified user email, eliminates hardcoded user@clasptek.org.
  */
 export async function initiateAdminPasswordReset(
   tenantId: string,
@@ -490,9 +531,8 @@ export async function initiateAdminPasswordReset(
   targetUserId: string,
   reason?: string
 ): Promise<{ success: boolean; error?: string; message?: string; email?: string; targetName?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
-  // 1. Verify tenant membership
   const { data: membership, error: memErr } = await supabase
     .from('tenant_memberships')
     .select('user_id, status, role')
@@ -504,15 +544,13 @@ export async function initiateAdminPasswordReset(
     return { success: false, error: 'User account not found within this organization.' };
   }
 
-  // 2. Reject suspended or revoked accounts
   if (membership.status === 'suspended') {
     return { success: false, error: 'Cannot initiate password reset for a suspended or revoked account.' };
   }
 
-  // 3. Inspect personnel employment status to ensure deactivated staff cannot recover access
   const { data: personnel } = await supabase
     .from('personnel')
-    .select('employment_status')
+    .select('employment_status, email, full_name')
     .eq('tenant_id', tenantId)
     .eq('user_id', targetUserId)
     .maybeSingle();
@@ -526,8 +564,8 @@ export async function initiateAdminPasswordReset(
     return { success: false, error: 'Cannot initiate password reset for a deactivated or terminated personnel account.' };
   }
 
-  // 4. Fetch target profile
-  const { data: profile } = await supabase
+  const adminClient = activeDeps.createSupabaseServiceClient();
+  const { data: profile } = await adminClient
     .from('profiles')
     .select('email, full_name, is_active')
     .eq('id', targetUserId)
@@ -537,20 +575,22 @@ export async function initiateAdminPasswordReset(
     return { success: false, error: 'Cannot initiate password reset for an inactive user profile.' };
   }
 
-  const userEmail = profile?.email || 'user@clasptek.org';
-  const userName = profile?.full_name || userEmail;
+  const targetEmail = (profile?.email || personnel?.email || '').trim().toLowerCase();
+  if (!targetEmail || !targetEmail.includes('@')) {
+    return {
+      success: false,
+      error: 'Cannot initiate password reset: target account has no verified email address associated with it.',
+    };
+  }
 
-  // 5. Genuine Supabase Auth password recovery dispatch (DEF-C219-05)
+  const targetName = profile?.full_name?.trim() || personnel?.full_name?.trim() || targetEmail;
   let dispatchError: string | null = null;
   try {
-    const adminClient = createSupabaseServiceClient();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clasptek.org';
-    const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(userEmail, {
+    const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(targetEmail, {
       redirectTo: `${appUrl}/login?mode=reset`,
     });
-    if (resetErr) {
-      dispatchError = resetErr.message;
-    }
+    if (resetErr) dispatchError = resetErr.message;
   } catch (err: unknown) {
     dispatchError = err instanceof Error ? err.message : String(err);
   }
@@ -562,13 +602,12 @@ export async function initiateAdminPasswordReset(
     };
   }
 
-  // 6. Fail-closed audit logging (no credentials or tokens recorded)
   await recordFinanceAuditLogFailClosed({
     tenantId,
     action: 'PASSWORD_RESET_INITIATED',
     entityType: 'user',
     entityId: targetUserId,
-    entityName: userName,
+    entityName: targetName,
     actorId: actor.id,
     actorRole: actor.role,
     reason: reason || 'Password recovery request accepted by authentication provider.',
@@ -579,8 +618,8 @@ export async function initiateAdminPasswordReset(
   return {
     success: true,
     message: 'Password reset recovery email dispatched successfully.',
-    email: userEmail,
-    targetName: userName,
+    email: targetEmail,
+    targetName,
   };
 }
 
@@ -626,7 +665,8 @@ export async function createOrLinkUserAccount(
     inviteToken: string;
   };
 }> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
+  const serviceClient = activeDeps.createSupabaseServiceClient();
   const normalizedEmail = (payload.email || '').trim().toLowerCase();
   const trimmedName = (payload.fullName || '').trim();
 
@@ -644,8 +684,8 @@ export async function createOrLinkUserAccount(
     : role === 'Finance Staff' ? 'FINANCE_STAFF'
     : 'STAFF';
 
-  // 1. Check if user already exists in profiles
-  const { data: existingProfile } = await supabase
+  // 1. Check if user already exists in profiles (via service client to bypass RLS)
+  const { data: existingProfile } = await serviceClient
     .from('profiles')
     .select('id, email, full_name')
     .eq('email', normalizedEmail)
@@ -676,7 +716,7 @@ export async function createOrLinkUserAccount(
     // DEF-C219-04: Provision genuine Supabase Auth identity via Admin API (Fail closed, zero synthetic ID fallback)
     let authCreationError: string | null = null;
     try {
-      const adminClient = createSupabaseServiceClient();
+      const adminClient = activeDeps.createSupabaseServiceClient();
       const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
         email: normalizedEmail,
         email_confirm: false,
@@ -703,7 +743,7 @@ export async function createOrLinkUserAccount(
 
     userId = createdAuthUserId;
 
-    const { error: profileErr } = await supabase.from('profiles').insert({
+    const { error: profileErr } = await serviceClient.from('profiles').insert({
       id: userId,
       email: normalizedEmail,
       full_name: trimmedName,
@@ -718,7 +758,7 @@ export async function createOrLinkUserAccount(
       // Rollback auth user if created
       if (createdAuthUserId) {
         try {
-          const adminClient = createSupabaseServiceClient();
+          const adminClient = activeDeps.createSupabaseServiceClient();
           await adminClient.auth.admin.deleteUser(createdAuthUserId);
         } catch (rollbackErr) {
           return {
@@ -805,9 +845,9 @@ export async function createOrLinkUserAccount(
         // Rollback created profile & auth user if we created them
         if (createdAuthUserId) {
           try {
-            const adminClient = createSupabaseServiceClient();
+            const adminClient = activeDeps.createSupabaseServiceClient();
             await adminClient.auth.admin.deleteUser(createdAuthUserId);
-            await supabase.from('profiles').delete().eq('id', userId);
+            await serviceClient.from('profiles').delete().eq('id', userId); // supabase.from('profiles').delete().eq('id', userId)
           } catch (rollbackErr) {
             return {
               success: false,
@@ -835,9 +875,9 @@ export async function createOrLinkUserAccount(
   if (memErr) {
     if (createdAuthUserId) {
       try {
-        const adminClient = createSupabaseServiceClient();
+        const adminClient = activeDeps.createSupabaseServiceClient();
         await adminClient.auth.admin.deleteUser(createdAuthUserId);
-        await supabase.from('profiles').delete().eq('id', userId);
+        await serviceClient.from('profiles').delete().eq('id', userId); // supabase.from('profiles').delete().eq('id', userId)
         if (createdPersonnelId) {
           await supabase.from('personnel').delete().eq('id', createdPersonnelId);
         }
@@ -889,16 +929,27 @@ export async function createOrLinkUserAccount(
 }
 
 /**
- * Revoke all active login sessions for a target user across devices (Fix 4)
- * Invalidation via Supabase Auth Admin global sign-out.
- * Account status remains active.
+ * Revoke all active login sessions for a target user across devices (Fix 4, C330B)
+ * Notice: @supabase/auth-js GoTrue Admin API signOut(jwt, scope) requires an active session JWT,
+ * not a user UUID. In addition, centralized database session revocation infrastructure
+ * (session_revocations table and terminate_user_sessions RPC) is part of C253, which is deferred.
+ * Rather than swallowing SDK errors or reporting false success, return explicit deferred status:
  */
 export async function revokeUserSessions(
   tenantId: string,
   actor: { id: string; role: string },
   userId: string
-): Promise<{ success: boolean; error?: string; message?: string }> {
-  const supabase = await createServerClient();
+): Promise<{ success: boolean; code?: string; error?: string; message?: string }> {
+  // Prevent self-revocation
+  if (userId === actor.id) {
+    return {
+      success: false,
+      code: 'SELF_REVOCATION_DISALLOWED',
+      error: 'Cannot revoke sessions for your own account.',
+    };
+  }
+
+  const supabase = await activeDeps.createServerClient();
 
   // Verify tenant membership
   const { data: membership, error: memErr } = await supabase
@@ -909,18 +960,10 @@ export async function revokeUserSessions(
     .maybeSingle();
 
   if (memErr || !membership) {
-    return { success: false, error: 'User account not found within this organization.' };
+    return { success: false, code: 'USER_NOT_FOUND', error: 'User account not found within this organization.' };
   }
 
-  // Supabase Auth global sign-out
-  try {
-    const adminClient = createSupabaseServiceClient();
-    await adminClient.auth.admin.signOut(userId, 'global');
-  } catch (err: unknown) {
-    console.warn('Notice: GoTrue signOut in offline/mock environment:', err instanceof Error ? err.message : err);
-  }
-
-  // Fail-closed audit logging
+  // Audit attempt in finance_audit_log (fail closed)
   await recordFinanceAuditLogFailClosed({
     tenantId,
     action: 'REVOKE_USER_SESSIONS',
@@ -928,17 +971,25 @@ export async function revokeUserSessions(
     entityId: userId,
     actorId: actor.id,
     actorRole: actor.role,
-    reason: 'Administrative revocation of active sessions across all devices',
+    reason: 'Administrative revocation of active sessions across all devices requested',
     source: 'people_and_access',
   });
 
-  return { success: true, message: 'All active sessions have been revoked across devices.' };
+  // Note / Defect remediation (C330B): In older phases, adminClient.auth.admin.signOut(userId, 'global')
+  // was attempted, but @supabase/auth-js Admin API signOut(jwt, scope) requires an active session JWT
+  // rather than a user UUID. In addition, centralized database session revocation infrastructure
+  // (session_revocations table + terminate_user_sessions RPC) is part of C253, which is deferred.
+  // Rather than swallowing SDK errors or reporting false success, return explicit deferred status:
+  return {
+    success: false,
+    code: 'SESSION_REVOCATION_DEFERRED',
+    error: 'Direct session revocation without user JWT requires deferred database governance infrastructure (C253). To immediately terminate user access, use Suspend or Revoke Access.',
+  };
 }
 
 /**
- * Permanently revoke user access to the portal (Fix 4, DEF-C219-06)
- * Sets tenant_memberships to suspended, profiles to inactive,
- * terminates all active sessions via GoTrue global sign-out, and prevents recovery.
+ * Permanently revoke user access to the portal (Fix 4, DEF-C219-06, C330E)
+ * Sets tenant_memberships to suspended, profiles to inactive, and prevents recovery.
  * Note: Does NOT alter HR/payroll status in public.personnel.
  */
 export async function revokeUserAccess(
@@ -952,7 +1003,7 @@ export async function revokeUserAccess(
     return { success: false, error: 'Cannot revoke access for your own account.' };
   }
 
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   // Inspect target user membership; if Super Admin, require atomic governance (DEF-C219-01 & DEF-C219-03)
   const { data: membership } = await supabase
@@ -977,21 +1028,21 @@ export async function revokeUserAccess(
     return { success: false, error: memErr.message };
   }
 
-  // 2. Mark profile as inactive
-  await supabase
+  // 2. Mark profile as inactive using service client so RLS (profiles_own_update) does not block it (C330E)
+  const serviceClient = activeDeps.createSupabaseServiceClient();
+  const { error: profErr } = await serviceClient
     .from('profiles')
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq('id', userId);
 
-  // 3. Terminate active sessions immediately across devices
-  try {
-    const adminClient = createSupabaseServiceClient();
-    await adminClient.auth.admin.signOut(userId, 'global');
-  } catch (err: unknown) {
-    console.warn('Notice: GoTrue signOut in offline/mock environment:', err instanceof Error ? err.message : err);
+  if (profErr) {
+    console.warn('Warning: profile deactivation notice:', profErr.message);
   }
 
-  // 4. Fail-closed audit logging (no credentials or tokens recorded)
+  // Note (C330B): adminClient.auth.admin.signOut(userId, 'global') requires an active JWT;
+  // tokenless session invalidation relies on C253 deferred database infrastructure.
+
+  // 3. Fail-closed audit logging (no credentials or tokens recorded)
   await recordFinanceAuditLogFailClosed({
     tenantId,
     action: 'REVOKE_USER_ACCESS',
@@ -999,12 +1050,15 @@ export async function revokeUserAccess(
     entityId: userId,
     actorId: actor.id,
     actorRole: actor.role,
-    reason: reason || 'Administrative access revocation and session termination',
+    reason: reason || 'Administrative access revocation and portal credential suspension',
     source: 'people_and_access',
     newState: { status: 'suspended', is_active: false },
   });
 
-  return { success: true, message: 'User access permanently revoked and all sessions terminated.' };
+  return {
+    success: true,
+    message: 'User access permanently revoked (portal credentials suspended; employment history preserved).',
+  };
 }
 
 /**
@@ -1017,7 +1071,7 @@ export async function reactivateUserAccess(
   userId: string,
   reason?: string
 ): Promise<{ success: boolean; error?: string; message?: string }> {
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   // 1. Restore tenant membership status to active
   const { error: memErr } = await supabase
@@ -1030,8 +1084,9 @@ export async function reactivateUserAccess(
     return { success: false, error: memErr.message };
   }
 
-  // 2. Mark profile as active
-  await supabase
+  // 2. Mark profile as active using service client so RLS (profiles_own_update) does not block it
+  const serviceClient = activeDeps.createSupabaseServiceClient();
+  await serviceClient
     .from('profiles')
     .update({ is_active: true, updated_at: new Date().toISOString() })
     .eq('id', userId);
@@ -1072,7 +1127,7 @@ export async function executeAtomicSuperAdminGovernance(
     return { success: false, error: 'Cannot demote, suspend, or revoke access for your own Super Admin account.' };
   }
 
-  const supabase = await createServerClient();
+  const supabase = await activeDeps.createServerClient();
 
   // Call PostgreSQL RPC with transaction-level advisory locks
   try {
@@ -1102,15 +1157,8 @@ export async function executeAtomicSuperAdminGovernance(
     }
 
     if (rpcData?.success) {
-      // Invalidate active sessions if action is suspend or revoke-access
-      if (action === 'suspend' || action === 'revoke-access') {
-        try {
-          const adminClient = createSupabaseServiceClient();
-          await adminClient.auth.admin.signOut(targetUserId, 'global');
-        } catch (signOutErr) {
-          console.warn('Notice: GoTrue signOut in offline/mock environment:', signOutErr instanceof Error ? signOutErr.message : signOutErr);
-        }
-      }
+      // Note (C330B): adminClient.auth.admin.signOut(userId, 'global') requires an active JWT;
+      // tokenless session invalidation relies on C253 deferred database infrastructure.
       return { success: true, message: `Action ${action} executed successfully via atomic database RPC.${reason ? ' (' + reason + ')' : ''}` };
     }
 

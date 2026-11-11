@@ -18,7 +18,7 @@ import {
   recordFinanceAuditLogFailClosed,
 } from '../../../../lib/admin/personnel-queries';
 import { recordFinanceAuditLog } from '@/lib/finance/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, createSupabaseServiceClient } from '@/lib/supabase/server';
 import { USER_ROLES, UserRole } from '@/types/auth';
 
 export const dynamic = 'force-dynamic';
@@ -154,8 +154,9 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ success: false, error: roleErr.message }, { status: 500 });
         }
 
-        // Also update profiles role for consistency
-        await supabase
+        // Also update profiles role for consistency using service client (C330D)
+        const serviceClient = createSupabaseServiceClient();
+        await serviceClient
           .from('profiles')
           .update({ role: dbRole, updated_at: new Date().toISOString() })
           .eq('id', userId);
@@ -336,7 +337,8 @@ export async function PATCH(request: NextRequest) {
       }
 
       case 'resend-invite': {
-        const { data: profile } = await supabase
+        const serviceClient = createSupabaseServiceClient();
+        const { data: profile } = await serviceClient
           .from('profiles')
           .select('email, full_name')
           .eq('id', userId)
@@ -374,7 +376,10 @@ export async function PATCH(request: NextRequest) {
         );
 
         if (!revokeRes.success) {
-          return NextResponse.json({ success: false, error: revokeRes.error }, { status: 400 });
+          return NextResponse.json(
+            { success: false, code: revokeRes.code || 'REVOKE_SESSIONS_FAILED', error: revokeRes.error },
+            { status: 400 }
+          );
         }
 
         return NextResponse.json({ success: true, message: 'All active sessions have been revoked across devices.' });
@@ -392,7 +397,10 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ success: false, error: revokeAccessRes.error }, { status: 400 });
         }
 
-        return NextResponse.json({ success: true, message: 'User access permanently revoked and all sessions terminated.' });
+        return NextResponse.json({
+          success: true,
+          message: revokeAccessRes.message || 'User access permanently revoked and all sessions terminated.',
+        });
       }
 
       case 'provision-invite': {

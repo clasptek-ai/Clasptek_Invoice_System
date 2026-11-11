@@ -1437,7 +1437,7 @@ export function PeopleAccessPageClient({
             <Pagination
               currentPage={usersPage}
               pageSize={usersPageSize}
-              totalRecords={userList.length}
+              totalRecords={filteredUsers.length}
               onPageChange={setUsersPage}
               onPageSizeChange={setUsersPageSize}
               entityLabel="users"
@@ -2437,7 +2437,7 @@ export function PeopleAccessPageClient({
               Permanently revoke portal access and deactivate all credentials for <strong>{revokeAccessModalUser.name}</strong> (<code>{revokeAccessModalUser.email}</code>)?
             </p>
             <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '4px', padding: '10px 12px', marginBottom: '14px', fontSize: '11.5px', color: '#991B1B', lineHeight: 1.5 }}>
-              <strong>Permanent Access Revocation:</strong> This terminates all active sessions, suspends portal login access, deactivates the linked personnel record, and prevents password recovery or invitation reactivation.
+              <strong>Permanent Access Revocation:</strong> This suspends portal login credentials, marks user profile inactive, and prevents password recovery or invitation reactivation. Linked HR and payroll employment history is preserved (DEF-C219-06).
             </div>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '11.5px', fontWeight: 600, display: 'block', marginBottom: '4px', color: 'var(--text-secondary)' }}>
