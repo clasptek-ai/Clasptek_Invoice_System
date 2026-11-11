@@ -167,6 +167,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // 2b. Role check (C253 / DEF-C252-05): A Finance Manager cannot delete a Super Admin's personnel record
+    if (target.user_id) {
+      const { data: targetMem } = await supabase
+        .from('tenant_memberships')
+        .select('role')
+        .eq('user_id', target.user_id)
+        .eq('tenant_id', auth.session.tenantId)
+        .maybeSingle();
+
+      if (targetMem?.role === 'SUPER_ADMIN' && auth.session.role !== 'Super Admin') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Forbidden: Only a Super Admin may delete personnel records belonging to a Super Admin.',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // 3. Dependency safety check: inspect payslips
     const { count: payslipCount } = await supabase
       .from('payslips')

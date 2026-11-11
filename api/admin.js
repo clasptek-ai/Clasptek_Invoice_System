@@ -244,14 +244,7 @@ async function allocateAuthoritativePersonnelId(supabaseUrl, secretKey, tenantId
  * -------------------------------------------------------------
  */
 async function handleProvisionUser(req, res, body) {
-  const { secretKey, supabaseUrl } = resolveCredentials();
-  if (!secretKey || !supabaseUrl) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Server configuration error: administrative credentials or Supabase URL unavailable.' }));
-  }
-
-  const authHeader = req.headers['authorization'] || '';
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
   if (!token || token.split('.').length !== 3) {
@@ -260,313 +253,22 @@ async function handleProvisionUser(req, res, body) {
     return res.end(JSON.stringify({ error: 'Unauthorized: A valid Supabase access token is required.' }));
   }
 
-  let callerUser = null;
-  try {
-    const userRes = await httpsRequest(
-      `${supabaseUrl}/auth/v1/user`,
-      { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${token}` } }
-    );
-    if (userRes.status === 200 && userRes.body && userRes.body.id) {
-      callerUser = userRes.body;
-    }
-  } catch (err) {
-    res.statusCode = 401;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Unauthorized: Failed to authenticate token.' }));
-  }
-
-  if (!callerUser) {
-    res.statusCode = 401;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Unauthorized: Token is expired or invalid.' }));
-  }
-
-  // Authoritative Role & Tenant Resolution
-  let callerRole = null;
-  let callerTenantId = null;
-
-  try {
-    const memberRes = await httpsRequest(
-      `${supabaseUrl}/rest/v1/tenant_memberships?user_id=eq.${callerUser.id}&status=eq.active&select=role,tenant_id,status`,
-      { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
-    );
-
-    if (Array.isArray(memberRes.body) && memberRes.body.length > 0) {
-      const activeSuperAdmin = memberRes.body.find(m => String(m.role || '').toUpperCase() === 'SUPER_ADMIN');
-      const activeMember = activeSuperAdmin || memberRes.body[0];
-      callerRole = String(activeMember.role || '').toUpperCase();
-      callerTenantId = activeMember.tenant_id;
-    }
-  } catch (_) {}
-
-  if (callerRole !== 'SUPER_ADMIN') {
-    res.statusCode = 403;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Forbidden: Caller does not possess active SUPER_ADMIN authorization.' }));
-  }
-
-  if (!callerTenantId || !isValidUuid(callerTenantId)) {
-    try {
-      const tenantRes = await httpsRequest(
-        `${supabaseUrl}/rest/v1/tenants?limit=1&select=id`,
-        { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
-      );
-      if (Array.isArray(tenantRes.body) && tenantRes.body.length > 0) {
-        callerTenantId = tenantRes.body[0].id;
-      }
-    } catch (_) {}
-  }
-
-  const authoritativeTenantId = callerTenantId;
-
-  // Validation
-  const {
-    email,
-    password,
-    fullName,
-    role,
-    employeeType,
-    department,
-    designation,
-    monthlySalary,
-    hourlyRate,
-    phone,
-    employeeId: requestedEmployeeId
-  } = body;
-
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Validation Error: A valid email address is required.' }));
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-
-  if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Validation Error: Full name must be at least 2 characters long.' }));
-  }
-
-  const allowedRoles = ['SUPER_ADMIN', 'FINANCE_MANAGER', 'STAFF', 'FINANCE_STAFF', 'FACILITATOR', 'FINANCE_VIEWER'];
-  const normalizedRole = String(role || '').toUpperCase().replace(/\s+/g, '_');
-  if (!allowedRoles.includes(normalizedRole)) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Validation Error: Invalid role "${role}". Allowed: ${allowedRoles.join(', ')}` }));
-  }
-
-  const allowedTypes = ['staff', 'facilitator'];
-  const normalizedType = String(employeeType || (normalizedRole === 'FACILITATOR' ? 'facilitator' : 'staff')).toLowerCase();
-  if (!allowedTypes.includes(normalizedType)) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Validation Error: Invalid employeeType "${employeeType}". Allowed: ${allowedTypes.join(', ')}` }));
-  }
-
-  const passCheck = validatePasswordPolicy(password);
-  if (!passCheck.valid) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Validation Error: ${passCheck.message}` }));
-  }
-
-  // Pre-check for duplicate email in auth.users
-  try {
-    const listRes = await httpsRequest(
-      `${supabaseUrl}/auth/v1/admin/users`,
-      { method: 'GET', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
-    );
-    if (listRes.body && Array.isArray(listRes.body.users)) {
-      const existingAuth = listRes.body.users.find(u => (u.email || '').toLowerCase() === normalizedEmail);
-      if (existingAuth) {
-        res.statusCode = 409;
-        res.setHeader('Content-Type', 'application/json');
-        return res.end(JSON.stringify({
-          error: `A user account with email "${normalizedEmail}" already exists in the system.`,
-          code: 'USER_EXISTS'
-        }));
-      }
-    }
-  } catch (_) {}
-
-  // Allocate employee ID
-  let allocatedEmployeeId = null;
-  try {
-    allocatedEmployeeId = await allocateAuthoritativePersonnelId(supabaseUrl, secretKey, authoritativeTenantId, normalizedType, requestedEmployeeId);
-  } catch (err) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Failed to allocate sequential employee ID: ${err.message}` }));
-  }
-
-  // Step 1: Create auth user
-  let createdAuthUser = null;
-  try {
-    const createAuthRes = await httpsRequest(
-      `${supabaseUrl}/auth/v1/admin/users`,
-      { method: 'POST', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}`, 'Content-Type': 'application/json' } },
-      {
-        email: normalizedEmail,
-        password: password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName.trim(),
-          role: normalizedRole,
-          employee_type: normalizedType,
-          employee_id: allocatedEmployeeId,
-          tenant_id: authoritativeTenantId
-        }
-      }
-    );
-
-    if (createAuthRes.status >= 400 || !createAuthRes.body || !createAuthRes.body.id) {
-      const errMsg = createAuthRes.body?.msg || createAuthRes.body?.message || 'Failed to create user in authentication directory.';
-      const statusCode = createAuthRes.status === 422 ? 409 : 500;
-      res.statusCode = statusCode;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: errMsg, code: 'AUTH_PROVISION_FAILED' }));
-    }
-
-    createdAuthUser = createAuthRes.body;
-  } catch (err) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Auth API communication error: ${err.message}` }));
-  }
-
-  // Rollback helper
-  const rollback = async (stage) => {
-    if (createdAuthUser && createdAuthUser.id) {
-      try {
-        await httpsRequest(
-          `${supabaseUrl}/auth/v1/admin/users/${createdAuthUser.id}`,
-          { method: 'DELETE', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
-        );
-      } catch (_) {}
-    }
-  };
-
-  // Step 2: Insert into public.personnel
-  const personnelId = `pers_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-  let createdPersonnel = null;
-
-  try {
-    const persInsertRes = await httpsRequest(
-      `${supabaseUrl}/rest/v1/personnel`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': secretKey,
-          'Authorization': `Bearer ${secretKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        }
-      },
-      {
-        id: personnelId,
-        tenant_id: authoritativeTenantId,
-        user_id: createdAuthUser.id,
-        employee_id: allocatedEmployeeId,
-        full_name: fullName.trim(),
-        email: normalizedEmail,
-        phone: phone ? phone.trim() : null,
-        employee_type: normalizedType,
-        designation: designation ? designation.trim() : (normalizedType === 'facilitator' ? 'Facilitator' : 'Staff Member'),
-        department: department ? department.trim() : 'Operations',
-        monthly_salary: monthlySalary ? Number(monthlySalary) : 0,
-        hourly_rate: hourlyRate ? Number(hourlyRate) : (normalizedType === 'facilitator' ? 15000 : 0),
-        status: 'active'
-      }
-    );
-
-    if (persInsertRes.status >= 400) {
-      await rollback('personnel_insert_failed');
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: 'Database error: Failed to create personnel record.', details: persInsertRes.body }));
-    }
-
-    createdPersonnel = Array.isArray(persInsertRes.body) ? persInsertRes.body[0] : persInsertRes.body;
-  } catch (err) {
-    await rollback('personnel_insert_exception');
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: `Internal error creating personnel record: ${err.message}` }));
-  }
-
-  // Step 3: Insert into public.tenant_memberships
-  const membershipId = `tm_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-  try {
-    await httpsRequest(
-      `${supabaseUrl}/rest/v1/tenant_memberships`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': secretKey,
-          'Authorization': `Bearer ${secretKey}`,
-          'Content-Type': 'application/json'
-        }
-      },
-      {
-        id: membershipId,
-        tenant_id: authoritativeTenantId,
-        user_id: createdAuthUser.id,
-        role: normalizedRole,
-        status: 'active'
-      }
-    );
-  } catch (_) {}
-
-  // Step 4: Audit log
-  try {
-    const auditId = `aud_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    await httpsRequest(
-      `${supabaseUrl}/rest/v1/finance_audit_log`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': secretKey,
-          'Authorization': `Bearer ${secretKey}`,
-          'Content-Type': 'application/json'
-        }
-      },
-      {
-        id: auditId,
-        tenant_id: authoritativeTenantId,
-        actor_id: callerUser.id,
-        actor_role: callerRole,
-        action: 'PROVISION_USER',
-        entity_type: 'personnel',
-        entity_id: personnelId,
-        entity_name: fullName.trim(),
-        source: 'supabase_app',
-        reason: `Admin provisioned user ${fullName.trim()} (${allocatedEmployeeId}) with role ${normalizedRole}.`
-      }
-    );
-  } catch (_) {}
-
-  res.statusCode = 201;
+  // Phase C255 (DEF-C254-LEGACY-01): Controlled safe deprecation of legacy provisioning endpoint.
+  // Direct, non-transactional PostgREST writes to tenant_memberships and personnel are decommissioned
+  // to prevent un-audited or orphaned database state.
+  // All user provisioning must proceed through the authoritative endpoint POST /api/admin/users.
+  res.statusCode = 410;
   res.setHeader('Content-Type', 'application/json');
   return res.end(JSON.stringify({
-    success: true,
-    message: `User ${fullName.trim()} (${allocatedEmployeeId}) provisioned successfully with role ${normalizedRole}.`,
-    user: {
-      id: createdAuthUser.id,
-      email: createdAuthUser.email,
-      fullName: fullName.trim(),
-      role: normalizedRole,
-      employeeType: normalizedType,
-      employeeId: allocatedEmployeeId,
-      personnelId: personnelId,
-      tenantId: authoritativeTenantId
-    }
+    success: false,
+    code: 'DEPRECATED_ENDPOINT',
+    error: 'Deprecated: Legacy provisioning via /api/admin is decommissioned. All user provisioning must be conducted through the authoritative endpoint POST /api/admin/users.'
   }));
 }
 
 /**
  * -------------------------------------------------------------
- * ACTION 2: DELETE PERSONNEL
+ * ACTION 2: DELETE PERSONNEL & REPAIR ORPHANED TENANT STATE
  * -------------------------------------------------------------
  */
 async function handleDeletePersonnel(req, res, body) {
@@ -624,10 +326,24 @@ async function handleDeletePersonnel(req, res, body) {
     }
   } catch (_) {}
 
+  // Check administrative authorization: C253 / DEF-C252-05
+  // Historical check: ['SUPER_ADMIN', 'FINANCE_MANAGER'].includes(callerRole)
+  // Restricts non-admin callers. Note: Deletion of personnel associated with user accounts / Super Admins
+  // requires callerRole === 'SUPER_ADMIN' and routes membership deletion through govern_tenant_membership.
   if (!['SUPER_ADMIN', 'FINANCE_MANAGER'].includes(callerRole)) {
     res.statusCode = 403;
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ error: 'Forbidden: Caller does not possess required administrative authorization.' }));
+  }
+
+  // C253 / DEF-C252-05: A Finance Manager cannot delete accounts associated with users or Super Admins
+  if (callerRole !== 'SUPER_ADMIN') {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({
+      error: 'Forbidden: Only an active Super Admin may delete personnel accounts.',
+      code: 'SUPER_ADMIN_REQUIRED'
+    }));
   }
 
   if (!callerTenantId || !isValidUuid(callerTenantId)) {
@@ -764,14 +480,54 @@ async function handleDeletePersonnel(req, res, body) {
     }));
   }
 
-  // Deletion execution
+  // Deletion execution: C253 / DEF-C252-05
+  // If target has an auth user / tenant membership, route membership removal through the authoritative
+  // govern_tenant_membership RPC so tenant advisory locks, last-Super-Admin invariants, and audit rows
+  // are strictly enforced, and CANNOT_REMOVE_LAST_SUPER_ADMIN aborts the deletion safely.
   if (authUserId) {
     try {
-      await httpsRequest(
-        `${supabaseUrl}/rest/v1/tenant_memberships?user_id=eq.${authUserId}&tenant_id=eq.${authoritativeTenantId}`,
-        { method: 'DELETE', headers: { 'apikey': secretKey, 'Authorization': `Bearer ${secretKey}` } }
+      const rpcRes = await httpsRequest(
+        `${supabaseUrl}/rest/v1/rpc/govern_tenant_membership`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': secretKey,
+            'Authorization': `Bearer ${secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        },
+        {
+          p_tenant_id: authoritativeTenantId,
+          p_target_user_id: authUserId,
+          p_action: 'remove-membership',
+          p_reason: `Permanent deletion of personnel record ${persId}`,
+          p_actor_id: callerUser.id,
+          p_actor_role: 'SUPER_ADMIN'
+        }
       );
-    } catch (_) {}
+
+      if (rpcRes.status >= 400) {
+        const rpcMsg = rpcRes.body?.message || rpcRes.body?.msg || rpcRes.body?.error || 'Membership governance RPC rejected deletion.';
+        if (rpcMsg.includes('CANNOT_REMOVE_LAST_SUPER_ADMIN')) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify({
+            error: 'Cannot remove or delete the last active Super Admin in this organization.',
+            code: 'CANNOT_REMOVE_LAST_SUPER_ADMIN'
+          }));
+        }
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({
+          error: `Membership governance rejected deletion: ${rpcMsg}`,
+          code: 'MEMBERSHIP_DELETION_FAILED'
+        }));
+      }
+    } catch (rpcErr) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ error: `Failed to execute governance RPC: ${rpcErr.message}` }));
+    }
   }
 
   try {
