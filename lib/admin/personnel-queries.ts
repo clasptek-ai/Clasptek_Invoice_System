@@ -57,6 +57,8 @@ export interface AdminPersonnel {
   lastName?: string | null;
   fullName: string;
   email: string;
+  officialWorkEmail?: string | null;
+  personalEmail?: string | null;
   phone?: string | null;
   employeeType: 'staff' | 'facilitator';
   department: string;
@@ -91,6 +93,10 @@ export interface AdminUser {
 
 /**
  * Fetch all personnel records for a given tenant
+ * Authoritative Official Work Email resolution (Phase C340):
+ * - If linked to an authentication account via user_id, Official Work Email = registered account email
+ * - Unlinked personnel have officialWorkEmail = null and email = ''
+ * - HR/contact email is preserved in personalEmail
  */
 export async function getAdminPersonnelList(tenantId: string): Promise<AdminPersonnel[]> {
   const supabase = await activeDeps.createServerClient();
@@ -106,36 +112,93 @@ export async function getAdminPersonnelList(tenantId: string): Promise<AdminPers
     return [];
   }
 
-  return (data || []).map((p) => ({
-    id: p.id,
-    tenantId: p.tenant_id,
-    userId: p.user_id,
-    employeeId: p.employee_id,
-    firstName: p.first_name,
-    lastName: p.last_name,
-    fullName: p.full_name,
-    email: p.email,
-    phone: p.phone,
-    employeeType: p.employee_type as 'staff' | 'facilitator',
-    department: p.department,
-    jobTitle: p.job_title,
-    employmentStatus: p.employment_status as AdminPersonnel['employmentStatus'],
-    dateJoined: p.date_joined,
-    bankName: p.bank_name,
-    accountName: p.account_name,
-    accountNumber: p.account_number,
-    compensationType: p.compensation_type || 'salaried',
-    basicPay: Number(p.basic_pay || 0),
-    facilitatorRate: Number(p.facilitator_rate || 0),
-    rateType: p.rate_type,
-    notes: p.notes,
-    createdAt: p.created_at,
-    updatedAt: p.updated_at,
-  }));
+  const rawPersonnel = data || [];
+  const userIds = rawPersonnel
+    .map((p) => p.user_id)
+    .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0);
+
+  // Authoritative registered account email resolution (Phase C340):
+  // 1. Supabase Auth identity (auth.users) via serviceClient.auth.admin.getUserById
+  // 2. public.profiles via serviceClient.from('profiles')
+  // Follow verified account UUID relationship ONLY (never match by name or fallback to personnel email)
+  const registeredEmailMap = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const serviceClient = activeDeps.createSupabaseServiceClient();
+
+    // Query profiles using service client to bypass RLS isolation
+    try {
+      const { data: profiles } = await serviceClient
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', userIds);
+
+      (profiles || []).forEach((prof) => {
+        if (prof?.id && prof?.email && prof.email.trim() !== '') {
+          registeredEmailMap.set(prof.id, prof.email.trim());
+        }
+      });
+    } catch (profErr) {
+      console.warn('Notice: Error fetching profiles for personnel list:', profErr);
+    }
+
+    // Direct inspect authoritative auth.users if admin client is available
+    // Registered account email in auth.users takes precedence over public profiles
+    if (serviceClient.auth?.admin?.getUserById) {
+      await Promise.all(
+        userIds.map(async (uid) => {
+          try {
+            const { data: authRes } = await serviceClient.auth.admin.getUserById(uid);
+            if (authRes?.user?.email && authRes.user.email.trim() !== '') {
+              registeredEmailMap.set(uid, authRes.user.email.trim());
+            }
+          } catch {
+            // Retain profile email if getUserById fails or is not available
+          }
+        })
+      );
+    }
+  }
+
+  return rawPersonnel.map((p) => {
+    const registeredEmail = p.user_id ? registeredEmailMap.get(p.user_id) || null : null;
+    return {
+      id: p.id,
+      tenantId: p.tenant_id,
+      userId: p.user_id,
+      employeeId: p.employee_id,
+      firstName: p.first_name,
+      lastName: p.last_name,
+      fullName: p.full_name,
+      email: registeredEmail || '',
+      officialWorkEmail: registeredEmail,
+      personalEmail: p.email || null,
+      phone: p.phone,
+      employeeType: p.employee_type as 'staff' | 'facilitator',
+      department: p.department,
+      jobTitle: p.job_title,
+      employmentStatus: p.employment_status as AdminPersonnel['employmentStatus'],
+      dateJoined: p.date_joined,
+      bankName: p.bank_name,
+      accountName: p.account_name,
+      accountNumber: p.account_number,
+      compensationType: p.compensation_type || 'salaried',
+      basicPay: Number(p.basic_pay || 0),
+      facilitatorRate: Number(p.facilitator_rate || 0),
+      rateType: p.rate_type,
+      notes: p.notes,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    };
+  });
 }
 
 /**
  * Fetch users and tenant memberships for People & Access
+ * Authoritative registered account email resolution (Phase C340):
+ * - Follows verified account UUID relationship ONLY
+ * - NEVER falls back to personnel.email or synthetic addresses
+ * - NEVER links personnel by fuzzy email/name matching
  */
 export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> {
   const supabase = await activeDeps.createServerClient();
@@ -152,7 +215,7 @@ export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> 
   }
 
   // Fetch profiles for these users using service client so RLS (profiles_own_read)
-  // does not hide other users' email and full_name from administrators (C330A)
+  // does not hide other users' email and full_name from administrators
   const userIds = memberships.map((m) => m.user_id);
   const serviceClient = activeDeps.createSupabaseServiceClient();
   const { data: profiles } = userIds.length > 0
@@ -164,6 +227,23 @@ export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> 
     if (p?.id) profileMap.set(p.id, p);
   });
 
+  // Query authoritative auth.users if available
+  const authEmailMap = new Map<string, string>();
+  if (userIds.length > 0 && serviceClient.auth?.admin?.getUserById) {
+    await Promise.all(
+      userIds.map(async (uid) => {
+        try {
+          const { data: authRes } = await serviceClient.auth.admin.getUserById(uid);
+          if (authRes?.user?.email && authRes.user.email.trim() !== '') {
+            authEmailMap.set(uid, authRes.user.email.trim());
+          }
+        } catch {
+          // Fallback to profile below
+        }
+      })
+    );
+  }
+
   // Fetch personnel to link
   const { data: personnel } = await supabase
     .from('personnel')
@@ -171,27 +251,26 @@ export async function getAdminUsersList(tenantId: string): Promise<AdminUser[]> 
     .eq('tenant_id', tenantId);
 
   const personnelByUserId = new Map<string, { id: string; employee_id: string; full_name: string; email?: string | null }>();
-  const personnelByEmail = new Map<string, { id: string; employee_id: string; full_name: string; email?: string | null }>();
 
   (personnel || []).forEach((p) => {
     if (p.user_id) personnelByUserId.set(p.user_id, p);
-    if (p.email && p.email.trim() !== '') {
-      personnelByEmail.set(p.email.trim().toLowerCase(), p);
-    }
   });
 
   return memberships.map((m) => {
     const prof = profileMap.get(m.user_id);
+    const authEmail = authEmailMap.get(m.user_id);
     const linkedByUid = personnelByUserId.get(m.user_id);
-    // Authoritative email resolution (C330A):
-    // 1. Genuine profile email (registered user account)
-    // 2. Linked personnel email (if linked by user_id)
-    // 3. Empty string fallback (never synthetic hardcoded 'user@clasptek.org')
-    const rawEmail = prof?.email || linkedByUid?.email || '';
+
+    // Authoritative email resolution (Phase C340):
+    // 1. Authoritative registered Auth account email (auth.users)
+    // 2. Profile email (registered user account)
+    // 3. Empty string fallback (NEVER fallback to personnel.email or synthetic 'user@clasptek.org')
+    const rawEmail = authEmail || prof?.email || '';
     const email = rawEmail.trim();
 
-    // Link personnel: user_id match takes priority, then non-empty email match
-    const linked = linkedByUid || (email ? personnelByEmail.get(email.toLowerCase()) : undefined);
+    // Link personnel: Follow verified account UUID relationship ONLY (Phase C340)
+    // Never match staff by email or name alone
+    const linked = linkedByUid;
 
     const name = prof?.full_name?.trim() || linked?.full_name?.trim() || (email ? email.split('@')[0] : 'User');
 
@@ -575,7 +654,22 @@ export async function initiateAdminPasswordReset(
     return { success: false, error: 'Cannot initiate password reset for an inactive user profile.' };
   }
 
-  const targetEmail = (profile?.email || personnel?.email || '').trim().toLowerCase();
+  // Authoritative registered account email resolution (Phase C340):
+  // Must target the genuine registered account email (from auth.users / profile).
+  // Fail closed: NEVER fallback to personnel.email or placeholder HR email.
+  let targetEmail = (profile?.email || '').trim().toLowerCase();
+
+  if (adminClient.auth?.admin?.getUserById) {
+    try {
+      const { data: authRes } = await adminClient.auth.admin.getUserById(targetUserId);
+      if (authRes?.user?.email && authRes.user.email.trim() !== '') {
+        targetEmail = authRes.user.email.trim().toLowerCase();
+      }
+    } catch {
+      // Retain profile email
+    }
+  }
+
   if (!targetEmail || !targetEmail.includes('@')) {
     return {
       success: false,
@@ -783,11 +877,29 @@ export async function createOrLinkUserAccount(
       .maybeSingle();
 
     if (existingPers) {
+      // Disallow ambiguous account links (Phase C340):
+      // If this personnel record is already linked to another distinct user account, fail closed.
+      if (existingPers.user_id && existingPers.user_id !== userId) {
+        if (createdAuthUserId) {
+          try {
+            const adminClient = activeDeps.createSupabaseServiceClient();
+            await adminClient.auth.admin.deleteUser(createdAuthUserId);
+          } catch (rollbackErr) {
+            console.error('Error rolling back auth user after ambiguous link rejection:', rollbackErr);
+          }
+        }
+        return {
+          success: false,
+          error: `AMBIGUOUS_ACCOUNT_LINK: Personnel record ${existingPers.employee_id} is already linked to another user account (${existingPers.user_id}). Ambiguous linking is disallowed.`,
+        };
+      }
+
       linkedPersonnel = existingPers;
       await supabase
         .from('personnel')
         .update({
           user_id: userId,
+          email: normalizedEmail, // Align Official Work Email into personnel record
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingPers.id);
@@ -802,7 +914,7 @@ export async function createOrLinkUserAccount(
       .eq('email', normalizedEmail)
       .maybeSingle();
 
-    if (matchingPers) {
+    if (matchingPers && (!matchingPers.user_id || matchingPers.user_id === userId)) {
       linkedPersonnel = matchingPers;
       await supabase
         .from('personnel')
@@ -860,6 +972,10 @@ export async function createOrLinkUserAccount(
       createdPersonnelId = persId;
       linkedPersonnel = { id: persId, employee_id: employeeId };
     }
+  }
+
+  if (!linkedPersonnel) {
+    return { success: false, error: 'Failed to resolve or provision associated personnel record.' };
   }
 
   // 3. Insert tenant membership

@@ -212,7 +212,7 @@ export function PeopleAccessPageClient({
       if (searchPersonnel.trim()) {
         const query = searchPersonnel.toLowerCase();
         const matchName = p.fullName.toLowerCase().includes(query);
-        const matchEmail = p.email.toLowerCase().includes(query);
+        const matchEmail = (p.email || p.personalEmail || '').toLowerCase().includes(query);
         const matchId = (p.employeeId || '').toLowerCase().includes(query);
         const matchDept = (p.department || '').toLowerCase().includes(query);
         const matchTitle = (p.jobTitle || '').toLowerCase().includes(query);
@@ -450,7 +450,7 @@ export function PeopleAccessPageClient({
     const rows = sourceList.map((p) => [
       p.employeeId,
       p.fullName,
-      p.email,
+      p.userId && p.email ? p.email : 'Account unavailable',
       p.phone || '',
       p.employeeType.toUpperCase(),
       p.department,
@@ -492,7 +492,7 @@ export function PeopleAccessPageClient({
     setAddType(p.employeeType);
     setFormData({
       fullName: p.fullName,
-      email: p.email,
+      email: p.personalEmail || p.email || '',
       phone: p.phone || '',
       department: p.department,
       jobTitle: p.jobTitle,
@@ -1648,7 +1648,7 @@ export function PeopleAccessPageClient({
                           <td style={{ padding: '10px' }}>
                             <strong>{p.fullName}</strong>
                             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                              {p.email} {p.phone ? `· ${p.phone}` : ''}
+                              {p.userId && p.email ? p.email : 'Account unavailable'} {p.phone ? `· ${p.phone}` : ''}
                             </div>
                           </td>
                           <td style={{ padding: '10px' }}>
@@ -1799,9 +1799,9 @@ export function PeopleAccessPageClient({
                         </span>
                       </div>
                       <div className="cp-mobile-record-field" style={{ gridColumn: 'span 2' }}>
-                        <span className="cp-mobile-record-label">Contact</span>
+                        <span className="cp-mobile-record-label">Official Work Email</span>
                         <span className="cp-mobile-record-value" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
-                          {p.email} {p.phone ? `· ${p.phone}` : ''}
+                          {p.userId && p.email ? p.email : 'Account unavailable'} {p.phone ? `· ${p.phone}` : ''}
                         </span>
                       </div>
                     </div>
@@ -2120,7 +2120,7 @@ export function PeopleAccessPageClient({
                           ...createUserForm,
                           personnelId: pers.id,
                           fullName: pers.fullName,
-                          email: pers.email,
+                          email: pers.personalEmail || pers.email || '',
                           phone: pers.phone || '',
                           department: pers.department,
                           jobTitle: pers.jobTitle,
@@ -2136,11 +2136,14 @@ export function PeopleAccessPageClient({
                     <option value="">— Select an unlinked personnel record —</option>
                     {personnelList
                       .filter((p) => !p.userId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.employeeId} &middot; {p.fullName} ({p.email}) &middot; {p.employeeType.toUpperCase()}
-                        </option>
-                      ))}
+                      .map((p) => {
+                        const contactAddr = p.personalEmail || p.email;
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.employeeId} &middot; {p.fullName} {contactAddr ? `(${contactAddr})` : ''} &middot; {p.employeeType.toUpperCase()}
+                          </option>
+                        );
+                      })}
                   </select>
                 </div>
               )}
