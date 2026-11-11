@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { getAuthoritativeSession } from '@/lib/auth/server';
 import { updateEnquiryStatus, getEnquiryById } from '@/lib/admissions/queries';
 import { ENQUIRY_TRANSITIONS, EnquiryStatus } from '@/types/admissions';
 
@@ -8,15 +8,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthoritativeSession();
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    const user = session.user;
 
     const { id } = await params;
     if (!id) {

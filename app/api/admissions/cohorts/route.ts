@@ -7,14 +7,13 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const session = await getAuthoritativeSession();
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (session.role === 'Staff') {
+      return NextResponse.json({ error: 'Forbidden: Staff cannot access cohorts' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

@@ -114,6 +114,7 @@ export interface CohortFilters {
   search?: string;
   programmeId?: string;
   status?: string;
+  facilitatorId?: string;
 }
 
 export interface CapacitySummary {

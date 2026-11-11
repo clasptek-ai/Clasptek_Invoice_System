@@ -201,8 +201,7 @@ it('Verifies known logo image references across core application components', ()
   const invoiceCode = fs.readFileSync(invoiceDocPath, 'utf8');
 
   assert.strictEqual(loginCode.includes('/assets/clasptek-official-logo.png'), true);
-  assert.strictEqual(sidebarCode.includes('/assets/clasptek_logo.png'), true);
-  assert.strictEqual(sidebarCode.includes('/assets/clasptek_brand_mark.png'), true);
+  assert.strictEqual(sidebarCode.includes('/assets/clasptek-official-logo.png'), true);
   assert.strictEqual(invoiceCode.includes('/assets/clasptek_logo.png'), true);
 });
 

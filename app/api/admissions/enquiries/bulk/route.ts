@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'];
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions for admissions management.' },
@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'DELETE') {
-      // Deletion requires Super Admin or Staff
-      if (!['Super Admin', 'Staff'].includes(session.role)) {
+      // Deletion requires Super Admin
+      if (!['Super Admin'].includes(session.role)) {
         return NextResponse.json(
-          { error: 'Forbidden: Role not authorized to delete enquiries.' },
+          { error: 'Forbidden: Role not authorized to delete enquiries. Only Super Admin can delete enquiries.' },
           { status: 403 }
         );
       }

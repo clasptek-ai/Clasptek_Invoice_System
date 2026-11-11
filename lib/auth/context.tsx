@@ -62,14 +62,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        // Build profile from user metadata
+        let authoritativeRole = normalizeRole(user.user_metadata?.role as string);
+        let authoritativeTenantId = (user.user_metadata?.tenant_id as string) ?? null;
+        const authoritativeTenantName = (user.user_metadata?.tenant_name as string) ?? 'Clasptek Main';
+
+        // Authoritative role & tenant lookup from PostgreSQL tenant_memberships
+        try {
+          const { data: membership } = await supabase!
+            .from('tenant_memberships')
+            .select('role, tenant_id, status')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (membership?.role) {
+            authoritativeRole = normalizeRole(membership.role);
+            if (membership.tenant_id) {
+              authoritativeTenantId = membership.tenant_id;
+            }
+          } else {
+            // Missing active membership: prevent unverified Super Admin escalation
+            if (authoritativeRole === 'Super Admin') {
+              authoritativeRole = 'Staff';
+            }
+          }
+        } catch {
+          // If query fails, ensure unverified sessions never default to Super Admin
+          if (authoritativeRole === 'Super Admin') {
+            authoritativeRole = 'Staff';
+          }
+        }
+
+        // Build profile from authoritative membership & user metadata
         const profile: UserProfile = {
           id: user.id,
           email: user.email ?? '',
           full_name: (user.user_metadata?.full_name as string) ?? null,
-          role: normalizeRole(user.user_metadata?.role as string),
-          tenant_id: (user.user_metadata?.tenant_id as string) ?? null,
-          tenant_name: (user.user_metadata?.tenant_name as string) ?? 'Clasptek Main',
+          role: authoritativeRole,
+          tenant_id: authoritativeTenantId,
+          tenant_name: authoritativeTenantName,
           is_active: true,
           created_at: user.created_at ?? '',
           updated_at: user.updated_at ?? '',
@@ -78,11 +109,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const tenant: TenantContext | null = profile.tenant_id
           ? {
-              id: profile.tenant_id,
-              name: profile.tenant_name ?? 'Clasptek Main',
-              slug: 'clasptek-main',
-              active_role: profile.role,
-            }
+            id: profile.tenant_id,
+            name: profile.tenant_name ?? 'Clasptek Main',
+            slug: 'clasptek-main',
+            active_role: profile.role,
+          }
           : null;
 
         setState({
@@ -110,13 +141,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       const u = session.user;
+      let authoritativeRole = normalizeRole(u.user_metadata?.role as string);
+      let authoritativeTenantId = (u.user_metadata?.tenant_id as string) ?? null;
+      const authoritativeTenantName = (u.user_metadata?.tenant_name as string) ?? 'Clasptek Main';
+
+      // Authoritative role & tenant lookup from PostgreSQL tenant_memberships
+      try {
+        const { data: membership } = await supabase!
+          .from('tenant_memberships')
+          .select('role, tenant_id, status')
+          .eq('user_id', u.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (membership?.role) {
+          authoritativeRole = normalizeRole(membership.role);
+          if (membership.tenant_id) {
+            authoritativeTenantId = membership.tenant_id;
+          }
+        } else {
+          // Missing active membership: prevent unverified Super Admin escalation
+          if (authoritativeRole === 'Super Admin') {
+            authoritativeRole = 'Staff';
+          }
+        }
+      } catch {
+        // If query fails, ensure unverified sessions never default to Super Admin
+        if (authoritativeRole === 'Super Admin') {
+          authoritativeRole = 'Staff';
+        }
+      }
+
       const profile: UserProfile = {
         id: u.id,
         email: u.email ?? '',
         full_name: (u.user_metadata?.full_name as string) ?? null,
-        role: normalizeRole(u.user_metadata?.role as string),
-        tenant_id: (u.user_metadata?.tenant_id as string) ?? null,
-        tenant_name: (u.user_metadata?.tenant_name as string) ?? 'Clasptek Main',
+        role: authoritativeRole,
+        tenant_id: authoritativeTenantId,
+        tenant_name: authoritativeTenantName,
         is_active: true,
         created_at: u.created_at ?? '',
         updated_at: u.updated_at ?? '',
@@ -125,11 +187,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const tenant: TenantContext | null = profile.tenant_id
         ? {
-            id: profile.tenant_id,
-            name: profile.tenant_name ?? 'Clasptek Main',
-            slug: 'clasptek-main',
-            active_role: profile.role,
-          }
+          id: profile.tenant_id,
+          name: profile.tenant_name ?? 'Clasptek Main',
+          slug: 'clasptek-main',
+          active_role: profile.role,
+        }
         : null;
 
       setState({

@@ -241,8 +241,8 @@ export async function getCohortEnrolmentsWithStudents(cohortId: string): Promise
         if (!assignedCohort && (!sessionInCohort || sessionInCohort.length === 0)) {
           return { data: [], error: 'FORBIDDEN: You are not assigned to this cohort' };
         }
-      } else if (session.role === 'Student') {
-        return { data: [], error: 'FORBIDDEN: Students cannot access cohort enrolment registers' };
+      } else if (session.role === 'Staff' || session.role === 'Student') {
+        return { data: [], error: 'FORBIDDEN: Staff and Students cannot access cohort enrolment registers' };
       }
     }
 

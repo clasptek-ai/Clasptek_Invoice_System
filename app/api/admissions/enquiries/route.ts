@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'];
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions' },
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Role check
-    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff', 'Staff'];
+    const allowedRoles = ['Super Admin', 'Finance Manager', 'Finance Staff'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(
         { error: 'Forbidden: Insufficient permissions to create prospect enquiries' },

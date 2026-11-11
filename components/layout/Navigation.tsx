@@ -358,6 +358,7 @@ export function NavItem({
         aria-disabled={isDisabled}
         tabIndex={isDisabled ? -1 : 0}
         title={label}
+        aria-label={label}
         className={cn(
           'cp-nav-item',
           isActive && 'active',

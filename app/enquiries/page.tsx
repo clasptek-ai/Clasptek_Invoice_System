@@ -34,9 +34,9 @@ export default async function EnquiriesPage({ searchParams }: PageProps) {
     redirect('/login?next=/enquiries');
   }
 
-  // Facilitators and Students must NOT access the CRM pipeline.
-  // Super Admin, Finance Manager, and Staff (Admissions) retain access.
-  const allowedRoles = ['Super Admin', 'Finance Manager', 'Staff'];
+  // Facilitators, Students, and Staff must NOT access the CRM pipeline.
+  // Super Admin and Finance Manager retain access.
+  const allowedRoles = ['Super Admin', 'Finance Manager'];
   if (!allowedRoles.includes(session.role)) {
     redirect('/dashboard');
   }
